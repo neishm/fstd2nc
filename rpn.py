@@ -1,6 +1,6 @@
 from pygeode.tools import load_lib
 
-lib = load_lib("librpn.so")
+lib = load_lib("rpn/librpn.so")
 
 
 from ctypes import Structure, c_int, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
@@ -293,6 +293,10 @@ def wrap (var, stuff):
 
 def open (filename):
   from pygeode.dataset import Dataset
+  from os.path import exists
+
+  assert exists(filename), "Can't find %s"%filename
+
   rawvars = []
   vinf_p = lib.get_varinfo(filename)
   vinf = vinf_p[0]
@@ -302,23 +306,4 @@ def open (filename):
   vars = filter(None, vars)  # remove the unhandled vars
   return Dataset(vars, print_warnings=False)
 
-filename = "anlm2006122000_000"
-#filename = "diff_trlm_sabnogw"
-d = open(filename)
 
-from pygeode.plot import plotvar
-from matplotlib.pyplot import show
-print d
-A = d.eta.auxasvar('A')
-B = d.eta.auxasvar('B')
-p = (A + B * d.P0 * 100) / 100
-p = p.transpose('time','hybrid','lat','lon')
-p.name = 'P'
-print p
-plotvar (p(hybrid=1.0))
-plotvar (p(hybrid=0.5))
-plotvar (p(hybrid=0))
-plotvar (p.mean('lon'))
-#plotvar (d.P0)
-#plotvar (d.TT(hybrid=1))
-show()
