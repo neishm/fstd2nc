@@ -594,47 +594,86 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
         assert (npak == h.npak);
 //        printf ("npak: %d\n", npak);
 
-        // Read the data into a buffer
-        byte *raw = malloc(recsize * npak / 8);
-        byte *bits = malloc(recsize * npak);
-        unsigned int *codes = malloc(sizeof(unsigned int) * recsize);
-        // First, read in bytes
-        fread (raw, 1, recsize*npak/8, f);
-        // Next, expand bytes into bit array
-        for (int i = 0; i < recsize * npak / 8; i++) {
-          byte x = raw[i];
-          for (int j = 7; j >= 0; j--) {
-            bits[i*8+j] = x & 0x01;
-            x >>= 1;
+        // Fast case: pack=16
+        if (npak == 16) {
+          byte *raw = malloc(2*recsize);
+          fread (raw, 2, recsize, f);
+          for (int i = 0; i < recsize; i++) {
+            out[i] = 1. * read16(raw+2*i) / (1<<16);
           }
+          free (raw);
         }
-        // Now, collapse this back into an integer code of size <npak>
-        for (int i = 0; i < recsize; i++) {
-          unsigned int x = 0;
-          for (int j = 0; j < npak; j++) x = (x<<1) + bits[i*npak + j];
-          codes[i] = x;
-//          printf ("%d ", x);
-        }
-//        printf ("\n");
-        // Decode this into a float
-        for (int i = 0; i < recsize; i++) {
-          out[i] = codes[i];
-          // convert to a value from 0 to 1
-          for (int j = 0; j < npak; j++) out[i] /= 2;
 
-          // apply diff shift
-          for (int j = 0; j < diff_shift; j++) out[i] *= 2;
-          for (int j = diff_shift; j < 0; j++) out[i] /= 2;
+        // Fast case: pack=24
+        else if (npak == 24) {
+          byte *raw = malloc(3*recsize);
+          fread (raw, 3, recsize, f);
+          for (int i = 0; i < recsize; i++) {
+            out[i] = 1. * read24(raw+3*i) / (1<<24);
+          }
+          free (raw);
+        }
+
+        // Fast case: pack=32
+        else if (npak == 32) {
+          byte *raw = malloc(4*recsize);
+          fread (raw, 4, recsize, f);
+          for (int i = 0; i < recsize; i++) {
+            out[i] = 1. * read32(raw+4*i) / (1LL<<32);
+          }
+          free (raw);
+        }
+
+        // Slow case: other packing density
+        else {
+          printf ("warning: slow unpacking!\n");
+          // Read the data into a buffer
+          byte *raw = malloc(recsize * npak / 8);
+          byte *bits = malloc(recsize * npak);
+          unsigned int *codes = malloc(sizeof(unsigned int) * recsize);
+          // First, read in bytes
+          fread (raw, 1, recsize*npak/8, f);
+          // Next, expand bytes into bit array
+          for (int i = 0; i < recsize * npak / 8; i++) {
+            byte x = raw[i];
+            for (int j = 7; j >= 0; j--) {
+              bits[i*8+j] = x & 0x01;
+              x >>= 1;
+            }
+          }
+          // Now, collapse this back into an integer code of size <npak>
+          for (int i = 0; i < recsize; i++) {
+            unsigned int x = 0;
+            for (int j = 0; j < npak; j++) x = (x<<1) + bits[i*npak + j];
+            codes[i] = x;
+//            printf ("%d ", x);
+          }
+//          printf ("\n");
+          // Decode this into a float
+          for (int i = 0; i < recsize; i++) {
+            out[i] = codes[i];
+            // convert to a value from 0 to 1
+            for (int j = 0; j < npak; j++) out[i] /= 2;
+
+          }
+//          printf ("\n");
+          free (codes);
+          free (bits);
+          free (raw);
+        }
+
+        // Finish decoding the values
+        for (int i = 0; i < recsize; i++) {
+          //TODO: more robust diff shift
+          if (diff_shift >= 0) out[i] *= (1<<diff_shift);
+          else out[i] /= (1<<(-diff_shift));
 
           // apply min
           out[i] += min;
-//          printf ("%g ", out[i]);
         }
-//        printf ("\n");
-        free (codes);
-        free (bits);
-        free (raw);
+
       }
+
 
       out += recsize;
     }

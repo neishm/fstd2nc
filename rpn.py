@@ -131,10 +131,14 @@ class RPN_Var (Var):
     lib.read_data (file, byref(self.var_), len(TI), TI, len(ZI), ZI, point(out))
 
     lib.fclose (file)
+
+    pbar.update(100)
+
     return out
   del need_full_axes
 
   def getview_old_but_working (self, view, pbar):
+#  def getview (self, view, pbar):
     from pygeode.tools import point
     import numpy as np
     from ctypes import c_int32, byref
