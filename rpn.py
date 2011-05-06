@@ -1,6 +1,6 @@
 from pygeode.tools import load_lib
 
-lib = load_lib("rpn/librpn.so")
+lib = load_lib("plugins/rpn/librpn.so")
 
 
 from ctypes import Structure, c_int, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
