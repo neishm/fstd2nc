@@ -179,6 +179,7 @@ def wrap (var, stuff):
   from pygeode.axis import Lat, Lon, gausslat, Pres, ZAxis, Hybrid
   from pygeode.timeaxis import StandardTime
   import numpy as np
+  from warnings import warn
 
   # Time axis
   taxis = var.axes[0]
@@ -189,6 +190,15 @@ def wrap (var, stuff):
   day, date = divmod(date, 1000000)
   hour, date = divmod(date, 10000)
   minute, second = divmod(date, 100)
+  # Check if we have valid dates
+  badmonths = (month < 1) + (month > 12)
+  if np.any(badmonths):
+    warn ("invalid months detected.  Resetting to '1'", stacklevel=3)
+    month[badmonths] = 1
+  baddays = (day < 1) + (day > 31)
+  if np.any(baddays):
+    warn ("invalid days detected.  Resetting to '1'", stacklevel=3)
+    day[baddays] = 1
   taxis = StandardTime(year=year, month=month, day=day, hour=hour, minute=minute, second=second, units = 'days')
 
   # Horizontal axes
@@ -203,11 +213,11 @@ def wrap (var, stuff):
   nj = len(yaxis)
   if grtyp == 'A':  # lat-lon
     xaxis = 360./ni * np.arange(ni)
-    yaxis = 180./nj * (np.arange(nj)+0.5) #1/2 gridpoint offset
+    yaxis = -90 + 180./nj * (np.arange(nj)+0.5) #1/2 gridpoint offset
 
   elif grtyp == 'B':  # lat-lon, with poles
     xaxis = 360./(ni-1) * np.arange(ni)
-    yaxis = 180./(nj-1) * np.arange(nj) - 90
+    yaxis = -90 + 180./(nj-1) * np.arange(nj) - 90
 
 
   elif grtyp == 'G':  # gaussian grid
@@ -308,6 +318,6 @@ def open (filename):
     rawvars.append(RPN_Var(var_,filename))
   vars = [wrap(v,rawvars) for v in rawvars]
   vars = filter(None, vars)  # remove the unhandled vars
-  return Dataset(vars, print_warnings=False)
+  return Dataset(vars)#, print_warnings=False)
 
 

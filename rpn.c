@@ -227,11 +227,13 @@ void read_record_header (FILE *f, RecordHeader *h) {
     for (month = 1; month <= 12; month++) if (dateo <= m[month]) break;
     day = dateo - m[month-1];
   }
+/*
   assert (month >= 1 && month <= 12);
   assert (day >= 1 && day <= 31);
   assert (hour >= 0 && hour <= 23);
   assert (minute >= 0 && minute <= 59);
   assert (second >= 0 && second <= 59);
+*/
   h->dateo = year * 10000000000 + month * 100000000 + day * 1000000 + hour * 10000 + minute * 100 + second;
 
   // Checksum
