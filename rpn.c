@@ -109,8 +109,10 @@ void print_chunk_header (ChunkHeader *h) {
   printf ("this_chunk: %llx, next_chunk: %llx, nrecs: %d, checksum: %x\n", h->this_chunk, h->next_chunk, h->nrecs, h->checksum);
 }
 
+/*
 // units of ip1
 char ip1units[][3] = {"m", "sg", "mb", "", "M", "hy", "th"};
+*/
 
 typedef char Nomvar[5];
 typedef char Etiket[13];
@@ -136,8 +138,8 @@ typedef struct {
   Typvar typvar;
   Nomvar nomvar;
   int ip1;
-  int ip1kind;
-  float ip1float;
+//  int ip1kind;
+//  float ip1float;
   int ip2;
   int ip3;
   long long int dateo;
@@ -175,9 +177,10 @@ void read_record_header (FILE *f, RecordHeader *h) {
   h->typvar[2] = 0;
   readchar (h->nomvar, buf+52, 4);
   h->nomvar[4] = 0;
-//  h->ip1 = read32(buf+56) >> 4;
-  int ip1 = read32(buf+56) >> 4;
-  h->ip1 = ip1;
+  h->ip1 = read32(buf+56) >> 4;
+//  int ip1 = read32(buf+56) >> 4;
+//  h->ip1 = ip1;
+/*
   h->ip1kind = ip1>>24;
   assert (h->ip1kind >= 0 && h->ip1kind <= 6);
   ip1 &= 0x0FFFFFF;
@@ -186,6 +189,7 @@ void read_record_header (FILE *f, RecordHeader *h) {
   h->ip1float = ip1;
   h->ip1float *= 10000;
   while (exp > 0) { h->ip1float /= 10; exp--; }
+*/
 
   h->ip2 = read32(buf+60) >> 4;
   h->ip3 = read32(buf+64) >> 4;
@@ -244,7 +248,7 @@ void read_record_header (FILE *f, RecordHeader *h) {
 }
 
 void print_record_header (RecordHeader *h) {
-  printf ("status: %d, size: %d, data pointer: %llx, deet: %d, npak: %d, ni: %d, grtyp: '%c', nj: %d, datyp: %d nk: %d, npas: %d, ig4: %d, ig2: %d, ig1: %d, ig3: %d, etiket: '%s', typvar: '%s', nomvar: '%s', ip1: %g %s, ip2: %d, ip3: %d, \ndateo: %lld\n", h->status, h->size, h->data, h->deet, h->npak, h->ni, h->grtyp, h->nj, h->datyp, h->nk, h->npas, h->ig4, h->ig2, h->ig1, h->ig3, h->etiket, h->typvar, h->nomvar, h->ip1float, ip1units[h->ip1kind], h->ip2, h->ip2, h->dateo);
+  printf ("status: %d, size: %d, data pointer: %llx, deet: %d, npak: %d, ni: %d, grtyp: '%c', nj: %d, datyp: %d nk: %d, npas: %d, ig4: %d, ig2: %d, ig1: %d, ig3: %d, etiket: '%s', typvar: '%s', nomvar: '%s', ip1: %d, ip2: %d, ip3: %d, \ndateo: %lld\n", h->status, h->size, h->data, h->deet, h->npak, h->ni, h->grtyp, h->nj, h->datyp, h->nk, h->npas, h->ig4, h->ig2, h->ig1, h->ig3, h->etiket, h->typvar, h->nomvar, h->ip1, h->ip2, h->ip2, h->dateo);
 }
 
 
@@ -287,6 +291,7 @@ typedef struct {
   Typvar typvar;
   char grtyp;
 //  int ip1;
+  int *ip1;
   int ip2;
   int ip3;
   int ig1;
@@ -301,8 +306,8 @@ typedef struct {
   int deet;
   int npas;
   long long *t;
-  int ip1kind;
-  float *z;
+//  int ip1kind;
+//  float *z;
   unsigned long long *offsets;
 } Varinfo_entry;
 
@@ -327,7 +332,7 @@ int receq (RecordHeader *h, Varinfo_entry *v) {
   if (h->nk != v->nk) return 0;
 //  if (h->deet != v->deet) return 0;
 //  if (h->npas != v->npas) return 0;
-  if (h->ip1kind != v->ip1kind) return 0;
+//  if (h->ip1kind != v->ip1kind) return 0;
   return 1;
 
 }
@@ -361,7 +366,7 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     if (var->ni != h->ni) continue;
     if (var->deet != h->deet) continue;
     if (var->npas != h->npas) continue;
-    if (var->ip1kind != h->ip1kind) continue;
+//    if (var->ip1kind != h->ip1kind) continue;
     break;
   }
   assert (v < MAX_NVARS);
@@ -386,7 +391,7 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     var->ni = h->ni;
     var->deet = h->deet;
     var->npas = h->npas;
-    var->ip1kind = h->ip1kind;
+//    var->ip1kind = h->ip1kind;
   }
 
   return var;
@@ -408,13 +413,13 @@ int get_tid (Varinfo_entry *var, long long t) {
 
 // Get a level id for the given variable.  Add a new entry if it's not already there.
 #define MAX_NZ 200
-int get_zid (Varinfo_entry *var, float z) {
+int get_zid (Varinfo_entry *var, int ip1) {
   int zid;
-  for (zid = 0; zid < var->nz; zid++) if (var->z[zid] == z) break;
+  for (zid = 0; zid < var->nz; zid++) if (var->ip1[zid] == ip1) break;
   assert (zid < MAX_NZ);
   if (zid == var->nz) {
     var->nz++;
-    var->z[zid] = z;
+    var->ip1[zid] = ip1;
   }
   return zid;
 }
@@ -438,28 +443,29 @@ Varinfo* get_varinfo (char *filename) {
   // Second loop: gather timestep/level information
   // Store the stuff locally for now, since we're taking up a lot of space.
   long long t[vinf->nvars][MAX_NT];
-  float z[vinf->nvars][MAX_NZ];
+//  float z[vinf->nvars][MAX_NZ];
+  int ip1[vinf->nvars][MAX_NZ];
   // Initialize nt, nz, borrow the local arrays for the Varinfo structure
   for (int v = 0; v < vinf->nvars; v++) {
     Varinfo_entry *var = vinf->var+v;
     var->nt = 0; var->nz = 0;
     var->t = t[v];
-    var->z = z[v];
+    var->ip1 = ip1[v];
   }
 
   // Get the timesteps & levels
   for (int r = 0; r < nrecs; r++) {
     Varinfo_entry *var = get_var (vinf, headers+r);
     get_tid (var, headers[r].dateo);
-    get_zid (var, headers[r].ip1float);
+    get_zid (var, headers[r].ip1);
   }
   // Copy the time/level information to the Varinfo object
   for (int v = 0; v < vinf->nvars; v++) {
     Varinfo_entry *var = vinf->var+v;
     var->t = malloc(sizeof(long long)*var->nt);
-    var->z = malloc(sizeof(float)*var->nz);
+    var->ip1 = malloc(sizeof(int)*var->nz);
     for (int tid = 0; tid < var->nt; tid++) var->t[tid] = t[v][tid];
-    for (int zid = 0; zid < var->nz; zid++) var->z[zid] = z[v][zid];
+    for (int zid = 0; zid < var->nz; zid++) var->ip1[zid] = ip1[v][zid];
   }
 
   // Get the offsets
@@ -475,7 +481,7 @@ Varinfo* get_varinfo (char *filename) {
     Varinfo_entry *var = get_var (vinf, headers+r);
     int nz = var->nz;
     int tid = get_tid (var, headers[r].dateo);
-    int zid = get_zid (var, headers[r].ip1float);
+    int zid = get_zid (var, headers[r].ip1);
     var->offsets[tid*nz + zid] = headers[r].data;
   }
 
@@ -495,7 +501,7 @@ void print_varinfo (Varinfo *vinf) {
     printf ("%s\n", var->nomvar);
     for (int i = 0; i < var->nt; i++) printf ("%16lld", var->t[i]);
     printf ("\n");
-    for (int i = 0; i < var->nz; i++) printf ("%16g", var->z[i]);
+    for (int i = 0; i < var->nz; i++) printf ("%16d", var->ip1[i]);
     printf ("\n\n");
   }
 
@@ -506,7 +512,7 @@ int free_varinfo (Varinfo *vinf) {
   for (int v = 0; v < vinf->nvars; v++) {
     Varinfo_entry *var = vinf->var+v;
     free (var->t);
-    free (var->z);
+    free (var->ip1);
     free (var->offsets);
   }
   free (vinf);

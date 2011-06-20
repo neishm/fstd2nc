@@ -29,8 +29,6 @@ typedef struct {
   int deet;
   int npas;
   long long *t;
-  int ip1kind;
-  float *z;
   unsigned long long *offsets;
 } Varinfo_entry;
 
@@ -38,12 +36,11 @@ typedef struct {
 class Varinfo_entry (Structure):
   _fields_ = [('nomvar', Nomvar), ('etiket', Etiket),
               ('typvar', Typvar), ('grtyp', c_char),
-              ('ip2', c_int), ('ip3', c_int),
+              ('ip1', POINTER(c_int)), ('ip2', c_int), ('ip3', c_int),
               ('ig1', c_int), ('ig2', c_int), ('ig3', c_int), ('ig4', c_int),
               ('nt', c_int), ('nz', c_int),
               ('nk', c_int), ('nj', c_int), ('ni', c_int),
               ('deet', c_int), ('npas', c_int), ('t', POINTER(c_longlong)),
-              ('ip1kind', c_int), ('z', POINTER(c_float)),
               ('offsets', POINTER(c_ulonglong))]
   def __str__ (self):
     return "%4s  %12s  %2s %1s %4d %4d %4d %4d %4d"%(
@@ -136,41 +133,6 @@ class RPN_Var (Var):
 
     return out
   del need_full_axes
-
-  def getview_old_but_working (self, view, pbar):
-#  def getview (self, view, pbar):
-    from pygeode.tools import point
-    import numpy as np
-    from ctypes import c_int32, byref
-
-    file = lib.fopen(self.filename, "rb")
-    ksl = view.slices[2]
-    jsl = view.slices[3]
-    isl = view.slices[4]
-
-    out = np.empty(view.shape, self.dtype)
-
-    # Don't slice over the horizontal axes
-    # (we need to read in the whole record)
-    bigview = view.only_slice(T, Z)
-    viewloop = list(bigview.loop_mem())
-    for i,smallview in enumerate(viewloop):
-      assert smallview.shape[2:] == bigview.shape[2:], "horizontal axes are too large?!"
-      tmp = np.empty(smallview.shape, dtype=self.dtype)
-      # Time, level slicing relative to *whole* variable
-      TI = smallview.integer_indices[0]
-      TI = (c_int32*len(TI))(*TI)
-      ZI = smallview.integer_indices[1]
-      ZI = (c_int32*len(ZI))(*ZI)
-      # Time, level slicing relative to the input view
-      tsl, zsl = smallview.map_to(bigview.clip()).slices[0:2]
-      lib.read_data (file, byref(self.var_), len(TI), TI, len(ZI), ZI, point(tmp))
-      pbar.update(100.*(i+1)/len(viewloop))
-      out[tsl,zsl,:,:,:] = tmp[:,:,ksl,jsl,isl]
-
-
-    lib.fclose (file)
-    return out
 
 del Var
 
@@ -266,9 +228,27 @@ def wrap (var, stuff):
   # 4       : height [M] (metres) with respect to ground level
   # 5       : hybrid coordinates [hy] (0.0->1.0)
   # 6       : theta [th]
-  ip1kind = var.var_.ip1kind
-  zaxis = var.var_.z[:var.var_.nz]
+
+#// units of ip1
+#char ip1units[][3] = {"m", "sg", "mb", "", "M", "hy", "th"};
+
+#  ip1kind = var.var_.ip1kind
+  ip1 = np.array(var.var_.ip1[:var.var_.nz])
+  # Get the kind of level
+  ip1kind = ip1>>24
+  assert len(set(ip1kind)) == 1, "incompatible level types found in the same var"
+  ip1kind = set(ip1kind).pop()
   zclass = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}[ip1kind]
+
+  # Convert codes to integer values
+  ip1 &= 0x0FFFFFF;
+  exp = ip1>>20;
+  ip1 &= 0x00FFFFF;
+  zaxis = np.asarray(ip1,'float32')
+  zaxis *= 10000;
+#  while (exp > 0) { h->ip1float /= 10; exp--; }
+  zaxis /= 10.**exp
+  
   if zclass is Hybrid:
     hy = [v for v in stuff if v.name == 'HY']
     if len(hy) != 1: return None
