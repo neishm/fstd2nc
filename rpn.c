@@ -226,13 +226,14 @@ typedef struct {
   Typvar typvar;
   char grtyp;
   int *ip1;
-  int ip2;
+  int *ip2;
   int ip3;
   int ig1;
   int ig2;
   int ig3;
   int ig4;
   int nt;
+  int nforecasts;
   int nz;
   int nk;
   int nj;
@@ -252,7 +253,7 @@ int receq (RecordHeader *h, Varinfo_entry *v) {
   if (strncmp(h->etiket, v->etiket, sizeof(Etiket)) != 0) return 0;
   if (strncmp(h->typvar, v->typvar, sizeof(Typvar)) != 0) return 0;
   if (h->grtyp != v->grtyp) return 0;
-  if (h->ip2 != v->ip2) return 0;
+//  if (h->ip2 != v->ip2) return 0;
   if (h->ip3 != v->ip3) return 0;
   if (h->ig1 != v->ig1) return 0;
   if (h->ig2 != v->ig2) return 0;
@@ -282,7 +283,7 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     if (strncmp(var->etiket, h->etiket, sizeof(Etiket)) != 0) continue;
     if (strncmp(var->typvar, h->typvar, sizeof(Typvar)) != 0) continue;
     if (var->grtyp != h->grtyp) continue;
-    if (var->ip2 != h->ip2) continue;
+//    if (var->ip2 != h->ip2) continue;
     if (var->ip3 != h->ip3) continue;
     if (var->ig1 != h->ig1) continue;
     if (var->ig2 != h->ig2) continue;
@@ -305,7 +306,7 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     strncpy(var->etiket, h->etiket, sizeof(Etiket));
     strncpy(var->typvar, h->typvar, sizeof(Typvar));
     var->grtyp = h->grtyp;
-    var->ip2 = h->ip2;
+//    var->ip2 = h->ip2;
     var->ip3 = h->ip3;
     var->ig1 = h->ig1;
     var->ig2 = h->ig2;
@@ -348,6 +349,19 @@ int get_zid (Varinfo_entry *var, int ip1) {
   return zid;
 }
 
+// Get a forecast id for the given variable.  Add a new entry if it's not already there.
+#define MAX_NF MAX_NT
+int get_forecastid (Varinfo_entry *var, int ip2) {
+  int fid;
+  for (fid = 0; fid < var->nforecasts; fid++) if (var->ip2[fid] == ip2) break;
+  assert (fid < MAX_NF);
+  if (fid == var->nforecasts) {
+    var->nforecasts++;
+    var->ip2[fid] = ip2;
+  }
+  return fid;
+}
+
 
 // Iterate through a list of records, generate information on the vars
 Varinfo* get_varinfo (char *filename) {
@@ -368,18 +382,21 @@ Varinfo* get_varinfo (char *filename) {
   // Store the stuff locally for now, since we're taking up a lot of space.
   long long t[vinf->nvars][MAX_NT];
   int ip1[vinf->nvars][MAX_NZ];
+  int ip2[vinf->nvars][MAX_NF];
   // Initialize nt, nz, borrow the local arrays for the Varinfo structure
   for (int v = 0; v < vinf->nvars; v++) {
     Varinfo_entry *var = vinf->var+v;
-    var->nt = 0; var->nz = 0;
+    var->nt = 0; var->nz = 0; var->nforecasts = 0;
     var->t = t[v];
     var->ip1 = ip1[v];
+    var->ip2 = ip2[v];
   }
 
   // Get the timesteps & levels
   for (int r = 0; r < nrecs; r++) {
     Varinfo_entry *var = get_var (vinf, headers+r);
     get_tid (var, headers[r].dateo);
+    get_forecastid (var, headers[r].ip2);
     get_zid (var, headers[r].ip1);
   }
   // Copy the time/level information to the Varinfo object
@@ -387,14 +404,16 @@ Varinfo* get_varinfo (char *filename) {
     Varinfo_entry *var = vinf->var+v;
     var->t = malloc(sizeof(long long)*var->nt);
     var->ip1 = malloc(sizeof(int)*var->nz);
+    var->ip2 = malloc(sizeof(int)*var->nforecasts);
     for (int tid = 0; tid < var->nt; tid++) var->t[tid] = t[v][tid];
+    for (int fid = 0; fid < var->nforecasts; fid++) var->ip2[fid] = ip2[v][fid];
     for (int zid = 0; zid < var->nz; zid++) var->ip1[zid] = ip1[v][zid];
   }
 
   // Get the offsets
   for (int v = 0; v < vinf->nvars; v++) {
     Varinfo_entry *var = vinf->var+v;
-    int size = var->nt * var->nz;
+    int size = var->nt * var->nforecasts * var->nz;
     // Allocate and initialize the space for the offsets
     var->offsets = malloc(sizeof(unsigned long long)*size);
     for (int i = 0; i < size; i++) var->offsets[i] = 0;
@@ -403,9 +422,11 @@ Varinfo* get_varinfo (char *filename) {
   for (int r = 0; r < nrecs; r++) {
     Varinfo_entry *var = get_var (vinf, headers+r);
     int nz = var->nz;
+    int nf = var->nforecasts;
     int tid = get_tid (var, headers[r].dateo);
+    int fid = get_forecastid (var, headers[r].ip2);
     int zid = get_zid (var, headers[r].ip1);
-    var->offsets[tid*nz + zid] = headers[r].data;
+    var->offsets[tid*nf*nz + fid*nz + zid] = headers[r].data;
   }
 
   // Done with the headers
@@ -425,6 +446,8 @@ void print_varinfo (Varinfo *vinf) {
     for (int i = 0; i < var->nt; i++) printf ("%16lld", var->t[i]);
     printf ("\n");
     for (int i = 0; i < var->nz; i++) printf ("%16d", var->ip1[i]);
+    printf ("\n");
+    for (int i = 0; i < var->nforecasts; i++) printf ("%16d", var->ip2[i]);
     printf ("\n\n");
   }
 
@@ -436,6 +459,7 @@ int free_varinfo (Varinfo *vinf) {
     Varinfo_entry *var = vinf->var+v;
     free (var->t);
     free (var->ip1);
+    free (var->ip2);
     free (var->offsets);
   }
   free (vinf);
@@ -444,29 +468,32 @@ int free_varinfo (Varinfo *vinf) {
 
 
 // Read a chunk of data
-int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, float *out) {
+int read_data (FILE *file, Varinfo_entry *var, int nt, int *ti, int nf, int *fi, int nz, int *zi, float *out) {
   int recsize = var->ni * var->nj * var->nk;  // size of one complete record
   for (int TI = 0; TI < nt; TI++) {
+   for (int FI = 0; FI < nf; FI++) {
     for (int ZI = 0; ZI < nz; ZI++) {
       int t = ti[TI];
+      int f = fi[FI];
       int z = zi[ZI];
 
       assert (t >= 0 && t < var->nt);
+      assert (f >= 0 && f < var->nforecasts);
       assert (z >= 0 && z < var->nz);
 
-      unsigned long long offset = var->offsets[t*var->nz + z];
+      unsigned long long offset = var->offsets[t*var->nforecasts*var->nz + f*var->nz + z];
 //      printf ("offset: %llx\n", offset);
       RecordHeader h;
-      fseek (f, offset, SEEK_SET);
-      read_record_header (f, &h);
+      fseek (file, offset, SEEK_SET);
+      read_record_header (file, &h);
 //      print_record_header (&h);
       assert (receq(&h, var)==1);
       assert (h.datyp == 1 || h.datyp == 5); //currently only support packed floating-point/IEEE floating point
 
       byte b[4];
-      fread (b, 1, 4, f);
+      fread (b, 1, 4, file);
       assert (read32(b) == 0);
-      fread (b, 1, 4, f);
+      fread (b, 1, 4, file);
       assert (read32(b) == 0);
 
       // Easiest case: 32-bit IEEE float
@@ -474,7 +501,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
         assert (h.npak == 32);  // must be 32-bit?!
         assert (sizeof(float) == sizeof(uint32_t));
         byte *raw = malloc(4*recsize);
-        fread (raw, 4, recsize, f);
+        fread (raw, 4, recsize, file);
         for (int i = 0; i < recsize; i++) {
           ((uint32_t*)(out))[i] = read32(raw+4*i);
         }
@@ -488,12 +515,12 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
       else if (h.datyp == 1) {
 
         // Get and validate record size
-        fread (b, 1, 4, f);
+        fread (b, 1, 4, file);
         int recsize_ = read32(b) - 0x7ff00000;
         assert (recsize_ == recsize);
 
         // Get encoding info
-        fread (b, 1, 4, f);
+        fread (b, 1, 4, file);
         int32_t info = read32(b);
 //        printf ("info: 0x%08x\n", info);
         int diff_shift = (info >> 16) - 0x0ff0;
@@ -501,7 +528,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
 
         // Get min value
         float min;
-        fread (b, 1, 4, f);
+        fread (b, 1, 4, file);
         assert (b[3] == 0);
         int mincode = read24(b);
         if ((info & 0x0000ff00) == 0x00001100) {
@@ -520,7 +547,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
         }
 
         // Get and verify npak
-        fread (b, 1, 3, f);
+        fread (b, 1, 3, file);
         int npak = read24(b);
         assert (npak == h.npak);
 //        printf ("npak: %d\n", npak);
@@ -528,7 +555,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
         // Fast case: pack=16
         if (npak == 16) {
           byte *raw = malloc(2*recsize);
-          fread (raw, 2, recsize, f);
+          fread (raw, 2, recsize, file);
           for (int i = 0; i < recsize; i++) {
             out[i] = 1. * read16(raw+2*i) / (1<<16);
           }
@@ -538,7 +565,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
         // Fast case: pack=24
         else if (npak == 24) {
           byte *raw = malloc(3*recsize);
-          fread (raw, 3, recsize, f);
+          fread (raw, 3, recsize, file);
           for (int i = 0; i < recsize; i++) {
             out[i] = 1. * read24(raw+3*i) / (1<<24);
           }
@@ -548,7 +575,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
         // Fast case: pack=32
         else if (npak == 32) {
           byte *raw = malloc(4*recsize);
-          fread (raw, 4, recsize, f);
+          fread (raw, 4, recsize, file);
           for (int i = 0; i < recsize; i++) {
             out[i] = 1. * read32(raw+4*i) / (1LL<<32);
           }
@@ -563,7 +590,7 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
           byte *bits = malloc(recsize * npak);
           unsigned int *codes = malloc(sizeof(unsigned int) * recsize);
           // First, read in bytes
-          fread (raw, 1, recsize*npak/8, f);
+          fread (raw, 1, recsize*npak/8, file);
           // Next, expand bytes into bit array
           for (int i = 0; i < recsize * npak / 8; i++) {
             byte x = raw[i];
@@ -607,8 +634,9 @@ int read_data (FILE *f, Varinfo_entry *var, int nt, int *ti, int nz, int *zi, fl
 
 
       out += recsize;
-    }
-  }
+    }// next level
+   } // next forecast
+  }  // next time
   return 0;
 }
 
@@ -619,6 +647,8 @@ int main (int argc, char *argv[]) {
 
   int nt = 1;
   int ti[] = {0};
+  int nf = 1;
+  int fi[] = {0};
   int nz = 1;
 //  int zi[] = {70};
   int zi[] = {0};
@@ -630,7 +660,7 @@ int main (int argc, char *argv[]) {
 //  print_varinfo (vinf);
   float out[96*48];
   FILE *f = fopen(filename, "rb");
-  read_data (f, vinf->var+varid, nt, ti, nz, zi, out);
+  read_data (f, vinf->var+varid, nt, ti, nf, fi, nz, zi, out);
   fclose(f);
   free_varinfo (vinf);
   return 0;

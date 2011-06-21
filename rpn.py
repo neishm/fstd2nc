@@ -14,14 +14,15 @@ typedef struct {
   Etiket etiket;
   Typvar typvar;
   char grtyp;
-  int ip1;
-  int ip2;
+  int *ip1;
+  int *ip2;
   int ip3;
   int ig1;
   int ig2;
   int ig3;
   int ig4;
   int nt;
+  int nforecasts;
   int nz;
   int nk;
   int nj;
@@ -36,9 +37,9 @@ typedef struct {
 class Varinfo_entry (Structure):
   _fields_ = [('nomvar', Nomvar), ('etiket', Etiket),
               ('typvar', Typvar), ('grtyp', c_char),
-              ('ip1', POINTER(c_int)), ('ip2', c_int), ('ip3', c_int),
+              ('ip1', POINTER(c_int)), ('ip2', POINTER(c_int)), ('ip3', c_int),
               ('ig1', c_int), ('ig2', c_int), ('ig3', c_int), ('ig4', c_int),
-              ('nt', c_int), ('nz', c_int),
+              ('nt', c_int), ('nforecasts', c_int), ('nz', c_int),
               ('nk', c_int), ('nj', c_int), ('ni', c_int),
               ('deet', c_int), ('npas', c_int), ('t', POINTER(c_longlong)),
               ('offsets', POINTER(c_ulonglong))]
@@ -67,6 +68,7 @@ from pygeode.axis import Axis, ZAxis
 
 # Raw axes from the file
 class T(Axis): pass  # time axis
+class F(Axis): pass  # forecast axis
 class Z(Axis): pass  # levels (over ip1)
 class K(Axis): pass  # ?? (nk)
 class J(Axis): pass  # latitudes?
@@ -100,13 +102,14 @@ class RPN_Var (Var):
   def __init__ (self, var_, filename):
     from pygeode.var import Var
     t = T(var_.nt)
+    f = F(var_.nforecasts)
     z = Z(var_.nz)
     k = K(var_.nk)
     j = J(var_.nj)
     i = I(var_.ni)
     self.var_ = var_
     self.filename = filename
-    Var.__init__ (self, [t,z,k,j,i], name=var_.nomvar.strip(), dtype='float32')
+    Var.__init__ (self, [t,f,z,k,j,i], name=var_.nomvar.strip(), dtype='float32')
 
   from pygeode.tools import need_full_axes
   @need_full_axes(I,J,K)
@@ -122,10 +125,12 @@ class RPN_Var (Var):
     # Time, level slicing relative to *whole* variable
     TI = view.integer_indices[0]
     TI = (c_int32*len(TI))(*TI)
-    ZI = view.integer_indices[1]
+    FI = view.integer_indices[1]
+    FI = (c_int32*len(FI))(*FI)
+    ZI = view.integer_indices[2]
     ZI = (c_int32*len(ZI))(*ZI)
 
-    lib.read_data (file, byref(self.var_), len(TI), TI, len(ZI), ZI, point(out))
+    lib.read_data (file, byref(self.var_), len(TI), TI, len(FI), FI, len(ZI), ZI, point(out))
 
     lib.fclose (file)
 
@@ -138,7 +143,7 @@ del Var
 
 # Higher-level wrapper for vars
 def wrap (var, stuff):
-  from pygeode.axis import Lat, Lon, gausslat, Pres, ZAxis, Hybrid
+  from pygeode.axis import Axis, Lat, Lon, gausslat, Pres, ZAxis, Hybrid
   from pygeode.timeaxis import StandardTime
   import numpy as np
   from warnings import warn
@@ -155,6 +160,14 @@ def wrap (var, stuff):
     year = 1900 + (dateo % 100); dateo /= 100
     day = dateo % 100; dateo /= 100
     month = dateo
+    badmonths = (month < 1) + (month > 12)
+    if np.any(badmonths):
+      warn("Invalid months detected.  Resetting to 1.", stacklevel=3)
+      month[badmonths] = 1
+    baddays = (day < 1) + (day > 31)
+    if np.any(baddays):
+      warn("Invalid days detected.  Resetting to 1.", stacklevel=3)
+      day[baddays] = 1
     taxis = StandardTime (startdate={'year':1900}, year=year, month=month, day=day, units='hours')
   # Case 2: new style
   else:
@@ -163,6 +176,10 @@ def wrap (var, stuff):
     # Convert to hours
     dateo /= 3600.
     taxis = StandardTime (values=dateo, units='hours', startdate={'year':1980})
+
+  # Forecast axis
+  #TODO: figure out why we can't use 'Axis' here
+  faxis = F(var.var_.ip2[:var.var_.nforecasts], name='forecast')
 
   ###
 
@@ -271,14 +288,14 @@ def wrap (var, stuff):
 
   #TODO
 
-  newvar = var.replace_axes (t=taxis, z=zaxis, i=xaxis, j=yaxis)
+  newvar = var.replace_axes (t=taxis, f=faxis, z=zaxis, i=xaxis, j=yaxis)
 
   remove_axes = []
   # Remove k dimension?
-  if var.var_.nk == 1: remove_axes.append(2)
+  if var.var_.nk == 1: remove_axes.append(3)
   # Remove levels (if only level is 0m above ground)
   if type(zaxis) == Height and len(zaxis) == 1 and zaxis.values == [0]:
-    remove_axes.append(1)
+    remove_axes.append(2)
 
   if len(remove_axes) > 0: newvar = newvar.squeeze(*remove_axes)
 
