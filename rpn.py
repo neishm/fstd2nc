@@ -144,24 +144,27 @@ def wrap (var, stuff):
   from warnings import warn
 
   # Time axis
-  taxis = var.axes[0]
-  nt = len(taxis)
-  date = np.array(var.var_.t[:nt])
-  year, date = divmod(date, 10000000000)
-  month, date = divmod(date, 100000000)
-  day, date = divmod(date, 1000000)
-  hour, date = divmod(date, 10000)
-  minute, second = divmod(date, 100)
-  # Check if we have valid dates
-  badmonths = (month < 1) + (month > 12)
-  if np.any(badmonths):
-    warn ("invalid months detected.  Resetting to '1'", stacklevel=3)
-    month[badmonths] = 1
-  baddays = (day < 1) + (day > 31)
-  if np.any(baddays):
-    warn ("invalid days detected.  Resetting to '1'", stacklevel=3)
-    day[baddays] = 1
-  taxis = StandardTime(year=year, month=month, day=day, hour=hour, minute=minute, second=second, units = 'days')
+  nt = int(var.var_.nt)
+
+  dateo = np.array(var.var_.t[:nt])
+  dateo = dateo/4 * 5
+  # Case 1: old style
+  if np.all(dateo < 123200000):
+    dateo /= 10;  # ignore operation run digit
+    hour = dateo % 100; dateo /= 100
+    year = 1900 + (dateo % 100); dateo /= 100
+    day = dateo % 100; dateo /= 100
+    month = dateo
+    taxis = StandardTime (startdate={'year':1900}, year=year, month=month, day=day, units='hours')
+  # Case 2: new style
+  else:
+    dateo -= 123200000;
+    dateo *= 4;  # now have # seconds since Jan 1, 1980
+    # Convert to hours
+    dateo /= 3600.
+    taxis = StandardTime (values=dateo, units='hours', startdate={'year':1980})
+
+  ###
 
   # Horizontal axes
   grtyp = var.var_.grtyp
@@ -169,10 +172,8 @@ def wrap (var, stuff):
   ig2 = var.var_.ig2
   ig3 = var.var_.ig3
   ig4 = var.var_.ig4
-  xaxis = var.axes[4]
-  yaxis = var.axes[3]
-  ni = len(xaxis)
-  nj = len(yaxis)
+  ni = int(var.var_.ni)
+  nj = int(var.var_.nj)
   if grtyp == 'A':  # lat-lon
     xaxis = 360./ni * np.arange(ni)
     yaxis = -90 + 180./nj * (np.arange(nj)+0.5) #1/2 gridpoint offset
@@ -255,7 +256,8 @@ def wrap (var, stuff):
     hy = hy[0]
     p0 = hy.var_.ig1 * 100.
     assert hy.var_.nz == 1
-    plid = hy.var_.z[0] * 100.
+#    plid = hy.var_.z[0] * 100.
+    plid = zaxis[0] * 100.
     exp = hy.var_.ig2 / 1000.
     etatop = plid / p0
     zaxis = np.array(zaxis)

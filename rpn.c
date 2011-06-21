@@ -109,11 +109,6 @@ void print_chunk_header (ChunkHeader *h) {
   printf ("this_chunk: %llx, next_chunk: %llx, nrecs: %d, checksum: %x\n", h->this_chunk, h->next_chunk, h->nrecs, h->checksum);
 }
 
-/*
-// units of ip1
-char ip1units[][3] = {"m", "sg", "mb", "", "M", "hy", "th"};
-*/
-
 typedef char Nomvar[5];
 typedef char Etiket[13];
 typedef char Typvar[3];
@@ -138,8 +133,6 @@ typedef struct {
   Typvar typvar;
   Nomvar nomvar;
   int ip1;
-//  int ip1kind;
-//  float ip1float;
   int ip2;
   int ip3;
   long long int dateo;
@@ -178,67 +171,9 @@ void read_record_header (FILE *f, RecordHeader *h) {
   readchar (h->nomvar, buf+52, 4);
   h->nomvar[4] = 0;
   h->ip1 = read32(buf+56) >> 4;
-//  int ip1 = read32(buf+56) >> 4;
-//  h->ip1 = ip1;
-/*
-  h->ip1kind = ip1>>24;
-  assert (h->ip1kind >= 0 && h->ip1kind <= 6);
-  ip1 &= 0x0FFFFFF;
-  int exp = ip1>>20;
-  ip1 &= 0x00FFFFF;
-  h->ip1float = ip1;
-  h->ip1float *= 10000;
-  while (exp > 0) { h->ip1float /= 10; exp--; }
-*/
-
   h->ip2 = read32(buf+60) >> 4;
   h->ip3 = read32(buf+64) >> 4;
-
-  // Extract date
-  long long int dateo = read32(buf+68);
-  dateo = dateo/4 * 5;
-  int year=0, month=0, day=0, hour=0, minute=0, second=0;
-  // Case 1: old style
-  if (dateo < 123200000) {
-    dateo /= 10;  // ignore operation run digit
-    hour = dateo % 100; dateo /= 100;
-    year = 1900 + (dateo % 100); dateo /= 100;
-    day = dateo % 100; dateo /= 100;
-    month = dateo;
-  }
-  // Case 2: new style
-  else {
-    dateo -= 123200000;
-    dateo *= 4;  // now have # seconds since Jan 1, 1980
-    second = dateo % 60; dateo /= 60;
-    minute = dateo % 60; dateo /= 60;
-    hour = dateo % 24; dateo /= 24;
-    year = 1980;
-    int ndays;
-    while (1) {
-      // Determine # of days in this year
-      ndays = 365;
-      if (year % 4 == 0) ndays++;
-      if (year % 100 == 0) ndays--;
-      if (year % 400 == 0) ndays++;
-      if (dateo < ndays) break;
-      year++; dateo -= ndays;
-    }
-    dateo++;  // day 0 -> day 1
-    int m[13] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365};
-    if (ndays == 366) for (int i = 2; i <= 12; i++) m[i]++;  // Leap year?
-    assert (dateo <= m[12]);
-    for (month = 1; month <= 12; month++) if (dateo <= m[month]) break;
-    day = dateo - m[month-1];
-  }
-/*
-  assert (month >= 1 && month <= 12);
-  assert (day >= 1 && day <= 31);
-  assert (hour >= 0 && hour <= 23);
-  assert (minute >= 0 && minute <= 59);
-  assert (second >= 0 && second <= 59);
-*/
-  h->dateo = year * 10000000000 + month * 100000000 + day * 1000000 + hour * 10000 + minute * 100 + second;
+  h->dateo = read32(buf+68);
 
   // Checksum
   h->checksum = 0;
@@ -290,7 +225,6 @@ typedef struct {
   Etiket etiket;
   Typvar typvar;
   char grtyp;
-//  int ip1;
   int *ip1;
   int ip2;
   int ip3;
@@ -306,8 +240,6 @@ typedef struct {
   int deet;
   int npas;
   long long *t;
-//  int ip1kind;
-//  float *z;
   unsigned long long *offsets;
 } Varinfo_entry;
 
@@ -320,7 +252,6 @@ int receq (RecordHeader *h, Varinfo_entry *v) {
   if (strncmp(h->etiket, v->etiket, sizeof(Etiket)) != 0) return 0;
   if (strncmp(h->typvar, v->typvar, sizeof(Typvar)) != 0) return 0;
   if (h->grtyp != v->grtyp) return 0;
-//  if (h->ip1 != v->ip1) return 0;
   if (h->ip2 != v->ip2) return 0;
   if (h->ip3 != v->ip3) return 0;
   if (h->ig1 != v->ig1) return 0;
@@ -330,9 +261,6 @@ int receq (RecordHeader *h, Varinfo_entry *v) {
   if (h->ni != v->ni) return 0;
   if (h->nj != v->nj) return 0;
   if (h->nk != v->nk) return 0;
-//  if (h->deet != v->deet) return 0;
-//  if (h->npas != v->npas) return 0;
-//  if (h->ip1kind != v->ip1kind) return 0;
   return 1;
 
 }
@@ -354,7 +282,6 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     if (strncmp(var->etiket, h->etiket, sizeof(Etiket)) != 0) continue;
     if (strncmp(var->typvar, h->typvar, sizeof(Typvar)) != 0) continue;
     if (var->grtyp != h->grtyp) continue;
-//    if (var->ip1 != h->ip1) continue;
     if (var->ip2 != h->ip2) continue;
     if (var->ip3 != h->ip3) continue;
     if (var->ig1 != h->ig1) continue;
@@ -366,7 +293,6 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     if (var->ni != h->ni) continue;
     if (var->deet != h->deet) continue;
     if (var->npas != h->npas) continue;
-//    if (var->ip1kind != h->ip1kind) continue;
     break;
   }
   assert (v < MAX_NVARS);
@@ -379,7 +305,6 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     strncpy(var->etiket, h->etiket, sizeof(Etiket));
     strncpy(var->typvar, h->typvar, sizeof(Typvar));
     var->grtyp = h->grtyp;
-//    var->ip1 = h->ip1;
     var->ip2 = h->ip2;
     var->ip3 = h->ip3;
     var->ig1 = h->ig1;
@@ -391,7 +316,6 @@ Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
     var->ni = h->ni;
     var->deet = h->deet;
     var->npas = h->npas;
-//    var->ip1kind = h->ip1kind;
   }
 
   return var;
@@ -443,7 +367,6 @@ Varinfo* get_varinfo (char *filename) {
   // Second loop: gather timestep/level information
   // Store the stuff locally for now, since we're taking up a lot of space.
   long long t[vinf->nvars][MAX_NT];
-//  float z[vinf->nvars][MAX_NZ];
   int ip1[vinf->nvars][MAX_NZ];
   // Initialize nt, nz, borrow the local arrays for the Varinfo structure
   for (int v = 0; v < vinf->nvars; v++) {
