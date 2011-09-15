@@ -84,6 +84,26 @@ class Height_wrt_Ground (ZAxis): pass
 
 class Theta (ZAxis): pass
 
+# Axis with an associated type
+# Slightly more specific than I or J axis, as we now have coordinate values,
+#  a grid type, and associated ig1, ig2, ig3, ig4.
+# We still don't interpret the values in any geophysical sense, though.
+class Horizontal(Axis):
+  @classmethod
+  def fromvar (cls, coordvar, paramvar):
+    from pygeode.axis import Axis
+    axis = cls(coordvar.get().squeeze())
+    axis.atts['grtyp'] = paramvar.var_.grtyp
+    axis.atts['ig1'] = int(paramvar.var_.ig1)
+    axis.atts['ig2'] = int(paramvar.var_.ig2)
+    axis.atts['ig3'] = int(paramvar.var_.ig3)
+    axis.atts['ig4'] = int(paramvar.var_.ig4)
+    return axis
+
+class XCoord(Horizontal): pass  # '>>'
+class YCoord(Horizontal): pass  # '^^'
+
+
 del Axis, ZAxis
 
 
@@ -148,6 +168,9 @@ def wrap (var, stuff):
   import numpy as np
   from warnings import warn
 
+  # Skip coordinate variables
+  if var.name in ('>>','^^','!!'): return None
+
   # Time axis
   nt = int(var.var_.nt)
 
@@ -206,14 +229,25 @@ def wrap (var, stuff):
     yaxis = gausslat(nj).values
 
   elif grtyp == 'Z':  # other lat-lon mesh?
-    xaxis = [v for v in stuff if v.name == '>>']
+    # Get matching coords
+    coords = []
+    for v in stuff:
+      if v.name not in ('>>','^^'): continue
+      V = v.var_
+      if V.ip1[0] != ig1 or V.ip2[0] != ig2 or V.ip3 != ig3:
+        continue
+      if v.name == '>>' and V.ni != ni: continue
+      if v.name == '^^' and V.nj != nj: continue
+      coords.append(v)
+    xaxis = [v for v in coords if v.name == '>>']
     if len(xaxis) != 1: return None
-    xaxis = xaxis[0].squeeze().get()
-    yaxis = [v for v in stuff if v.name == '^^']
+    xaxis = XCoord.fromvar(xaxis[0], var)
+    yaxis = [v for v in coords if v.name == '^^']
     if len(yaxis) != 1: return None
-    yaxis = yaxis[0].squeeze().get()
+    yaxis = YCoord.fromvar(yaxis[0], var)
 
   else:
+    print "unhandled grid type '%s'"%grtyp
     return None  # ignore this variable?
 
   # Adjust the order of the latitudes?
@@ -232,8 +266,8 @@ def wrap (var, stuff):
     # North to south?
     elif ig2 == 1: yaxis = yaxis[::-1]
 
-  xaxis = Lon(xaxis)
-  yaxis = Lat(yaxis)
+    xaxis = Lon(xaxis)
+    yaxis = Lat(yaxis)
 
   #TODO
 
@@ -296,6 +330,9 @@ def wrap (var, stuff):
   # Remove levels (if only level is 0m above ground)
   if type(zaxis) == Height and len(zaxis) == 1 and zaxis.values == [0]:
     remove_axes.append(2)
+  # Remove forecast axis if there is no forecast
+  if len(faxis) == 1 and faxis.values == [0]:
+    remove_axes.append(1)
 
   if len(remove_axes) > 0: newvar = newvar.squeeze(*remove_axes)
 
