@@ -90,15 +90,27 @@ class Theta (ZAxis): pass
 # We still don't interpret the values in any geophysical sense, though.
 class Horizontal(Axis):
   @classmethod
-  def fromvar (cls, coordvar, paramvar):
+  def fromvar (cls, coordvar):
     from pygeode.axis import Axis
     axis = cls(coordvar.get().squeeze())
-    axis.atts['grtyp'] = paramvar.var_.grtyp
-    axis.atts['ig1'] = int(paramvar.var_.ig1)
-    axis.atts['ig2'] = int(paramvar.var_.ig2)
-    axis.atts['ig3'] = int(paramvar.var_.ig3)
-    axis.atts['ig4'] = int(paramvar.var_.ig4)
+    axis.atts['grtyp'] = coordvar.var_.grtyp
+    axis.atts['ig1'] = int(coordvar.var_.ig1)
+    axis.atts['ig2'] = int(coordvar.var_.ig2)
+    axis.atts['ig3'] = int(coordvar.var_.ig3)
+    axis.atts['ig4'] = int(coordvar.var_.ig4)
+    axis.atts['ip1'] = int(coordvar.var_.ip1[0])
+    axis.atts['ip2'] = int(coordvar.var_.ip2[0])
+    axis.atts['ip3'] = int(coordvar.var_.ip3)
     return axis
+
+  # Check if 2 coordinates are part of the same grid definition (matching ipX/igX)
+  @staticmethod
+  def compatible (x, y):
+    assert isinstance(x, Horizontal)
+    assert isinstance(y, Horizontal)
+    for att in 'grtyp', 'ip1', 'ip2', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4':
+      if x.atts[att] != y.atts[att]: return False
+    return True
 
 class XCoord(Horizontal): pass  # '>>'
 class YCoord(Horizontal): pass  # '^^'
@@ -241,10 +253,10 @@ def wrap (var, stuff):
       coords.append(v)
     xaxis = [v for v in coords if v.name == '>>']
     if len(xaxis) != 1: return None
-    xaxis = XCoord.fromvar(xaxis[0], var)
+    xaxis = XCoord.fromvar(xaxis[0])
     yaxis = [v for v in coords if v.name == '^^']
     if len(yaxis) != 1: return None
-    yaxis = YCoord.fromvar(yaxis[0], var)
+    yaxis = YCoord.fromvar(yaxis[0])
 
   else:
     print "unhandled grid type '%s'"%grtyp
@@ -354,6 +366,101 @@ def open (filename):
     rawvars.append(RPN_Var(var_,filename))
   vars = [wrap(v,rawvars) for v in rawvars]
   vars = filter(None, vars)  # remove the unhandled vars
-  return Dataset(vars)#, print_warnings=False)
+  dataset = Dataset(vars)#, print_warnings=False)
+
+  # Add explicit latitude/longitude fields (if needed)
+  dataset = add_latlon(dataset)
+  return dataset
 
 
+# Miscellaneous functions
+# (could be moved to a utility library)
+
+# Polar stereographic conversion.
+# Create a 2D array of latitudes and longitudes from the given 1D arrays of coordinates
+
+# based on some random code found at
+# http://www.windatlas.ca/scripts/xy_ll.js
+# which was probably based on the LLFXY function in the RPN libraries?
+def llfxy (x,y,d60,dgrw,nhem):
+  import numpy as np
+
+  # Reshape x and y into 2D arrays
+  X = x.reshape(-1,1)
+  Y = y.reshape(1,-1)
+
+  c_b3 = 90.
+  c_b4 = 180.
+  rdtodg=180. / np.pi
+  re=1.866025*6371000/d60
+  re2=re*re
+
+  dlat=90.
+  dlon=0.
+
+  dlon = np.arctan2(Y, X) * rdtodg
+
+#  if x < 0:
+#    dlon += r_sign(c_b4, y)
+  dlon[x<0,:] += 180. * np.sign(Y)
+
+  dlon -= dgrw
+
+#  if dlon > 180.:
+#    dlon += -360.
+  dlon[dlon>180] -= 360.
+
+#  if dlon < -180.:
+#    dlon += 360.
+  dlon[dlon<-180] += 360.
+
+  r2 = X*X + Y*Y
+  dlat = (re2-r2) / (re2+r2)
+  dlat = np.arcsin(dlat) * rdtodg
+
+  if nhem == 2:
+    dlat = -(dlat)
+    dlon = -(dlon)
+
+
+  return dlat, dlon
+
+# Filter function
+# Check for any XCoord/YCoord axes, generate latitude and longitude fields
+def add_latlon (dataset):
+  from pygeode.var import Var
+  from pygeode.dataset import Dataset
+
+  # Pull out the variables
+  vars = list(dataset.vars)
+
+  # Loop over all XCoords
+  for xaxis in dataset.axes:
+    if not isinstance(xaxis,XCoord): continue
+    # Find the matching YCoord
+    for yaxis in dataset.axes:
+      if not isinstance(yaxis,YCoord): continue
+      if not Horizontal.compatible(xaxis,yaxis): continue
+
+      grtyp = xaxis.atts['grtyp']
+
+      if grtyp in ('N', 'S'):
+        d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
+        nhem = 1 if grtyp == 'N' else 2
+        lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
+      else:
+        print "add_latlon: can't handle grtyp '%' yet"%grtyp
+        continue
+
+      # Convert the raw lat/lon values to a Var
+      lat = Var([xaxis,yaxis], values=lat, name='latitudes')
+      lon = Var([xaxis,yaxis], values=lon, name='longitudes')
+
+      # Append these to the list of vars
+      vars.append(lat)
+      vars.append(lon)
+
+  # Regroup the variables together
+  dataset = Dataset(vars, atts=dataset.atts)
+
+  return dataset
