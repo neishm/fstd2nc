@@ -175,7 +175,7 @@ del Var
 
 # Higher-level wrapper for vars
 def wrap (var, stuff):
-  from pygeode.axis import Axis, Lat, Lon, gausslat, Pres, ZAxis, Hybrid
+  from pygeode.axis import Axis, Lat, Lon, gausslat, Pres, ZAxis, Hybrid, TAxis
   from pygeode.timeaxis import StandardTime
   import numpy as np
   from warnings import warn
@@ -188,8 +188,12 @@ def wrap (var, stuff):
 
   dateo = np.array(var.var_.t[:nt])
   dateo = dateo/4 * 5
+  # Case 0: degenerate time axis
+  if np.all(dateo == 0):
+    warn ("degenerate time axis detected", stacklevel=3)
+    taxis = TAxis(list(dateo))
   # Case 1: old style
-  if np.all(dateo < 123200000):
+  elif np.all(dateo < 123200000):
     dateo /= 10;  # ignore operation run digit
     hour = dateo % 100; dateo /= 100
     year = 1900 + (dateo % 100); dateo /= 100
@@ -345,6 +349,9 @@ def wrap (var, stuff):
   # Remove forecast axis if there is no forecast
   if len(faxis) == 1 and faxis.values == [0]:
     remove_axes.append(1)
+  # Remove degenerate time axis?
+  if len(taxis) == 1 and taxis.values == [0]:
+    remove_axes.append(0)
 
   if len(remove_axes) > 0: newvar = newvar.squeeze(*remove_axes)
 
