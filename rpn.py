@@ -207,7 +207,7 @@ def wrap (var, stuff):
     if np.any(baddays):
       warn("Invalid days detected.  Resetting to 1.", stacklevel=3)
       day[baddays] = 1
-    taxis = StandardTime (startdate={'year':1900}, year=year, month=month, day=day, units='hours')
+    taxis = StandardTime (year=year, month=month, day=day, units='hours')
   # Case 2: new style
   else:
     dateo -= 123200000;
@@ -350,7 +350,7 @@ def wrap (var, stuff):
   if len(faxis) == 1 and faxis.values == [0]:
     remove_axes.append(1)
   # Remove degenerate time axis?
-  if len(taxis) == 1 and taxis.values == [0]:
+  if len(taxis) == 1 and not isinstance(taxis,StandardTime) and taxis.values == [0]:
     remove_axes.append(0)
 
   if len(remove_axes) > 0: newvar = newvar.squeeze(*remove_axes)
