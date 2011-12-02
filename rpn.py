@@ -304,7 +304,9 @@ def wrap (var, stuff):
   ip1 = np.array(var.var_.ip1[:var.var_.nz])
   # Get the kind of level
   ip1kind = ip1>>24
-  assert len(set(ip1kind)) == 1, "incompatible level types found in the same var"
+  if len(set(ip1kind)) != 1:
+    warn ("incompatible level types found in the same var for '%s'"%var.name,stacklevel=2)
+    return None
   ip1kind = set(ip1kind).pop()
   zclass = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}[ip1kind]
 
