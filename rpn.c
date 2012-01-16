@@ -158,7 +158,8 @@ void read_record_header (FILE *f, RecordHeader *h) {
   h->nk = read24(buf+20)>>4;
   h->npas = (read32(buf+24)>>4)/4;
   h->ig4 = read24(buf+28);
-  h->ig2 = buf[27]*65536 + buf[35]*256 + buf[39];
+//  h->ig2 = buf[27]*65536 + buf[35]*256 + buf[39];  // this isn't part of ig2???
+  h->ig2 = buf[35]*256 + buf[39];
   h->ig1 = read24(buf+32);
   h->ig3 = read24(buf+36);
   readchar (h->etiket, buf+40, 5);

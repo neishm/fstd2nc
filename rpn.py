@@ -257,10 +257,18 @@ def wrap (var, stuff):
       coords.append(v)
     xaxis = [v for v in coords if v.name == '>>']
     if len(xaxis) != 1: return None
-    xaxis = XCoord.fromvar(xaxis[0])
+    xaxis = xaxis[0]
     yaxis = [v for v in coords if v.name == '^^']
     if len(yaxis) != 1: return None
-    yaxis = YCoord.fromvar(yaxis[0])
+    yaxis = yaxis[0]
+
+    #TODO: check for rotated grids (gridtyp = 'E' and IG1/IG2/IG3/IG4 indicate rotation?
+    if xaxis.var_.grtyp == 'E':
+      xaxis = Lon(xaxis.squeeze().get())
+      yaxis = Lat(yaxis.squeeze().get())
+    else:
+      xaxis = XCoord.fromvar(xaxis)
+      yaxis = YCoord.fromvar(yaxis)
 
   else:
     print "unhandled grid type '%s'"%grtyp
@@ -282,6 +290,7 @@ def wrap (var, stuff):
     # North to south?
     elif ig2 == 1: yaxis = yaxis[::-1]
 
+    # Convert the X/Y coords to Lat/Lon
     xaxis = Lon(xaxis)
     yaxis = Lat(yaxis)
 
@@ -458,7 +467,7 @@ def add_latlon (dataset):
         nhem = 1 if grtyp == 'N' else 2
         lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
       else:
-        print "add_latlon: can't handle grtyp '%' yet"%grtyp
+        print "add_latlon: can't handle grtyp '%s' yet"%grtyp
         continue
 
       # Convert the raw lat/lon values to a Var
