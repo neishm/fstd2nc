@@ -181,7 +181,7 @@ def wrap (var, stuff):
   from warnings import warn
 
   # Skip coordinate variables
-  if var.name in ('>>','^^','!!'): return None
+  if var.name in ('>>','^^','!!','HY'): return None
 
   # Time axis
   nt = int(var.var_.nt)
@@ -256,10 +256,14 @@ def wrap (var, stuff):
       if v.name == '^^' and V.nj != nj: continue
       coords.append(v)
     xaxis = [v for v in coords if v.name == '>>']
-    if len(xaxis) != 1: return None
+    if len(xaxis) != 1:
+      print "error - %s - len(xaxis) = %d != 1"%(var.name,len(xaxis))
+      return None
     xaxis = xaxis[0]
     yaxis = [v for v in coords if v.name == '^^']
-    if len(yaxis) != 1: return None
+    if len(yaxis) != 1:
+      print "error - %s - len(yaxis) = %d != 1"%(var.name,len(yaxis))
+      return None
     yaxis = yaxis[0]
 
     #TODO: check for rotated grids (gridtyp = 'E' and IG1/IG2/IG3/IG4 indicate rotation?
@@ -271,7 +275,7 @@ def wrap (var, stuff):
       yaxis = YCoord.fromvar(yaxis)
 
   else:
-    print "unhandled grid type '%s'"%grtyp
+    print "unhandled grid type '%s' for variable '%s'"%(grtyp,var.name)
     return None  # ignore this variable?
 
   # Adjust the order of the latitudes?
@@ -329,8 +333,10 @@ def wrap (var, stuff):
   zaxis /= 10.**exp
   
   if zclass is Hybrid:
-    hy = [v for v in stuff if v.name == 'HY']
-    if len(hy) != 1: return None
+    hy = [v for v in stuff if v.name == 'HY' and v.var_.etiket == var.var_.etiket]
+    if len(hy) != 1:
+      print 'error - %s - len(hy) = %d != 1'%(var.name,len(hy))
+      return None
     hy = hy[0]
     p0 = hy.var_.ig1 * 100.
     assert hy.var_.nz == 1
@@ -357,9 +363,9 @@ def wrap (var, stuff):
   # Remove levels (if only level is 0m above ground)
   if type(zaxis) == Height and len(zaxis) == 1 and zaxis.values == [0]:
     remove_axes.append(2)
-  # Remove forecast axis if there is no forecast
-  if len(faxis) == 1 and faxis.values == [0]:
-    remove_axes.append(1)
+#  # Remove forecast axis if there is no forecast
+#  if len(faxis) == 1 and faxis.values == [0]:
+#    remove_axes.append(1)
   # Remove degenerate time axis?
   if len(taxis) == 1 and not isinstance(taxis,StandardTime) and taxis.values == [0]:
     remove_axes.append(0)
