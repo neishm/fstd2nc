@@ -142,6 +142,9 @@ class RPN_Var (Var):
     self.var_ = var_
     self.filename = filename
     Var.__init__ (self, [t,f,z,k,j,i], name=var_.nomvar.strip(), dtype='float32')
+    # Pre-fetch the values for coordinate records
+    if self.name in ('>>','^^','!!','HY'):
+      self.values = self.get()
 
   from pygeode.tools import need_full_axes
   @need_full_axes(I,J,K)
