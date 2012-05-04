@@ -3,65 +3,54 @@ from pygeode.tools import load_lib
 lib = load_lib("plugins/rpn/librpn.so")
 
 
-from ctypes import Structure, c_int, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
+from ctypes import Structure, c_int, c_uint, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
 Nomvar = c_char * 5
 Etiket = c_char * 13
 Typvar = c_char * 3
 
+
 """
 typedef struct {
-  Nomvar nomvar;
+  int status;
+  int size;
+  unsigned long long int data;
+  int deet;
+  int npak;
+  int ni;
+  char grtyp;
+  int nj;
+  int datyp;
+  int nk;
+  int npas;
+  int ig4;
+  int ig2;
+  int ig1;
+  int ig3;
   Etiket etiket;
   Typvar typvar;
-  char grtyp;
-  int *ip1;
-  int *ip2;
+  Nomvar nomvar;
+  int ip1;
+  int ip2;
   int ip3;
-  int ig1;
-  int ig2;
-  int ig3;
-  int ig4;
-  int nt;
-  int nforecasts;
-  int nz;
-  int nk;
-  int nj;
-  int ni;
-  int deet;
-  int npas;
-  long long *t;
-  unsigned long long *offsets;
-} Varinfo_entry;
-
+  long long int dateo;
+  unsigned int checksum;
+} RecordHeader;
 """
-class Varinfo_entry (Structure):
-  _fields_ = [('nomvar', Nomvar), ('etiket', Etiket),
-              ('typvar', Typvar), ('grtyp', c_char),
-              ('ip1', POINTER(c_int)), ('ip2', POINTER(c_int)), ('ip3', c_int),
-              ('ig1', c_int), ('ig2', c_int), ('ig3', c_int), ('ig4', c_int),
-              ('nt', c_int), ('nforecasts', c_int), ('nz', c_int),
-              ('nk', c_int), ('nj', c_int), ('ni', c_int),
-              ('deet', c_int), ('npas', c_int), ('t', POINTER(c_longlong)),
-              ('offsets', POINTER(c_ulonglong))]
-  def __str__ (self):
-    return "%4s  %12s  %2s %1s %4d %4d %4d %4d %4d"%(
-           self.nomvar, self.etiket, self.typvar, self.grtyp,
-           self.nt, self.nz, self.nk, self.nj, self.ni
-    )
 
-MAX_NVARS = 1000
-class Varinfo (Structure):
-  _fields_ = [('nvars', c_int), ('var', Varinfo_entry*MAX_NVARS)]
+class RecordHeader (Structure):
+  _fields_ = [('status', c_int), ('size', c_int), ('data', c_ulonglong),
+              ('deet', c_int), ('npak', c_int), ('ni', c_int),
+              ('grtyp', c_char), ('nj', c_int), ('datyp', c_int),
+              ('nk', c_int), ('npas', c_int), ('ig4', c_int),
+              ('ig2', c_int), ('ig1', c_int), ('ig3', c_int),
+              ('etiket', Etiket), ('typvar', Typvar), ('nomvar', Nomvar),
+              ('ip1', c_int), ('ip2', c_int), ('ip3', c_int),
+              ('dateo', c_longlong), ('checksum', c_uint)]
 
-Varinfo_p = POINTER(Varinfo)
-# hook in a delete function?
-def Varinfo_p_del(self):
-  self.rpnlib.free_varinfo(self)
-Varinfo_p.__del__ = Varinfo_p_del
-Varinfo_p.rpnlib = lib
 
-lib.get_varinfo.restype = Varinfo_p
-lib.fopen.restype = c_void_p
+# What header attributes define a unique variable
+unique_var_atts = 'nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'grtyp', 'ip2', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4'
+
 
 from pygeode.var import Var
 from pygeode.axis import Axis, ZAxis
@@ -129,22 +118,63 @@ del Axis, ZAxis
 # 6       : theta [th]
 
 
-# Wrap a Varinfo_entry into a pygeode Var
+# Wrap a list of headers into a PyGeode Var
 class RPN_Var (Var):
-  def __init__ (self, var_, filename):
+  def __init__ (self, filename, headers):
     from pygeode.var import Var
-    t = T(var_.nt)
-    f = F(var_.nforecasts)
-    z = Z(var_.nz)
-    k = K(var_.nk)
-    j = J(var_.nj)
-    i = I(var_.ni)
-    self.var_ = var_
+    import numpy as np
+
+    name = headers[0].nomvar.strip()
+
+    # Get unique time steps, forecasts, and levels
+    # dateo, ip2, ip1?
+    dateo_list = []
+    ip2_list = []
+    ip1_list = []
+
+    for h in headers:
+      if h.dateo not in dateo_list:
+        dateo_list.append(h.dateo)
+      if h.ip2 not in ip2_list:
+        ip2_list.append(h.ip2)
+      if h.ip1 not in ip1_list:
+        ip1_list.append(h.ip1)
+
+    # Encode as integers
+    dateo_list = np.array(dateo_list, dtype='int64')
+    ip2_list = np.array(ip2_list, dtype='int64')
+    ip1_list = np.array(ip1_list, dtype='int64')
+
+    # Define the axes
+    t = T(dateo_list)
+    f = F(ip2_list)
+    z = Z(ip1_list)
+    k = K(headers[0].nk)
+    j = J(headers[0].nj)
+    i = I(headers[0].ni)
+
+    # Make sure we have all the records we need
+    assert len(t) * len(f) * len(z) == len(headers), "some records are missing from variable '%s'"%name
+
+    # Set some metadata (things that uniquely define the variable)
+    atts = {}
+    for att in unique_var_atts:
+      atts[att] = getattr(headers[0], att)
+
+    # Generate a matrix for the order of headers
+    header_order = np.empty((len(t),len(f),len(z)), dtype=int)
+    header_order[:] = -1
+    for hi, h in enumerate(headers):
+      ti = np.where(dateo_list == h.dateo)[0][0]
+      fi = np.where(ip2_list == h.ip2)[0][0]
+      zi = np.where(ip1_list == h.ip1)[0][0]
+      header_order[ti,fi,zi] = hi
+
     self.filename = filename
-    Var.__init__ (self, [t,f,z,k,j,i], name=var_.nomvar.strip(), dtype='float32')
-    # Pre-fetch the values for coordinate records
-    if self.name in ('>>','^^','!!','HY'):
-      self.values = self.get()
+    self.headers = headers
+    self.header_order = header_order
+
+    Var.__init__ (self, [t,f,z,k,j,i], name=name, atts=atts, dtype='float32')
 
   from pygeode.tools import need_full_axes
   @need_full_axes(I,J,K)
@@ -153,21 +183,24 @@ class RPN_Var (Var):
     import numpy as np
     from ctypes import c_int32, byref
 
-    file = lib.fopen(self.filename, "rb")
-
     out = np.empty(view.shape, self.dtype)
 
     # Time, level slicing relative to *whole* variable
     TI = view.integer_indices[0]
-    TI = (c_int32*len(TI))(*TI)
     FI = view.integer_indices[1]
-    FI = (c_int32*len(FI))(*FI)
     ZI = view.integer_indices[2]
-    ZI = (c_int32*len(ZI))(*ZI)
 
-    lib.read_data (file, byref(self.var_), len(TI), TI, len(FI), FI, len(ZI), ZI, point(out))
+    # Generate a list of all the headers we need
+    headers = []
+    for ti in TI:
+      for fi in FI:
+        for zi in ZI:
+          hi = self.header_order[ti,fi,zi]
+          headers.append(self.headers[hi])
+    headers = (RecordHeader*len(headers))(*headers)
 
-    lib.fclose (file)
+    recsize = self.shape[3] * self.shape[4] * self.shape[5]
+    lib.read_data_new (self.filename, len(headers), headers, recsize, point(out))
 
     pbar.update(100)
 
@@ -377,8 +410,19 @@ def wrap (var, stuff):
 
   return newvar
 
+# Helper method - group headers based on what variable the represent
+def collect_headers (headers):
+  var_headers = {}
+  for h in headers:
+    # Generate a unique key for this variable
+    key = tuple(getattr(h,att) for att in unique_var_atts)
+    if key not in var_headers:
+      var_headers[key] = []
+    # Add this header to the variable
+    var_headers[key].append(h)
 
-
+  return var_headers
+  
 
 def open (filename):
   from pygeode.dataset import Dataset
@@ -386,17 +430,25 @@ def open (filename):
 
   assert exists(filename), "Can't find %s"%filename
 
-  rawvars = []
-  vinf_p = lib.get_varinfo(filename)
-  vinf = vinf_p[0]
-  for var_ in vinf.var[:vinf.nvars]:
-    rawvars.append(RPN_Var(var_,filename))
-  vars = [wrap(v,rawvars) for v in rawvars]
-  vars = filter(None, vars)  # remove the unhandled vars
-  dataset = Dataset(vars)#, print_warnings=False)
+  nrecs = lib.get_num_records(filename)
+  print nrecs
 
-  # Add explicit latitude/longitude fields (if needed)
-  dataset = add_latlon(dataset)
+  headers = (RecordHeader*nrecs)()
+
+  lib.get_record_headers_new (filename, headers)
+
+  vars = collect_headers(headers)
+
+  # Generate PyGeode vars based on the header information
+  vars = [RPN_Var(filename, headers) for headers in vars.values()]
+
+  print vars
+
+  # Convert to a dataset
+  dataset = Dataset(vars)
+
+  print dataset
+
   return dataset
 
 

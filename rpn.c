@@ -641,4 +641,241 @@ int read_data (FILE *file, Varinfo_entry *var, int nt, int *ti, int nf, int *fi,
   return 0;
 }
 
+/****************************/
+
+// New stuff
+
+// Get the number of records in a file
+int get_num_records (char *filename) {
+  FileHeader h;
+  FILE *file = fopen (filename, "rb");
+  read_file_header (file, &h);
+  fclose (file);
+  return h.nrecs;
+}
+
+// Read the records into a pre-allocated array
+int get_record_headers_new (char *filename, RecordHeader *h) {
+  FILE *f = fopen(filename, "rb");
+  FileHeader fileheader;
+  fseek (f, 0, SEEK_SET);
+  read_file_header (f, &fileheader);
+  int rec = 0;
+  for (int c = 0; c < fileheader.nchunks; c++) {
+    ChunkHeader chunkheader;
+    read_chunk_header (f, &chunkheader);
+    unsigned int checksum = 0;
+    for (int r = 0; r < chunkheader.nrecs; r++) {
+      read_record_header (f, h+rec);
+      // Skip erased records
+      if (h[rec].status == 255) continue;
+      checksum ^= h[rec].checksum;
+      rec++;
+    }
+    checksum ^= chunkheader.nrecs;
+    checksum ^= (chunkheader.next_chunk_words);
+//    printf ("chunk %d checksum: 0x%08X   computed checksum: 0x%08X, xor: %08X\n", c, chunkheader.checksum, checksum, chunkheader.checksum ^ checksum);
+    assert (checksum == chunkheader.checksum);
+    // Go to next chunk
+    fseek (f, chunkheader.next_chunk, SEEK_SET);
+  }
+  fclose (f);
+  return 0;
+}
+
+
+// Compare RecordHeaders for equality
+// NOTE: this used to compare a RecordHeader with a Varinfo_entry,
+// hence the 'h' and 'v' names.
+int receq_new (RecordHeader *h, RecordHeader *v) {
+  if (strncmp(h->nomvar, v->nomvar, sizeof(Nomvar)) != 0) {
+    printf ("'%s' != '%s'\n", h->nomvar, v->nomvar);
+    return 0;
+  }
+  if (strncmp(h->etiket, v->etiket, sizeof(Etiket)) != 0) return 0;
+  if (strncmp(h->typvar, v->typvar, sizeof(Typvar)) != 0) return 0;
+  if (h->grtyp != v->grtyp) return 0;
+  if (h->ip1 != v->ip1) return 0;
+  if (h->ip2 != v->ip2) return 0;
+  if (h->ip3 != v->ip3) return 0;
+  if (h->ig1 != v->ig1) return 0;
+  if (h->ig2 != v->ig2) return 0;
+  if (h->ig3 != v->ig3) return 0;
+  if (h->ig4 != v->ig4) return 0;
+  if (h->ni != v->ni) return 0;
+  if (h->nj != v->nj) return 0;
+  if (h->nk != v->nk) return 0;
+  return 1;
+
+}
+
+
+// Read a chunk of data
+int read_data_new (char *filename, int nrecs, RecordHeader *headers, int recsize, float *out) {
+
+  FILE *file = fopen (filename, "rb");
+
+  // Loop over all records
+  for (int rec = 0; rec < nrecs; rec++) {
+
+      unsigned long long offset = headers[rec].data;
+//      printf ("offset: %llx\n", offset);
+      RecordHeader h;
+      fseek (file, offset, SEEK_SET);
+      read_record_header (file, &h);
+//      print_record_header (&h);
+      // Make sure the header matches
+      assert (receq_new(headers+rec, &h) == 1);
+      assert (h.datyp == 1 || h.datyp == 5); //currently only support packed floating-point/IEEE floating point
+
+      byte b[4];
+      fread (b, 1, 4, file);
+      assert (read32(b) == 0);
+      fread (b, 1, 4, file);
+      assert (read32(b) == 0);
+
+      // Easiest case: 32-bit IEEE float
+      if (h.datyp == 5) {
+        assert (h.npak == 32);  // must be 32-bit?!
+        assert (sizeof(float) == sizeof(uint32_t));
+        byte *raw = malloc(4*recsize);
+        fread (raw, 4, recsize, file);
+        for (int i = 0; i < recsize; i++) {
+          ((uint32_t*)(out))[i] = read32(raw+4*i);
+        }
+        free(raw);
+//        for (int i = 0; i < recsize; i++) {
+//          printf ("%g  ", out[i]);
+//        }
+//        printf ("\n");
+      }
+      // Other supported case: packed float
+      else if (h.datyp == 1) {
+
+        // Get and validate record size
+        fread (b, 1, 4, file);
+        int recsize_ = read32(b) - 0x7ff00000;
+        assert (recsize_ == recsize);
+
+        // Get encoding info
+        fread (b, 1, 4, file);
+        int32_t info = read32(b);
+//        printf ("info: 0x%08x\n", info);
+        int diff_shift = (info >> 16) - 0x0ff0;
+//        printf ("diff_shift: %d\n", diff_shift);
+
+        // Get min value
+        float min;
+        fread (b, 1, 4, file);
+        assert (b[3] == 0);
+        int mincode = read24(b);
+        if ((info & 0x0000ff00) == 0x00001100) {
+          min = 0;
+//          printf ("min is zero\n");
+        }
+        else {
+          int min_shift = ((info & 0x0000fff0) >> 4) - 0x3d0 + 1;
+//          printf ("min_shift: %d\n", min_shift);
+//          printf ("mincode: %d\n", mincode);
+          min = mincode / 16777216.;
+          while (min_shift > 0) { min *= 2; min_shift--; }
+          while (min_shift < 0) { min /= 2; min_shift++; }
+          if ((info & 0x0000000f) == 1) min *= -1;
+//          printf ("min: %g\n", min);
+        }
+
+        // Get and verify npak
+        fread (b, 1, 3, file);
+        int npak = read24(b);
+        assert (npak == h.npak);
+//        printf ("npak: %d\n", npak);
+
+        // Fast case: pack=16
+        if (npak == 16) {
+          byte *raw = malloc(2*recsize);
+          fread (raw, 2, recsize, file);
+          for (int i = 0; i < recsize; i++) {
+            out[i] = 1. * read16(raw+2*i) / (1<<16);
+          }
+          free (raw);
+        }
+
+        // Fast case: pack=24
+        else if (npak == 24) {
+          byte *raw = malloc(3*recsize);
+          fread (raw, 3, recsize, file);
+          for (int i = 0; i < recsize; i++) {
+            out[i] = 1. * read24(raw+3*i) / (1<<24);
+          }
+          free (raw);
+        }
+
+        // Fast case: pack=32
+        else if (npak == 32) {
+          byte *raw = malloc(4*recsize);
+          fread (raw, 4, recsize, file);
+          for (int i = 0; i < recsize; i++) {
+            out[i] = 1. * read32(raw+4*i) / (1LL<<32);
+          }
+          free (raw);
+        }
+
+        // Slow case: other packing density
+        else {
+          printf ("warning: slow unpacking!\n");
+          // Read the data into a buffer
+          byte *raw = malloc(recsize * npak / 8);
+          byte *bits = malloc(recsize * npak);
+          unsigned int *codes = malloc(sizeof(unsigned int) * recsize);
+          // First, read in bytes
+          fread (raw, 1, recsize*npak/8, file);
+          // Next, expand bytes into bit array
+          for (int i = 0; i < recsize * npak / 8; i++) {
+            byte x = raw[i];
+            for (int j = 7; j >= 0; j--) {
+              bits[i*8+j] = x & 0x01;
+              x >>= 1;
+            }
+          }
+          // Now, collapse this back into an integer code of size <npak>
+          for (int i = 0; i < recsize; i++) {
+            unsigned int x = 0;
+            for (int j = 0; j < npak; j++) x = (x<<1) + bits[i*npak + j];
+            codes[i] = x;
+//            printf ("%d ", x);
+          }
+//          printf ("\n");
+          // Decode this into a float
+          for (int i = 0; i < recsize; i++) {
+            out[i] = codes[i];
+            // convert to a value from 0 to 1
+            for (int j = 0; j < npak; j++) out[i] /= 2;
+
+          }
+//          printf ("\n");
+          free (codes);
+          free (bits);
+          free (raw);
+        }
+
+        // Finish decoding the values
+        for (int i = 0; i < recsize; i++) {
+          //TODO: more robust diff shift
+          if (diff_shift >= 0) out[i] *= (1<<diff_shift);
+          else out[i] /= (1<<(-diff_shift));
+
+          // apply min
+          out[i] += min;
+        }
+
+      }
+
+
+      out += recsize;
+  }
+
+  fclose (file);
+
+  return 0;
+}
 
