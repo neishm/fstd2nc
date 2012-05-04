@@ -642,28 +642,3 @@ int read_data (FILE *file, Varinfo_entry *var, int nt, int *ti, int nf, int *fi,
 }
 
 
-int main (int argc, char *argv[]) {
-//  char filename[] = "anlm2006122000_000";
-  char filename[] = "diff_trlm_sabnogw";
-
-  int nt = 1;
-  int ti[] = {0};
-  int nf = 1;
-  int fi[] = {0};
-  int nz = 1;
-//  int zi[] = {70};
-  int zi[] = {0};
-
-//  int varid = 8;  // TT?
-  int varid = 2;  // P0?
-
-  Varinfo *vinf = get_varinfo (filename);
-//  print_varinfo (vinf);
-  float out[96*48];
-  FILE *f = fopen(filename, "rb");
-  read_data (f, vinf->var+varid, nt, ti, nf, fi, nz, zi, out);
-  fclose(f);
-  free_varinfo (vinf);
-  return 0;
-}
-

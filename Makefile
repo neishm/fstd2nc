@@ -1,4 +1,4 @@
 LIBS = rpn
-PROGS = rpn
+PROGS = 
 
 include rules.mk
