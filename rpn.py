@@ -200,7 +200,7 @@ class RPN_Var (Var):
     headers = (RecordHeader*len(headers))(*headers)
 
     recsize = self.shape[3] * self.shape[4] * self.shape[5]
-    lib.read_data_new (self.filename, len(headers), headers, recsize, point(out))
+    lib.read_data (self.filename, len(headers), headers, recsize, point(out))
 
     pbar.update(100)
 
@@ -435,7 +435,7 @@ def open (filename):
 
   headers = (RecordHeader*nrecs)()
 
-  lib.get_record_headers_new (filename, headers)
+  lib.get_record_headers (filename, headers)
 
   vars = collect_headers(headers)
 
