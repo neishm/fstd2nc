@@ -422,6 +422,9 @@ def collect_headers (headers):
   for h in headers:
     # Generate a unique key for this variable
     key = tuple(getattr(h,att) for att in unique_var_atts)
+    # Include part of the ip1 parameter (must have consistent vertical coordinate type)
+    key += (h.ip1>>24,)
+
     if key not in var_headers:
       var_headers[key] = []
     # Add this header to the variable
