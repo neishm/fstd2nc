@@ -87,10 +87,10 @@ class Horizontal(Axis):
     atts = dict(**coordvar.atts)
     zaxis = coordvar.getaxis('Z')
     assert len(zaxis) == 1
-    atts['ip1'] = zaxis.values[0]
+    atts['ip1'] = int(zaxis.values[0])
     faxis = coordvar.getaxis('F')
     assert len(faxis) == 1
-    atts['ip2'] = faxis.values[0]
+    atts['ip2'] = int(faxis.values[0])
 
     # Instantiate
     axis = cls(values, atts=atts)
