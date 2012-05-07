@@ -213,6 +213,8 @@ class RPN_Var (Var):
 
 del Var
 
+#TODO - remove this
+# deprecated - this has been split into several smaller, logical steps.
 # Higher-level wrapper for vars
 def wrap (var, stuff):
   from pygeode.axis import Axis, Lat, Lon, gausslat, Pres, ZAxis, Hybrid, TAxis
@@ -427,6 +429,37 @@ def collect_headers (headers):
 
   return var_headers
   
+# Helper method - check if a coordinate is compatible with a variable
+# (on raw variables)
+def uses_coord (v, coord):
+  if v.atts['ig1'] != coord.atts['ip1']: return False
+  if v.atts['ig2'] != coord.atts['ip2']: return False
+  if v.atts['ig3'] != coord.atts['ip3']: return False
+  return True
+
+# Helper method - apply the coordinate variables ('>>','^^', 'HY') to the variables
+def attach_xycoords (varlist):
+
+  # Get the various coords
+  xcoords = [XCoord.fromvar(v) for v in varlist if v.name == '>>']
+  ycoords = [YCoord.fromvar(v) for v in varlist if v.name == '^^']
+
+  varlist = [v for v in varlist if v.name not in ('>>','^^')]
+
+  # Loop over the other (non-coordinate) variables, and apply whatever
+  # coords we can.
+  for i,v in enumerate(varlist):
+    icoord = v.getaxis(I)
+    jcoord = v.getaxis(J)
+    for xcoord in xcoords:
+      if uses_coord (v, xcoord): icoord = xcoord
+    for ycoord in ycoords:
+      if uses_coord (v, ycoord): jcoord = ycoord
+
+    varlist[i] = v.replace_axes(I = icoord, J = jcoord)
+
+  return varlist
+
 
 def open (filename):
   from pygeode.dataset import Dataset
@@ -445,7 +478,10 @@ def open (filename):
 
   # Generate PyGeode vars based on the header information
   vars = [RPN_Var(filename, headers) for headers in vars.values()]
+  print vars
 
+  # Do some filtering
+  vars = attach_xycoords(vars)
   print vars
 
   # Convert to a dataset
