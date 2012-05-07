@@ -80,16 +80,20 @@ class Theta (ZAxis): pass
 class Horizontal(Axis):
   @classmethod
   def fromvar (cls, coordvar):
-    from pygeode.axis import Axis
-    axis = cls(coordvar.get().squeeze())
-    axis.atts['grtyp'] = coordvar.var_.grtyp
-    axis.atts['ig1'] = int(coordvar.var_.ig1)
-    axis.atts['ig2'] = int(coordvar.var_.ig2)
-    axis.atts['ig3'] = int(coordvar.var_.ig3)
-    axis.atts['ig4'] = int(coordvar.var_.ig4)
-    axis.atts['ip1'] = int(coordvar.var_.ip1[0])
-    axis.atts['ip2'] = int(coordvar.var_.ip2[0])
-    axis.atts['ip3'] = int(coordvar.var_.ip3)
+    # Get the coordinate values
+    values = coordvar.get().squeeze()
+
+    # Get the metadata
+    atts = dict(**coordvar.atts)
+    zaxis = coordvar.getaxis('Z')
+    assert len(zaxis) == 1
+    atts['ip1'] = zaxis.values[0]
+    faxis = coordvar.getaxis('F')
+    assert len(faxis) == 1
+    atts['ip2'] = faxis.values[0]
+
+    # Instantiate
+    axis = cls(values, atts=atts)
     return axis
 
   # Check if 2 coordinates are part of the same grid definition (matching ipX/igX)
