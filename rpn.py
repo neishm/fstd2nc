@@ -590,6 +590,48 @@ def decode_timeaxis (varlist):
 
   return varlist
 
+# Helper method - decode the latitudes / longitudes for A/B/G grids
+def decode_latlon (varlist):
+  import numpy as np
+  from pygeode.axis import gausslat, Lat, Lon
+  from warnings import warn
+
+  varlist = list(varlist)
+
+  for i, v in enumerate(varlist):
+
+    grtyp = v.atts['grtyp']
+    if grtyp not in ('A','B','G'): continue
+
+    ni = v.atts['ni']
+    nj = v.atts['nj']
+
+    if grtyp == 'A':  # lat-lon
+      lon = Lon(360./ni * np.arange(ni))
+      lat = Lat(-90 + 180./nj * (np.arange(nj)+0.5)) #1/2 gridpoint offset
+
+    elif grtyp == 'B':  # lat-lon, with poles
+      lon = Lon(360./(ni-1) * np.arange(ni))
+      lat = Lat(-90 + 180./(nj-1) * np.arange(nj) - 90)
+
+    elif grtyp == 'G':  # gaussian grid
+      if v.atts['ig1'] != 0:
+        warn("can only handle global gaussian grid right now",stacklevel=2)
+        continue
+      lon = Lon(360./ni * np.arange(ni))
+      lat = gausslat(nj)
+
+    if v.atts['ig1'] != 0:
+      warn("can't handle northern/southern hemispheric grids yet.",stacklevel=2)
+      continue
+
+    # North to south?
+    if v.atts['ig2'] == 1: lat = Lat(lat.values[::-1])
+
+    varlist[i] = v.replace_axes (I = lon, xcoord = lon, J = lat, ycoord = lat, ignore_mismatch=True)
+
+  return varlist
+
 
 def open (filename):
   from pygeode.dataset import Dataset
@@ -616,6 +658,8 @@ def open (filename):
   vars = decode_zcoord(vars)
   print vars
   vars = decode_timeaxis(vars)
+  print vars
+  vars = decode_latlon(vars)
   print vars
 
   # Convert to a dataset
