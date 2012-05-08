@@ -57,7 +57,7 @@ from pygeode.axis import Axis, ZAxis
 
 # Raw axes from the file
 class T(Axis): pass  # time axis
-class F(Axis): pass  # forecast axis
+class F(Axis): name = 'forecast'  # forecast axis
 class Z(Axis): pass  # levels (over ip1)
 class K(Axis): pass  # ?? (nk)
 class J(Axis): pass  # latitudes?
