@@ -49,7 +49,7 @@ class RecordHeader (Structure):
 
 
 # What header attributes define a unique variable
-unique_var_atts = 'nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'grtyp', 'ip2', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4'
+unique_var_atts = 'nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'grtyp', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4'
 
 
 from pygeode.var import Var
