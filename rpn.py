@@ -177,9 +177,6 @@ class RPN_Var (Var):
     j = J(headers[0].nj)
     i = I(headers[0].ni)
 
-    # Make sure we have all the records we need
-    assert len(t) * len(f) * len(z) == len(headers), "some records are missing from variable '%s'"%name
-
     # Set some metadata (things that uniquely define the variable)
     atts = {}
     for att in unique_var_atts:
@@ -193,6 +190,9 @@ class RPN_Var (Var):
       fi = np.where(ip2_list == h.ip2)[0][0]
       zi = np.where(ip1_list == h.ip1)[0][0]
       header_order[ti,fi,zi] = hi
+
+    # Make sure we have all the records we need
+    assert np.all(header_order >= 0), "some records are missing from variable '%s'"%name
 
     self.filename = filename
     self.headers = headers
