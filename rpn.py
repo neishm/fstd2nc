@@ -709,6 +709,8 @@ def open (filename):
   print vars
   vars = remove_degenerate_axes(vars)
   print vars
+  vars = add_latlon(vars)
+  print vars
 
   # Convert to a dataset
   dataset = Dataset(vars)
@@ -772,40 +774,45 @@ def llfxy (x,y,d60,dgrw,nhem):
 
 # Filter function
 # Check for any XCoord/YCoord axes, generate latitude and longitude fields
-def add_latlon (dataset):
+def add_latlon (varlist):
   from pygeode.var import Var
-  from pygeode.dataset import Dataset
+  from warnings import warn
 
   # Pull out the variables
-  vars = list(dataset.vars)
+  varlist = list(varlist)
 
-  # Loop over all XCoords
-  for xaxis in dataset.axes:
-    if not isinstance(xaxis,XCoord): continue
-    # Find the matching YCoord
-    for yaxis in dataset.axes:
-      if not isinstance(yaxis,YCoord): continue
-      if not Horizontal.compatible(xaxis,yaxis): continue
+  # Dictionary of lat/lon fields
+  lats = {}
+  lons = {}
 
-      grtyp = xaxis.atts['grtyp']
+  for v in varlist:
+    if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
+    xaxis = v.getaxis(XCoord)
+    yaxis = v.getaxis(YCoord)
 
-      if grtyp in ('N', 'S'):
-        d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
-        nhem = 1 if grtyp == 'N' else 2
-        lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
-      else:
-        print "add_latlon: can't handle grtyp '%s' yet"%grtyp
-        continue
+    grtyp = xaxis.atts['grtyp']
 
-      # Convert the raw lat/lon values to a Var
-      lat = Var([xaxis,yaxis], values=lat, name='latitudes')
-      lon = Var([xaxis,yaxis], values=lon, name='longitudes')
+    # Polar stereographic?
+    if grtyp in ('N', 'S'):
+      d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
+      nhem = 1 if grtyp == 'N' else 2
+      lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
+    else:
+      warn ("can't handle grtyp '%s' yet"%grtyp)
+      continue
 
-      # Append these to the list of vars
-      vars.append(lat)
-      vars.append(lon)
+    # Convert the raw lat/lon values to a Var
+    lat = Var([xaxis,yaxis], values=lat, name='latitudes')
+    lon = Var([xaxis,yaxis], values=lon, name='longitudes')
 
-  # Regroup the variables together
-  dataset = Dataset(vars, atts=dataset.atts)
+    # Use a unique identifier for these lats/lons, to avoid duplication
+    xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
+    ykey = tuple(yaxis.atts[att] for att in unique_var_atts)
+    lons[xkey] = lon
+    lats[ykey] = lat
 
-  return dataset
+  # Append these to the list of vars
+  for lat in lats.values(): varlist.append(lat)
+  for lon in lons.values(): varlist.append(lon)
+
+  return varlist
