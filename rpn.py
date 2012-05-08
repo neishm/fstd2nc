@@ -69,9 +69,27 @@ class Sigma (ZAxis):
   plotorder = -1
   plotscale = 'log'
 
+from pygeode.axis import Pres
+
 class Height_wrt_Ground (ZAxis): pass
 
+#TODO: sub-class this to allow a Hybrid.fromvar()-type thing
+from pygeode.axis import Hybrid
+
 class Theta (ZAxis): pass
+
+# How the ip1 types get mapped to the above classes:
+#
+# kind    : level type
+# 0       : height [m] (metres)
+# 1       : sigma  [sg] (0.0->1.0)
+# 2       : pressure [mb] (millibars)
+# 3       : arbitrary code
+# 4       : height [M] (metres) with respect to ground level
+# 5       : hybrid coordinates [hy] (0.0->1.0)
+# 6       : theta [th]
+#
+vertical_type = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}
 
 # Axis with an associated type
 # Slightly more specific than I or J axis, as we now have coordinate values,
@@ -109,7 +127,7 @@ class XCoord(Horizontal): pass  # '>>'
 class YCoord(Horizontal): pass  # '^^'
 
 
-del Axis, ZAxis
+del Axis
 
 
 #kind    : level type
@@ -463,6 +481,69 @@ def attach_xycoords (varlist):
 
   return varlist
 
+# Helper method - decode an ip1 value
+def decode_ip1 (ip1):
+  import numpy as np
+  ip1 = np.array(ip1, dtype=np.int)
+  ip1 &= 0x0FFFFFF;
+  exp = ip1>>20
+  ip1 &= 0x00FFFFF
+  ip1 = np.asarray(ip1,'float32')
+  ip1 *= 10000;
+  ip1 /= 10.**exp
+  return ip1
+
+
+# Helper method - decode the vertical coordinate (ip1)
+def decode_zcoord (varlist):
+  import numpy as np
+
+  # The HY record has no dimensionality of its own, so we can't create
+  # particular axes until we match it to particular variables.
+  hycoords= [v for v in varlist if v.name == 'HY']
+
+  varlist = [v for v in varlist if v.name not in ('HY',)]
+
+  # Loop over the other (non-coordinate) variables, and apply whatever
+  # coords we can.
+  for i,v in enumerate(varlist):
+    zcoord = v.getaxis(Z)
+
+    # First, decode the ip1 values
+    ip1 = v.getaxis(Z).values
+    coordtype = ip1[0]>>24
+    ip1 = decode_ip1 (ip1)
+
+    # Set a default axis - just in case we don't get anything proper
+    zcoord = ZAxis(ip1)
+
+    # Special case - hybrid axis
+    # we need the special 'HY' record to instantiate this
+    if vertical_type[coordtype] is Hybrid:
+     for hycoord in hycoords:
+      # Assume we only need to match the 'etiket' parameter to use HY
+      if v.atts['etiket'] == hycoord.atts['etiket']:
+        p0 = hycoord.atts['ig1'] * 100.
+        hy_ip1 = hycoord.getaxis(Z).values[0]
+        plid = decode_ip1(hy_ip1) * 100.
+        exp = hycoord.atts['ig2'] / 1000.
+        etatop = plid / p0
+
+        zvalues = np.array(zcoord.values)
+        zvalues[zvalues<etatop] = etatop  # fix bug where z value is slightly less than etatop
+        B = ((zvalues - etatop)/(1-etatop))**exp
+        A = p0 * (zvalues - B)
+        zcoord = Hybrid(zvalues,A,B)
+        del p0, hy_ip1, plid, exp, etatop, zvalues, B, A
+
+    # Other vertical coordinates (easy case)
+    else:
+      zcoord = vertical_type[coordtype](zcoord.values)
+
+    varlist[i] = v.replace_axes(Z = zcoord)
+
+  return varlist
+
 
 def open (filename):
   from pygeode.dataset import Dataset
@@ -485,6 +566,8 @@ def open (filename):
 
   # Do some filtering
   vars = attach_xycoords(vars)
+  print vars
+  vars = decode_zcoord(vars)
   print vars
 
   # Convert to a dataset
