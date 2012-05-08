@@ -602,7 +602,6 @@ def decode_latlon (varlist):
   for i, v in enumerate(varlist):
 
     grtyp = v.atts['grtyp']
-    if grtyp not in ('A','B','G'): continue
 
     ni = v.atts['ni']
     nj = v.atts['nj']
@@ -622,12 +621,29 @@ def decode_latlon (varlist):
       lon = Lon(360./ni * np.arange(ni))
       lat = gausslat(nj)
 
-    if v.atts['ig1'] != 0:
+    # Cheap hack - Z grid on regular lat/lon?
+    elif grtyp == 'Z' and v.hasaxis(XCoord) and v.hasaxis(YCoord):
+      xcoord = v.getaxis(XCoord)
+      ycoord = v.getaxis(YCoord)
+      ig1, ig2, ig3, ig4 = map(xcoord.atts.get, ['ig1','ig2','ig3','ig4'])
+      # This trick only works for 'E' coordinates
+      if xcoord.atts['grtyp'] != 'E': continue
+      # Also only works for a particular kind of 'E' coordinates?
+      if ig1 != 900 or ig2 != 0 or ig3 != 43200 or ig4 != 43200: continue
+      lon = Lon(xcoord.values)
+      lat = Lat(ycoord.values)
+
+    # Unhandled grid type
+    else: continue
+
+    # Check for hemispheric data?
+    if grtyp in ('A','B','G') and v.atts['ig1'] != 0:
       warn("can't handle northern/southern hemispheric grids yet.",stacklevel=2)
       continue
 
     # North to south?
-    if v.atts['ig2'] == 1: lat = Lat(lat.values[::-1])
+    if grtyp in ('A','B','G') and v.atts['ig2'] == 1:
+      lat = Lat(lat.values[::-1])
 
     varlist[i] = v.replace_axes (I = lon, xcoord = lon, J = lat, ycoord = lat, ignore_mismatch=True)
 
