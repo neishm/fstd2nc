@@ -550,6 +550,7 @@ def decode_zcoord (varlist):
 # Helper method - decode time axis
 def decode_timeaxis (varlist):
   import numpy as np
+  from warnings import warn
 
   # Make a copy of the list
   varlist = list(varlist)
