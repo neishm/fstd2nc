@@ -126,6 +126,8 @@ class Horizontal(Axis):
 class XCoord(Horizontal): pass  # '>>'
 class YCoord(Horizontal): pass  # '^^'
 
+from pygeode.axis import TAxis
+from pygeode.timeaxis import StandardTime
 
 del Axis
 
@@ -548,7 +550,6 @@ def decode_zcoord (varlist):
 # Helper method - decode time axis
 def decode_timeaxis (varlist):
   import numpy as np
-  from pygeode.timeaxis import StandardTime
 
   # Make a copy of the list
   varlist = list(varlist)
@@ -632,6 +633,34 @@ def decode_latlon (varlist):
 
   return varlist
 
+# Helper method - remove degenerate axes
+def remove_degenerate_axes (varlist):
+  varlist = list(varlist)
+
+  for i, v in enumerate(varlist):
+    remove_axes = []
+
+    # Remove k dimension?
+    if v.hasaxis(K):
+      if len(v.getaxis(K)) == 1:
+        remove_axes.append(v.whichaxis(K))
+
+    # Remove levels (if only level is 0m above ground)
+    if v.hasaxis(Height):
+      height = v.getaxis(Height).values
+      if len(height) == 1 and height[0] == 0:
+        remove_axes.append(v.whichaxis(Height))
+    # Remove degenerate time axis?
+    if not v.hasaxis(StandardTime):
+      taxis = v.getaxis(TAxis)
+      if len(taxis) == 1 and taxis[0] == 0:
+        remove_axes.append(v.whichaxis(TAxis))
+
+    if len(remove_axes) > 0:
+      varlist[i] = v.squeeze(*remove_axes)
+
+  return varlist
+
 
 def open (filename):
   from pygeode.dataset import Dataset
@@ -660,6 +689,8 @@ def open (filename):
   vars = decode_timeaxis(vars)
   print vars
   vars = decode_latlon(vars)
+  print vars
+  vars = remove_degenerate_axes(vars)
   print vars
 
   # Convert to a dataset
