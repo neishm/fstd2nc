@@ -476,7 +476,6 @@ def open (filename):
   assert exists(filename), "Can't find %s"%filename
 
   nrecs = lib.get_num_records(filename)
-  print nrecs
 
   headers = (RecordHeader*nrecs)()
 
@@ -486,26 +485,17 @@ def open (filename):
 
   # Generate PyGeode vars based on the header information
   vars = [RPN_Var(filename, headers) for headers in vars.values()]
-  print vars
 
   # Do some filtering
   vars = attach_xycoords(vars)
-  print vars
   vars = decode_zcoord(vars)
-  print vars
   vars = decode_timeaxis(vars)
-  print vars
   vars = decode_latlon(vars)
-  print vars
   vars = remove_degenerate_axes(vars)
-  print vars
   vars = add_latlon(vars)
-  print vars
 
   # Convert to a dataset
   dataset = Dataset(vars)
-
-  print dataset
 
   return dataset
 
