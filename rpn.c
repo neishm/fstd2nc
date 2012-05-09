@@ -8,8 +8,8 @@
 
 typedef unsigned char byte;
 
-int read32 (byte *b) {
-  return (((int)(b[0]))<<24) | (((int)(b[1]))<<16) | (((int)(b[2]))<<8) | (((int)(b[3]))<<0);
+unsigned int read32 (byte *b) {
+  return (((unsigned int)(b[0]))<<24) | (((int)(b[1]))<<16) | (((int)(b[2]))<<8) | (((int)(b[3]))<<0);
 }
 
 int read24 (byte *b) {
