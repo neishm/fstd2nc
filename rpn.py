@@ -579,8 +579,8 @@ def llfxy (x,y,d60,dgrw,nhem):
   import numpy as np
 
   # Reshape x and y into 2D arrays
-  X = x.reshape(-1,1)
-  Y = y.reshape(1,-1)
+  X = x.reshape(1,-1)
+  Y = y.reshape(-1,1)
 
   c_b3 = 90.
   c_b4 = 180.
@@ -595,7 +595,7 @@ def llfxy (x,y,d60,dgrw,nhem):
 
 #  if x < 0:
 #    dlon += r_sign(c_b4, y)
-  dlon[x<0,:] += 180. * np.sign(Y)
+  dlon[:,x<0] += 180. * np.sign(Y)
 
   dlon -= dgrw
 
