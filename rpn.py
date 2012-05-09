@@ -497,8 +497,11 @@ def add_latlon (varlist):
   varlist = list(varlist)
 
   # Dictionary of lat/lon fields
-  lats = {}
-  lons = {}
+  latdict = {}
+  londict = {}
+  # Ordered version
+  lats = []
+  lons = []
 
   for v in varlist:
     if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
@@ -523,12 +526,16 @@ def add_latlon (varlist):
     # Use a unique identifier for these lats/lons, to avoid duplication
     xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
     ykey = tuple(yaxis.atts[att] for att in unique_var_atts)
-    lons[xkey] = lon
-    lats[ykey] = lat
+    if xkey not in londict:
+      londict[xkey] = lon
+      lons.append(lon)
+    if ykey not in latdict:
+      latdict[ykey] = lat
+      lats.append(lat)
 
   # Append these to the list of vars
-  for lat in lats.values(): varlist.append(lat)
-  for lon in lons.values(): varlist.append(lon)
+  varlist.extend(lats)
+  varlist.extend(lons)
 
   return varlist
 
