@@ -2,6 +2,9 @@ from pygeode.tools import load_lib
 
 lib = load_lib("plugins/rpn/librpn.so")
 
+######################################################################
+# This first section defines a basic interface to get the raw data out.
+######################################################################
 
 from ctypes import Structure, c_int, c_uint, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
 Nomvar = c_char * 5
@@ -52,8 +55,7 @@ class RecordHeader (Structure):
 unique_var_atts = 'nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'grtyp', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4'
 
 
-from pygeode.var import Var
-from pygeode.axis import Axis, ZAxis
+from pygeode.axis import Axis
 
 # Raw axes from the file
 class T(Axis): pass  # time axis
@@ -63,78 +65,12 @@ class K(Axis): pass  # ?? (nk)
 class J(Axis): pass  # latitudes?
 class I(Axis): pass  # longitudes?
 
-# More specific sub-axes:
-class Height (ZAxis): pass
-class Sigma (ZAxis):
-  plotorder = -1
-  plotscale = 'log'
-
-from pygeode.axis import Pres
-
-class Height_wrt_Ground (ZAxis): pass
-
-#TODO: sub-class this to allow a Hybrid.fromvar()-type thing
-from pygeode.axis import Hybrid
-
-class Theta (ZAxis): pass
-
-# How the ip1 types get mapped to the above classes:
-#
-# kind    : level type
-# 0       : height [m] (metres)
-# 1       : sigma  [sg] (0.0->1.0)
-# 2       : pressure [mb] (millibars)
-# 3       : arbitrary code
-# 4       : height [M] (metres) with respect to ground level
-# 5       : hybrid coordinates [hy] (0.0->1.0)
-# 6       : theta [th]
-#
-vertical_type = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}
-
-# Axis with an associated type
-# Slightly more specific than I or J axis, as we now have coordinate values,
-#  a grid type, and associated ig1, ig2, ig3, ig4.
-# We still don't interpret the values in any geophysical sense, though.
-class Horizontal(Axis):
-  @classmethod
-  def fromvar (cls, coordvar):
-    # Get the coordinate values
-    values = coordvar.get().squeeze()
-
-    # Get the metadata
-    atts = dict(**coordvar.atts)
-    zaxis = coordvar.getaxis('Z')
-    assert len(zaxis) == 1
-    atts['ip1'] = int(zaxis.values[0])
-    faxis = coordvar.getaxis('F')
-    assert len(faxis) == 1
-    atts['ip2'] = int(faxis.values[0])
-
-    # Instantiate
-    axis = cls(values, atts=atts)
-    return axis
-
-
-class XCoord(Horizontal): pass  # '>>'
-class YCoord(Horizontal): pass  # '^^'
-
-from pygeode.axis import TAxis
-from pygeode.timeaxis import StandardTime
-
 del Axis
 
 
-#kind    : level type
-# 0       : height [m] (metres)
-# 1       : sigma  [sg] (0.0->1.0)
-# 2       : pressure [mb] (millibars)
-# 3       : arbitrary code
-# 4       : height [M] (metres) with respect to ground level
-# 5       : hybrid coordinates [hy] (0.0->1.0)
-# 6       : theta [th]
 
-
-# Wrap a list of headers into a PyGeode Var
+# Collect a list of headers into a PyGeode Var
+from pygeode.var import Var
 class RPN_Var (Var):
   def __init__ (self, filename, headers):
     from pygeode.var import Var
@@ -241,6 +177,88 @@ def collect_headers (headers):
     var_headers[key].append(h)
 
   return var_headers
+
+
+# Open an RPN file, return a list of raw variables (minimal processing)
+def rawopen (filename):
+  from os.path import exists
+  assert exists(filename), "Can't find %s"%filename
+  nrecs = lib.get_num_records(filename)
+  headers = (RecordHeader*nrecs)()
+  lib.get_record_headers (filename, headers)
+  vardict = collect_headers(headers)
+  # Generate PyGeode vars based on the header information
+  varlist = [RPN_Var(filename, headers) for headers in vardict.values()]
+  return varlist
+
+
+######################################################################
+#  The stuff below wraps a basic RPN variable to have a more useful
+#  geophysical representation.
+######################################################################
+
+# More specific sub-axes:
+from pygeode.axis import ZAxis
+class Height (ZAxis): pass
+class Sigma (ZAxis):
+  plotorder = -1
+  plotscale = 'log'
+
+from pygeode.axis import Pres
+
+class Height_wrt_Ground (ZAxis): pass
+
+#TODO: sub-class this to allow a Hybrid.fromvar()-type thing
+from pygeode.axis import Hybrid
+
+class Theta (ZAxis): pass
+
+# How the ip1 types get mapped to the above classes:
+#
+# kind    : level type
+# 0       : height [m] (metres)
+# 1       : sigma  [sg] (0.0->1.0)
+# 2       : pressure [mb] (millibars)
+# 3       : arbitrary code
+# 4       : height [M] (metres) with respect to ground level
+# 5       : hybrid coordinates [hy] (0.0->1.0)
+# 6       : theta [th]
+#
+vertical_type = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}
+
+# Axis with an associated type
+# Slightly more specific than I or J axis, as we now have coordinate values,
+#  a grid type, and associated ig1, ig2, ig3, ig4.
+# We still don't interpret the values in any geophysical sense, though.
+from pygeode.axis import Axis
+class Horizontal(Axis):
+  @classmethod
+  def fromvar (cls, coordvar):
+    # Get the coordinate values
+    values = coordvar.get().squeeze()
+
+    # Get the metadata
+    atts = dict(**coordvar.atts)
+    zaxis = coordvar.getaxis('Z')
+    assert len(zaxis) == 1
+    atts['ip1'] = int(zaxis.values[0])
+    faxis = coordvar.getaxis('F')
+    assert len(faxis) == 1
+    atts['ip2'] = int(faxis.values[0])
+
+    # Instantiate
+    axis = cls(values, atts=atts)
+    return axis
+del Axis
+
+class XCoord(Horizontal): pass  # '>>'
+class YCoord(Horizontal): pass  # '^^'
+
+from pygeode.axis import TAxis
+from pygeode.timeaxis import StandardTime
+
+
+
   
 # Helper method - check if a coordinate is compatible with a variable
 # (on raw variables)
@@ -469,22 +487,61 @@ def remove_degenerate_axes (varlist):
   return varlist
 
 
+# Filter function
+# Check for any XCoord/YCoord axes, generate latitude and longitude fields
+def add_latlon (varlist):
+  from pygeode.var import Var
+  from warnings import warn
+
+  # Pull out the variables
+  varlist = list(varlist)
+
+  # Dictionary of lat/lon fields
+  lats = {}
+  lons = {}
+
+  for v in varlist:
+    if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
+    xaxis = v.getaxis(XCoord)
+    yaxis = v.getaxis(YCoord)
+
+    grtyp = xaxis.atts['grtyp']
+
+    # Polar stereographic?
+    if grtyp in ('N', 'S'):
+      d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
+      nhem = 1 if grtyp == 'N' else 2
+      lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
+    else:
+      warn ("can't handle grtyp '%s' yet"%grtyp)
+      continue
+
+    # Convert the raw lat/lon values to a Var
+    lat = Var([xaxis,yaxis], values=lat, name='latitudes')
+    lon = Var([xaxis,yaxis], values=lon, name='longitudes')
+
+    # Use a unique identifier for these lats/lons, to avoid duplication
+    xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
+    ykey = tuple(yaxis.atts[att] for att in unique_var_atts)
+    lons[xkey] = lon
+    lats[ykey] = lat
+
+  # Append these to the list of vars
+  for lat in lats.values(): varlist.append(lat)
+  for lon in lons.values(): varlist.append(lon)
+
+  return varlist
+
+
+
+######################################################################
+# You're probably looking for this
+######################################################################
 def open (filename):
   from pygeode.dataset import Dataset
-  from os.path import exists
 
-  assert exists(filename), "Can't find %s"%filename
-
-  nrecs = lib.get_num_records(filename)
-
-  headers = (RecordHeader*nrecs)()
-
-  lib.get_record_headers (filename, headers)
-
-  vars = collect_headers(headers)
-
-  # Generate PyGeode vars based on the header information
-  vars = [RPN_Var(filename, headers) for headers in vars.values()]
+  # Get the raw (unprocessed) variables
+  vars = rawopen(filename)
 
   # Do some filtering
   vars = attach_xycoords(vars)
@@ -498,6 +555,8 @@ def open (filename):
   dataset = Dataset(vars)
 
   return dataset
+
+
 
 
 # Miscellaneous functions
@@ -552,47 +611,4 @@ def llfxy (x,y,d60,dgrw,nhem):
 
   return dlat, dlon
 
-# Filter function
-# Check for any XCoord/YCoord axes, generate latitude and longitude fields
-def add_latlon (varlist):
-  from pygeode.var import Var
-  from warnings import warn
 
-  # Pull out the variables
-  varlist = list(varlist)
-
-  # Dictionary of lat/lon fields
-  lats = {}
-  lons = {}
-
-  for v in varlist:
-    if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
-    xaxis = v.getaxis(XCoord)
-    yaxis = v.getaxis(YCoord)
-
-    grtyp = xaxis.atts['grtyp']
-
-    # Polar stereographic?
-    if grtyp in ('N', 'S'):
-      d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
-      nhem = 1 if grtyp == 'N' else 2
-      lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
-    else:
-      warn ("can't handle grtyp '%s' yet"%grtyp)
-      continue
-
-    # Convert the raw lat/lon values to a Var
-    lat = Var([xaxis,yaxis], values=lat, name='latitudes')
-    lon = Var([xaxis,yaxis], values=lon, name='longitudes')
-
-    # Use a unique identifier for these lats/lons, to avoid duplication
-    xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
-    ykey = tuple(yaxis.atts[att] for att in unique_var_atts)
-    lons[xkey] = lon
-    lats[ykey] = lat
-
-  # Append these to the list of vars
-  for lat in lats.values(): varlist.append(lat)
-  for lon in lons.values(): varlist.append(lon)
-
-  return varlist
