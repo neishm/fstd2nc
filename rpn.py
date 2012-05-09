@@ -2,149 +2,131 @@ from pygeode.tools import load_lib
 
 lib = load_lib("plugins/rpn/librpn.so")
 
+######################################################################
+# This first section defines a basic interface to get the raw data out.
+######################################################################
 
-from ctypes import Structure, c_int, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
+from ctypes import Structure, c_int, c_uint, c_char, c_longlong, c_ulonglong, c_float, POINTER, byref, c_void_p
 Nomvar = c_char * 5
 Etiket = c_char * 13
 Typvar = c_char * 3
 
+
 """
 typedef struct {
-  Nomvar nomvar;
+  int status;
+  int size;
+  unsigned long long int data;
+  int deet;
+  int npak;
+  int ni;
+  char grtyp;
+  int nj;
+  int datyp;
+  int nk;
+  int npas;
+  int ig4;
+  int ig2;
+  int ig1;
+  int ig3;
   Etiket etiket;
   Typvar typvar;
-  char grtyp;
-  int *ip1;
-  int *ip2;
+  Nomvar nomvar;
+  int ip1;
+  int ip2;
   int ip3;
-  int ig1;
-  int ig2;
-  int ig3;
-  int ig4;
-  int nt;
-  int nforecasts;
-  int nz;
-  int nk;
-  int nj;
-  int ni;
-  int deet;
-  int npas;
-  long long *t;
-  unsigned long long *offsets;
-} Varinfo_entry;
-
+  long long int dateo;
+  unsigned int checksum;
+} RecordHeader;
 """
-class Varinfo_entry (Structure):
-  _fields_ = [('nomvar', Nomvar), ('etiket', Etiket),
-              ('typvar', Typvar), ('grtyp', c_char),
-              ('ip1', POINTER(c_int)), ('ip2', POINTER(c_int)), ('ip3', c_int),
-              ('ig1', c_int), ('ig2', c_int), ('ig3', c_int), ('ig4', c_int),
-              ('nt', c_int), ('nforecasts', c_int), ('nz', c_int),
-              ('nk', c_int), ('nj', c_int), ('ni', c_int),
-              ('deet', c_int), ('npas', c_int), ('t', POINTER(c_longlong)),
-              ('offsets', POINTER(c_ulonglong))]
-  def __str__ (self):
-    return "%4s  %12s  %2s %1s %4d %4d %4d %4d %4d"%(
-           self.nomvar, self.etiket, self.typvar, self.grtyp,
-           self.nt, self.nz, self.nk, self.nj, self.ni
-    )
 
-MAX_NVARS = 1000
-class Varinfo (Structure):
-  _fields_ = [('nvars', c_int), ('var', Varinfo_entry*MAX_NVARS)]
+class RecordHeader (Structure):
+  _fields_ = [('status', c_int), ('size', c_int), ('data', c_ulonglong),
+              ('deet', c_int), ('npak', c_int), ('ni', c_int),
+              ('grtyp', c_char), ('nj', c_int), ('datyp', c_int),
+              ('nk', c_int), ('npas', c_int), ('ig4', c_int),
+              ('ig2', c_int), ('ig1', c_int), ('ig3', c_int),
+              ('etiket', Etiket), ('typvar', Typvar), ('nomvar', Nomvar),
+              ('ip1', c_int), ('ip2', c_int), ('ip3', c_int),
+              ('dateo', c_longlong), ('checksum', c_uint)]
 
-Varinfo_p = POINTER(Varinfo)
-# hook in a delete function?
-def Varinfo_p_del(self):
-  self.rpnlib.free_varinfo(self)
-Varinfo_p.__del__ = Varinfo_p_del
-Varinfo_p.rpnlib = lib
 
-lib.get_varinfo.restype = Varinfo_p
-lib.fopen.restype = c_void_p
+# What header attributes define a unique variable
+unique_var_atts = 'nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'grtyp', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4'
 
-from pygeode.var import Var
-from pygeode.axis import Axis, ZAxis
+
+from pygeode.axis import Axis
 
 # Raw axes from the file
 class T(Axis): pass  # time axis
-class F(Axis): pass  # forecast axis
+class F(Axis): name = 'forecast'  # forecast axis
 class Z(Axis): pass  # levels (over ip1)
 class K(Axis): pass  # ?? (nk)
 class J(Axis): pass  # latitudes?
 class I(Axis): pass  # longitudes?
 
-# More specific sub-axes:
-class Height (ZAxis): pass
-class Sigma (ZAxis):
-  plotorder = -1
-  plotscale = 'log'
-
-class Height_wrt_Ground (ZAxis): pass
-
-class Theta (ZAxis): pass
-
-# Axis with an associated type
-# Slightly more specific than I or J axis, as we now have coordinate values,
-#  a grid type, and associated ig1, ig2, ig3, ig4.
-# We still don't interpret the values in any geophysical sense, though.
-class Horizontal(Axis):
-  @classmethod
-  def fromvar (cls, coordvar):
-    from pygeode.axis import Axis
-    axis = cls(coordvar.get().squeeze())
-    axis.atts['grtyp'] = coordvar.var_.grtyp
-    axis.atts['ig1'] = int(coordvar.var_.ig1)
-    axis.atts['ig2'] = int(coordvar.var_.ig2)
-    axis.atts['ig3'] = int(coordvar.var_.ig3)
-    axis.atts['ig4'] = int(coordvar.var_.ig4)
-    axis.atts['ip1'] = int(coordvar.var_.ip1[0])
-    axis.atts['ip2'] = int(coordvar.var_.ip2[0])
-    axis.atts['ip3'] = int(coordvar.var_.ip3)
-    return axis
-
-  # Check if 2 coordinates are part of the same grid definition (matching ipX/igX)
-  @staticmethod
-  def compatible (x, y):
-    assert isinstance(x, Horizontal)
-    assert isinstance(y, Horizontal)
-    for att in 'grtyp', 'ip1', 'ip2', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4':
-      if x.atts[att] != y.atts[att]: return False
-    return True
-
-class XCoord(Horizontal): pass  # '>>'
-class YCoord(Horizontal): pass  # '^^'
+del Axis
 
 
-del Axis, ZAxis
 
-
-#kind    : level type
-# 0       : height [m] (metres)
-# 1       : sigma  [sg] (0.0->1.0)
-# 2       : pressure [mb] (millibars)
-# 3       : arbitrary code
-# 4       : height [M] (metres) with respect to ground level
-# 5       : hybrid coordinates [hy] (0.0->1.0)
-# 6       : theta [th]
-
-
-# Wrap a Varinfo_entry into a pygeode Var
+# Collect a list of headers into a PyGeode Var
+from pygeode.var import Var
 class RPN_Var (Var):
-  def __init__ (self, var_, filename):
+  def __init__ (self, filename, headers):
     from pygeode.var import Var
-    t = T(var_.nt)
-    f = F(var_.nforecasts)
-    z = Z(var_.nz)
-    k = K(var_.nk)
-    j = J(var_.nj)
-    i = I(var_.ni)
-    self.var_ = var_
+    import numpy as np
+
+    name = headers[0].nomvar.strip()
+
+    # Get unique time steps, forecasts, and levels
+    # dateo, ip2, ip1?
+    dateo_list = []
+    ip2_list = []
+    ip1_list = []
+
+    for h in headers:
+      if h.dateo not in dateo_list:
+        dateo_list.append(h.dateo)
+      if h.ip2 not in ip2_list:
+        ip2_list.append(h.ip2)
+      if h.ip1 not in ip1_list:
+        ip1_list.append(h.ip1)
+
+    # Encode as integers
+    dateo_list = np.array(dateo_list, dtype='int64')
+    ip2_list = np.array(ip2_list, dtype='int64')
+    ip1_list = np.array(ip1_list, dtype='int64')
+
+    # Define the axes
+    t = T(dateo_list)
+    f = F(ip2_list)
+    z = Z(ip1_list)
+    k = K(headers[0].nk)
+    j = J(headers[0].nj)
+    i = I(headers[0].ni)
+
+    # Set some metadata (things that uniquely define the variable)
+    atts = {}
+    for att in unique_var_atts:
+      atts[att] = getattr(headers[0], att)
+
+    # Generate a matrix for the order of headers
+    header_order = np.empty((len(t),len(f),len(z)), dtype=int)
+    header_order[:] = -1
+    for hi, h in enumerate(headers):
+      ti = np.where(dateo_list == h.dateo)[0][0]
+      fi = np.where(ip2_list == h.ip2)[0][0]
+      zi = np.where(ip1_list == h.ip1)[0][0]
+      header_order[ti,fi,zi] = hi
+
+    # Make sure we have all the records we need
+    assert np.all(header_order >= 0), "some records are missing from variable '%s'"%name
+
     self.filename = filename
-    Var.__init__ (self, [t,f,z,k,j,i], name=var_.nomvar.strip(), dtype='float32')
-    # Pre-fetch the values for coordinate records
-    if self.name in ('>>','^^','!!','HY'):
-      self.values = self.get()
+    self.headers = headers
+    self.header_order = header_order
+
+    Var.__init__ (self, [t,f,z,k,j,i], name=name, atts=atts, dtype='float32')
 
   from pygeode.tools import need_full_axes
   @need_full_axes(I,J,K)
@@ -153,21 +135,24 @@ class RPN_Var (Var):
     import numpy as np
     from ctypes import c_int32, byref
 
-    file = lib.fopen(self.filename, "rb")
-
     out = np.empty(view.shape, self.dtype)
 
     # Time, level slicing relative to *whole* variable
     TI = view.integer_indices[0]
-    TI = (c_int32*len(TI))(*TI)
     FI = view.integer_indices[1]
-    FI = (c_int32*len(FI))(*FI)
     ZI = view.integer_indices[2]
-    ZI = (c_int32*len(ZI))(*ZI)
 
-    lib.read_data (file, byref(self.var_), len(TI), TI, len(FI), FI, len(ZI), ZI, point(out))
+    # Generate a list of all the headers we need
+    headers = []
+    for ti in TI:
+      for fi in FI:
+        for zi in ZI:
+          hi = self.header_order[ti,fi,zi]
+          headers.append(self.headers[hi])
+    headers = (RecordHeader*len(headers))(*headers)
 
-    lib.fclose (file)
+    recsize = self.shape[3] * self.shape[4] * self.shape[5]
+    lib.read_data (self.filename, len(headers), headers, recsize, point(out))
 
     pbar.update(100)
 
@@ -176,228 +161,409 @@ class RPN_Var (Var):
 
 del Var
 
-# Higher-level wrapper for vars
-def wrap (var, stuff):
-  from pygeode.axis import Axis, Lat, Lon, gausslat, Pres, ZAxis, Hybrid, TAxis
-  from pygeode.timeaxis import StandardTime
+
+# Helper method - group headers based on what variable the represent
+def collect_headers (headers):
+  var_headers = {}
+  for h in headers:
+    # Generate a unique key for this variable
+    key = tuple(getattr(h,att) for att in unique_var_atts)
+    # Include part of the ip1 parameter (must have consistent vertical coordinate type)
+    key += (h.ip1>>24,)
+
+    if key not in var_headers:
+      var_headers[key] = []
+    # Add this header to the variable
+    var_headers[key].append(h)
+
+  return var_headers
+
+
+# Open an RPN file, return a list of raw variables (minimal processing)
+def rawopen (filename):
+  from os.path import exists
+  assert exists(filename), "Can't find %s"%filename
+  nrecs = lib.get_num_records(filename)
+  headers = (RecordHeader*nrecs)()
+  lib.get_record_headers (filename, headers)
+  vardict = collect_headers(headers)
+  # Generate PyGeode vars based on the header information
+  varlist = [RPN_Var(filename, headers) for headers in vardict.values()]
+  return varlist
+
+
+######################################################################
+#  The stuff below wraps a basic RPN variable to have a more useful
+#  geophysical representation.
+######################################################################
+
+# More specific sub-axes:
+from pygeode.axis import ZAxis
+class Height (ZAxis): pass
+class Sigma (ZAxis):
+  plotorder = -1
+  plotscale = 'log'
+
+from pygeode.axis import Pres
+
+class Height_wrt_Ground (ZAxis): pass
+
+#TODO: sub-class this to allow a Hybrid.fromvar()-type thing
+from pygeode.axis import Hybrid
+
+class Theta (ZAxis): pass
+
+# How the ip1 types get mapped to the above classes:
+#
+# kind    : level type
+# 0       : height [m] (metres)
+# 1       : sigma  [sg] (0.0->1.0)
+# 2       : pressure [mb] (millibars)
+# 3       : arbitrary code
+# 4       : height [M] (metres) with respect to ground level
+# 5       : hybrid coordinates [hy] (0.0->1.0)
+# 6       : theta [th]
+#
+vertical_type = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}
+
+# Axis with an associated type
+# Slightly more specific than I or J axis, as we now have coordinate values,
+#  a grid type, and associated ig1, ig2, ig3, ig4.
+# We still don't interpret the values in any geophysical sense, though.
+from pygeode.axis import Axis
+class Horizontal(Axis):
+  @classmethod
+  def fromvar (cls, coordvar):
+    # Get the coordinate values
+    values = coordvar.get().squeeze()
+
+    # Get the metadata
+    atts = dict(**coordvar.atts)
+    zaxis = coordvar.getaxis('Z')
+    assert len(zaxis) == 1
+    atts['ip1'] = int(zaxis.values[0])
+    faxis = coordvar.getaxis('F')
+    assert len(faxis) == 1
+    atts['ip2'] = int(faxis.values[0])
+
+    # Instantiate
+    axis = cls(values, atts=atts)
+    return axis
+del Axis
+
+class XCoord(Horizontal): pass  # '>>'
+class YCoord(Horizontal): pass  # '^^'
+
+from pygeode.axis import TAxis
+from pygeode.timeaxis import StandardTime
+
+
+
+  
+# Helper method - check if a coordinate is compatible with a variable
+# (on raw variables)
+def uses_coord (v, coord):
+  if v.atts['ig1'] != coord.atts['ip1']: return False
+  if v.atts['ig2'] != coord.atts['ip2']: return False
+  if v.atts['ig3'] != coord.atts['ip3']: return False
+  return True
+
+# Helper method - apply the coordinate variables ('>>','^^', 'HY') to the variables
+def attach_xycoords (varlist):
+
+  # Get the various coords
+  xcoords = [XCoord.fromvar(v) for v in varlist if v.name == '>>']
+  ycoords = [YCoord.fromvar(v) for v in varlist if v.name == '^^']
+
+  varlist = [v for v in varlist if v.name not in ('>>','^^')]
+
+  # Loop over the other (non-coordinate) variables, and apply whatever
+  # coords we can.
+  for i,v in enumerate(varlist):
+    icoord = v.getaxis(I)
+    jcoord = v.getaxis(J)
+    for xcoord in xcoords:
+      if uses_coord (v, xcoord): icoord = xcoord
+    for ycoord in ycoords:
+      if uses_coord (v, ycoord): jcoord = ycoord
+
+    varlist[i] = v.replace_axes(I = icoord, J = jcoord)
+
+  return varlist
+
+# Helper method - decode an ip1 value
+def decode_ip1 (ip1):
+  import numpy as np
+  ip1 = np.array(ip1, dtype=np.int)
+  ip1 &= 0x0FFFFFF;
+  exp = ip1>>20
+  ip1 &= 0x00FFFFF
+  ip1 = np.asarray(ip1,'float32')
+  ip1 *= 10000;
+  ip1 /= 10.**exp
+  return ip1
+
+
+# Helper method - decode the vertical coordinate (ip1)
+def decode_zcoord (varlist):
+  import numpy as np
+
+  # The HY record has no dimensionality of its own, so we can't create
+  # particular axes until we match it to particular variables.
+  hycoords= [v for v in varlist if v.name == 'HY']
+
+  varlist = [v for v in varlist if v.name not in ('HY',)]
+
+  # Loop over the other (non-coordinate) variables, and apply whatever
+  # coords we can.
+  for i,v in enumerate(varlist):
+    zcoord = v.getaxis(Z)
+
+    # First, decode the ip1 values
+    ip1 = v.getaxis(Z).values
+    coordtype = ip1[0]>>24
+    ip1 = decode_ip1 (ip1)
+
+    # Set a default axis - just in case we don't get anything proper
+    zcoord = ZAxis(ip1)
+
+    # Special case - hybrid axis
+    # we need the special 'HY' record to instantiate this
+    if vertical_type[coordtype] is Hybrid:
+     for hycoord in hycoords:
+      # Assume we only need to match the 'etiket' parameter to use HY
+      if v.atts['etiket'] == hycoord.atts['etiket']:
+        p0 = hycoord.atts['ig1'] * 100.
+        hy_ip1 = hycoord.getaxis(Z).values[0]
+        plid = decode_ip1(hy_ip1) * 100.
+        exp = hycoord.atts['ig2'] / 1000.
+        etatop = plid / p0
+
+        zvalues = np.array(zcoord.values)
+        zvalues[zvalues<etatop] = etatop  # fix bug where z value is slightly less than etatop
+        B = ((zvalues - etatop)/(1-etatop))**exp
+        A = p0 * (zvalues - B)
+        zcoord = Hybrid(zvalues,A,B)
+        del p0, hy_ip1, plid, exp, etatop, zvalues, B, A
+
+    # Other vertical coordinates (easy case)
+    else:
+      zcoord = vertical_type[coordtype](zcoord.values)
+
+    varlist[i] = v.replace_axes(Z = zcoord)
+
+  return varlist
+
+
+# Helper method - decode time axis
+def decode_timeaxis (varlist):
   import numpy as np
   from warnings import warn
 
-  # Skip coordinate variables
-  if var.name in ('>>','^^','!!','HY'): return None
+  # Make a copy of the list
+  varlist = list(varlist)
 
-  # Time axis
-  nt = int(var.var_.nt)
+  # Iterate over each variable
+  for i, v in enumerate(varlist):
 
-  dateo = np.array(var.var_.t[:nt])
-  dateo = dateo/4 * 5
-  # Case 0: degenerate time axis
-  if np.all(dateo == 0):
-    warn ("degenerate time axis detected", stacklevel=3)
-    taxis = TAxis(list(dateo))
-  # Case 1: old style
-  elif np.all(dateo < 123200000):
-    dateo /= 10;  # ignore operation run digit
-    hour = dateo % 100; dateo /= 100
-    year = 1900 + (dateo % 100); dateo /= 100
-    day = dateo % 100; dateo /= 100
-    month = dateo
-    badmonths = (month < 1) + (month > 12)
-    if np.any(badmonths):
-      warn("Invalid months detected.  Resetting to 1.", stacklevel=3)
-      month[badmonths] = 1
-    baddays = (day < 1) + (day > 31)
-    if np.any(baddays):
-      warn("Invalid days detected.  Resetting to 1.", stacklevel=3)
-      day[baddays] = 1
-    taxis = StandardTime (year=year, month=month, day=day, units='hours')
-  # Case 2: new style
-  else:
-    dateo -= 123200000;
-    dateo *= 4;  # now have # seconds since Jan 1, 1980
-    # Convert to hours
-    dateo /= 3600.
-    taxis = StandardTime (values=dateo, units='hours', startdate={'year':1980})
-
-  # Forecast axis
-  #TODO: figure out why we can't use 'Axis' here
-  faxis = F(var.var_.ip2[:var.var_.nforecasts], name='forecast')
-
-  ###
-
-  # Horizontal axes
-  grtyp = var.var_.grtyp
-  ig1 = var.var_.ig1
-  ig2 = var.var_.ig2
-  ig3 = var.var_.ig3
-  ig4 = var.var_.ig4
-  ni = int(var.var_.ni)
-  nj = int(var.var_.nj)
-  if grtyp == 'A':  # lat-lon
-    xaxis = 360./ni * np.arange(ni)
-    yaxis = -90 + 180./nj * (np.arange(nj)+0.5) #1/2 gridpoint offset
-
-  elif grtyp == 'B':  # lat-lon, with poles
-    xaxis = 360./(ni-1) * np.arange(ni)
-    yaxis = -90 + 180./(nj-1) * np.arange(nj) - 90
-
-
-  elif grtyp == 'G':  # gaussian grid
-    assert ig1 == 0, "can only handle global gaussian grid right now"
-    xaxis = 360./ni * np.arange(ni)
-    yaxis = gausslat(nj).values
-
-  elif grtyp == 'Z':  # other lat-lon mesh?
-    # Get matching coords
-    coords = []
-    for v in stuff:
-      if v.name not in ('>>','^^'): continue
-      V = v.var_
-      if V.ip1[0] != ig1 or V.ip2[0] != ig2 or V.ip3 != ig3:
-        continue
-      if v.name == '>>' and V.ni != ni: continue
-      if v.name == '^^' and V.nj != nj: continue
-      coords.append(v)
-    xaxis = [v for v in coords if v.name == '>>']
-    if len(xaxis) != 1:
-      print "error - %s - len(xaxis) = %d != 1"%(var.name,len(xaxis))
-      return None
-    xaxis = xaxis[0]
-    yaxis = [v for v in coords if v.name == '^^']
-    if len(yaxis) != 1:
-      print "error - %s - len(yaxis) = %d != 1"%(var.name,len(yaxis))
-      return None
-    yaxis = yaxis[0]
-
-    #TODO: check for rotated grids (gridtyp = 'E' and IG1/IG2/IG3/IG4 indicate rotation?
-    if xaxis.var_.grtyp == 'E':
-      xaxis = Lon(xaxis.squeeze().get())
-      yaxis = Lat(yaxis.squeeze().get())
+    dateo = np.array(v.getaxis(T).values)
+    dateo = dateo/4 * 5
+    # Case 0: degenerate time axis
+    if np.all(dateo == 0):
+      warn ("degenerate time axis detected", stacklevel=3)
+      taxis = TAxis(list(dateo))
+    # Case 1: old style
+    elif np.all(dateo < 123200000):
+      dateo /= 10;  # ignore operation run digit
+      hour = dateo % 100; dateo /= 100
+      year = 1900 + (dateo % 100); dateo /= 100
+      day = dateo % 100; dateo /= 100
+      month = dateo
+      badmonths = (month < 1) + (month > 12)
+      if np.any(badmonths):
+        warn("Invalid months detected.  Resetting to 1.", stacklevel=3)
+        month[badmonths] = 1
+      baddays = (day < 1) + (day > 31)
+      if np.any(baddays):
+        warn("Invalid days detected.  Resetting to 1.", stacklevel=3)
+        day[baddays] = 1
+      taxis = StandardTime (year=year, month=month, day=day, units='hours')
+    # Case 2: new style
     else:
-      xaxis = XCoord.fromvar(xaxis)
-      yaxis = YCoord.fromvar(yaxis)
+      dateo -= 123200000;
+      dateo *= 4;  # now have # seconds since Jan 1, 1980
+      # Convert to hours
+      dateo /= 3600.
+      taxis = StandardTime (values=dateo, units='hours', startdate={'year':1980})
 
-  else:
-    print "unhandled grid type '%s' for variable '%s'"%(grtyp,var.name)
-    return None  # ignore this variable?
+    varlist[i] = v.replace_axes(T = taxis)
 
-  # Adjust the order of the latitudes?
-  if grtyp in ('A','B','G'):
-    # Global?
-    if ig1 == 0: pass
-    # Northern Hemisphere?
-    elif ig1 == 1:
-      yaxis = (yaxis+90)/2
-    # Southern Hemisphere?
-    elif ig1 == 2:
-      yaxis = (yaxis-90)/2
+  return varlist
 
-    # South to north?
-    if ig2 == 0: pass
+# Helper method - decode the latitudes / longitudes for A/B/G grids
+def decode_latlon (varlist):
+  import numpy as np
+  from pygeode.axis import gausslat, Lat, Lon
+  from warnings import warn
+
+  varlist = list(varlist)
+
+  for i, v in enumerate(varlist):
+
+    grtyp = v.atts['grtyp']
+
+    ni = v.atts['ni']
+    nj = v.atts['nj']
+
+    if grtyp == 'A':  # lat-lon
+      lon = Lon(360./ni * np.arange(ni))
+      lat = Lat(-90 + 180./nj * (np.arange(nj)+0.5)) #1/2 gridpoint offset
+
+    elif grtyp == 'B':  # lat-lon, with poles
+      lon = Lon(360./(ni-1) * np.arange(ni))
+      lat = Lat(-90 + 180./(nj-1) * np.arange(nj) - 90)
+
+    elif grtyp == 'G':  # gaussian grid
+      if v.atts['ig1'] != 0:
+        warn("can only handle global gaussian grid right now",stacklevel=2)
+        continue
+      lon = Lon(360./ni * np.arange(ni))
+      lat = gausslat(nj)
+
+    # Cheap hack - Z grid on regular lat/lon?
+    elif grtyp == 'Z' and v.hasaxis(XCoord) and v.hasaxis(YCoord):
+      xcoord = v.getaxis(XCoord)
+      ycoord = v.getaxis(YCoord)
+      ig1, ig2, ig3, ig4 = map(xcoord.atts.get, ['ig1','ig2','ig3','ig4'])
+      # This trick only works for 'E' coordinates
+      if xcoord.atts['grtyp'] != 'E': continue
+      # Also only works for a particular kind of 'E' coordinates?
+      if ig1 != 900 or ig2 != 0 or ig3 != 43200 or ig4 != 43200: continue
+      lon = Lon(xcoord.values)
+      lat = Lat(ycoord.values)
+
+    # Unhandled grid type
+    else: continue
+
+    # Check for hemispheric data?
+    if grtyp in ('A','B','G') and v.atts['ig1'] != 0:
+      warn("can't handle northern/southern hemispheric grids yet.",stacklevel=2)
+      continue
+
     # North to south?
-    elif ig2 == 1: yaxis = yaxis[::-1]
+    if grtyp in ('A','B','G') and v.atts['ig2'] == 1:
+      lat = Lat(lat.values[::-1])
 
-    # Convert the X/Y coords to Lat/Lon
-    xaxis = Lon(xaxis)
-    yaxis = Lat(yaxis)
+    varlist[i] = v.replace_axes (I = lon, xcoord = lon, J = lat, ycoord = lat, ignore_mismatch=True)
 
-  #TODO
+  return varlist
 
-  # Vertical axis
-  #kind    : level type
-  # 0       : height [m] (metres)
-  # 1       : sigma  [sg] (0.0->1.0)
-  # 2       : pressure [mb] (millibars)
-  # 3       : arbitrary code
-  # 4       : height [M] (metres) with respect to ground level
-  # 5       : hybrid coordinates [hy] (0.0->1.0)
-  # 6       : theta [th]
+# Helper method - remove degenerate axes
+def remove_degenerate_axes (varlist):
+  varlist = list(varlist)
 
-#// units of ip1
-#char ip1units[][3] = {"m", "sg", "mb", "", "M", "hy", "th"};
+  for i, v in enumerate(varlist):
+    remove_axes = []
 
-#  ip1kind = var.var_.ip1kind
-  ip1 = np.array(var.var_.ip1[:var.var_.nz])
-  # Get the kind of level
-  ip1kind = ip1>>24
-  if len(set(ip1kind)) != 1:
-    warn ("incompatible level types found in the same var for '%s'"%var.name,stacklevel=2)
-    return None
-  ip1kind = set(ip1kind).pop()
-  zclass = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}[ip1kind]
+    # Remove k dimension?
+    if v.hasaxis(K):
+      if len(v.getaxis(K)) == 1:
+        remove_axes.append(v.whichaxis(K))
 
-  # Convert codes to integer values
-  ip1 &= 0x0FFFFFF;
-  exp = ip1>>20;
-  ip1 &= 0x00FFFFF;
-  zaxis = np.asarray(ip1,'float32')
-  zaxis *= 10000;
-#  while (exp > 0) { h->ip1float /= 10; exp--; }
-  zaxis /= 10.**exp
-  
-  if zclass is Hybrid:
-    hy = [v for v in stuff if v.name == 'HY' and v.var_.etiket == var.var_.etiket]
-    if len(hy) != 1:
-      print 'error - %s - len(hy) = %d != 1'%(var.name,len(hy))
-      return None
-    hy = hy[0]
-    p0 = hy.var_.ig1 * 100.
-    assert hy.var_.nz == 1
-#    plid = hy.var_.z[0] * 100.
-    plid = zaxis[0] * 100.
-    exp = hy.var_.ig2 / 1000.
-    etatop = plid / p0
-    zaxis = np.array(zaxis)
-    zaxis[np.where(zaxis<etatop)] = etatop  # fix bug where zaxis is slightly less than etatop
-    B = ((zaxis - etatop)/(1-etatop))**exp
-    A = p0 * (zaxis - B)
-    zaxis = Hybrid(zaxis,A,B)
-  else:
-    zaxis = zclass(zaxis)
+    # Remove levels (if only level is 0m above ground)
+    if v.hasaxis(Height):
+      height = v.getaxis(Height).values
+      if len(height) == 1 and height[0] == 0:
+        remove_axes.append(v.whichaxis(Height))
+    # Remove degenerate time axis?
+    if not v.hasaxis(StandardTime):
+      taxis = v.getaxis(TAxis)
+      if len(taxis) == 1 and taxis[0] == 0:
+        remove_axes.append(v.whichaxis(TAxis))
+
+    if len(remove_axes) > 0:
+      varlist[i] = v.squeeze(*remove_axes)
+
+  return varlist
 
 
-  #TODO
+# Filter function
+# Check for any XCoord/YCoord axes, generate latitude and longitude fields
+def add_latlon (varlist):
+  from pygeode.var import Var
+  from warnings import warn
 
-  newvar = var.replace_axes (t=taxis, f=faxis, z=zaxis, i=xaxis, j=yaxis)
+  # Pull out the variables
+  varlist = list(varlist)
 
-  remove_axes = []
-  # Remove k dimension?
-  if var.var_.nk == 1: remove_axes.append(3)
-  # Remove levels (if only level is 0m above ground)
-  if type(zaxis) == Height and len(zaxis) == 1 and zaxis.values == [0]:
-    remove_axes.append(2)
-#  # Remove forecast axis if there is no forecast
-#  if len(faxis) == 1 and faxis.values == [0]:
-#    remove_axes.append(1)
-  # Remove degenerate time axis?
-  if len(taxis) == 1 and not isinstance(taxis,StandardTime) and taxis.values == [0]:
-    remove_axes.append(0)
+  # Dictionary of lat/lon fields
+  latdict = {}
+  londict = {}
+  # Ordered version
+  lats = []
+  lons = []
 
-  if len(remove_axes) > 0: newvar = newvar.squeeze(*remove_axes)
+  for v in varlist:
+    if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
+    xaxis = v.getaxis(XCoord)
+    yaxis = v.getaxis(YCoord)
 
-  return newvar
+    grtyp = xaxis.atts['grtyp']
+
+    # Polar stereographic?
+    if grtyp in ('N', 'S'):
+      d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
+      nhem = 1 if grtyp == 'N' else 2
+      lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
+    else:
+      warn ("can't handle grtyp '%s' yet"%grtyp)
+      continue
+
+    # Convert the raw lat/lon values to a Var
+    lat = Var([xaxis,yaxis], values=lat, name='latitudes')
+    lon = Var([xaxis,yaxis], values=lon, name='longitudes')
+
+    # Use a unique identifier for these lats/lons, to avoid duplication
+    xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
+    ykey = tuple(yaxis.atts[att] for att in unique_var_atts)
+    if xkey not in londict:
+      londict[xkey] = lon
+      lons.append(lon)
+    if ykey not in latdict:
+      latdict[ykey] = lat
+      lats.append(lat)
+
+  # Append these to the list of vars
+  varlist.extend(lats)
+  varlist.extend(lons)
+
+  return varlist
 
 
 
-
+######################################################################
+# You're probably looking for this
+######################################################################
 def open (filename):
   from pygeode.dataset import Dataset
-  from os.path import exists
 
-  assert exists(filename), "Can't find %s"%filename
+  # Get the raw (unprocessed) variables
+  vars = rawopen(filename)
 
-  rawvars = []
-  vinf_p = lib.get_varinfo(filename)
-  vinf = vinf_p[0]
-  for var_ in vinf.var[:vinf.nvars]:
-    rawvars.append(RPN_Var(var_,filename))
-  vars = [wrap(v,rawvars) for v in rawvars]
-  vars = filter(None, vars)  # remove the unhandled vars
-  dataset = Dataset(vars)#, print_warnings=False)
+  # Do some filtering
+  vars = attach_xycoords(vars)
+  vars = decode_zcoord(vars)
+  vars = decode_timeaxis(vars)
+  vars = decode_latlon(vars)
+  vars = remove_degenerate_axes(vars)
+  vars = add_latlon(vars)
 
-  # Add explicit latitude/longitude fields (if needed)
-  dataset = add_latlon(dataset)
+  # Convert to a dataset
+  dataset = Dataset(vars)
+
   return dataset
+
+
 
 
 # Miscellaneous functions
@@ -452,42 +618,4 @@ def llfxy (x,y,d60,dgrw,nhem):
 
   return dlat, dlon
 
-# Filter function
-# Check for any XCoord/YCoord axes, generate latitude and longitude fields
-def add_latlon (dataset):
-  from pygeode.var import Var
-  from pygeode.dataset import Dataset
 
-  # Pull out the variables
-  vars = list(dataset.vars)
-
-  # Loop over all XCoords
-  for xaxis in dataset.axes:
-    if not isinstance(xaxis,XCoord): continue
-    # Find the matching YCoord
-    for yaxis in dataset.axes:
-      if not isinstance(yaxis,YCoord): continue
-      if not Horizontal.compatible(xaxis,yaxis): continue
-
-      grtyp = xaxis.atts['grtyp']
-
-      if grtyp in ('N', 'S'):
-        d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
-        nhem = 1 if grtyp == 'N' else 2
-        lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
-      else:
-        print "add_latlon: can't handle grtyp '%s' yet"%grtyp
-        continue
-
-      # Convert the raw lat/lon values to a Var
-      lat = Var([xaxis,yaxis], values=lat, name='latitudes')
-      lon = Var([xaxis,yaxis], values=lon, name='longitudes')
-
-      # Append these to the list of vars
-      vars.append(lat)
-      vars.append(lon)
-
-  # Regroup the variables together
-  dataset = Dataset(vars, atts=dataset.atts)
-
-  return dataset

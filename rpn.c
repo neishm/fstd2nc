@@ -188,24 +188,31 @@ void print_record_header (RecordHeader *h) {
 }
 
 
-int get_record_headers (FILE *f, RecordHeader **h) {
+// Get the number of records in a file
+int get_num_records (char *filename) {
+  FileHeader h;
+  FILE *file = fopen (filename, "rb");
+  read_file_header (file, &h);
+  fclose (file);
+  return h.nrecs;
+}
+
+// Read the records into a pre-allocated array
+int get_record_headers (char *filename, RecordHeader *h) {
+  FILE *f = fopen(filename, "rb");
   FileHeader fileheader;
   fseek (f, 0, SEEK_SET);
   read_file_header (f, &fileheader);
-  int N = fileheader.nrecs;
-  *h = malloc(sizeof(RecordHeader)*N);
   int rec = 0;
   for (int c = 0; c < fileheader.nchunks; c++) {
     ChunkHeader chunkheader;
     read_chunk_header (f, &chunkheader);
     unsigned int checksum = 0;
     for (int r = 0; r < chunkheader.nrecs; r++) {
-      assert (rec < N);
-      RecordHeader *header = (*h)+rec;
-      read_record_header (f, header);
+      read_record_header (f, h+rec);
       // Skip erased records
-      if (header->status == 255) continue;
-      checksum ^= header->checksum;
+      if (h[rec].status == 255) continue;
+      checksum ^= h[rec].checksum;
       rec++;
     }
     checksum ^= chunkheader.nrecs;
@@ -215,38 +222,15 @@ int get_record_headers (FILE *f, RecordHeader **h) {
     // Go to next chunk
     fseek (f, chunkheader.next_chunk, SEEK_SET);
   }
-  return N;
+  fclose (f);
+  return 0;
 }
 
 
-// Helper functions
-
-typedef struct {
-  Nomvar nomvar;
-  Etiket etiket;
-  Typvar typvar;
-  char grtyp;
-  int *ip1;
-  int *ip2;
-  int ip3;
-  int ig1;
-  int ig2;
-  int ig3;
-  int ig4;
-  int nt;
-  int nforecasts;
-  int nz;
-  int nk;
-  int nj;
-  int ni;
-  int deet;
-  int npas;
-  long long *t;
-  unsigned long long *offsets;
-} Varinfo_entry;
-
-// Compare a RecordHeader and a Varinfo_entry for equality
-int receq (RecordHeader *h, Varinfo_entry *v) {
+// Compare RecordHeaders for equality
+// NOTE: this used to compare a RecordHeader with a Varinfo_entry,
+// hence the 'h' and 'v' names.
+int receq (RecordHeader *h, RecordHeader *v) {
   if (strncmp(h->nomvar, v->nomvar, sizeof(Nomvar)) != 0) {
     printf ("'%s' != '%s'\n", h->nomvar, v->nomvar);
     return 0;
@@ -254,7 +238,8 @@ int receq (RecordHeader *h, Varinfo_entry *v) {
   if (strncmp(h->etiket, v->etiket, sizeof(Etiket)) != 0) return 0;
   if (strncmp(h->typvar, v->typvar, sizeof(Typvar)) != 0) return 0;
   if (h->grtyp != v->grtyp) return 0;
-//  if (h->ip2 != v->ip2) return 0;
+  if (h->ip1 != v->ip1) return 0;
+  if (h->ip2 != v->ip2) return 0;
   if (h->ip3 != v->ip3) return 0;
   if (h->ig1 != v->ig1) return 0;
   if (h->ig2 != v->ig2) return 0;
@@ -267,228 +252,23 @@ int receq (RecordHeader *h, Varinfo_entry *v) {
 
 }
 
-#define MAX_NVARS 1000
-typedef struct {
-  int nvars;
-  Varinfo_entry var[MAX_NVARS];
-} Varinfo;
-
-// Look up the varid for a particular record.
-// Add a new entry if the variable has not been encountered yet.
-Varinfo_entry *get_var (Varinfo *vinf, RecordHeader *h) {
-  int v;
-  Varinfo_entry *var;
-  for (v = 0; v < vinf->nvars; v++) {
-    var = vinf->var+v;
-    if (strncmp(var->nomvar, h->nomvar, sizeof(Nomvar)) != 0) continue;
-    if (strncmp(var->etiket, h->etiket, sizeof(Etiket)) != 0) continue;
-    if (strncmp(var->typvar, h->typvar, sizeof(Typvar)) != 0) continue;
-    if (var->grtyp != h->grtyp) continue;
-//    if (var->ip2 != h->ip2) continue;
-    if (var->ip3 != h->ip3) continue;
-    if (var->ig1 != h->ig1) continue;
-    if (var->ig2 != h->ig2) continue;
-    if (var->ig3 != h->ig3) continue;
-    if (var->ig4 != h->ig4) continue;
-    if (var->nk != h->nk) continue;
-    if (var->nj != h->nj) continue;
-    if (var->ni != h->ni) continue;
-    if (var->deet != h->deet) continue;
-    if (var->npas != h->npas) continue;
-    break;
-  }
-  assert (v < MAX_NVARS);
-
-  // New record?
-  if (v == vinf->nvars) {
-    vinf->nvars++;
-    var = vinf->var+v;
-    strncpy(var->nomvar, h->nomvar, sizeof(Nomvar));
-    strncpy(var->etiket, h->etiket, sizeof(Etiket));
-    strncpy(var->typvar, h->typvar, sizeof(Typvar));
-    var->grtyp = h->grtyp;
-//    var->ip2 = h->ip2;
-    var->ip3 = h->ip3;
-    var->ig1 = h->ig1;
-    var->ig2 = h->ig2;
-    var->ig3 = h->ig3;
-    var->ig4 = h->ig4;
-    var->nk = h->nk;
-    var->nj = h->nj;
-    var->ni = h->ni;
-    var->deet = h->deet;
-    var->npas = h->npas;
-  }
-
-  return var;
-}
-
-// Get a timestep id for the given variable.  Add a new entry if it's not already there.
-#define MAX_NT 1000
-int get_tid (Varinfo_entry *var, long long t) {
-  int tid;
-  for (tid = 0; tid < var->nt; tid++)
-    if (var->t[tid] == t) break;
-  assert (tid < MAX_NT);
-  if (tid == var->nt) {
-    var->nt++;
-    var->t[tid] = t;
-  }
-  return tid;
-}
-
-// Get a level id for the given variable.  Add a new entry if it's not already there.
-#define MAX_NZ 200
-int get_zid (Varinfo_entry *var, int ip1) {
-  int zid;
-  for (zid = 0; zid < var->nz; zid++) if (var->ip1[zid] == ip1) break;
-  assert (zid < MAX_NZ);
-  if (zid == var->nz) {
-    var->nz++;
-    var->ip1[zid] = ip1;
-  }
-  return zid;
-}
-
-// Get a forecast id for the given variable.  Add a new entry if it's not already there.
-#define MAX_NF MAX_NT
-int get_forecastid (Varinfo_entry *var, int ip2) {
-  int fid;
-  for (fid = 0; fid < var->nforecasts; fid++) if (var->ip2[fid] == ip2) break;
-  assert (fid < MAX_NF);
-  if (fid == var->nforecasts) {
-    var->nforecasts++;
-    var->ip2[fid] = ip2;
-  }
-  return fid;
-}
-
-
-// Iterate through a list of records, generate information on the vars
-Varinfo* get_varinfo (char *filename) {
-  RecordHeader *headers;
-  int nrecs;
-  // Open the file, read the records
-  FILE *file = fopen (filename, "rb");
-  nrecs = get_record_headers (file, &headers);
-  fclose (file);
-
-  Varinfo *vinf = malloc(sizeof(Varinfo));
-  vinf->nvars = 0;
-
-  // First loop: accumulate a list of variables
-  for (int r = 0; r < nrecs; r++) get_var (vinf, headers+r);
-
-  // Second loop: gather timestep/level information
-  // Store the stuff locally for now, since we're taking up a lot of space.
-  long long t[vinf->nvars][MAX_NT];
-  int ip1[vinf->nvars][MAX_NZ];
-  int ip2[vinf->nvars][MAX_NF];
-  // Initialize nt, nz, borrow the local arrays for the Varinfo structure
-  for (int v = 0; v < vinf->nvars; v++) {
-    Varinfo_entry *var = vinf->var+v;
-    var->nt = 0; var->nz = 0; var->nforecasts = 0;
-    var->t = t[v];
-    var->ip1 = ip1[v];
-    var->ip2 = ip2[v];
-  }
-
-  // Get the timesteps & levels
-  for (int r = 0; r < nrecs; r++) {
-    Varinfo_entry *var = get_var (vinf, headers+r);
-    get_tid (var, headers[r].dateo);
-    get_forecastid (var, headers[r].ip2);
-    get_zid (var, headers[r].ip1);
-  }
-  // Copy the time/level information to the Varinfo object
-  for (int v = 0; v < vinf->nvars; v++) {
-    Varinfo_entry *var = vinf->var+v;
-    var->t = malloc(sizeof(long long)*var->nt);
-    var->ip1 = malloc(sizeof(int)*var->nz);
-    var->ip2 = malloc(sizeof(int)*var->nforecasts);
-    for (int tid = 0; tid < var->nt; tid++) var->t[tid] = t[v][tid];
-    for (int fid = 0; fid < var->nforecasts; fid++) var->ip2[fid] = ip2[v][fid];
-    for (int zid = 0; zid < var->nz; zid++) var->ip1[zid] = ip1[v][zid];
-  }
-
-  // Get the offsets
-  for (int v = 0; v < vinf->nvars; v++) {
-    Varinfo_entry *var = vinf->var+v;
-    int size = var->nt * var->nforecasts * var->nz;
-    // Allocate and initialize the space for the offsets
-    var->offsets = malloc(sizeof(unsigned long long)*size);
-    for (int i = 0; i < size; i++) var->offsets[i] = 0;
-  }
-
-  for (int r = 0; r < nrecs; r++) {
-    Varinfo_entry *var = get_var (vinf, headers+r);
-    int nz = var->nz;
-    int nf = var->nforecasts;
-    int tid = get_tid (var, headers[r].dateo);
-    int fid = get_forecastid (var, headers[r].ip2);
-    int zid = get_zid (var, headers[r].ip1);
-    var->offsets[tid*nf*nz + fid*nz + zid] = headers[r].data;
-  }
-
-  // Done with the headers
-  free (headers);
-
-
-
-  return vinf;
-
-}
-
-
-void print_varinfo (Varinfo *vinf) {
-  for (int v = 0; v < vinf->nvars; v++) {
-    Varinfo_entry *var = vinf->var+v;
-    printf ("%s\n", var->nomvar);
-    for (int i = 0; i < var->nt; i++) printf ("%16lld", var->t[i]);
-    printf ("\n");
-    for (int i = 0; i < var->nz; i++) printf ("%16d", var->ip1[i]);
-    printf ("\n");
-    for (int i = 0; i < var->nforecasts; i++) printf ("%16d", var->ip2[i]);
-    printf ("\n\n");
-  }
-
-}
-
-// Free the space taken by a Varinfo struct
-int free_varinfo (Varinfo *vinf) {
-  for (int v = 0; v < vinf->nvars; v++) {
-    Varinfo_entry *var = vinf->var+v;
-    free (var->t);
-    free (var->ip1);
-    free (var->ip2);
-    free (var->offsets);
-  }
-  free (vinf);
-  return 0;
-}
-
 
 // Read a chunk of data
-int read_data (FILE *file, Varinfo_entry *var, int nt, int *ti, int nf, int *fi, int nz, int *zi, float *out) {
-  int recsize = var->ni * var->nj * var->nk;  // size of one complete record
-  for (int TI = 0; TI < nt; TI++) {
-   for (int FI = 0; FI < nf; FI++) {
-    for (int ZI = 0; ZI < nz; ZI++) {
-      int t = ti[TI];
-      int f = fi[FI];
-      int z = zi[ZI];
+int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, float *out) {
 
-      assert (t >= 0 && t < var->nt);
-      assert (f >= 0 && f < var->nforecasts);
-      assert (z >= 0 && z < var->nz);
+  FILE *file = fopen (filename, "rb");
 
-      unsigned long long offset = var->offsets[t*var->nforecasts*var->nz + f*var->nz + z];
+  // Loop over all records
+  for (int rec = 0; rec < nrecs; rec++) {
+
+      unsigned long long offset = headers[rec].data;
 //      printf ("offset: %llx\n", offset);
       RecordHeader h;
       fseek (file, offset, SEEK_SET);
       read_record_header (file, &h);
 //      print_record_header (&h);
-      assert (receq(&h, var)==1);
+      // Make sure the header matches
+      assert (receq(headers+rec, &h) == 1);
       assert (h.datyp == 1 || h.datyp == 5); //currently only support packed floating-point/IEEE floating point
 
       byte b[4];
@@ -635,10 +415,10 @@ int read_data (FILE *file, Varinfo_entry *var, int nt, int *ti, int nf, int *fi,
 
 
       out += recsize;
-    }// next level
-   } // next forecast
-  }  // next time
+  }
+
+  fclose (file);
+
   return 0;
 }
-
 
