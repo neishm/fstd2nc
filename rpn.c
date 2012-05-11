@@ -297,7 +297,10 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
 
         // Get and validate record size
         fread (b, 1, 4, file);
-        int recsize_ = read32(b) - 0x7ff00000;
+        unsigned int marker_and_recsize = read32(b);
+        int marker = marker_and_recsize >> 20;
+        int recsize_ = marker_and_recsize & 0xFFFFF;
+        assert (marker == 0x7ff);  // Check if supported header type
         assert (recsize_ == recsize);
 
         // Get encoding info
