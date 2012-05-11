@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 
 // pseudo-RPN interface
 
@@ -298,41 +299,40 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
         // Get and validate record size
         fread (b, 1, 4, file);
         unsigned int marker_and_recsize = read32(b);
-        int marker = marker_and_recsize >> 20;
+        int marker = (marker_and_recsize >> 20);
         int recsize_ = marker_and_recsize & 0xFFFFF;
         assert (marker == 0x7ff);  // Check if supported header type
         assert (recsize_ == recsize);
 
-        // Get encoding info
-        fread (b, 1, 4, file);
-        int32_t info = read32(b);
-//        printf ("info: 0x%08x\n", info);
-        int diff_shift = (info >> 16) - 0x0ff0;
-//        printf ("diff_shift: %d\n", diff_shift);
+        // Get the exponent used in the encoding
+        fread (b, 1, 2, file);
+        int range_exp = read16(b) - 4096;
 
-        // Get min value
-        float min;
+        // Get the min value exponent and sign
+        fread (b, 1, 2, file);
+        int min_expo_sign = read16(b);
+        int min_expo = (min_expo_sign >> 4) + 127 - 1024 + 48;  // based on compact_h.c
+        int min_sign = min_expo_sign & 0x000F;
+
+        // Get the min value mantissa
         fread (b, 1, 4, file);
-        assert (b[3] == 0);
-        int mincode = read24(b);
-        if ((info & 0x0000ff00) == 0x00001100) {
-          min = 0;
-//          printf ("min is zero\n");
-        }
-        else {
-          int min_shift = ((info & 0x0000fff0) >> 4) - 0x3d0 + 1;
-//          printf ("min_shift: %d\n", min_shift);
-//          printf ("mincode: %d\n", mincode);
-          min = mincode / 16777216.;
-          while (min_shift > 0) { min *= 2; min_shift--; }
-          while (min_shift < 0) { min /= 2; min_shift++; }
-          if ((info & 0x0000000f) == 1) min *= -1;
-//          printf ("min: %g\n", min);
-        }
+        int min_mantissa = read24(b);  // skipping last byte (not used in 32-bit float encoding)
+        assert (b[3] == 0);  // the last byte in the encoded mantissa should be zero?
+
+        // Construct the min value
+        // note: already includes the '1' in '1.xxxxx' (24th bit)
+        float min = (min_mantissa / 8388608.) * pow(2,min_expo-127);
+        if (min_sign == 1) min *= -1;
+        // Special case - min is 0
+        //if (min_mantissa == 0 || min_expo < 849) min = 0;
+
+        // Skip over the 16-bit mantissa argument (not used?)
+        fread (b, 1, 2, file);
+        assert (b[0] == 0 && b[1] == 0);  // don't know what to do with a 16-bit mantissa
 
         // Get and verify npak
-        fread (b, 1, 3, file);
-        int npak = read24(b);
+        fread (b, 1, 1, file);
+        int npak = b[0];
         assert (npak == h.npak);
 //        printf ("npak: %d\n", npak);
 
@@ -341,7 +341,7 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
           byte *raw = malloc(2*recsize);
           fread (raw, 2, recsize, file);
           for (int i = 0; i < recsize; i++) {
-            out[i] = 1. * read16(raw+2*i) / (1<<16);
+            out[i] = read16(raw+2*i);
           }
           free (raw);
         }
@@ -351,7 +351,7 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
           byte *raw = malloc(3*recsize);
           fread (raw, 3, recsize, file);
           for (int i = 0; i < recsize; i++) {
-            out[i] = 1. * read24(raw+3*i) / (1<<24);
+            out[i] = read24(raw+3*i);
           }
           free (raw);
         }
@@ -361,7 +361,7 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
           byte *raw = malloc(4*recsize);
           fread (raw, 4, recsize, file);
           for (int i = 0; i < recsize; i++) {
-            out[i] = 1. * read32(raw+4*i) / (1LL<<32);
+            out[i] = read32(raw+4*i);
           }
           free (raw);
         }
@@ -394,9 +394,6 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
           // Decode this into a float
           for (int i = 0; i < recsize; i++) {
             out[i] = codes[i];
-            // convert to a value from 0 to 1
-            for (int j = 0; j < npak; j++) out[i] /= 2;
-
           }
 //          printf ("\n");
           free (codes);
@@ -405,13 +402,12 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
         }
 
         // Finish decoding the values
+        float mulfactor = pow(2,range_exp);
         for (int i = 0; i < recsize; i++) {
-          //TODO: more robust diff shift
-          if (diff_shift >= 0) out[i] *= (1<<diff_shift);
-          else out[i] /= (1<<(-diff_shift));
 
-          // apply min
-          out[i] += min;
+          out[i] = out[i] * mulfactor + min;
+          // note: original code (compact_h.c) multiplies mulfactor by 1.0000000000001.  why???
+
         }
 
       }
