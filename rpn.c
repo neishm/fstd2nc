@@ -150,17 +150,17 @@ void read_record_header (FILE *f, RecordHeader *h) {
   h->data = read32(buf+4) * 8L;
   assert (h->data > 8);
   h->data -= 8;  // rewind a bit to get the proper start of the data
-  h->deet = read16(buf+9);
+  h->deet = read24(buf+8);
   h->npak = buf[11];
   h->ni = read24(buf+12);
   h->grtyp = buf[15];
   h->nj = read24(buf+16);
   h->datyp = buf[19];
   h->nk = read24(buf+20)>>4;
-  h->npas = (read32(buf+24)>>4)/4;
+  //TODO: ubc
+  h->npas = (read32(buf+24)>>6);
   h->ig4 = read24(buf+28);
-//  h->ig2 = buf[27]*65536 + buf[35]*256 + buf[39];  // this isn't part of ig2???
-  h->ig2 = buf[35]*256 + buf[39];
+  h->ig2 = buf[32]*65536 + buf[35]*256 + buf[39];
   h->ig1 = read24(buf+32);
   h->ig3 = read24(buf+36);
   readchar (h->etiket, buf+40, 5);
