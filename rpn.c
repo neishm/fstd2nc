@@ -41,40 +41,45 @@ void readchar (byte *dest, byte *src, int n) {
 typedef struct {
   long long int file_size;
   int num_overwrites;
-  int nrecs_all;
+  int num_extensions;
   int nchunks;
   unsigned long long int last_chunk;
   int max_data_length;
-  int num_edits;
+  int num_erasures;
   int nrecs;
 } FileHeader;
 
 void read_file_header (FILE *f, FileHeader *h) {
   int nbytes;
   byte buf[208];
-  char fixed1[16] = "\0\0\0\x1a\0\0\0\0XDF0STDR";
-  char fixed2[8] = "\0\x10\0\x09\0\x02\0\x01";
-  char fixed3[8] = "\0\0\0\0\0\0\0\0";
   nbytes = fread (buf, 1, 208, f);
   assert (nbytes == 208);
-  assert (memcmp(buf, fixed1, 16) == 0);
-  assert (memcmp(buf+40, fixed2, 8) == 0);
-  assert (memcmp(buf+56, fixed3, 8) == 0);
+  assert (buf[0] == 0); //idtyp
+  assert (read24(buf+1) == 26);  // header length (words)
+  assert (read32(buf+4) == 0); // address of file header
+  assert (strncmp(buf+8,"XDF0",4) == 0); // XDF version
+  assert (strncmp(buf+12,"STDR",4) == 0); // application signature
 //  for (int i = 0; i < 16; i++) assert (buf[64+i*8] == 'S');
 //  for (int i = 0; i < 16; i++) assert (buf[64+i*8+1] == 'F');
   //TODO: verify the 144-byte fixed thing??
   h->file_size = read32(buf+16) * 8L;
   h->num_overwrites = read32(buf+20);
-  h->nrecs_all = read32(buf+24);
+  h->num_extensions = read32(buf+24);
   h->nchunks = read32(buf+28);
   h->last_chunk = read32(buf+32) * 8L;
   h->max_data_length = read32(buf+36) * 8;
-  h->num_edits = read32(buf+48);
+  assert (read16(buf+40) == 16); // # of primary keys
+  assert (read16(buf+42) == 9);  // length of primary keys (words)
+  assert (read16(buf+44) == 2);  // # of auxiliary keys
+  assert (read16(buf+46) == 1);  // length of auxiliary keys (words)
+  h->num_erasures = read32(buf+48);
   h->nrecs = read32(buf+52);
+  assert (read32(buf+56) == 0);  // read/write flag
+  assert (read32(buf+60) == 0);  // reserved area
 }
 
 void print_file_header (FileHeader *h) {
-  printf ("file_size: %lld, num_overwrites: %d, nrecs (including erased): %d, nchunks: %d, last_chunk: %llx, max_data_length: %d, num_edits: %d, nrecs: %d\n", h->file_size, h->num_overwrites, h->nrecs_all, h->nchunks, h->last_chunk, h->max_data_length, h->num_edits, h->nrecs);
+  printf ("file_size: %lld, num_overwrites: %d, num_extensions: %d, nchunks: %d, last_chunk: %llx, max_data_length: %d, num_erasures: %d, nrecs: %d\n", h->file_size, h->num_overwrites, h->num_extensions, h->nchunks, h->last_chunk, h->max_data_length, h->num_erasures, h->nrecs);
 }
 
 typedef struct {
