@@ -525,8 +525,8 @@ def add_latlon (varlist):
       continue
 
     # Convert the raw lat/lon values to a Var
-    lat = Var([xaxis,yaxis], values=lat, name='latitudes')
-    lon = Var([xaxis,yaxis], values=lon, name='longitudes')
+    lat = Var([yaxis,xaxis], values=lat, name='latitudes')
+    lon = Var([yaxis,xaxis], values=lon, name='longitudes')
 
     # Use a unique identifier for these lats/lons, to avoid duplication
     xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
