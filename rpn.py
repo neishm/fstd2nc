@@ -497,33 +497,41 @@ def add_latlon (varlist):
   # Pull out the variables
   varlist = list(varlist)
 
-  # Dictionary of lat/lon fields
-  latdict = {}
-  londict = {}
-  # Ordered version
+  # Computed lat/lon fields
   lats = []
   lons = []
+
+  # Keys of computed fields
+  computed_keys = []
 
   for v in varlist:
     if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
     xaxis = v.getaxis(XCoord)
     yaxis = v.getaxis(YCoord)
+
+    grtyp = xaxis.atts['grtyp']
+    ig1 = xaxis.atts['ig1']
+    ig2 = xaxis.atts['ig2']
+    ig3 = xaxis.atts['ig3']
+    ig4 = xaxis.atts['ig4']
+
+    # Determine if we already have these fields
+    key = (grtyp, ig1, ig2, ig3, ig4, len(xaxis), len(yaxis))
+    if key in computed_keys: continue
+
     # Convert the X/Y coordinates to double precision
     # (for more accurate intermediate calculations)
     xvalues = np.asarray(xaxis.values, dtype='float64')
     yvalues = np.asarray(yaxis.values, dtype='float64')
 
-    grtyp = xaxis.atts['grtyp']
-
     # Polar stereographic?
     #TODO: handle new-style encoding of d60/dgrw
     if grtyp in ('N', 'S'):
-      d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
+      d60, dgrw = ig3, ig4
       nhem = 1 if grtyp == 'N' else 2
       lat, lon = llfxy (xvalues, yvalues, d60, dgrw, nhem)
     elif grtyp == 'E':
       # Based on igaxg.f
-      ig1, ig2, ig3, ig4 = map(xaxis.atts.get, ['ig1','ig2','ig3','ig4'])
       lg1 = (ig1<<2) | (ig3&3)
       lg2 = (ig2<<2) | (ig4&3)
       if lg2 > 3600: lg2 -= 7201
@@ -543,15 +551,9 @@ def add_latlon (varlist):
     lat = Var([yaxis,xaxis], values=lat, name='latitudes')
     lon = Var([yaxis,xaxis], values=lon, name='longitudes')
 
-    # Use a unique identifier for these lats/lons, to avoid duplication
-    xkey = tuple(xaxis.atts[att] for att in unique_var_atts)
-    ykey = tuple(yaxis.atts[att] for att in unique_var_atts)
-    if xkey not in londict:
-      londict[xkey] = lon
-      lons.append(lon)
-    if ykey not in latdict:
-      latdict[ykey] = lat
-      lats.append(lat)
+    lons.append(lon)
+    lats.append(lat)
+    computed_keys.append(key)
 
   # Append these to the list of vars
   varlist.extend(lats)
