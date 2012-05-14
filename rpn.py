@@ -516,10 +516,25 @@ def add_latlon (varlist):
     grtyp = xaxis.atts['grtyp']
 
     # Polar stereographic?
+    #TODO: handle new-style encoding of d60/dgrw
     if grtyp in ('N', 'S'):
       d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
       nhem = 1 if grtyp == 'N' else 2
       lat, lon = llfxy (xvalues, yvalues, d60, dgrw, nhem)
+    elif grtyp == 'E':
+      # Based on igaxg.f
+      ig1, ig2, ig3, ig4 = map(xaxis.atts.get, ['ig1','ig2','ig3','ig4'])
+      lg1 = (ig1<<2) | (ig3&3)
+      lg2 = (ig2<<2) | (ig4&3)
+      if lg2 > 3600: lg2 -= 7201
+      lg3 = (ig3>>2)
+      if lg3 < 3559: lg3 += 16384
+      lg4 = (ig4>>2)
+      xg1 = (lg1 - 3600.) / 40.
+      xg2 = (lg3 - 3600.) / 40.
+      xg3 = lg2 / 40.
+      xg4 = lg4 / 40.
+      lat, lon = rotated_ll (xvalues, yvalues, xg1,xg2,xg3,xg4)
     else:
       warn ("can't handle grtyp '%s' yet"%grtyp)
       continue
@@ -623,4 +638,88 @@ def llfxy (x,y,d60,dgrw,nhem):
 
   return dlat, dlon
 
+# Convert points on a map to 3D cartesian points
+def ll2p (lat, lon):
+  import numpy as np
+  # Convert to radians
+  lat = lat * (np.pi/180)
+  lon = lon * (np.pi/180)
+  # Convert from spherical coordinates to cartesian coordinates
+  Px = - np.cos(lat) * np.cos(lon)
+  Py = - np.cos(lat) * np.sin(lon)
+  Pz =   np.sin(lat)
+
+  return Px, Py, Pz
+
+# Convert 3D cartesian points to points on a map
+def p2ll (Px, Py, Pz):
+  import numpy as np
+  lat = np.arcsin(Pz)
+  lon = np.arctan2(-Py, -Px)
+  # Convert from radians to degrees
+  lat *= (180/np.pi)
+  lon *= (180/np.pi)
+  # Sanity check
+  Qx, Qy, Qz = ll2p(lat,lon)
+  assert np.allclose(Qx,Px), "%s != %s"%(Qx,Px)
+  assert np.allclose(Qy,Py)
+  assert np.allclose(Qz,Pz)
+  return lat, lon
+
+
+# Compute the cross-product of 2 vectors
+def cross_product ((Px, Py, Pz), (Qx, Qy, Qz)):
+  # Take the cross-product of the 2 vectors
+  Rx = Py*Qz - Qy*Pz
+  Ry = Pz*Qx - Qz*Px
+  Rz = Px*Qy - Qx*Py
+  return Rx, Ry, Rz
+
+# Normalize a vector
+def normalize (Px, Py, Pz):
+  import numpy as np
+  M = np.sqrt(Px**2 + Py**2 + Pz**2)
+  Px = Px / M
+  Py = Py / M
+  Pz = Pz / M
+  return (Px, Py, Pz)
+
+
+# Calculate the lat/lon coordinates for a rotated grid
+def rotated_ll (x, y, lat1, lon1, lat2, lon2):
+
+  # Reshape the grid x and y points into 2D arrays
+  X = x.reshape(1,-1)
+  Y = y.reshape(-1,1)
+
+  # 3D 'X' coordinate
+  Px, Py, Pz = ll2p (lat1, lon1)
+
+  # Another point, in the 3D X/Y plane
+  Qx, Qy, Qz = ll2p (lat2, lon2)
+
+  # Compute the 3D 'Z' coordinate
+  # (take the cross-product of the 2 vectors in the X/Y plane)
+  Rx, Ry, Rz = cross_product ((Px, Py, Pz), (Qx, Qy, Qz))
+  # Normalize
+  Rx, Ry, Rz = normalize (Rx, Ry, Rz)
+  
+
+  # Compute the 3D 'Y' coordinate
+  # (take the cross-product of the Z and X axes)
+  Qx, Qy, Qz = cross_product ((Rx, Ry, Rz), (Px, Py, Pz))
+
+  # Compute the model grid points in 3D space
+  Gx, Gy, Gz = ll2p (Y, X)
+
+  # Apply the rotation
+  Hx = Px * Gx + Qx * Gy + Rx * Gz
+  Hy = Py * Gx + Qy * Gy + Ry * Gz
+  Hz = Pz * Gx + Qz * Gy + Rz * Gz
+
+  # Re-normalize (there may be some numerical drift)
+  Hx, Hy, Hz = normalize (Hx, Hy, Hz)
+
+  # Convert back to lat/lon coordinates
+  return p2ll (Hx, Hy, Hz)
 
