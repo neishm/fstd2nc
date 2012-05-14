@@ -1,0 +1,11 @@
+Version 0.2.0 (May 14, 2012):
+	* Low-level file I/O routines updated / validated against the actual
+	  RPN file interface.
+	* Fixed bug in decoding R32 fields (packed 32-bit).
+	* Some support for rotated (E) grids.
+	* A new script to convert from RPN files to netCDF (rpn2nc).
+
+Version 0.1.0 (May 9, 2012):
+	* Initial version.
+	* Works on global uniform (unrotated) grid files.
+	* Some support for polar stereographic grids.
