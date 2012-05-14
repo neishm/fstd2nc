@@ -492,6 +492,7 @@ def remove_degenerate_axes (varlist):
 def add_latlon (varlist):
   from pygeode.var import Var
   from warnings import warn
+  import numpy as np
 
   # Pull out the variables
   varlist = list(varlist)
@@ -507,6 +508,10 @@ def add_latlon (varlist):
     if not v.hasaxis(XCoord) or not v.hasaxis(YCoord): continue
     xaxis = v.getaxis(XCoord)
     yaxis = v.getaxis(YCoord)
+    # Convert the X/Y coordinates to double precision
+    # (for more accurate intermediate calculations)
+    xvalues = np.asarray(xaxis.values, dtype='float64')
+    yvalues = np.asarray(yaxis.values, dtype='float64')
 
     grtyp = xaxis.atts['grtyp']
 
@@ -514,7 +519,7 @@ def add_latlon (varlist):
     if grtyp in ('N', 'S'):
       d60, dgrw = map(xaxis.atts.get, ['ig3', 'ig4'])
       nhem = 1 if grtyp == 'N' else 2
-      lat, lon = llfxy (xaxis.values, yaxis.values, d60, dgrw, nhem)
+      lat, lon = llfxy (xvalues, yvalues, d60, dgrw, nhem)
     else:
       warn ("can't handle grtyp '%s' yet"%grtyp)
       continue
