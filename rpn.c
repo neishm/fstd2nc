@@ -22,7 +22,7 @@ int read16 (byte *b) {
 }
 
 // Read packed characters
-void readchar (byte *dest, byte *src, int n) {
+void readchar (char *dest, byte *src, int n) {
   for (int i = 0; i < n; i++) {
     dest[i] = 0;
     // first byte needed
