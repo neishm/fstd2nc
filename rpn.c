@@ -59,9 +59,6 @@ void read_file_header (FILE *f, FileHeader *h) {
   assert (read32(buf+4) == 0); // address of file header
   assert (strncmp(buf+8,"XDF0",4) == 0); // XDF version
   assert (strncmp(buf+12,"STDR",4) == 0); // application signature
-//  for (int i = 0; i < 16; i++) assert (buf[64+i*8] == 'S');
-//  for (int i = 0; i < 16; i++) assert (buf[64+i*8+1] == 'F');
-  //TODO: verify the 144-byte fixed thing??
   h->file_size = read32(buf+16) * 8L;
   h->num_overwrites = read32(buf+20);
   h->num_extensions = read32(buf+24);
@@ -76,6 +73,21 @@ void read_file_header (FILE *f, FileHeader *h) {
   h->nrecs = read32(buf+52);
   assert (read32(buf+56) == 0);  // read/write flag
   assert (read32(buf+60) == 0);  // reserved area
+  char ncle[5];
+  // Validate primary keys
+  for (int i = 0; i < 16; i++) {
+    sprintf (ncle, "SF%02d", i+1);
+    assert (strncmp(buf+64+i*8, ncle, 4) == 0);  // validate key names
+    assert ((read16(buf+64+i*8+4)>>3) == 31+i*32);  // validate bit1
+    assert ((read24(buf+64+i*8+5)&0x7FFFF) == 0x7C000); // validate lcls/tcle
+  }
+  // Validate auxiliary keys
+  for (int i = 0; i < 2; i++) {
+    sprintf (ncle, "AXI%01d", i+1);
+    assert (strncmp(buf+192+i*8, ncle, 4) == 0);  // validate key names
+    assert ((read16(buf+192+i*8+4)>>3) == 31+i*32);  // validate bit1
+    assert ((read24(buf+192+i*8+5)&0x7FFFF) == 0x7C000); // validate lcls/tcle
+  }
 }
 
 void print_file_header (FileHeader *h) {
