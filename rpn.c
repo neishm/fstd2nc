@@ -106,21 +106,20 @@ typedef struct {
 void read_chunk_header (FILE *f, ChunkHeader *h) {
   int nbytes;
   byte buf[32];
-  char fixed1[4] = "\0\0\x09\x04";
-  char fixed2[8] = "\0\0\0\0\0\0\0\0";
-  char fixed3[4] = "\0\0\0\0";
   nbytes = fread (buf, 1, 32, f);
   assert (nbytes == 32);
-  assert (memcmp(buf, fixed1, 4) == 0);
-  assert (memcmp(buf+8, fixed2, 8) == 0);
-  assert (memcmp(buf+28, fixed3, 4) == 0);
+  assert (buf[0] == 0); // idtyp
+  assert (read24(buf+1) == 2308);  // Header length (words)
   h->this_chunk_words = read32(buf+4);
   h->this_chunk = h->this_chunk_words * 8L - 8;
+  assert (read32(buf+8) == 0); // reserved1
+  assert (read32(buf+12) == 0); // reserved2
   h->next_chunk_words = read32(buf+16);
   h->next_chunk = h->next_chunk_words * 8L;
   if (h->next_chunk > 0) h->next_chunk -= 8; // Rewind a bit
   h->nrecs = read32(buf+20);
   h->checksum = read32(buf+24);
+  assert (read32(buf+28) == 0);  // reserved3
 }
 
 void print_chunk_header (ChunkHeader *h) {
