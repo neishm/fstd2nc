@@ -661,13 +661,6 @@ def p2ll (Px, Py, Pz):
   # Convert from radians to degrees
   lat *= (180/np.pi)
   lon *= (180/np.pi)
-  # Sanity check
-  Qx, Qy, Qz = ll2p(lat,lon)
-  assert np.allclose(Qx,Px), "%s != %s"%(Qx,Px)
-  assert np.allclose(Qy,Py)
-  assert np.allclose(Qz,Pz)
-  return lat, lon
-
 
 # Compute the cross-product of 2 vectors
 def cross_product ((Px, Py, Pz), (Qx, Qy, Qz)):
