@@ -1,5 +1,5 @@
 SUBDIRS = 
-LIBS = rpn
+LIBS = rpn bmf
 include rules.mk
 
 install:
