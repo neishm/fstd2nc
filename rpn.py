@@ -604,29 +604,16 @@ def llfxy (x,y,d60,dgrw,nhem):
   X = x.reshape(1,-1)
   Y = y.reshape(-1,1)
 
-  c_b3 = 90.
-  c_b4 = 180.
   rdtodg=180. / np.pi
   re=1.866025*6371000/d60
   re2=re*re
 
-  dlat=90.
-  dlon=0.
-
   dlon = np.arctan2(Y, X) * rdtodg
 
-#  if x < 0:
-#    dlon += r_sign(c_b4, y)
   dlon[:,x<0] += 180. * np.sign(Y)
 
   dlon -= dgrw
-
-#  if dlon > 180.:
-#    dlon += -360.
   dlon[dlon>180] -= 360.
-
-#  if dlon < -180.:
-#    dlon += 360.
   dlon[dlon<-180] += 360.
 
   r2 = X*X + Y*Y
@@ -661,13 +648,6 @@ def p2ll (Px, Py, Pz):
   # Convert from radians to degrees
   lat *= (180/np.pi)
   lon *= (180/np.pi)
-  # Sanity check
-  Qx, Qy, Qz = ll2p(lat,lon)
-  assert np.allclose(Qx,Px), "%s != %s"%(Qx,Px)
-  assert np.allclose(Qy,Py)
-  assert np.allclose(Qz,Pz)
-  return lat, lon
-
 
 # Compute the cross-product of 2 vectors
 def cross_product ((Px, Py, Pz), (Qx, Qy, Qz)):
