@@ -367,7 +367,7 @@ def decode_timeaxis (varlist):
   for i, v in enumerate(varlist):
 
     dateo = np.array(v.getaxis(T).values)
-    dateo = dateo/4 * 5
+    dateo = dateo/4. * 5 
     # Case 0: degenerate time axis
     if np.all(dateo == 0):
       warn ("degenerate time axis detected", stacklevel=3)
