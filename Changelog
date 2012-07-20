@@ -1,3 +1,7 @@
+Version 0.3.1 (July 20, 2012):
+	* Fix bug with RPN date stamps.  Need to use floating-point during the
+	  conversion, or we can't resolve time intervals less than an hour.
+
 Version 0.3.0 (July 3, 2012):
 	* Some minor code cleanup.
 	* Interface for raw 'BMF' files used by the GEM model.
