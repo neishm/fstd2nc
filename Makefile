@@ -1,5 +1,6 @@
 SUBDIRS = 
 LIBS = rpn bmf
+COMMON = io
 include rules.mk
 
 install:

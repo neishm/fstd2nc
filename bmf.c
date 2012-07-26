@@ -1,31 +1,6 @@
 #include <stdio.h>
 #include <assert.h>
-
-typedef unsigned char byte;
-
-unsigned int read32 (byte *b) {
-  return (((unsigned int)(b[0]))<<24) | (((int)(b[1]))<<16) | (((int)(b[2]))<<8) | (((int)(b[3]))<<0);
-}
-
-unsigned int fread32 (FILE *f) {
-  byte b[4];
-  int n = fread (b, 1, 4, f);
-  assert (n == 4);
-  return read32(b);
-}
-
-float freadfloat (FILE *f) {
-  int x = fread32(f);
-  return *((float*)(&x));
-}
-
-void ftn_section (FILE *f, int n) {
-  int m = fread32(f);
-  assert (m == n);
-}
-
-#define ftn_start ftn_section
-#define ftn_end ftn_section
+#include "io.h"
 
 typedef struct {
   char nom[5];
