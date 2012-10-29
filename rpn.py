@@ -85,8 +85,13 @@ class RPN_Var (Var):
     ip1_list = []
 
     for h in headers:
-      if h.dateo not in dateo_list:
-        dateo_list.append(h.dateo)
+      # Fudge the date - h.dateo is actually the date of validity.
+      # We need the date of the start of the forecast.
+      # The 720 is a magic conversion factor from hours to whatever units
+      # the date stamp is stored in.
+      date = h.dateo - h.ip2 * 720
+      if date not in dateo_list:
+        dateo_list.append(date)
       if h.ip2 not in ip2_list:
         ip2_list.append(h.ip2)
       if h.ip1 not in ip1_list:
@@ -114,7 +119,8 @@ class RPN_Var (Var):
     header_order = np.empty((len(t),len(f),len(z)), dtype=int)
     header_order[:] = -1
     for hi, h in enumerate(headers):
-      ti = np.where(dateo_list == h.dateo)[0][0]
+      # Hack to get the date of forecast (not date of validity)
+      ti = np.where(dateo_list == h.dateo - h.ip2*720)[0][0]
       fi = np.where(ip2_list == h.ip2)[0][0]
       zi = np.where(ip1_list == h.ip1)[0][0]
       header_order[ti,fi,zi] = hi
