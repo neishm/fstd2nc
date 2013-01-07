@@ -73,6 +73,19 @@ del Axis
 from pygeode.var import Var
 class RPN_Var (Var):
   def __init__ (self, filename, headers):
+    # Does this file contain actual forecasts?
+    try:
+      self._init (filename, headers, forecast_sign = +1)
+    # Or back trajectories?
+    except AssertionError:
+      self._init (filename, headers, forecast_sign = -1)
+      from warnings import warn
+      warn ("Auto-detecting negative forecasts")
+
+  # Try an initialization under certain conditions
+  # Currently, tries to set up the field with a particular direction for the forecast.
+  # The different assumptions can be permuated at a higher level, until one version happens to work.
+  def _init (self, filename, headers, forecast_sign):
     from pygeode.var import Var
     import numpy as np
 
@@ -85,16 +98,18 @@ class RPN_Var (Var):
     ip1_list = []
 
     for h in headers:
-      if h.dateo not in dateo_list:
-        dateo_list.append(h.dateo)
-      if h.ip2 not in ip2_list:
-        ip2_list.append(h.ip2)
+      # Get the proper date of validity and forecast time
+      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.ip2, forecast_sign)
+      if dateo not in dateo_list:
+        dateo_list.append(dateo)
+      if ip2 not in ip2_list:
+        ip2_list.append(ip2)
       if h.ip1 not in ip1_list:
         ip1_list.append(h.ip1)
 
     # Encode as integers
     dateo_list = np.array(dateo_list, dtype='int64')
-    ip2_list = np.array(ip2_list, dtype='int64')
+    ip2_list = np.array(ip2_list) # No integers for this one - could have fractional number of hours
     ip1_list = np.array(ip1_list, dtype='int64')
 
     # Define the axes
@@ -114,8 +129,10 @@ class RPN_Var (Var):
     header_order = np.empty((len(t),len(f),len(z)), dtype=int)
     header_order[:] = -1
     for hi, h in enumerate(headers):
-      ti = np.where(dateo_list == h.dateo)[0][0]
-      fi = np.where(ip2_list == h.ip2)[0][0]
+      # Hack to get the date of forecast (not date of validity)
+      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.ip2, forecast_sign)
+      ti = np.where(dateo_list == dateo)[0][0]
+      fi = np.where(ip2_list == ip2)[0][0]
       zi = np.where(ip1_list == h.ip1)[0][0]
       header_order[ti,fi,zi] = hi
 
@@ -160,6 +177,33 @@ class RPN_Var (Var):
   del need_full_axes
 
 del Var
+
+
+# Helper method - get proper dateo and ip2 values from the ones in the file.
+# There are a couple of issues this corrects:
+#  1) The file actually contains the date of validity, so we have to subract
+#     the forecast time from this.
+#  2) The forecast hour (ip2) truncates to an integer, so 30-minute forecast
+#     intervals aren't properly encoded.
+def correct_dateo_ip2 (datev, ip2, forecast_sign):
+  # Skip non-data records (e.g. ^^, >>)
+  if datev == 0: return datev, ip2
+
+  # Apply the sign to the forecast
+  ip2 *= forecast_sign
+
+  # Correct the ip2 value first
+  x = ((5*datev-3200) % 3600) / 3600.
+  assert forecast_sign in (1,-1)
+  if forecast_sign == 1:
+    ip2 += x
+  else:
+    ip2 -= (1-x)%1
+
+  # Get the date of original analysis from the date of validity
+  dateo = datev - int(round(720*ip2))
+
+  return dateo, ip2  
 
 
 # Helper method - group headers based on what variable the represent
