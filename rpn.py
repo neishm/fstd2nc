@@ -693,6 +693,8 @@ def p2ll (Px, Py, Pz):
   lat *= (180/np.pi)
   lon *= (180/np.pi)
 
+  return lat, lon
+
 # Compute the cross-product of 2 vectors
 def cross_product ((Px, Py, Pz), (Qx, Qy, Qz)):
   # Take the cross-product of the 2 vectors
