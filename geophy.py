@@ -13,7 +13,7 @@ class Geophy_File:
     if hasattr(self,'file'):
       self.lib.fclose(self.file)
 
-from pygeode.rpn.bmf import IAxis, JAxis, KAxis
+from bmf import IAxis, JAxis, KAxis
 from pygeode.var import Var
 class Geophy_Var(Var):
   def __init__ (self, file, geonm1, geonm2, geonm5, geopar1, geopar2, geopar3, ni, nj, base_offset):
