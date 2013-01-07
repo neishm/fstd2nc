@@ -25,10 +25,10 @@ SHARED = -shared -Wl,-soname,$(basename $<)
 %: %.c
 	$(CC) $(CFLAGS) $(LDLIBS) -o $@ $^
 
-lib%.$(LIBEXT): %.c
+lib%.$(LIBEXT): %.c $(addsuffix .o, $(COMMON))
 	$(CC) $(CFLAGS) $(LDLIBS) $(SHARED) -o $@ $^
 
-lib%.$(LIBEXT): %.f
+lib%.$(LIBEXT): %.f $(addsuffix .o, $(COMMON))
 	$(FC) $(FFLAGS) $(LDLIBS) $(SHARED) -o $@ $^
 
 

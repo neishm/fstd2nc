@@ -4,22 +4,9 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include "io.h"
 
 // pseudo-RPN interface
-
-typedef unsigned char byte;
-
-unsigned int read32 (byte *b) {
-  return (((unsigned int)(b[0]))<<24) | (((int)(b[1]))<<16) | (((int)(b[2]))<<8) | (((int)(b[3]))<<0);
-}
-
-int read24 (byte *b) {
-  return (((int)(b[0]))<<16) | (((int)(b[1]))<<8) | (((int)(b[2]))<<0);
-}
-
-int read16 (byte *b) {
-  return (((int)(b[0]))<<8) | (((int)(b[1]))<<0);
-}
 
 // Read packed characters
 void readchar (char *dest, byte *src, int n) {
