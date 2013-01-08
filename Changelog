@@ -1,3 +1,15 @@
+Version 0.4.2 (Jan 7, 2013):
+	* Minor bug fix in "p2ll" function - return statement was missing.
+
+Version 0.4.1 (Jan 7, 2013):
+	* Minor bug fix in geophy.
+
+Version 0.4.0 (Jan 7, 2013):
+	* Add support for GEM geophy binary files.
+	* Adjust date to be date of analysis, not date of validity.
+	* Support for multiple forecast hours in the same file.
+	* Allow for negative forecast hours.
+
 Version 0.3.1 (July 20, 2012):
 	* Fix bug with RPN date stamps.  Need to use floating-point during the
 	  conversion, or we can't resolve time intervals less than an hour.
