@@ -223,7 +223,7 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
 //      print_record_header (&h);
       // Make sure the header matches
       assert (receq(headers+rec, &h) == 1);
-      assert (h.datyp == 1 || h.datyp == 5); //currently only support packed floating-point/IEEE floating point
+      assert (h.datyp == 1 || h.datyp == 5 || h.datyp == 133); //currently only support packed floating-point/IEEE floating point/compressed IEEE floating point
 
       byte b[4];
       fread (b, 1, 4, file);
@@ -246,6 +246,12 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
 //        }
 //        printf ("\n");
       }
+
+      // Compressed?
+      else if (h.datyp == 133) {
+        read_compress32 (file, &h, recsize, out);
+      }
+
       // Other supported case: packed float
       else if (h.datyp == 1) {
 
