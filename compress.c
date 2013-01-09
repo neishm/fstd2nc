@@ -5,6 +5,8 @@
 // A bitwise file interface
 typedef struct {
   FILE *file;
+  unsigned long long start;
+  int length;
   unsigned int current_word;
   unsigned char usable_bits;
 } BITFILE;
@@ -12,6 +14,8 @@ typedef struct {
 BITFILE as_bitfile (FILE *f) {
   BITFILE b;
   b.file = f;
+  b.length = fread32(f);
+  b.start = ftello64(f);
   b.current_word = 0;
   b.usable_bits = 0;
   return b;
@@ -19,18 +23,9 @@ BITFILE as_bitfile (FILE *f) {
 
 // Read up to 32 bits from a stream
 unsigned int bitread (BITFILE *b, unsigned char nbits) {
+  if (nbits == 0) return 0;
+
   unsigned int data = 0;
-/*
-  if (b->usable_bits == 0) assert (b->current_word == 0);
-  if (b->usable_bits == 1) assert (b->current_word < 2);
-  if (b->usable_bits == 2) assert (b->current_word < 4);
-  if (b->usable_bits == 3) assert (b->current_word < 8);
-  if (b->usable_bits == 4) assert (b->current_word < 16);
-  if (b->usable_bits == 5) assert (b->current_word < 32);
-  if (b->usable_bits == 6) assert (b->current_word < 64);
-  if (b->usable_bits == 7) assert (b->current_word < 128);
-  if (b->usable_bits == 8) assert (b->current_word < 256);
-*/
 
   // Can we use up the rest of this current word?
   if (nbits > b->usable_bits) {
@@ -48,10 +43,15 @@ unsigned int bitread (BITFILE *b, unsigned char nbits) {
   b->current_word &= (0xFFFFFFFF >> (32-leftover_bits));  // fails for >>32
   if (leftover_bits == 0) b->current_word = 0; // account for shift failure
   b->usable_bits = leftover_bits;
-//  if (b->usable_bits == 0) printf ("0 == %d?\n", b->current_word);
-//  if (b->usable_bits == 0) assert (b->current_word == 0);
 
   return data;
+}
+
+// Finish with a bit stream
+int close_bitstream (BITFILE *b) {
+  // Move to the end of the stream
+  fseeko64(b->file, b->start + b->length, SEEK_SET);
+  return 0;
 }
 
 
@@ -117,7 +117,67 @@ int print_compress32_params (ZParams *p) {
 
   printf ("exp_code = %2i   mantissa_code = %2i\n",
         p->exp_code,     p->mantissa_code);
+
+  return 0;
 }
+
+// Lorenzo predictor decoder
+int lorenzo_decoder (BITFILE *b, int ni, int nj, int step, int nbits, int *out) {
+  int recsize = ni * nj;
+  // Temporary variable to hold the differences
+  int diff[recsize];
+
+  // Number of bits required to read the tiles' number of bits
+  unsigned char nbits_req_container = bitread(b,3);
+  assert (nbits_req_container > 0);
+
+  // Fill first row
+  for (int i = 0; i < ni; i++) {
+    out[i] = bitread(b,nbits);
+    diff[i] = 0;
+  }
+  // Fill first column
+  for (int k = ni; k < recsize; k+=ni) {
+    out[k] = bitread(b,nbits);
+    diff[k] = 0;
+  }
+
+  // Loop over each tile
+  for (int j0 = 1; j0 < nj; j0 += step) {
+    for (int i0 = 1; i0 < ni; i0 += step) {
+      unsigned char nbits_needed = bitread(b,nbits_req_container);
+//      printf ("nbits_needed: %d\n", nbits_needed);
+      for (int dj = 0; dj < step && j0+dj < nj; dj++) {
+        for (int di = 0; di < step && i0+di < ni; di++) {
+          int k = ni*(j0+dj) + (i0+di);
+          // Special case: no bits needed for the encoding?
+          if (nbits_needed == 0) diff[k] = 0;
+          // Otherwise, extract the diff
+          else {
+            int nbits2 = nbits_needed + 1; // minimum of 2 bits for encoding
+            int tmp = bitread(b,nbits2);
+            // Apply a sign
+            diff[k] = (tmp<<(32-nbits2)) >> (32-nbits2);
+          }
+        }
+      }
+    }
+  } // end of loop over tiles
+
+  // Integrate the differences to restore the field
+  for (int j = 1; j < nj; j++) {
+    for (int i = 1; i < ni; i++) {
+      int k22 = ni*j     + i;
+      int k12 = ni*j     + (i-1);
+      int k21 = ni*(j-1) + i;
+      int k11 = ni*(j-1) + (i-1);
+      out[k22] = diff[k22] + out[k21] + out[k12] - out[k11];
+    }
+  }
+
+  return 0;
+}
+
 
 // Read a compressed field
 int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
@@ -125,15 +185,12 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
   ZParams p;
 
   assert (h->ni * h->nj == recsize);
-
-  // Fill the output
-  // TODO - remove this, or set to NaN?
-  for (int i = 0; i < recsize; i++) out[i] = 0.0;
-
   assert (h->datyp == 133);
 
   read_compress32_params (f, &p);
 //  print_compress32_params (&p);
+
+//  printf ("?? %4s %d sign_code = %d exp_nbits = %d\n", h->nomvar, h->ip1, p.sign_code, p.exp_nbits);
 
   // Extract the sign bits
   assert (p.sign_code == 0 || p.sign_code == 1 || p.sign_code == 2);
@@ -148,8 +205,8 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
   }
   // Packed?
   else if (p.sign_code == 2 || p.sign_code == 3) {
-    unsigned int len_sign = fread32(f);  // not used?
     BITFILE b = as_bitfile(f);
+//    printf ("len_sign = %d\n", b.length);
     unsigned char lastval = 0;
     int i = 0;
     while (i < recsize) {
@@ -165,7 +222,7 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
         i += runlength; continue;
       }
       // count?
-      if (seq_type == 1) {
+      else if (seq_type == 1) {
         unsigned char val = bitread(&b,1);
         unsigned char count = bitread(&b,6);
 //        printf ("?? %4s %d bit = %d, i=%d, count=%d, recsize=%d\n", h->nomvar, h->ip1, val, i, count, recsize);
@@ -185,83 +242,49 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
       }  // end of "COUNT" encoding
 
     }  // end of loop over field elements
+
+    close_bitstream(&b);
+
   }  // end of packed sign condition
 
 
   // Extract the exponents
   assert (p.exp_code == 0 || p.exp_code == 1 || p.exp_code == 2);
-  unsigned short exp[recsize];
+  int exp[recsize];
   // Identical exponents?
   if (p.exp_code == 0) {
     for (int i = 0; i < recsize; i++) exp[i] = p.exp_min;
   }
   // Otherwise, have packed exponents
-  if (p.exp_code == 1 || p.exp_code == 2) {
-    // Temporary variable to hold the exponent differences
-    short exp_diff[recsize];
-//    for (int k = 0; k < recsize; k++) exp_diff[k] = 0;
-
-    unsigned int len_exp = fread32(f);  // Not used?
-//    printf ("len_exp = %d\n", len_exp);
+  else if (p.exp_code == 1 || p.exp_code == 2) {
+    // Call the Lorenzo predictor decoder
     BITFILE b = as_bitfile(f);
-    unsigned char nbits_req_container = bitread(&b,3); // 3 b/c of p.step??
-    int ni = h->ni;
-    int nj = h->nj;
-    assert (ni * nj == recsize);
-    // Fill first row
-    for (int i = 0; i < ni; i++) {
-      exp[i] = bitread(&b,p.exp_nbits);
-      exp_diff[i] = 0;
-    }
-    // Fill first column
-    for (int k = ni; k < recsize; k+=ni) {
-      exp[k] = bitread(&b,p.exp_nbits);
-      exp_diff[k] = 0;
-    }
+//    printf ("len_exp = %d\n", b.length);
+//    assert (b.length > 0);
+    lorenzo_decoder (&b, h->ni, h->nj, p.step, p.exp_nbits, exp);
+    close_bitstream (&b);
 
-    // Loop over each tile
-    for (int j0 = 1; j0 < nj; j0 += p.step) {
-      for (int i0 = 1; i0 < ni; i0 += p.step) {
-        unsigned char nbits_needed = bitread(&b,nbits_req_container);
-//        printf ("nbits_needed: %d\n", nbits_needed);
-        for (int dj = 0; dj < p.step && j0+dj < nj; dj++) {
-          for (int di = 0; di < p.step && i0+di < ni; di++) {
-            int k = ni*(j0+dj) + (i0+di);
-            // Special case: no bits needed for the encoding?
-            if (nbits_needed == 0) exp_diff[k] = 0;
-            // Otherwise, extract the diff
-            else {
-              int nbits2 = nbits_needed + 1; // minimum of 2 bits for encoding
-              int tmp = bitread(&b,nbits2);
-              // Apply a sign
-              exp_diff[k] = (tmp<<(32-nbits2)) >> (32-nbits2);
-//              assert (exp_diff[k] > -1000 && exp_diff[k] < 1000);
-            }
-          }
-        }
-      }
-    } // end of loop over tiles
-
-    // Integrate the differences to restore the exponent field
-    for (int j = 1; j < nj; j++) {
-      for (int i = 1; i < ni; i++) {
-        int k22 = ni*j     + i;
-        int k12 = ni*j     + (i-1);
-        int k21 = ni*(j-1) + i;
-        int k11 = ni*(j-1) + (i-1);
-        exp[k22] = exp_diff[k22] + exp[k21] + exp[k12] - exp[k11];
-      }
-    }
     // Add the minimum value
     for (int k = 0; k < recsize; k++) exp[k] += p.exp_min;
-    // Test the diff
-//    for (int k = 0; k < recsize; k++) {
-//      assert (exp_diff[k] >= 0);
-//      exp[k] = exp_diff[k];
-//    }
 
   } // End of packed exponent case
 
+
+  // Extract the mantissas
+
+/*
+  unsigned int mantissa[recsize];
+  // First case - nothing fancy applied
+  assert (p.mantissa_code == 0 || p.mantissa_code == 1);
+  if (p.mantissa_code == 0) {
+    BITFILE b = as_bitfile(f);
+    for (int k = 0; k < recsize; k++) mantissa[k] = bitread(&b,p.mantissa_nbits);
+  }
+  // More fancy case - Lorenzo predictor
+  else if (p.mantissa_code == 1) {
+    //TODO
+  }
+*/
 
   // Reconstruct the field from the information we have
 //  for (int i = 0; i < recsize; i++) out[i] = 1 - 2*sign[i];
