@@ -271,24 +271,26 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
 
 
   // Extract the mantissas
-
-/*
   unsigned int mantissa[recsize];
   // First case - nothing fancy applied
   assert (p.mantissa_code == 0 || p.mantissa_code == 1);
-  if (p.mantissa_code == 0) {
+  printf ("mantissa code: %d\n", p.mantissa_code);
+  if (p.mantissa_code == 1) {
     BITFILE b = as_bitfile(f);
     for (int k = 0; k < recsize; k++) mantissa[k] = bitread(&b,p.mantissa_nbits);
+    close_bitstream(&b);
   }
   // More fancy case - Lorenzo predictor
-  else if (p.mantissa_code == 1) {
-    //TODO
+  else if (p.mantissa_code == 0) {
+    BITFILE b = as_bitfile(f);
+    lorenzo_decoder (&b, h->ni, h->nj, p.step, p.mantissa_nbits, (int*)mantissa);
+    close_bitstream(&b);
   }
-*/
 
   // Reconstruct the field from the information we have
 //  for (int i = 0; i < recsize; i++) out[i] = 1 - 2*sign[i];
-  for (int k = 0; k < recsize; k++) out[k] = exp[k];
+//  for (int k = 0; k < recsize; k++) out[k] = exp[k];
+  for (int k = 0; k < recsize; k++) out[k] = mantissa[k];
 
   return 0;
 }
