@@ -249,7 +249,9 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
 
       // Compressed?
       else if (h.datyp == 133) {
-        read_compress32 (file, &h, recsize, out);
+        unsigned char buf[h.size*8];
+        fread (buf, 1, h.size*8, file);
+        read_compress32 (buf, &h, recsize, out);
       }
 
       // Other supported case: packed float

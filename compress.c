@@ -4,18 +4,19 @@
 
 // A bitwise file interface
 typedef struct {
-  FILE *file;
-  unsigned long long start;
+  unsigned char *buf_start;
+  unsigned char **buf;
   int length;
   unsigned int current_word;
   unsigned char usable_bits;
 } BITFILE;
 
-BITFILE as_bitfile (FILE *f) {
+BITFILE as_bitfile (unsigned char **buf) {
   BITFILE b;
-  b.file = f;
-  b.length = fread32(f);
-  b.start = ftello64(f);
+  b.length = read32(*buf);
+  (*buf) += 4;
+  b.buf = buf;
+  b.buf_start = *buf;
   b.current_word = 0;
   b.usable_bits = 0;
   return b;
@@ -32,7 +33,8 @@ unsigned int bitread (BITFILE *b, unsigned char nbits) {
     data |= b->current_word;
     nbits -= b->usable_bits;
     data <<= nbits;
-    b->current_word = fread32(b->file);
+    b->current_word = read32(*(b->buf));
+    (*b->buf) += 4;
 //    printf ("?? new word: %08X\n", b->current_word);
     b->usable_bits = 32;
   }
@@ -49,8 +51,11 @@ unsigned int bitread (BITFILE *b, unsigned char nbits) {
 
 // Finish with a bit stream
 int close_bitstream (BITFILE *b) {
-  // Move to the end of the stream
-  fseeko64(b->file, b->start + b->length, SEEK_SET);
+  int used = *(b->buf) - b->buf_start;
+//  printf ("used: %d length %d\n", used, b->length);
+  if (b->length > 0) {  // skip for the bad length encoded in the mantissa
+    *(b->buf) += (b->length - used);
+  }
   return 0;
 }
 
@@ -77,13 +82,16 @@ typedef struct {
 
 
 // Read the parameters for a compressed field
-int read_compress32_params (FILE *f, ZParams *p) {
+int read_compress32_params (unsigned char **buf, ZParams *p) {
 
   unsigned int unknown, zfstzip, zieee_info;
 
-  unknown = fread32 (f);  // compressed size?
-  zfstzip = fread32 (f);
-  zieee_info = fread32 (f);
+  unknown = read32 (*buf);  // compressed size?
+  (*buf) += 4;
+  zfstzip = read32 (*buf);
+  (*buf) += 4;
+  zieee_info = read32 (*buf);
+  (*buf) += 4;
 
 //  printf ("raw params: %08X %08X\n", zfstzip, zieee_info);
 
@@ -180,14 +188,14 @@ int lorenzo_decoder (BITFILE *b, int ni, int nj, int step, int nbits, int *out) 
 
 
 // Read a compressed field
-int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
+int read_compress32 (unsigned char *buf, RecordHeader *h, int recsize, float *out) {
 
   ZParams p;
 
   assert (h->ni * h->nj == recsize);
   assert (h->datyp == 133);
 
-  read_compress32_params (f, &p);
+  read_compress32_params (&buf, &p);
 //  print_compress32_params (&p);
 
 //  printf ("?? %4s %d sign_code = %d exp_nbits = %d\n", h->nomvar, h->ip1, p.sign_code, p.exp_nbits);
@@ -205,7 +213,7 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
   }
   // Packed?
   else if (p.sign_code == 2 || p.sign_code == 3) {
-    BITFILE b = as_bitfile(f);
+    BITFILE b = as_bitfile(&buf);
 //    printf ("len_sign = %d\n", b.length);
     unsigned char lastval = 0;
     int i = 0;
@@ -258,7 +266,7 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
   // Otherwise, have packed exponents
   else if (p.exp_code == 1 || p.exp_code == 2) {
     // Call the Lorenzo predictor decoder
-    BITFILE b = as_bitfile(f);
+    BITFILE b = as_bitfile(&buf);
 //    printf ("len_exp = %d\n", b.length);
 //    assert (b.length > 0);
     lorenzo_decoder (&b, h->ni, h->nj, p.step, p.exp_nbits, exp);
@@ -276,13 +284,13 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
   assert (p.mantissa_code == 0 || p.mantissa_code == 1);
 //  printf ("mantissa code: %d\n", p.mantissa_code);
   if (p.mantissa_code == 1) {
-    BITFILE b = as_bitfile(f);
+    BITFILE b = as_bitfile(&buf);
     for (int k = 0; k < recsize; k++) mantissa[k] = bitread(&b,p.mantissa_nbits);
     close_bitstream(&b);
   }
   // More fancy case - Lorenzo predictor
   else if (p.mantissa_code == 0) {
-    BITFILE b = as_bitfile(f);
+    BITFILE b = as_bitfile(&buf);
     lorenzo_decoder (&b, h->ni, h->nj, p.step, p.mantissa_nbits, (int*)mantissa);
     close_bitstream(&b);
   }
