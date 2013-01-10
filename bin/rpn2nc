@@ -35,13 +35,9 @@ if exists(ncfile):
     exit(1)
 
 
-import warnings
-with warnings.catch_warnings():
-  warnings.simplefilter("ignore")
+# Load the input file
+data = rpn.open(rpnfile)
 
-  # Load the input file
-  data = rpn.open(rpnfile)
-
-  # Write to netcdf
-  nc.save(ncfile, data)
+# Write to netcdf
+nc.save(ncfile, data)
 
