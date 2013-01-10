@@ -4,8 +4,21 @@ from sys import argv, exit, stdout
 from os.path import exists
 from pygeode.formats import netcdf as nc, rpn
 
+# Extract keyword options
+kwargs = [a for a in argv if a.startswith('--')]
+argv = [a for a in argv if a not in kwargs]
+
+squash_forecasts = False
+if '--squash-forecasts' in kwargs:
+  squash_forecasts = True
+  kwargs.remove('--squash-forecasts')
+
+if len(kwargs) > 0:
+  print "Unknown keyword arg(s):", kwargs
+  exit(1)
+
 if len(argv) != 3:
-  print "Usage: %s <rpn_file> <netcdf_file>"%argv[0]
+  print "Usage: %s [--squash-forecasts] <rpn_file> <netcdf_file>"%argv[0]
   exit(1)
 
 rpnfile = argv[1]
@@ -37,6 +50,31 @@ if exists(ncfile):
 
 # Load the input file
 data = rpn.open(rpnfile)
+
+# Modify the data?
+
+if squash_forecasts is True:
+  from pygeode.dataset import Dataset
+  from pygeode.timeaxis import StandardTime
+  from pygeode.concat import concat
+  F = rpn.F   # Forecast axis
+  varlist = []
+  for var in data:
+    if var.hasaxis(StandardTime) and var.hasaxis(F):
+      # Split by time
+      nt = len(var.getaxis(StandardTime))
+      varparts = [var(i_time=t) for t in range(nt)]
+      # Squash each individual time
+      for t,varpart in enumerate(varparts):
+        # Assume time is in units of hours, and so is forecast
+        newtime = varpart.getaxis(F).values + varpart.time.values
+        newtime = StandardTime(values=newtime, units='hours', startdate=varpart.time.startdate)
+        varparts[t] = varparts[t].squeeze('time').replace_axes(forecast=newtime)
+      # Merge back into a single variable
+      var = concat(varparts)
+    varlist.append(var)
+  data = Dataset(varlist, atts=data.atts)
+
 
 # Write to netcdf
 nc.save(ncfile, data)
