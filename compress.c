@@ -274,7 +274,7 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
   unsigned int mantissa[recsize];
   // First case - nothing fancy applied
   assert (p.mantissa_code == 0 || p.mantissa_code == 1);
-  printf ("mantissa code: %d\n", p.mantissa_code);
+//  printf ("mantissa code: %d\n", p.mantissa_code);
   if (p.mantissa_code == 1) {
     BITFILE b = as_bitfile(f);
     for (int k = 0; k < recsize; k++) mantissa[k] = bitread(&b,p.mantissa_nbits);
@@ -287,10 +287,18 @@ int read_compress32 (FILE *f, RecordHeader *h, int recsize, float *out) {
     close_bitstream(&b);
   }
 
+  // Account for truncated mantissa
+  if (p.mantissa_nbits < 23) {
+    for (int k = 0; k < recsize; k++) mantissa[k] <<= (23-p.mantissa_nbits);
+  }
+
   // Reconstruct the field from the information we have
 //  for (int i = 0; i < recsize; i++) out[i] = 1 - 2*sign[i];
 //  for (int k = 0; k < recsize; k++) out[k] = exp[k];
-  for (int k = 0; k < recsize; k++) out[k] = mantissa[k];
+//  for (int k = 0; k < recsize; k++) out[k] = mantissa[k];
+  for (int k = 0; k < recsize; k++) {
+    ((unsigned int *)out)[k] = (sign[k]<<31) | (exp[k]<<23) | mantissa[k];
+  }
 
   return 0;
 }
