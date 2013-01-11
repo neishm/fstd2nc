@@ -1,6 +1,6 @@
 SUBDIRS = 
 LIBS = rpn bmf geophy
-COMMON = io
+COMMON = io compress
 include rules.mk
 
 install:

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <math.h>
 #include "io.h"
+#include "rpn.h"
 
 // pseudo-RPN interface
 
@@ -22,19 +23,6 @@ void readchar (char *dest, byte *src, int n) {
     dest[i] += 32;
   }
 }
-
-
-
-typedef struct {
-  long long int file_size;
-  int num_overwrites;
-  int num_extensions;
-  int nchunks;
-  unsigned long long int last_chunk;
-  int max_data_length;
-  int num_erasures;
-  int nrecs;
-} FileHeader;
 
 void read_file_header (FILE *f, FileHeader *h) {
   int nbytes;
@@ -81,15 +69,6 @@ void print_file_header (FileHeader *h) {
   printf ("file_size: %lld, num_overwrites: %d, num_extensions: %d, nchunks: %d, last_chunk: %llx, max_data_length: %d, num_erasures: %d, nrecs: %d\n", h->file_size, h->num_overwrites, h->num_extensions, h->nchunks, h->last_chunk, h->max_data_length, h->num_erasures, h->nrecs);
 }
 
-typedef struct {
-  unsigned int this_chunk_words;
-  unsigned long long int this_chunk;
-  unsigned int next_chunk_words;
-  unsigned long long int  next_chunk;
-  int nrecs;
-  unsigned int checksum;
-} ChunkHeader;
-
 void read_chunk_header (FILE *f, ChunkHeader *h) {
   int nbytes;
   byte buf[32];
@@ -113,35 +92,6 @@ void print_chunk_header (ChunkHeader *h) {
   printf ("this_chunk: %llx, next_chunk: %llx, nrecs: %d, checksum: %x\n", h->this_chunk, h->next_chunk, h->nrecs, h->checksum);
 }
 
-typedef char Nomvar[5];
-typedef char Etiket[13];
-typedef char Typvar[3];
-
-typedef struct {
-  int status;
-  int size;
-  unsigned long long int data;
-  int deet;
-  int npak;
-  int ni;
-  char grtyp;
-  int nj;
-  int datyp;
-  int nk;
-  int npas;
-  int ig4;
-  int ig2;
-  int ig1;
-  int ig3;
-  Etiket etiket;
-  Typvar typvar;
-  Nomvar nomvar;
-  int ip1;
-  int ip2;
-  int ip3;
-  long long int dateo;
-  unsigned int checksum;
-} RecordHeader;
 
 void read_record_header (FILE *f, RecordHeader *h) {
   int nbytes;
@@ -273,7 +223,7 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
 //      print_record_header (&h);
       // Make sure the header matches
       assert (receq(headers+rec, &h) == 1);
-      assert (h.datyp == 1 || h.datyp == 5); //currently only support packed floating-point/IEEE floating point
+      assert (h.datyp == 1 || h.datyp == 5 || h.datyp == 133); //currently only support packed floating-point/IEEE floating point/compressed IEEE floating point
 
       byte b[4];
       fread (b, 1, 4, file);
@@ -296,6 +246,14 @@ int read_data (char *filename, int nrecs, RecordHeader *headers, int recsize, fl
 //        }
 //        printf ("\n");
       }
+
+      // Compressed?
+      else if (h.datyp == 133) {
+        unsigned char buf[h.size*8];
+        fread (buf, 1, h.size*8, file);
+        read_compress32 (buf, &h, recsize, out);
+      }
+
       // Other supported case: packed float
       else if (h.datyp == 1) {
 
