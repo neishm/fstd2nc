@@ -1,3 +1,7 @@
+Version 0.5.0 (Jan 11, 2013)
+	* Some support for reading compressed fields (datyp=133).
+	* Option in rpn2nc to squash the forecast axis into the time axis.
+
 Version 0.4.2 (Jan 7, 2013):
 	* Minor bug fix in "p2ll" function - return statement was missing.
 
