@@ -399,6 +399,48 @@ def decode_zcoord (varlist):
   return varlist
 
 
+# Helper method - decode RPN date stamps into relative times
+def decode_date (date):
+  import numpy as np
+  date = np.array(date)
+  # Decode the run
+  run = (date % 8)
+  date = (date>>3) * 10 + run
+  # Case 0: degenerate time axis
+  if np.all(date == 0):
+    return 0
+  # Case 1: old style
+  elif np.all(date < 123200000):
+    raise Exception  # old-style dates not supported
+    date /= 10;  # ignore operation run digit
+    hour = date % 100; date /= 100
+    year = 1900 + (date % 100); date /= 100
+    day = date % 100; date /= 100
+    month = date
+    badmonths = (month < 1) + (month > 12)
+    if np.any(badmonths):
+      warn("Invalid months detected.  Resetting to 1.", stacklevel=3)
+      month[badmonths] = 1
+    baddays = (day < 1) + (day > 31)
+    if np.any(baddays):
+      warn("Invalid days detected.  Resetting to 1.", stacklevel=3)
+      day[baddays] = 1
+    from pygeode.axis import StandardTime
+    taxis = StandardTime (year=year, month=month, day=day, units='seconds', startdate=dict(year=1980))
+    return taxis.values
+  # Case 2: new style
+  else:
+    date -= 123200000;
+    # re-encode the run
+    run = date % 10
+    date = (date/10) * 8 + run
+    # Convert from 5-second intervals to seconds
+    date *= 5
+
+  assert (np.all(date%60==0))
+  return date
+
+
 # Helper method - decode time axis
 def decode_timeaxis (varlist):
   import numpy as np
@@ -411,34 +453,13 @@ def decode_timeaxis (varlist):
   for i, v in enumerate(varlist):
 
     dateo = np.array(v.getaxis(T).values)
-    dateo = dateo/4. * 5 
-    # Case 0: degenerate time axis
+    dateo = decode_date(dateo)
     if np.all(dateo == 0):
       warn ("degenerate time axis detected", stacklevel=3)
       taxis = TAxis(list(dateo))
-    # Case 1: old style
-    elif np.all(dateo < 123200000):
-      dateo /= 10;  # ignore operation run digit
-      hour = dateo % 100; dateo /= 100
-      year = 1900 + (dateo % 100); dateo /= 100
-      day = dateo % 100; dateo /= 100
-      month = dateo
-      badmonths = (month < 1) + (month > 12)
-      if np.any(badmonths):
-        warn("Invalid months detected.  Resetting to 1.", stacklevel=3)
-        month[badmonths] = 1
-      baddays = (day < 1) + (day > 31)
-      if np.any(baddays):
-        warn("Invalid days detected.  Resetting to 1.", stacklevel=3)
-        day[baddays] = 1
-      taxis = StandardTime (year=year, month=month, day=day, units='hours')
-    # Case 2: new style
     else:
-      dateo -= 123200000;
-      dateo *= 4;  # now have # seconds since Jan 1, 1980
-      # Convert to hours
-      dateo /= 3600.
-      taxis = StandardTime (values=dateo, units='hours', startdate={'year':1980})
+    # Case 2: new style
+      taxis = StandardTime (values=dateo/3600., units='hours', startdate={'year':1980})
 
     varlist[i] = v.replace_axes(T = taxis)
 
