@@ -99,7 +99,7 @@ class RPN_Var (Var):
 
     for h in headers:
       # Get the proper date of validity and forecast time
-      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.ip2, forecast_sign)
+      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign)
       if dateo not in dateo_list:
         dateo_list.append(dateo)
       if ip2 not in ip2_list:
@@ -130,7 +130,7 @@ class RPN_Var (Var):
     header_order[:] = -1
     for hi, h in enumerate(headers):
       # Hack to get the date of forecast (not date of validity)
-      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.ip2, forecast_sign)
+      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign)
       ti = np.where(dateo_list == dateo)[0][0]
       fi = np.where(ip2_list == ip2)[0][0]
       zi = np.where(ip1_list == h.ip1)[0][0]
@@ -183,25 +183,19 @@ del Var
 # There are a couple of issues this corrects:
 #  1) The file actually contains the date of validity, so we have to subract
 #     the forecast time from this.
-#  2) The forecast hour (ip2) truncates to an integer, so 30-minute forecast
-#     intervals aren't properly encoded.
-def correct_dateo_ip2 (datev, ip2, forecast_sign):
+#  2) The forecast hour (ip2) truncates to an integer, so don't use it from
+#     the file.  Instead, use deet*npas to reconstruct ip2
+def correct_dateo_ip2 (datev, deet, npas, forecast_sign):
+  ip2 = deet*npas / 3600.
+
   # Skip non-data records (e.g. ^^, >>)
   if datev == 0: return datev, ip2
 
   # Apply the sign to the forecast
   ip2 *= forecast_sign
 
-  # Correct the ip2 value first
-  x = ((5*datev-3200) % 3600) / 3600.
-  assert forecast_sign in (1,-1)
-  if forecast_sign == 1:
-    ip2 += x
-  else:
-    ip2 -= (1-x)%1
-
   # Get the date of original analysis from the date of validity
-  dateo = datev - int(round(720*ip2))
+  dateo = datev - (deet*npas)/5.
 
   return dateo, ip2  
 
