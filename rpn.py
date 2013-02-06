@@ -72,20 +72,20 @@ del Axis
 # Collect a list of headers into a PyGeode Var
 from pygeode.var import Var
 class RPN_Var (Var):
-  def __init__ (self, filename, headers):
+  def __init__ (self, filename, headers, squash_forecasts=False):
     # Does this file contain actual forecasts?
     try:
-      self._init (filename, headers, forecast_sign = +1)
+      self._init (filename, headers, forecast_sign = +1, squash_forecasts=squash_forecasts)
     # Or back trajectories?
     except AssertionError:
-      self._init (filename, headers, forecast_sign = -1)
+      self._init (filename, headers, forecast_sign = -1, squash_forecasts=squash_forecasts)
       from warnings import warn
       warn ("Auto-detecting negative forecasts")
 
   # Try an initialization under certain conditions
   # Currently, tries to set up the field with a particular direction for the forecast.
   # The different assumptions can be permuated at a higher level, until one version happens to work.
-  def _init (self, filename, headers, forecast_sign):
+  def _init (self, filename, headers, forecast_sign, squash_forecasts=False):
     from pygeode.var import Var
     import numpy as np
 
@@ -99,7 +99,7 @@ class RPN_Var (Var):
 
     for h in headers:
       # Get the proper date of validity and forecast time
-      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign)
+      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign, squash_forecasts)
       if dateo not in dateo_list:
         dateo_list.append(dateo)
       if ip2 not in ip2_list:
@@ -130,7 +130,7 @@ class RPN_Var (Var):
     header_order[:] = -1
     for hi, h in enumerate(headers):
       # Hack to get the date of forecast (not date of validity)
-      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign)
+      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign, squash_forecasts)
       ti = np.where(dateo_list == dateo)[0][0]
       fi = np.where(ip2_list == ip2)[0][0]
       zi = np.where(ip1_list == h.ip1)[0][0]
@@ -185,7 +185,7 @@ del Var
 #     the forecast time from this.
 #  2) The forecast hour (ip2) truncates to an integer, so don't use it from
 #     the file.  Instead, use deet*npas to reconstruct ip2
-def correct_dateo_ip2 (datev, deet, npas, forecast_sign):
+def correct_dateo_ip2 (datev, deet, npas, forecast_sign, squash_forecasts):
   ip2 = deet*npas / 3600.
 
   # Skip non-data records (e.g. ^^, >>)
@@ -193,6 +193,10 @@ def correct_dateo_ip2 (datev, deet, npas, forecast_sign):
 
   # Apply the sign to the forecast
   ip2 *= forecast_sign
+
+  # If we're squashing the forecasts, then *don't* get the date of origin.
+  if squash_forecasts is True:
+    return datev, 0
 
   # Get the date of original analysis from the date of validity
   dateo = datev - (deet*npas)/5.
@@ -218,7 +222,7 @@ def collect_headers (headers):
 
 
 # Open an RPN file, return a list of raw variables (minimal processing)
-def rawopen (filename):
+def rawopen (filename, squash_forecasts=False):
   from os.path import exists
   assert exists(filename), "Can't find %s"%filename
   nrecs = lib.get_num_records(filename)
@@ -226,7 +230,7 @@ def rawopen (filename):
   lib.get_record_headers (filename, headers)
   vardict = collect_headers(headers)
   # Generate PyGeode vars based on the header information
-  varlist = [RPN_Var(filename, headers) for headers in vardict.values()]
+  varlist = [RPN_Var(filename, headers, squash_forecasts=squash_forecasts) for headers in vardict.values()]
   return varlist
 
 
@@ -625,11 +629,11 @@ def add_latlon (varlist):
 ######################################################################
 # You're probably looking for this
 ######################################################################
-def open (filename):
+def open (filename, squash_forecasts=False):
   from pygeode.dataset import Dataset
 
   # Get the raw (unprocessed) variables
-  vars = rawopen(filename)
+  vars = rawopen(filename, squash_forecasts=squash_forecasts)
 
   # Do some filtering
   vars = attach_xycoords(vars)
@@ -638,6 +642,10 @@ def open (filename):
   vars = decode_latlon(vars)
   vars = remove_degenerate_axes(vars)
   vars = add_latlon(vars)
+
+  # Remove a squashed forecast axis?
+  if squash_forecasts is True:
+    vars = [v.squeeze('forecast') for v in vars]
 
   # Convert to a dataset
   dataset = Dataset(vars)

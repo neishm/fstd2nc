@@ -49,31 +49,7 @@ if exists(ncfile):
 
 
 # Load the input file
-data = rpn.open(rpnfile)
-
-# Modify the data?
-
-if squash_forecasts is True:
-  from pygeode.dataset import Dataset
-  from pygeode.timeaxis import StandardTime
-  from pygeode.concat import concat
-  F = rpn.F   # Forecast axis
-  varlist = []
-  for var in data:
-    if var.hasaxis(StandardTime) and var.hasaxis(F):
-      # Split by time
-      nt = len(var.getaxis(StandardTime))
-      varparts = [var(i_time=t) for t in range(nt)]
-      # Squash each individual time
-      for t,varpart in enumerate(varparts):
-        # Assume time is in units of hours, and so is forecast
-        newtime = varpart.getaxis(F).values + varpart.time.values
-        newtime = StandardTime(values=newtime, units='hours', startdate=varpart.time.startdate)
-        varparts[t] = varparts[t].squeeze('time').replace_axes(forecast=newtime)
-      # Merge back into a single variable
-      var = concat(varparts)
-    varlist.append(var)
-  data = Dataset(varlist, atts=data.atts)
+data = rpn.open(rpnfile, squash_forecasts=squash_forecasts)
 
 
 # Write to netcdf
