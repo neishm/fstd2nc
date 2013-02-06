@@ -1,3 +1,10 @@
+Version 0.6.0 (Feb 6, 2013)
+	* Push the --squash-forecast option deeper into the code, to avoid
+	  triggering time/forecast assertions that are no longer applicable.
+	* Factor out the code for decoding the time axis.
+	* Don't use the IP2 value from the file.  Instead, regenerate a
+	  "proper" IP2 from DEET/NPAS.
+
 Version 0.5.0 (Jan 11, 2013)
 	* Some support for reading compressed fields (datyp=133).
 	* Option in rpn2nc to squash the forecast axis into the time axis.
