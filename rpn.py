@@ -99,7 +99,7 @@ class RPN_Var (Var):
 
     for h in headers:
       # Get the proper date of validity and forecast time
-      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign, squash_forecasts)
+      dateo, ip2 = correct_dateo_ip2 (name, h.dateo, h.ip2, h.deet, h.npas, forecast_sign, squash_forecasts)
       if dateo not in dateo_list:
         dateo_list.append(dateo)
       if ip2 not in ip2_list:
@@ -130,7 +130,7 @@ class RPN_Var (Var):
     header_order[:] = -1
     for hi, h in enumerate(headers):
       # Hack to get the date of forecast (not date of validity)
-      dateo, ip2 = correct_dateo_ip2 (h.dateo, h.deet, h.npas, forecast_sign, squash_forecasts)
+      dateo, ip2 = correct_dateo_ip2 (name, h.dateo, h.ip2, h.deet, h.npas, forecast_sign, squash_forecasts)
       ti = np.where(dateo_list == dateo)[0][0]
       fi = np.where(ip2_list == ip2)[0][0]
       zi = np.where(ip1_list == h.ip1)[0][0]
@@ -185,11 +185,13 @@ del Var
 #     the forecast time from this.
 #  2) The forecast hour (ip2) truncates to an integer, so don't use it from
 #     the file.  Instead, use deet*npas to reconstruct ip2
-def correct_dateo_ip2 (datev, deet, npas, forecast_sign, squash_forecasts):
-  ip2 = deet*npas / 3600.
+def correct_dateo_ip2 (name, datev, ip2, deet, npas, forecast_sign, squash_forecasts):
 
   # Skip non-data records (e.g. ^^, >>)
-  if datev == 0: return datev, ip2
+  if name in ('>>','^^','HY','!!'): return datev, ip2
+
+  # Regenerate the ip2 value based on DEET,NPAS
+  ip2 = deet*npas / 3600.
 
   # Apply the sign to the forecast
   ip2 *= forecast_sign
@@ -645,7 +647,7 @@ def open (filename, squash_forecasts=False):
 
   # Remove a squashed forecast axis?
   if squash_forecasts is True:
-    vars = [v.squeeze('forecast') for v in vars]
+    vars = [v.squeeze('forecast') if v.hasaxis('forecast') else v for v in vars]
 
   # Convert to a dataset
   dataset = Dataset(vars)
