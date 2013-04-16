@@ -125,6 +125,12 @@ class RPN_Var (Var):
     for att in unique_var_atts:
       atts[att] = getattr(headers[0], att)
 
+    # Attach additional information, for special coordinates
+    if name == '!!':
+      self.atts['ip1'] = headers[0].ip1
+      self.atts['ip2'] = headers[0].ip2
+      self.atts['ip3'] = headers[0].ip3
+
     # Generate a matrix for the order of headers
     header_order = np.empty((len(t),len(f),len(z)), dtype=int)
     header_order[:] = -1
@@ -255,6 +261,10 @@ class Height_wrt_Ground (ZAxis): pass
 #TODO: sub-class this to allow a Hybrid.fromvar()-type thing
 from pygeode.axis import Hybrid
 
+# GEM4 coordinate - hybrid in log(pressure) coordinates
+class LogHybrid (ZAxis):
+  name = 'zeta'
+
 class Theta (ZAxis): pass
 
 # How the ip1 types get mapped to the above classes:
@@ -268,6 +278,7 @@ class Theta (ZAxis): pass
 # 5       : hybrid coordinates [hy] (0.0->1.0)
 # 6       : theta [th]
 #
+#NOTE: 'Hybrid' in this context could be 'LogHybrid' as well!
 vertical_type = {0:Height, 1:Sigma, 2:Pres, 3:ZAxis, 4:Height_wrt_Ground, 5:Hybrid, 6:Theta}
 
 # Axis with an associated type
@@ -355,8 +366,9 @@ def decode_zcoord (varlist):
   # The HY record has no dimensionality of its own, so we can't create
   # particular axes until we match it to particular variables.
   hycoords= [v for v in varlist if v.name == 'HY']
+  bangcoords = [v for v in varlist if v.name == '!!']
 
-  varlist = [v for v in varlist if v.name not in ('HY',)]
+  varlist = [v for v in varlist if v.name not in ('HY','!!')]
 
   # Loop over the other (non-coordinate) variables, and apply whatever
   # coords we can.
@@ -389,6 +401,12 @@ def decode_zcoord (varlist):
         A = p0 * (zvalues - B)
         zcoord = Hybrid(zvalues,A,B)
         del p0, hy_ip1, plid, exp, etatop, zvalues, B, A
+      del hycoord
+     # Match GEM4 vertical coordinate ('!!')
+     for bangcoord in bangcoords:
+      if v.atts['ig1'] == bangcoord.atts['ip1'] and v.atts['ig2'] == bangcoord.atts['ip2'] and v.atts['ig3'] == bangcoord.atts['ip3']:
+        zcoord = LogHybrid(zcoord.values)
+        #TODO: Decode A and B
 
     # Other vertical coordinates (easy case)
     else:

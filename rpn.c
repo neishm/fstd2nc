@@ -113,7 +113,7 @@ void read_record_header (FILE *f, RecordHeader *h) {
   //TODO: ubc
   h->npas = (read32(buf+24)>>6);
   h->ig4 = read24(buf+28);
-  h->ig2 = buf[32]*65536 + buf[35]*256 + buf[39];
+  h->ig2 = buf[31]*65536 + buf[35]*256 + buf[39];
   h->ig1 = read24(buf+32);
   h->ig3 = read24(buf+36);
   readchar (h->etiket, buf+40, 5);
