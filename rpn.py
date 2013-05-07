@@ -412,7 +412,17 @@ def decode_zcoord (varlist):
     else:
       zcoord = vertical_type[coordtype](zcoord.values)
 
-    varlist[i] = v.replace_axes(Z = zcoord)
+    # Apply the Z coordinate
+    v = v.replace_axes(Z = zcoord)
+
+    # Force an order for model levels?
+    # (works around a bug where the order of the records from the model output
+    #  is not the natural order of the coordinate).
+    if v.hasaxis(Hybrid) or v.hasaxis(LogHybrid):
+      v = v.sorted(ZAxis)
+
+    # Update the var list
+    varlist[i] = v
 
   return varlist
 
