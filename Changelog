@@ -1,3 +1,9 @@
+Version 0.7.0 (May 28, 2013)
+	* Add rudimentary support for '!!' vertical record.  No vertical
+	  information is extracted beyond the 'zeta' values, though.
+	* Fix the z-axis order.  Depending on the order of output for the
+	  GEM model, the default order of records may not be adequate.
+
 Version 0.6.1 (Feb 11, 2013)
 	* Fixed bug in attaching latitude/longitude fields.  LAM/rotated grids
 	  did not have coordinate information, due to a kludging of the ip2
