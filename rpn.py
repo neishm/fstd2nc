@@ -220,6 +220,9 @@ def collect_headers (headers):
     key = tuple(getattr(h,att) for att in unique_var_atts)
     # Include part of the ip1 parameter (must have consistent vertical coordinate type)
     key += (h.ip1>>24,)
+    # For coordinate variables, include ip1,ip2,ip3
+    if h.nomvar.strip() in ('>>','^^','!!'):
+      key += (h.ip1,h.ip2,h.ip3)
 
     if key not in var_headers:
       var_headers[key] = []
