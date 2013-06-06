@@ -1,3 +1,7 @@
+Version 0.7.1 (Jun 6, 2013)
+	* Bug fix - coordinate variables should be distinguished by ip1,ip2,ip3
+	  values (in addition to usual unique attributes).
+
 Version 0.7.0 (May 28, 2013)
 	* Add rudimentary support for '!!' vertical record.  No vertical
 	  information is extracted beyond the 'zeta' values, though.
