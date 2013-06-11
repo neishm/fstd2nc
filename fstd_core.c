@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
+// Wrap a Fortran call
+// Note: change this as needed on your platform.
+#define f77name(name) name ## _
+
 extern int c_fnom (int*, char*, char*, int);
 extern int c_fclos (int);
 extern int c_fstouv (int, char*);
@@ -12,6 +16,7 @@ extern int c_fstinfx (int, int, int*, int*, int*, int, char*, int, int, int, cha
 extern int c_fstprm (int, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*, char*, char*, char*, char*, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*);
 extern int c_fstluk (void*, int, int*, int*, int*);
 extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, int, int, char*, char*, char*, char*, int, int, int, int, int, int);
+extern int f77name(newdate) (int*, int*, int*, int*);
 
 typedef struct {
   int handle;
@@ -152,6 +157,29 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
   Py_RETURN_NONE;
 }
 
+// Convert a CMC timestamp to seconds since 1980-01-01 00:00:00.
+static PyObject *stamp2date (PyObject *self, PyObject *args) {
+  int date, stamp, run;
+  int mode = 1;
+  int ier;
+  if (!PyArg_ParseTuple(args, "i", &stamp)) return NULL;
+  ier = f77name(newdate)(&date, &stamp, &run, &mode);
+  if (ier != 0) return NULL;
+  return Py_BuildValue("i", date*5); // Convert from 5-second intervals
+}
+
+// Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp.
+static PyObject *date2stamp (PyObject *self, PyObject *args) {
+  int date, stamp, run = 0;
+  int mode = -1;
+  int ier;
+  if (!PyArg_ParseTuple(args, "i", &date)) return NULL;
+  date /= 5; // Convert to 5-second intervals
+  ier = f77name(newdate)(&date, &stamp, &run, &mode);
+  if (ier != 0) return NULL;
+  return Py_BuildValue("i", stamp);
+}
+
 static PyMethodDef FST_Methods[] = {
   {"open_readonly", fstd_open_readonly, METH_VARARGS, "Open an FSTD file for read access"},
   {"open_write", fstd_open_write, METH_VARARGS, "Open an FSTD file for write access"},
@@ -159,6 +187,8 @@ static PyMethodDef FST_Methods[] = {
   {"get_record_headers", fstd_get_record_headers, METH_VARARGS, "Get all record headers from an FSTD file"},
   {"read_record", fstd_read_record, METH_VARARGS, "Read a record into the given numpy array"},
   {"write_records", fstd_write_records, METH_VARARGS, "Write a set of records into a given FSTD file"},
+  {"stamp2date", stamp2date, METH_VARARGS, "Convert a CMC timestamp to seconds since 1980-01-01 00:00:00"},
+  {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
   {NULL, NULL, 0, NULL}
 };
 
