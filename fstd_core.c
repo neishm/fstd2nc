@@ -157,27 +157,72 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
   Py_RETURN_NONE;
 }
 
-// Convert a CMC timestamp to seconds since 1980-01-01 00:00:00.
+// Convert CMC timestamps to seconds since 1980-01-01 00:00:00.
 static PyObject *stamp2date (PyObject *self, PyObject *args) {
-  int date, stamp, run;
-  int mode = 1;
-  int ier;
-  if (!PyArg_ParseTuple(args, "i", &stamp)) return NULL;
-  ier = f77name(newdate)(&date, &stamp, &run, &mode);
-  if (ier != 0) return NULL;
-  return Py_BuildValue("i", date*5); // Convert from 5-second intervals
+  PyObject *stamp_obj;
+  PyArrayObject *date_array, *stamp_array;
+  int *date, *stamp, run = 0, mode = 1;
+  int ier, i;
+  npy_intp n;
+  if (!PyArg_ParseTuple(args, "O", &stamp_obj)) return NULL;
+  stamp_array = (PyArrayObject*)PyArray_ContiguousFromAny(stamp_obj,NPY_INT,0,0);
+  if (stamp_array == NULL) return NULL;
+  n = PyArray_SIZE(stamp_array);
+  date_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
+  if (date_array == NULL) {
+    Py_DECREF(stamp_array);
+    return NULL;
+  }
+  date = (int*)date_array->data;
+  stamp = (int*)stamp_array->data;
+  for (i = 0; i < n; i++) {
+    ier = f77name(newdate)(date, stamp, &run, &mode);
+    if (ier != 0) {
+      Py_DECREF(stamp_array);
+      Py_DECREF(date_array);
+      PyErr_SetString (PyExc_RuntimeError, "Problem encountered with NEWDATE");
+      return NULL;
+    }
+    // Convert from 5-second intervals
+    *date *= 5;
+    date++; stamp++;
+  }
+  Py_DECREF(stamp_array);
+  return (PyObject*)date_array;
 }
 
-// Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp.
+// Convert seconds since 1980-01-01 00:00:00 to CMC timestamps.
 static PyObject *date2stamp (PyObject *self, PyObject *args) {
-  int date, stamp, run = 0;
-  int mode = -1;
-  int ier;
-  if (!PyArg_ParseTuple(args, "i", &date)) return NULL;
-  date /= 5; // Convert to 5-second intervals
-  ier = f77name(newdate)(&date, &stamp, &run, &mode);
-  if (ier != 0) return NULL;
-  return Py_BuildValue("i", stamp);
+  PyObject *date_obj;
+  PyArrayObject *date_array, *stamp_array;
+  int *date, *stamp, run = 0, mode = -1;
+  int ier, i;
+  npy_intp n;
+  if (!PyArg_ParseTuple(args, "O", &date_obj)) return NULL;
+  date_array = (PyArrayObject*)PyArray_ContiguousFromAny(date_obj,NPY_INT,0,0);
+  if (date_array == NULL) return NULL;
+  n = PyArray_SIZE(date_array);
+  stamp_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
+  if (stamp_array == NULL) {
+    Py_DECREF(date_array);
+    return NULL;
+  }
+  date = (int*)date_array->data;
+  stamp = (int*)stamp_array->data;
+  for (i = 0; i < n; i++) {
+    // Convert from 5-second intervals
+    int current_date = *date / 5;
+    ier = f77name(newdate)(&current_date, stamp, &run, &mode);
+    if (ier != 0) {
+      Py_DECREF(stamp_array);
+      Py_DECREF(date_array);
+      PyErr_SetString (PyExc_RuntimeError, "Problem encountered with NEWDATE");
+      return NULL;
+    }
+    date++; stamp++;
+  }
+  Py_DECREF(date_array);
+  return (PyObject*)stamp_array;
 }
 
 static PyMethodDef FST_Methods[] = {
@@ -187,7 +232,7 @@ static PyMethodDef FST_Methods[] = {
   {"get_record_headers", fstd_get_record_headers, METH_VARARGS, "Get all record headers from an FSTD file"},
   {"read_record", fstd_read_record, METH_VARARGS, "Read a record into the given numpy array"},
   {"write_records", fstd_write_records, METH_VARARGS, "Write a set of records into a given FSTD file"},
-  {"stamp2date", stamp2date, METH_VARARGS, "Convert a CMC timestamp to seconds since 1980-01-01 00:00:00"},
+  {"stamp2date", stamp2date, METH_VARARGS, "Convert CMC timestamps to seconds since 1980-01-01 00:00:00"},
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
   {NULL, NULL, 0, NULL}
 };
