@@ -17,6 +17,7 @@ extern int c_fstprm (int, int*, int*, int*, int*, int*, int*, int*, int*, int*, 
 extern int c_fstluk (void*, int, int*, int*, int*);
 extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, int, int, char*, char*, char*, char*, int, int, int, int, int, int);
 extern int f77name(newdate) (int*, int*, int*, int*);
+extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
 
 typedef struct {
   int handle;
@@ -225,6 +226,60 @@ static PyObject *date2stamp (PyObject *self, PyObject *args) {
   return (PyObject*)stamp_array;
 }
 
+// Decode vertical levels
+static PyObject *decode_levels (PyObject *self, PyObject *args) {
+  PyObject *ip1_obj;
+  PyArrayObject *ip1_array, *z_array;
+  float *z;
+  int *ip1, kind, mode = -1, flag = 0;
+  int i;
+  npy_intp n;
+  if (!PyArg_ParseTuple(args, "O", &ip1_obj)) return NULL;
+  ip1_array = (PyArrayObject*)PyArray_ContiguousFromAny(ip1_obj,NPY_INT,0,0);
+  if (ip1_array == NULL) return NULL;
+  n = PyArray_SIZE(ip1_array);
+  z_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_FLOAT32);
+  if (z_array == NULL) {
+    Py_DECREF(ip1_array);
+    return NULL;
+  }
+  ip1 = (int*)ip1_array->data;
+  z = (float*)z_array->data;
+  for (i = 0; i < n; i++) {
+    f77name(convip)(ip1++, z++, &kind, &mode, "", &flag);
+  }
+  PyObject *ret = Py_BuildValue("(O,i)", z_array, kind);
+  Py_DECREF (ip1_array);
+  Py_DECREF (z_array);
+  return ret;
+}
+
+// Encode vertical levels
+static PyObject *encode_levels (PyObject *self, PyObject *args) {
+  PyObject *z_obj;
+  PyArrayObject *ip1_array, *z_array;
+  float *z;
+  int *ip1, kind, mode = 2, flag = 0;
+  int i;
+  npy_intp n;
+  if (!PyArg_ParseTuple(args, "Oi", &z_obj, &kind)) return NULL;
+  z_array = (PyArrayObject*)PyArray_ContiguousFromAny(z_obj,NPY_FLOAT32,0,0);
+  if (z_array == NULL) return NULL;
+  n = PyArray_SIZE(z_array);
+  ip1_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
+  if (ip1_array == NULL) {
+    Py_DECREF(z_array);
+    return NULL;
+  }
+  ip1 = (int*)ip1_array->data;
+  z = (float*)z_array->data;
+  for (i = 0; i < n; i++) {
+    f77name(convip)(ip1++, z++, &kind, &mode, "", &flag);
+  }
+  Py_DECREF (z_array);
+  return (PyObject*)ip1_array;
+}
+
 static PyMethodDef FST_Methods[] = {
   {"open_readonly", fstd_open_readonly, METH_VARARGS, "Open an FSTD file for read access"},
   {"open_write", fstd_open_write, METH_VARARGS, "Open an FSTD file for write access"},
@@ -234,6 +289,8 @@ static PyMethodDef FST_Methods[] = {
   {"write_records", fstd_write_records, METH_VARARGS, "Write a set of records into a given FSTD file"},
   {"stamp2date", stamp2date, METH_VARARGS, "Convert CMC timestamps to seconds since 1980-01-01 00:00:00"},
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
+  {"decode_levels", decode_levels, METH_VARARGS, "Decode vertical levels"},
+  {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
   {NULL, NULL, 0, NULL}
 };
 
