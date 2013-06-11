@@ -11,6 +11,7 @@ extern int c_fstnbr (int);
 extern int c_fstinfx (int, int, int*, int*, int*, int, char*, int, int, int, char*, char*);
 extern int c_fstprm (int, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*, char*, char*, char*, char*, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*, int*);
 extern int c_fstluk (void*, int, int*, int*, int*);
+extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, int, int, char*, char*, char*, char*, int, int, int, int, int, int);
 
 typedef struct {
   int handle;
@@ -32,6 +33,17 @@ static PyObject *fstd_open_readonly (PyObject *self, PyObject *args) {
   char *filename;
   if (!PyArg_ParseTuple(args, "s", &filename)) return NULL;
   ier = c_fnom (&iun, filename, "STD+RND+R/O", 0);
+  if (ier != 0) return NULL;
+  c_fstouv (iun, "RND");
+  return Py_BuildValue("i", iun);
+}
+
+// Open a file for write access
+static PyObject *fstd_open_write (PyObject *self, PyObject *args) {
+  int iun=0, ier;
+  char *filename;
+  if (!PyArg_ParseTuple(args, "s", &filename)) return NULL;
+  ier = c_fnom (&iun, filename, "STD+RND+R/W", 0);
   if (ier != 0) return NULL;
   c_fstouv (iun, "RND");
   return Py_BuildValue("i", iun);
@@ -100,11 +112,53 @@ static PyObject *fstd_read_record (PyObject *self, PyObject *args) {
   Py_RETURN_NONE;
 }
 
+// Write records to a file
+static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
+  PyObject *field_obj;
+  PyArrayObject *headers, *field;
+  HEADER *h;
+  int iun, nrec, i, ier;
+  if (!PyArg_ParseTuple(args, "iO!", &iun, &PyArray_Type, &headers)) return NULL;
+  if (PyArray_ITEMSIZE(headers) != sizeof(HEADER)) return NULL;
+  printf ("okay\n");
+  if (!PyArray_ISCONTIGUOUS(headers)) return NULL;
+  nrec = PyArray_SIZE(headers);
+  h = (HEADER*)headers->data;
+
+  for (i = 0; i < nrec; i++) {
+    if (h->data_func == NULL) return NULL;
+    field_obj = PyObject_CallObject (h->data_func, NULL);
+    if (field_obj == NULL) return NULL;
+    field = (PyArrayObject*)PyArray_EnsureArray(field_obj);
+    if (field == NULL) return NULL;
+    if (PyArray_SIZE(field) < (h->ni * h->nj * h->nk)) {
+      PyErr_SetString (PyExc_TypeError, "Array from data_func is too small");
+      Py_DECREF(field);
+      return NULL;
+    }
+    char typvar[3] = {' ',' ','\0'};
+    char nomvar[5] = {' ',' ',' ',' ','\0'};
+    char etiket[13] = {' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','\0'};
+    char grtyp[2] = {' ','\0'};
+    strncpy (typvar, h->typvar, 2);
+    strncpy (nomvar, h->nomvar, 4);
+    strncpy (etiket, h->etiket, 12);
+    strncpy (grtyp, h->grtyp, 1);
+    ier = c_fstecr (field->data, NULL, -h->nbits, iun, h->dateo, h->deet, h->npas, h->ni, h->nj, h->nk, h->ip1, h->ip2, h->ip3, typvar, nomvar, etiket, grtyp, h->ig1, h->ig2, h->ig3, h->ig4, h->datyp, 0);
+    if (ier < 0) return NULL;
+    Py_DECREF(field);
+    h++;
+  }
+  Py_RETURN_NONE;
+}
+
 static PyMethodDef FST_Methods[] = {
   {"open_readonly", fstd_open_readonly, METH_VARARGS, "Open an FSTD file for read access"},
+  {"open_write", fstd_open_write, METH_VARARGS, "Open an FSTD file for write access"},
   {"close", fstd_close, METH_VARARGS, "Close an FSTD file"},
   {"get_record_headers", fstd_get_record_headers, METH_VARARGS, "Get all record headers from an FSTD file"},
   {"read_record", fstd_read_record, METH_VARARGS, "Read a record into the given numpy array"},
+  {"write_records", fstd_write_records, METH_VARARGS, "Write a set of records into a given FSTD file"},
   {NULL, NULL, 0, NULL}
 };
 

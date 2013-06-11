@@ -7,7 +7,7 @@ class FSTD_File (object):
     if mode == 'r':
       self.iun = fstd_core.open_readonly(filename)
     elif mode == 'w':
-      raise NotImplementedError
+      self.iun = fstd_core.open_write(filename)
     else: raise ValueError ("Unknown file mode '%s'"%mode)
   def __del__ (self):
     from pygeode.formats import fstd_core
@@ -56,4 +56,8 @@ def open (filename):
   print h
   data = h['data_func']()
   print data
+
+  # Try writing back out
+  test = FSTD_File ("writeback.fst", mode='w')
+  fstd_core.write_records (test.iun, headers)
 
