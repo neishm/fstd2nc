@@ -20,7 +20,7 @@ extern int f77name(newdate) (int*, int*, int*, int*);
 extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
 
 typedef struct {
-  int handle;
+  int pad;
   int dateo, deet, npas;
   int ni, nj, nk;
   int nbits, datyp, ip1;
@@ -33,42 +33,104 @@ typedef struct {
   PyObject *data_func;
 } HEADER;
 
-// Open a file for read access
-static PyObject *fstd_open_readonly (PyObject *self, PyObject *args) {
-  int iun=0, ier;
+// Data type for holding an FSTD unit.
+// Allows the file to be closed when all references are gone.
+typedef struct {
+  PyObject_HEAD
+  int iun;
+} FSTD_Unit_Object;
+
+static void FSTD_Unit_dealloc (FSTD_Unit_Object *self) {
+  c_fstfrm(self->iun);
+  c_fclos (self->iun);
+  self->ob_type->tp_free((PyObject*)self);
+}
+
+static PyTypeObject FSTD_Unit_Type = {
+  PyObject_HEAD_INIT(NULL)
+  0,                         /*ob_size*/
+  "fstd_core.FSTD_Unit",     /*tp_name*/
+  sizeof(FSTD_Unit_Object),  /*tp_basicsize*/
+  0,                         /*tp_itemsize*/
+  (destructor)FSTD_Unit_dealloc, /*tp_dealloc*/
+//  0,                         /*tp_dealloc*/
+  0,                         /*tp_print*/
+  0,                         /*tp_getattr*/
+  0,                         /*tp_setattr*/
+  0,                         /*tp_compare*/
+  0,                         /*tp_repr*/
+  0,                         /*tp_as_number*/
+  0,                         /*tp_as_sequence*/
+  0,                         /*tp_as_mapping*/
+  0,                         /*tp_hash */
+  0,                         /*tp_call*/
+  0,                         /*tp_str*/
+  0,                         /*tp_getattro*/
+  0,                         /*tp_setattro*/
+  0,                         /*tp_as_buffer*/
+  Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+  "FSTD file unit",          /* tp_doc */
+};
+
+
+
+// Python interface for reading a single record
+// (function closure for encapsulating the file and record handle).
+typedef struct {
+  PyObject_HEAD
+  FSTD_Unit_Object *file;
+  int handle;
+  npy_intp dims[3];  // Dimensions of the record
+  int typenum;
+} RecordGetter_Object;
+
+static PyObject *RecordGetter_call (PyObject *self, PyObject *args, PyObject *kwargs) {
+  RecordGetter_Object *o = (RecordGetter_Object*)self;
+  PyArrayObject *out = (PyArrayObject*)PyArray_SimpleNew(3, o->dims, o->typenum);
+  if (out == NULL) return NULL;
+  int ni, nj, nk;
+  c_fstluk (out->data, o->handle, &ni, &nj, &nk);
+  return (PyObject*)out;
+}
+
+static void RecordGetter_dealloc (RecordGetter_Object *self) {
+  Py_DECREF(self->file);
+  self->ob_type->tp_free((PyObject*)self);
+}
+
+static PyTypeObject RecordGetter_Type = {
+  PyObject_HEAD_INIT(NULL)
+  0,                         /*ob_size*/
+  "fstd_core.RecordGetter",  /*tp_name*/
+  sizeof(RecordGetter_Object), /*tp_basicsize*/
+  0,                         /*tp_itemsize*/
+  (destructor)RecordGetter_dealloc,      /*tp_dealloc*/
+//  0,                         /*tp_dealloc*/
+  0,                         /*tp_print*/
+  0,                         /*tp_getattr*/
+  0,                         /*tp_setattr*/
+  0,                         /*tp_compare*/
+  0,                         /*tp_repr*/
+  0,                         /*tp_as_number*/
+  0,                         /*tp_as_sequence*/
+  0,                         /*tp_as_mapping*/
+  0,                         /*tp_hash */
+  RecordGetter_call,         /*tp_call*/
+  0,                         /*tp_str*/
+  0,                         /*tp_getattro*/
+  0,                         /*tp_setattro*/
+  0,                         /*tp_as_buffer*/
+  Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+  "Closures for reading particular FSTD records",           /* tp_doc */
+};
+
+
+// Return all record headers in the given file.
+// Include hooks to data getters.
+static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
   char *filename;
-  if (!PyArg_ParseTuple(args, "s", &filename)) return NULL;
-  ier = c_fnom (&iun, filename, "STD+RND+R/O", 0);
-  if (ier != 0) return NULL;
-  c_fstouv (iun, "RND");
-  return Py_BuildValue("i", iun);
-}
+  int iun = 0, ier, nrec;
 
-// Open a file for write access
-static PyObject *fstd_open_write (PyObject *self, PyObject *args) {
-  int iun=0, ier;
-  char *filename;
-  if (!PyArg_ParseTuple(args, "s", &filename)) return NULL;
-  ier = c_fnom (&iun, filename, "STD+RND+R/W", 0);
-  if (ier != 0) return NULL;
-  c_fstouv (iun, "RND");
-  return Py_BuildValue("i", iun);
-}
-
-// Close a file
-static PyObject *fstd_close (PyObject *self, PyObject *args) {
-  int iun, ier;
-  if (!PyArg_ParseTuple(args, "i", &iun)) return NULL;
-  ier = c_fstfrm(iun);
-  if (ier != 0) return NULL;
-  ier = c_fclos (iun);
-  if (ier != 0) return NULL;
-  Py_RETURN_NONE;
-}
-
-// Return all record headers in the given file
-static PyObject *fstd_get_record_headers (PyObject *self, PyObject *args) {
-  int iun, ier, nrec;
   PyObject *header_structure;
   PyArray_Descr *descr;
   PyArrayObject *headers;
@@ -76,23 +138,33 @@ static PyObject *fstd_get_record_headers (PyObject *self, PyObject *args) {
   npy_intp dims[1];
   int handle, i;
 
-  if (!PyArg_ParseTuple(args, "i", &iun)) return NULL;
-  nrec = c_fstnbr(iun);
+  if (!PyArg_ParseTuple(args, "s", &filename)) return NULL;
+  ier = c_fnom (&iun, filename, "STD+RND+R/O", 0);
+  if (ier != 0) return NULL;
+  nrec = c_fstouv (iun, "RND");
+  if (nrec < 0) return NULL;
+  FSTD_Unit_Object *file = (FSTD_Unit_Object*) PyType_GenericNew (&FSTD_Unit_Type, NULL, NULL);
+  if (file == NULL) return NULL;
+  file->iun = iun;
 
   // Allocate the header array
   dims[0] = nrec;
-  header_structure = Py_BuildValue("[(s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s)]", "handle", "i4", "dateo", "i4", "deet", "i4", "npas", "i4", "ni", "i4", "nj", "i4", "nk", "i4", "nbits", "i4", "datyp", "i4", "ip1", "i4", "ip2", "i4", "ip3", "i4", "typvar", "a2", "nomvar", "a4", "etiket", "a12", "grtyp", "a2", "ig1", "i4", "ig2", "i4", "ig3", "i4", "ig4", "i4", "swa", "i4", "lng", "i4", "dltf", "i4", "ubc", "i4", "extra1", "i4", "extra2", "i4", "extra3", "i4", "data_func", "O");
+  header_structure = Py_BuildValue("[(s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s)]", "pad", "i4", "dateo", "i4", "deet", "i4", "npas", "i4", "ni", "i4", "nj", "i4", "nk", "i4", "nbits", "i4", "datyp", "i4", "ip1", "i4", "ip2", "i4", "ip3", "i4", "typvar", "a2", "nomvar", "a4", "etiket", "a12", "grtyp", "a2", "ig1", "i4", "ig2", "i4", "ig3", "i4", "ig4", "i4", "swa", "i4", "lng", "i4", "dltf", "i4", "ubc", "i4", "extra1", "i4", "extra2", "i4", "extra3", "i4", "data_func", "O");
+  if (header_structure == NULL) return NULL;
   PyArray_DescrConverter (header_structure, &descr);
   Py_DECREF (header_structure);
   headers = (PyArrayObject*) PyArray_SimpleNewFromDescr (1, dims, descr);
+  if (headers == NULL) return NULL;
 
   // Populate the header array with data from the file
+//  printf ("sizeof(HEADER) = %d; PyArray_ITEMSIZE(headers) = %d\n", sizeof(HEADER), PyArray_ITEMSIZE(headers));
+  if (sizeof(HEADER) != PyArray_ITEMSIZE(headers)) return NULL;
   h = (HEADER*)headers->data;
   handle = -2;
   for (i = 0; i < nrec; i++) {
     int ni, nj, nk;
     handle = c_fstinfx (handle, iun, &ni, &nj, &nk, -1, "", -1, -1, -1, "", "");
-    h->handle = handle;
+    if (handle < 0) return NULL;
 
     memset (h->typvar, ' ', 2);
     memset (h->nomvar, ' ', 4);
@@ -102,32 +174,65 @@ static PyObject *fstd_get_record_headers (PyObject *self, PyObject *args) {
 
     if (ier != 0) return NULL;
 
+    RecordGetter_Object *func = (RecordGetter_Object*) PyType_GenericNew (&RecordGetter_Type, NULL, NULL);
+    if (func == NULL) return NULL;
+    Py_INCREF(file);
+    func->file = file;
+    func->handle = handle;
+    func->dims[0] = nk;
+    func->dims[1] = nj;
+    func->dims[2] = ni;
+//dtypes = {1:'float', 2:'uint', 3:'a', 4:'int', 5:'float', 134:'float', 130:'uint', 132:'int', 133:'float'}
+    func->typenum = -1;
+    switch (h->datyp) {
+      case 1:
+      case 5:
+      case 134:
+      case 133:
+        func->typenum = h->nbits > 32 ? NPY_FLOAT64 : NPY_FLOAT32;
+        break;
+      case 2:
+      case 130:
+        func->typenum = h->nbits > 32 ? NPY_UINT64 : NPY_UINT32;
+        break;
+      case 3:
+        func->typenum = NPY_UINT8;
+        break;
+      case 4:
+      case 132:
+        func->typenum = h->nbits > 32 ? NPY_INT64 : NPY_INT32;
+      default:
+        return NULL;
+    }
+    h->data_func = (PyObject*)func;
+
     h++;
   }
 
+  Py_DECREF (file);  // File is referenced in all record getters.
+
+//  Py_INCREF(headers);  // Force no cleanup
   return (PyObject*)headers;
 }
 
-// Read a record from a file
-static PyObject *fstd_read_record (PyObject *self, PyObject *args) {
-  int ier, handle, ni, nj, nk;
-  PyArrayObject *out;
-  if (!PyArg_ParseTuple(args, "iO!", &handle, &PyArray_Type, &out)) return NULL;
-  ier = c_fstluk (out->data, handle, &ni, &nj, &nk);
-  if (ier < 0) return NULL;
-  Py_RETURN_NONE;
-}
+
+
 
 // Write records to a file
 static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
+  char *filename;
   PyObject *field_obj;
   PyArrayObject *headers, *field;
   HEADER *h;
-  int iun, nrec, i, ier;
-  if (!PyArg_ParseTuple(args, "iO!", &iun, &PyArray_Type, &headers)) return NULL;
+  int iun = 0, nrec, i, ier;
+  if (!PyArg_ParseTuple(args, "sO!", &filename, &PyArray_Type, &headers)) return NULL;
+  ier = c_fnom (&iun, filename, "STD+RND+R/W", 0);
+  if (ier != 0) return NULL;
+  c_fstouv (iun, "RND");
+
   if (PyArray_ITEMSIZE(headers) != sizeof(HEADER)) return NULL;
   printf ("okay\n");
-  if (!PyArray_ISCONTIGUOUS(headers)) return NULL;
+  if (!PyArray_ISCONTIGUOUS(headers)) return NULL; //TODO
   nrec = PyArray_SIZE(headers);
   h = (HEADER*)headers->data;
 
@@ -155,6 +260,10 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
     Py_DECREF(field);
     h++;
   }
+
+  c_fstfrm (iun);
+  c_fclos (iun);
+
   Py_RETURN_NONE;
 }
 
@@ -280,12 +389,9 @@ static PyObject *encode_levels (PyObject *self, PyObject *args) {
   return (PyObject*)ip1_array;
 }
 
+
 static PyMethodDef FST_Methods[] = {
-  {"open_readonly", fstd_open_readonly, METH_VARARGS, "Open an FSTD file for read access"},
-  {"open_write", fstd_open_write, METH_VARARGS, "Open an FSTD file for write access"},
-  {"close", fstd_close, METH_VARARGS, "Close an FSTD file"},
-  {"get_record_headers", fstd_get_record_headers, METH_VARARGS, "Get all record headers from an FSTD file"},
-  {"read_record", fstd_read_record, METH_VARARGS, "Read a record into the given numpy array"},
+  {"read_records", fstd_read_records, METH_VARARGS, "Get all record headers from an FSTD file"},
   {"write_records", fstd_write_records, METH_VARARGS, "Write a set of records into a given FSTD file"},
   {"stamp2date", stamp2date, METH_VARARGS, "Convert CMC timestamps to seconds since 1980-01-01 00:00:00"},
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
@@ -295,7 +401,16 @@ static PyMethodDef FST_Methods[] = {
 };
 
 PyMODINIT_FUNC initfstd_core(void) {
-  (void) Py_InitModule("fstd_core", FST_Methods);
+  PyObject *m = Py_InitModule("fstd_core", FST_Methods);
+
+  Py_INCREF(&FSTD_Unit_Type);
+  if (PyType_Ready(&FSTD_Unit_Type) < 0) return;
+  PyModule_AddObject (m, "FSTD_Unit", (PyObject*)&FSTD_Unit_Type);
+
+  Py_INCREF(&RecordGetter_Type);
+  if (PyType_Ready(&RecordGetter_Type) < 0) return;
+  PyModule_AddObject (m, "RecordGetter", (PyObject*)&RecordGetter_Type);
+
   import_array();
 }
 
