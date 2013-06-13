@@ -19,6 +19,7 @@ extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, 
 extern int f77name(newdate) (int*, int*, int*, int*);
 extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
 
+// C struct for accessing records
 typedef struct {
   int pad;
   int dateo, deet, npas;
@@ -32,6 +33,10 @@ typedef struct {
   int extra2, extra3;
   PyObject *data_func;
 } HEADER;
+
+// Corresponding numpy descr (to be initialized)
+static PyArray_Descr *descr;
+
 
 // Data type for holding an FSTD unit.
 // Allows the file to be closed when all references are gone.
@@ -131,8 +136,6 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
   char *filename;
   int iun = 0, ier, nrec;
 
-  PyObject *header_structure;
-  PyArray_Descr *descr;
   PyArrayObject *headers;
   HEADER *h;
   npy_intp dims[1];
@@ -149,10 +152,7 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
 
   // Allocate the header array
   dims[0] = nrec;
-  header_structure = Py_BuildValue("[(s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s)]", "pad", "i4", "dateo", "i4", "deet", "i4", "npas", "i4", "ni", "i4", "nj", "i4", "nk", "i4", "nbits", "i4", "datyp", "i4", "ip1", "i4", "ip2", "i4", "ip3", "i4", "typvar", "a2", "nomvar", "a4", "etiket", "a12", "grtyp", "a2", "ig1", "i4", "ig2", "i4", "ig3", "i4", "ig4", "i4", "swa", "i4", "lng", "i4", "dltf", "i4", "ubc", "i4", "extra1", "i4", "extra2", "i4", "extra3", "i4", "data_func", "O");
-  if (header_structure == NULL) return NULL;
-  PyArray_DescrConverter (header_structure, &descr);
-  Py_DECREF (header_structure);
+  Py_INCREF(descr);
   headers = (PyArrayObject*) PyArray_SimpleNewFromDescr (1, dims, descr);
   if (headers == NULL) return NULL;
 
@@ -402,6 +402,7 @@ static PyMethodDef FST_Methods[] = {
 
 PyMODINIT_FUNC initfstd_core(void) {
   PyObject *m = Py_InitModule("fstd_core", FST_Methods);
+  import_array();
 
   Py_INCREF(&FSTD_Unit_Type);
   if (PyType_Ready(&FSTD_Unit_Type) < 0) return;
@@ -411,6 +412,11 @@ PyMODINIT_FUNC initfstd_core(void) {
   if (PyType_Ready(&RecordGetter_Type) < 0) return;
   PyModule_AddObject (m, "RecordGetter", (PyObject*)&RecordGetter_Type);
 
-  import_array();
+  PyObject *header_structure = Py_BuildValue("[(s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s)]", "pad", "i4", "dateo", "i4", "deet", "i4", "npas", "i4", "ni", "i4", "nj", "i4", "nk", "i4", "nbits", "i4", "datyp", "i4", "ip1", "i4", "ip2", "i4", "ip3", "i4", "typvar", "a2", "nomvar", "a4", "etiket", "a12", "grtyp", "a2", "ig1", "i4", "ig2", "i4", "ig3", "i4", "ig4", "i4", "swa", "i4", "lng", "i4", "dltf", "i4", "ubc", "i4", "extra1", "i4", "extra2", "i4", "extra3", "i4", "data_func", "O");
+  if (header_structure == NULL) return;
+  PyArray_DescrConverter (header_structure, &descr);
+  Py_DECREF(header_structure);
+  PyModule_AddObject (m, "record_descr", (PyObject*)descr);
+
 }
 
