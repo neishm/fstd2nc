@@ -216,7 +216,8 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
 }
 
 
-
+// Macro for ensuring a record array is contiguous (and of the right type)
+#define MAKE_CONTIGUOUS(arr,d) if (arr->descr != d) { PyErr_SetString (PyExc_ValueError, "Invalid record format"); return NULL; } if ((arr = PyArray_GETCONTIGUOUS(arr))==NULL) return NULL;
 
 // Write records to a file
 static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
@@ -230,9 +231,7 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
   if (ier != 0) return NULL;
   c_fstouv (iun, "RND");
 
-  if (PyArray_ITEMSIZE(headers) != sizeof(HEADER)) return NULL;
-  headers = PyArray_GETCONTIGUOUS(headers);
-  if (headers == NULL) return NULL;
+  MAKE_CONTIGUOUS(headers,descr);
   nrec = PyArray_SIZE(headers);
   h = (HEADER*)headers->data;
 
