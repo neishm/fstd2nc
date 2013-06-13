@@ -231,8 +231,8 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
   c_fstouv (iun, "RND");
 
   if (PyArray_ITEMSIZE(headers) != sizeof(HEADER)) return NULL;
-  printf ("okay\n");
-  if (!PyArray_ISCONTIGUOUS(headers)) return NULL; //TODO
+  headers = PyArray_GETCONTIGUOUS(headers);
+  if (headers == NULL) return NULL;
   nrec = PyArray_SIZE(headers);
   h = (HEADER*)headers->data;
 
@@ -260,6 +260,8 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
     Py_DECREF(field);
     h++;
   }
+
+  Py_DECREF(headers);
 
   c_fstfrm (iun);
   c_fclos (iun);
