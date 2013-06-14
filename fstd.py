@@ -52,6 +52,8 @@ class FSTD_Var (Var):
               print "%s: found"%header
       raise ValueError ("Missing some records that are needed to fill out the (time,forecast,level) dimensions.")
 
+    self.data_funcs = data_funcs
+
     # Construct the time/forecast axes
     taxis = StandardTime (startdate={'year':1980,'month':1}, values=dates, units='seconds')
     faxis = Forecast (values=forecasts/3600.)
@@ -182,6 +184,30 @@ class FSTD_Var (Var):
     # Finish initializing
     from pygeode.var import Var
     Var.__init__(self, [taxis,faxis,zaxis,kaxis,jaxis,iaxis], dtype=dtype, name=name, atts=atts)
+
+  def getview (self, view, pbar):
+
+    import numpy as np
+    out = np.empty(view.shape, dtype=self.dtype)
+
+    itimes = view.integer_indices[0]
+    iforecasts = view.integer_indices[1]
+    ilevels = view.integer_indices[2]
+
+    sl_k = view.slices[3]
+    sl_j = view.slices[4]
+    sl_i = view.slices[5]
+
+    for out_t, in_t in enumerate(itimes):
+      for out_f, in_f in enumerate(iforecasts):
+        for out_l, in_l in enumerate(ilevels):
+          data = self.data_funcs[in_t,in_f,in_l]()
+          data = data[sl_k,:,:]
+          data = data[:,sl_j,:] # Avoid triggering "advanced" numpy indexing
+          data = data[:,:,sl_i]
+          out[out_t,out_f,out_l,:,:,:] = data
+
+    return out
 
 del Var
 
