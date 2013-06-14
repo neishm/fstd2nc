@@ -1,75 +1,233 @@
 
-# Wrapper for FSTD file.  Allows the file to be automatically closed when
-# there are no more references to it.
-class FSTD_File (object):
-  def __init__ (self, filename, mode='r'):
-    from pygeode.formats import fstd_core
-    if mode == 'r':
-      self.iun = fstd_core.open_readonly(filename)
-    elif mode == 'w':
-      self.iun = fstd_core.open_write(filename)
-    else: raise ValueError ("Unknown file mode '%s'"%mode)
-    self.mode = mode
-  def __del__ (self):
-    from pygeode.formats import fstd_core
-    fstd_core.close (self.iun)
-  def get_records (self):
-    from pygeode.formats import fstd_core
-    if self.mode != 'r':
-      raise IOError ("File not set for read access")
-    # Get the record headers
-    records = fstd_core.get_record_headers(self.iun)
-    # Fill in the data functions.
-    # Done here, since it's not easy to implement on the C side.
-    map(self.make_data_func, records)
-    return records
+from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres, Height
+from pygeode.timeaxis import StandardTime
+class Forecast(Axis): pass
+class IAxis(Axis): pass
+class JAxis(Axis): pass
+class KAxis(Axis): pass
 
-  def write_records (self, records):
+# Create a multi-dimensional variable from a set of records
+from pygeode.var import Var
+class FSTD_Var (Var):
+  def __init__ (self, records, coords, squash_forecasts=False):
     from pygeode.formats import fstd_core
-    if self.mode != 'w':
-      raise IOError ("File not set for write access")
-    fstd_core.write_records (self.iun, records)
+    import numpy as np
 
-  # Helper function - create a data function for the given handle.
-  @staticmethod
-  def make_data_func (header):
-    handle = header['handle']
-    datyp = header['datyp']
-    nbits = header['nbits']
-    dtypes = {1:'float', 2:'uint', 3:'a', 4:'int', 5:'float', 134:'float', 130:'uint', 132:'int', 133:'float'}
-    if datyp not in dtypes:
-      raise ValueError ("Can't handle datyp %d"%datyp)
-    dtype = dtypes[datyp]
-    if dtype in ('float','uint','int'):
-      dtype += str(nbits)
-    elif dtype == 'a':
+    name = str(records[0]['nomvar']).rstrip()
+
+    # Get the dates, forecast hours, and levels.
+    dates = fstd_core.stamp2date(records['dateo'])
+    forecasts = records['deet']*records['npas']
+    if squash_forecasts:
+      dates += forecasts
+      forecasts[:] = 0
+
+    levels, kind = fstd_core.decode_levels(records['ip1'])
+
+    # Get unique values of these arrays
+    dates, idate = np.unique(dates, return_inverse=True)
+    forecasts, iforecast = np.unique(forecasts, return_inverse=True)
+    levels, ilevel = np.unique(levels, return_inverse=True)
+
+    # Construct a multidimensional array of data functions.
+    # One function per date,forecast,level.
+    data_funcs = np.empty([len(dates),len(forecasts),len(levels)], dtype='O')
+    data_funcs[:] = None
+    data_funcs[idate,iforecast,ilevel] = records['data_func']
+
+    if np.any(data_funcs == None):
+      print "Unable to construct a full field for %s - missing some expected records:"%name
+      from datetime import datetime, timedelta
+      for i,date in enumerate(dates):
+        # Convert to printable date
+        date = int(date)
+        date = datetime(year=1980,month=1,day=1) + timedelta(seconds=date)
+        for j,forecast in enumerate(forecasts):
+          forecast = int(forecast)/3600.
+          for k,level in enumerate(levels):
+            header = "%s - %3gh - level = %8g"%(date,forecast,level)
+            if data_funcs[i,j,k] is None:
+              print "%s: MISSING"%header
+            else:
+              print "%s: found"%header
+      raise ValueError ("Missing some records that are needed to fill out the (time,forecast,level) dimensions.")
+
+    # Construct the time/forecast axes
+    taxis = StandardTime (startdate={'year':1980,'month':1}, values=dates, units='seconds')
+    faxis = Forecast (values=forecasts/3600.)
+
+    # Construst the i,j,k,z axes
+
+    iaxis, jaxis, kaxis, zaxis = None, None, None, None
+
+    nomvar = str(records[0]['nomvar']).rstrip()
+    typvar = str(records[0]['typvar']).rstrip()
+    etiket = str(records[0]['etiket']).rstrip()
+    grtyp = str(records[0]['grtyp']).rstrip()
+    ni = int(records[0]['ni'])
+    nj = int(records[0]['nj'])
+    nk = int(records[0]['nk'])
+    ig1 = int(records[0]['ig1'])
+    ig2 = int(records[0]['ig2'])
+    ig3 = int(records[0]['ig3'])
+    ig4 = int(records[0]['ig4'])
+
+    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket)
+
+    kaxis = KAxis(nk)
+
+    # Lat/Lon grid?
+    if grtyp == 'A':
+      x0 = 0
+      dx = 360./ni
+      x = x0 + np.arange(ni) * dx
+      if ig1 == 0:  # Global
+        dy = 180./nj
+        y_south = -90 + dy/2
+        y_north = 90 - dy/2
+      elif ig1 == 1:# Northern Hemisphere
+        dy = 90./nj
+        y_south = 0 + dy/2
+        y_north = 90 - dy/2
+      else:         # Southern Hemisphere
+        dy = 90./nj
+        y_south = -90 + dy/2
+        y_north = 0 - dy/2
+
+      if ig2 == 0:  # South -> North
+        y = y_south + np.arange(nj) * dy
+      else:         # North -> South
+        y = y_north - np.arange(nj) * dy
+
+      iaxis = Lon(values=x)
+      jaxis = Lat(values=y)
+
+      del x0, dx, y_south, y_north, dy, x, y
+
+    elif grtyp == 'B':
+      x0 = 0
+      dx = 360./(ni-1)
+      x = x0 + np.arange(ni) * dx
+      if ig1 == 0:  # Global
+        dy = 180./(nj-1)
+        y_south = -90
+        y_north = 90
+      elif ig1 == 1:# Northern Hemisphere
+        dy = 90./(nj-1)
+        y_south = 0
+        y_north = 90
+      else:         # Southern Hemisphere
+        dy = 90./(nj-1)
+        y_south = -90
+        y_north = 0
+
+      if ig2 == 0:  # South -> North
+        y = y_south + np.arange(nj) * dy
+      else:         # North -> South
+        y = y_north - np.arange(nj) * dy
+
+      iaxis = Lon(values=x)
+      jaxis = Lat(values=y)
+
+      del x0, dx, y_south, y_north, dy, x, y
+
+    elif grtyp == 'G':
+      from pygeode.quadrulepy import legendre_compute
+      from math import pi
+      x0 = 0
+      dx = 360./ni
+      x = x0 + np.arange(ni) * dx
+
+      y, w = legendre_compute(nj)
+      y = np.arcsin(y) / pi + 0.5  # Range (0,1)
+
+      if ig1 == 0:  # Global
+        y = -90 + y*180
+      elif ig1 == 1:# Northern Hemisphere
+        y = 0 + y*90
+      else:         # Southern Hemisphere
+        y = -90 + y*90
+
+      if ig2 == 0:  # South -> North
+        pass
+      else:         # North -> South
+        y = y[::-1]
+
+      iaxis = Lon(values=x)
+      jaxis = Lat(values=y)
+
+      del x0, dx, x, y, w
+
+    elif grtyp == 'L': pass #TODO
+
+    else:
+      from warnings import warn
+      warn ("Unable to attach meaningful horizontal axes to %s"%name)
+      iaxis = IAxis(ni)
+      jaxis = JAxis(nj)
+
+    # Vertical axis
+    zaxis = ZAxis(values=levels) #TODO
+
+    # Determine the dtype to use
+    # Use the first dtype found.
+    datyp = int(records[0]['datyp'])
+    nbits = int(records[0]['nbits'])
+    dtype = {1:'float', 2:'uint', 3:'a', 4:'int', 5:'float', 134:'float', 130:'uint', 132:'int', 133:'float'}[datyp]
+    if dtype == 'a':
       dtype += str(nbits/8)
-    ni, nj, nk = header['ni'], header['nj'], header['nk']
+    else:
+      dtype += '64' if nbits > 32 else '32'
 
-    def data_func ():
-      from pygeode.formats import fstd_core
-      import numpy as np
-      out = np.empty([nk,nj,ni], dtype=dtype)
-      fstd_core.read_record(handle,out)
-      return out
+    # Finish initializing
+    from pygeode.var import Var
+    Var.__init__(self, [taxis,faxis,zaxis,kaxis,jaxis,iaxis], dtype=dtype, name=name, atts=atts)
 
-    header['data_func'] = data_func
+del Var
 
+# Helper function - preload a record.
+def preload(record):
+  data = record['data_func']()
+  def data_func(): return data
+  record['data_func'] = data_func
 
 
 # Open a file for read access.  Returns a generic 'Dataset' object.
 def open (filename):
-  f = FSTD_File (filename, mode='r')
 
-  headers = f.get_records()
+  from pygeode.formats import fstd_core
+  import numpy as np
 
-  # Test the access
-  h = headers[headers['nomvar']=='>>  '][0]
-  print h
-  data = h['data_func']()
-  print data
+  # What header attributes define a unique variable
+  unique_var_atts = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'grtyp', 'ip3', 'ig1', 'ig2', 'ig3', 'ig4']
 
-  # Try writing back out
-  test = FSTD_File ("writeback.fst", mode='w')
-  test.write_records (headers)
+  # Read the records
+  records = fstd_core.read_records(filename)
+
+  # Pull out the coordinate records
+  nomvar = records['nomvar']
+  is_coord = (nomvar == '>>  ') | (nomvar == '^^  ') | (nomvar == 'HY  ') | (nomvar == '!!  ')
+  coords = records[is_coord]
+  records = records[-is_coord]
+  del nomvar, is_coord
+
+  # Preload the coords
+  map(preload, coords)
+
+  # Group the records together
+  all_keys = records[unique_var_atts]
+  unique_keys, var_indices = np.unique(all_keys, return_inverse=True)
+
+  var_bins = [ records[var_indices==i] for i in range(len(unique_keys)) ]
+
+  # Create the variables
+  varlist = []
+  for var_records in var_bins:
+    is_var_coord = coords[['ip1','ip2','ip3']] == var_records[['ig1','ig2','ig3']][0]
+    var_coords = coords[is_var_coord]
+    var = FSTD_Var (var_records, var_coords)
+    varlist.append(var)
+    del var_records, is_var_coord, var_coords
+
+  #TODO
 
