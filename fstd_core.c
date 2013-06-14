@@ -18,6 +18,8 @@ extern int c_fstluk (void*, int, int*, int*, int*);
 extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, int, int, char*, char*, char*, char*, int, int, int, int, int, int);
 extern int f77name(newdate) (int*, int*, int*, int*);
 extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
+extern void f77name(cxgaig)(char*, int*, int*, int*, int*, float*, float*, float*, float*);
+extern void f77name(cigaxg)(char*, float*, float*, float*, float*, int*, int*, int*, int*);
 
 // C struct for accessing records
 typedef struct {
@@ -390,6 +392,26 @@ static PyObject *encode_levels (PyObject *self, PyObject *args) {
   return (PyObject*)ip1_array;
 }
 
+// Decode IG1, IG2, IG3, IG4
+static PyObject *decode_ig (PyObject *self, PyObject *args) {
+  char *grtyp;
+  int ig1=0, ig2=0, ig3=0, ig4=0;
+  float xg1=0, xg2=0, xg3=0, xg4=0;
+  if (!PyArg_ParseTuple(args, "siiii", &grtyp, &ig1, &ig2, &ig3, &ig4)) return NULL;
+  f77name(cigaxg)(grtyp, &xg1, &xg2, &xg3, &xg4, &ig1, &ig2, &ig3, &ig4);
+  return Py_BuildValue ("ffff", xg1, xg2, xg3, xg4);
+}
+
+// Encode IG1, IG2, IG3, IG4
+static PyObject *encode_ig (PyObject *self, PyObject *args) {
+  char *grtyp;
+  int ig1=0, ig2=0, ig3=0, ig4=0;
+  float xg1=0, xg2=0, xg3=0, xg4=0;
+  if (!PyArg_ParseTuple(args, "sffff", &grtyp, &xg1, &xg2, &xg3, &xg4)) return NULL;
+  f77name(cxgaig)(grtyp, &ig1, &ig2, &ig3, &ig4, &xg1, &xg2, &xg3, &xg4);
+  return Py_BuildValue ("iiii", ig1, ig2, ig3, ig4);
+}
+
 
 static PyMethodDef FST_Methods[] = {
   {"read_records", fstd_read_records, METH_VARARGS, "Get all record headers from an FSTD file"},
@@ -398,6 +420,8 @@ static PyMethodDef FST_Methods[] = {
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
   {"decode_levels", decode_levels, METH_VARARGS, "Decode vertical levels"},
   {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
+  {"decode_ig", decode_ig, METH_VARARGS, "Decode IG1, IG2, IG3, IG4"},
+  {"encode_ig", encode_ig, METH_VARARGS, "Encode IG1, IG2, IG3, IG4"},
   {NULL, NULL, 0, NULL}
 };
 
