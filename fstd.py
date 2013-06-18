@@ -160,7 +160,13 @@ class FSTD_Var (Var):
 
       del x0, dx, x, y, w
 
-    elif grtyp == 'L': pass #TODO
+    elif grtyp == 'L':
+      xlat0, xlon0, dlat, dlon = fstd_core.decode_ig('L',ig1,ig2,ig3,ig4)
+      iaxis = Lon(values = xlon0 + np.arange(ni) * dlon)
+      jaxis = Lat(values = xlat0 + np.arange(nj) * dlat)
+      del xlat0, xlon0, dlat, dlon
+
+    elif grtyp == 'N': pass #TODO
 
     else:
       from warnings import warn
@@ -245,6 +251,8 @@ def open (filename):
   unique_keys, var_indices = np.unique(all_keys, return_inverse=True)
 
   var_bins = [ records[var_indices==i] for i in range(len(unique_keys)) ]
+
+  del all_keys, unique_keys, var_indices
 
   # Create the variables
   varlist = []
