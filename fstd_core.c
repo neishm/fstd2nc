@@ -203,6 +203,7 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
       case 4:
       case 132:
         func->typenum = h->nbits > 32 ? NPY_INT64 : NPY_INT32;
+        break;
       default:
         return NULL;
     }
