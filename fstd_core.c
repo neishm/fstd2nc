@@ -2,6 +2,7 @@
 #include <numpy/arrayobject.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 // Wrap a Fortran call
 // Note: change this as needed on your platform.
@@ -417,6 +418,64 @@ static PyObject *encode_ig (PyObject *self, PyObject *args) {
   return Py_BuildValue ("iiii", ig1, ig2, ig3, ig4);
 }
 
+
+// Get latitudes & longitudes for polar stereographic projection.
+// Original source is in RMNLIB; updated to work on an array of points instead
+// of just a single point at a time.
+void llfxy (double *DLAT_array, double *DLON_array, double *X_array, double *Y_array, double D60, double DGRW, int NHEM, int nx, int ny) {
+
+  const double RDTODG = 180. / M_PI;
+
+  int i, j;
+  double sin60p1 = sin(M_PI/6) + 1;
+  double RE = sin60p1*6.371E+6/D60;
+  double RE2 = RE*RE;
+
+  double *DLAT = DLAT_array;
+  double *DLON = DLON_array;
+  for (j = 0; j < ny; j++) {
+    double Y = Y_array[j];
+    for (i = 0; i < nx; i++) {
+      double X = X_array[i];
+//*
+//*     * IF POINT IS AT POLE SET COORD TO (0.,90.).
+//*
+      if (X == 0. && Y == 0.) {
+        *DLAT=90.;
+        *DLON=0.;
+      }
+      else {
+//*
+//*     * CALCULATE LONGITUDE IN MAP COORDINATES.
+//*
+        if (X == 0.) *DLON = copysign(90.,Y);
+        if (X != 0.) *DLON = atan2(Y,X) * RDTODG;
+        if (X <  0.) *DLON += copysign(180.,Y);
+//*
+//*     * ADJUST LONGITUDE FOR GRID ORIENTATION.
+//*
+        *DLON -= DGRW;
+        if (*DLON > 180.) *DLON -= 360.;
+        if (*DLON <-180.) *DLON += 360.;
+//*
+//*     * CALCULATE LATITUDE.
+//*
+        double R2 = X*X+Y*Y;
+        *DLAT = asin((RE2-R2)/(RE2+R2)) * RDTODG;
+//*
+//*     * CHANGE SIGNS IF IN SOUTHERN HEMISPHERE.
+//*
+      }
+
+      if (NHEM == 2) {
+        *DLAT = -*DLAT;
+        *DLON = -*DLON;
+      }
+
+      DLAT++; DLON++;  // Point to next elements in the output arrays
+    }  // next i
+  }  // next j
+}
 
 static PyMethodDef FST_Methods[] = {
   {"read_records", fstd_read_records, METH_VARARGS, "Get all record headers from an FSTD file"},
