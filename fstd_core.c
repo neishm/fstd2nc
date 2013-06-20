@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include "quadrule.h"
 
 // Wrap a Fortran call
 // Note: change this as needed on your platform.
@@ -418,6 +419,14 @@ static PyObject *encode_ig (PyObject *self, PyObject *args) {
   return Py_BuildValue ("iiii", ig1, ig2, ig3, ig4);
 }
 
+
+// Compute Gaussian latitudes
+void gauss_lats (double *lat, int n) {
+  double x[n], w[n];
+  int i;
+  legendre_compute (n, x, w);
+  for (i = 0; i < n; i++) lat[i] = asin(x[i]) * 180. / M_PI;
+}
 
 // Get latitudes & longitudes for polar stereographic projection.
 // Original source is in RMNLIB; updated to work on an array of points instead
