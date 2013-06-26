@@ -296,7 +296,9 @@ static PyObject *stamp2date (PyObject *self, PyObject *args) {
   date = (int*)date_array->data;
   stamp = (int*)stamp_array->data;
   for (i = 0; i < n; i++) {
-    ier = f77name(newdate)(date, stamp, &run, &mode);
+    ier = 0;
+    if (*stamp == 0) *date = 0;
+    else ier = f77name(newdate)(date, stamp, &run, &mode);
     if (ier != 0) {
       Py_DECREF(stamp_array);
       Py_DECREF(date_array);
@@ -330,9 +332,11 @@ static PyObject *date2stamp (PyObject *self, PyObject *args) {
   date = (int*)date_array->data;
   stamp = (int*)stamp_array->data;
   for (i = 0; i < n; i++) {
+    ier = 0;
     // Convert from 5-second intervals
     int current_date = *date / 5;
-    ier = f77name(newdate)(&current_date, stamp, &run, &mode);
+    if (current_date == 0) *stamp = 0;
+    else ier = f77name(newdate)(&current_date, stamp, &run, &mode);
     if (ier != 0) {
       Py_DECREF(stamp_array);
       Py_DECREF(date_array);
