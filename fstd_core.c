@@ -490,6 +490,110 @@ void llfxy (double *DLAT_array, double *DLON_array, double *X_array, double *Y_a
   }  // next j
 }
 
+
+// Helper method - find a coordinate record for the given field
+// (match ig1,ig2,ig3 to a coordinate's ip1,ip2,ip3).
+int find_coord(HEADER *records, int n, int varid, char coord_nomvar[4]) {
+  int i;
+  for (i = 0; i < n; i++) {
+    if (strncmp(records[i].nomvar,coord_nomvar,4) != 0) continue;
+    if (records[i].ip1 != records[varid].ig1) continue;
+    if (records[i].ip2 != records[varid].ig2) continue;
+    if (records[i].ip3 != records[varid].ig3) continue;
+    return i;
+  }
+  return -1;
+}
+
+// Construct latitude/longitude fields from the given records
+static PyObject *get_latlon (PyObject *self, PyObject *args) {
+
+  // Get the input records
+  PyArrayObject *record_array;
+  if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &record_array)) return NULL;
+  if (record_array->descr != descr) return NULL;
+  if (PyArray_ITEMSIZE(record_array) != sizeof(HEADER)) return NULL;
+  record_array = PyArray_GETCONTIGUOUS(record_array);
+  HEADER *records = (HEADER*)record_array->data;
+  int num_records = PyArray_SIZE(record_array);
+
+  // Create a dictionary to hold unique latitude & longitude arrays.
+  // Keys are (grtyp,ig1,ig2,ig3,ig4,ni,nj)
+  PyObject *dict = PyDict_New();
+
+  int var_id;
+  for (var_id = 0; var_id < num_records; var_id++) {
+    // Skip coordinate records
+    if (strncmp(records[var_id].nomvar,">>  ",4) == 0) continue;
+    if (strncmp(records[var_id].nomvar,"^^  ",4) == 0) continue;
+    if (strncmp(records[var_id].nomvar,"HY  ",4) == 0) continue;
+    if (strncmp(records[var_id].nomvar,"!!  ",4) == 0) continue;
+    // Construct the key for this record
+    char grtyp = *records[var_id].grtyp;
+    int ig1 = records[var_id].ig1;
+    int ig2 = records[var_id].ig2;
+    int ig3 = records[var_id].ig3;
+    int ig4 = records[var_id].ig4;
+    int ni = records[var_id].ni;
+    int nj = records[var_id].nj;
+    PyObject *key = Py_BuildValue("s#iiiiii",&grtyp,1,ig1,ig2,ig3,ig4,ni,nj);
+    if (key == NULL) return NULL;
+    // Check if we've already handled this grid
+    if (PyDict_Contains(dict,key)) continue;
+
+    // Check for x/y coordinate records
+    int x_id = find_coord(records, num_records, var_id, ">>  ");
+    int y_id = find_coord(records, num_records, var_id, "^^  ");
+
+    
+    PyObject *lat, *lon;
+
+    // Check the grid type
+    switch (grtyp) {
+
+    case 'A':
+      lon = PyArray_Arange (0., 360., 360./ni, NPY_FLOAT64);
+      double lat0, lat1;
+      double dlat = (ig1 == 0) ? 180./nj : 90./nj;
+      if (ig2 == 0) {  // South to North
+        double south = (ig1==1) ? dlat/2 : -90. + dlat/2;
+        double north = (ig1==2) ? dlat/2 :  90. + dlat/2;
+        lat = PyArray_Arange (south, north, dlat, NPY_FLOAT64);
+      } else {  // North to South
+        south = (ig1==1) ? -dlat/2 : -90. - dlat/2;
+        north = (ig1==2) ? -dlat/2 :  90. - dlat/2;
+        lat = PyArray_Arange (north, south, -dlat, NPY_FLOAT64);
+      }
+      break;
+
+    case 'B'://TODO
+      lon = PyArray_Arange (0., 360.+360./(ni-1), 360./(ni-1), NPY_FLOAT64);
+      double lat0, lat1;
+      if (ig2 == 0) {  // South to North
+        lat0 = (ig1==1) ? 0. : -90.;
+        lat1 = (ig1==2) ? 0. :  90.;
+      } else {  // North to South
+        lat1 = (ig1==1) ? 0. : -90.;
+        lat0 = (ig1==2) ? 0. :  90.;
+      }
+      lat = PyArray_Arange (lat0, lat1, (lat1-lat0)/nj, NPY_FLOAT64);
+      break;
+
+    }
+    // Build the value
+    //TODO
+    PyObject *value = Py_BuildValue("OO", Py_None, Py_None);
+    PyDict_SetItem(dict,key,value);
+    Py_DECREF(value);
+  }
+
+  // Clean up local references
+  Py_DECREF(record_array);
+
+  // Return the arrays
+  return dict;
+}
+
 static PyMethodDef FST_Methods[] = {
   {"read_records", fstd_read_records, METH_VARARGS, "Get all record headers from an FSTD file"},
   {"write_records", fstd_write_records, METH_VARARGS, "Write a set of records into a given FSTD file"},
@@ -499,6 +603,7 @@ static PyMethodDef FST_Methods[] = {
   {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
   {"decode_ig", decode_ig, METH_VARARGS, "Decode IG1, IG2, IG3, IG4"},
   {"encode_ig", encode_ig, METH_VARARGS, "Encode IG1, IG2, IG3, IG4"},
+  {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
   {NULL, NULL, 0, NULL}
 };
 
