@@ -72,9 +72,18 @@ class FSTD_Var (Var):
 
     # Construst the i,j,k,z axes
 
-    #TODO
-    iaxis = IAxis(ni)
-    jaxis = JAxis(nj)
+    key = (grtyp,ig1,ig2,ig3,ig4,ni,nj);
+    if key in latlon_arrays:
+      ax, ay, lat, lon = latlon_arrays[key]
+      if lat.ndim == 1: jaxis = Lat(lat)
+      else: jaxis = YAxis(ay)
+      if lon.ndim == 1: iaxis = Lon(lon)
+      else: iaxis = XAxis(ax)
+      #TODO: store 2D lat/lon coordinates
+    else:
+      iaxis = IAxis(ni)
+      jaxis = JAxis(nj)
+
     kaxis = KAxis(nk)
 
     atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket)
