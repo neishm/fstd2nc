@@ -148,6 +148,22 @@ def preload(record):
   def data_func(): return data
   record['data_func'] = data_func
 
+# Reduce the dimensionality of the given FSTD variable
+def reduce_dimensionality (var, squash_forecasts=False):
+  remove_axes = []
+  # Forecast (axis 1)
+  if var.shape[1] == 1:
+    if squash_forecasts:
+      remove_axes += [1]
+  # Vertical (axis 2)
+  if var.shape[2] == 1:
+    if isinstance(var.axes[2], Height) and var.axes[2].values == [0]:
+      remove_axes += [2]
+  # K axis (axis 3)
+  if var.shape[3] == 1:
+    remove_axes += [3]
+
+  return var.squeeze(*remove_axes)
 
 # Open a file for read access.  Returns a generic 'Dataset' object.
 def open (filename):
@@ -190,7 +206,8 @@ def open (filename):
     var = FSTD_Var (var_records, latlon_arrays, handled_latlon_vars, extra_coord_vars)
     varlist.append(var)
 
-  #TODO: dimensionality reduction
+  # Dimensionality reduction
+  varlist = [reduce_dimensionality(var) for var in varlist]
 
   # Combine variables and extra 2D coordinates
   varlist.extend(extra_coord_vars)
