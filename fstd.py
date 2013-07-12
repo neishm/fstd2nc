@@ -166,7 +166,7 @@ def reduce_dimensionality (var, squash_forecasts=False):
   return var.squeeze(*remove_axes)
 
 # Open a file for read access.  Returns a generic 'Dataset' object.
-def open (filename):
+def open (filename, squash_forecasts=False):
 
   from pygeode.formats import fstd_core
   import numpy as np
@@ -203,11 +203,11 @@ def open (filename):
   # Create the variables
   varlist = []
   for var_records in var_bins:
-    var = FSTD_Var (var_records, latlon_arrays, handled_latlon_vars, extra_coord_vars)
+    var = FSTD_Var (var_records, latlon_arrays, handled_latlon_vars, extra_coord_vars, squash_forecasts)
     varlist.append(var)
 
   # Dimensionality reduction
-  varlist = [reduce_dimensionality(var) for var in varlist]
+  varlist = [reduce_dimensionality(var,squash_forecasts) for var in varlist]
 
   # Combine variables and extra 2D coordinates
   varlist.extend(extra_coord_vars)
