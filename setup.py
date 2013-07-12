@@ -3,7 +3,7 @@
 from distutils.core import setup, Extension
 
 # Extension modules
-fstd_core = Extension ('pygeode.formats.fstd_core', sources=['fstd_core.c','quadrule.c'], libraries=['rmn'])
+fstd_core = Extension ('pygeode.formats.fstd_core', sources=['fstd_core.c'], libraries=['rmn'])
 
 # PyGeode installation script
 

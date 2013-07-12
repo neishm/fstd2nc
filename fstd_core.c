@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "quadrule.h"
 
 // Wrap a Fortran call
 // Note: change this as needed on your platform.
@@ -22,6 +21,12 @@ extern int f77name(newdate) (int*, int*, int*, int*);
 extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
 extern void f77name(cxgaig)(char*, int*, int*, int*, int*, float*, float*, float*, float*);
 extern void f77name(cigaxg)(char*, float*, float*, float*, float*, int*, int*, int*, int*);
+extern int c_ezqkdef(int ni, int nj, char *grtyp, 
+                 int ig1, int ig2, int ig3, int ig4, int iunit);
+extern int c_ezgdef_fmem(int ni, int nj, char *grtyp, char *grref, 
+                int ig1ref, int ig2ref, int ig3ref, int ig4ref, float *ax, float *ay);
+extern int c_gdll (int gdid,  float *lat, float *lon);
+extern int c_gdrls(int gdid);
 
 // C struct for accessing records
 typedef struct {
@@ -403,107 +408,48 @@ static PyObject *encode_levels (PyObject *self, PyObject *args) {
   return (PyObject*)ip1_array;
 }
 
-// Decode IG1, IG2, IG3, IG4
-static PyObject *decode_ig (PyObject *self, PyObject *args) {
-  char *grtyp;
-  int ig1=0, ig2=0, ig3=0, ig4=0;
-  float xg1=0, xg2=0, xg3=0, xg4=0;
-  if (!PyArg_ParseTuple(args, "siiii", &grtyp, &ig1, &ig2, &ig3, &ig4)) return NULL;
-  f77name(cigaxg)(grtyp, &xg1, &xg2, &xg3, &xg4, &ig1, &ig2, &ig3, &ig4);
-  return Py_BuildValue ("ffff", xg1, xg2, xg3, xg4);
-}
-
-// Encode IG1, IG2, IG3, IG4
-static PyObject *encode_ig (PyObject *self, PyObject *args) {
-  char *grtyp;
-  int ig1=0, ig2=0, ig3=0, ig4=0;
-  float xg1=0, xg2=0, xg3=0, xg4=0;
-  if (!PyArg_ParseTuple(args, "sffff", &grtyp, &xg1, &xg2, &xg3, &xg4)) return NULL;
-  f77name(cxgaig)(grtyp, &ig1, &ig2, &ig3, &ig4, &xg1, &xg2, &xg3, &xg4);
-  return Py_BuildValue ("iiii", ig1, ig2, ig3, ig4);
-}
-
-
-// Compute Gaussian latitudes
-void gauss_lats (double *lat, int n) {
-  double x[n], w[n];
-  int i;
-  legendre_compute (n, x, w);
-  for (i = 0; i < n; i++) lat[i] = asin(x[i]) * 180. / M_PI;
-}
-
-// Get latitudes & longitudes for polar stereographic projection.
-// Original source is in RMNLIB; updated to work on an array of points instead
-// of just a single point at a time.
-void llfxy (double *DLAT_array, double *DLON_array, double *X_array, double *Y_array, double D60, double DGRW, int NHEM, int nx, int ny) {
-
-  const double RDTODG = 180. / M_PI;
-
-  int i, j;
-  double sin60p1 = sin(M_PI/6) + 1;
-  double RE = sin60p1*6.371E+6/D60;
-  double RE2 = RE*RE;
-
-  double *DLAT = DLAT_array;
-  double *DLON = DLON_array;
-  for (j = 0; j < ny; j++) {
-    double Y = Y_array[j];
-    for (i = 0; i < nx; i++) {
-      double X = X_array[i];
-//*
-//*     * IF POINT IS AT POLE SET COORD TO (0.,90.).
-//*
-      if (X == 0. && Y == 0.) {
-        *DLAT=90.;
-        *DLON=0.;
-      }
-      else {
-//*
-//*     * CALCULATE LONGITUDE IN MAP COORDINATES.
-//*
-        if (X == 0.) *DLON = copysign(90.,Y);
-        if (X != 0.) *DLON = atan2(Y,X) * RDTODG;
-        if (X <  0.) *DLON += copysign(180.,Y);
-//*
-//*     * ADJUST LONGITUDE FOR GRID ORIENTATION.
-//*
-        *DLON -= DGRW;
-        if (*DLON > 180.) *DLON -= 360.;
-        if (*DLON <-180.) *DLON += 360.;
-//*
-//*     * CALCULATE LATITUDE.
-//*
-        double R2 = X*X+Y*Y;
-        *DLAT = asin((RE2-R2)/(RE2+R2)) * RDTODG;
-//*
-//*     * CHANGE SIGNS IF IN SOUTHERN HEMISPHERE.
-//*
-      }
-
-      if (NHEM == 2) {
-        *DLAT = -*DLAT;
-        *DLON = -*DLON;
-      }
-
-      DLAT++; DLON++;  // Point to next elements in the output arrays
-    }  // next i
-  }  // next j
-}
-
-
-// Helper method - find a coordinate record for the given field
+// Helper methods - find a coordinate record for the given field
 // (match ig1,ig2,ig3 to a coordinate's ip1,ip2,ip3).
-int find_coord(HEADER *records, int n, int varid, char coord_nomvar[4]) {
+int find_coord(HEADER *records, int num_records, char nomvar[4], int ig1, int ig2, int ig3, int ni, int nj) {
   int i;
-  for (i = 0; i < n; i++) {
-    if (strncmp(records[i].nomvar,coord_nomvar,4) != 0) continue;
-    if (records[i].ip1 != records[varid].ig1) continue;
-    if (records[i].ip2 != records[varid].ig2) continue;
-    if (records[i].ip3 != records[varid].ig3) continue;
+  for (i = 0; i < num_records; i++) {
+    if (strncmp(records[i].nomvar,nomvar,4) != 0) continue;
+    if (records[i].ni != ni) continue;
+    if (records[i].nj != nj) continue;
+    if (records[i].ip1 != ig1) continue;
+    if (records[i].ip2 != ig2) continue;
+    if (records[i].ip3 != ig3) continue;
     return i;
   }
   return -1;
 }
+int find_xrec(HEADER *records, int n, int varid) {
+  char grtyp = records[varid].grtyp[0];
+  int ig1 = records[varid].ig1;
+  int ig2 = records[varid].ig2;
+  int ig3 = records[varid].ig3;
+  int ni = records[varid].ni;
+  int nj = records[varid].nj;
+  if (grtyp == 'Y')
+    return find_coord(records, n, ">>  ", ig1, ig2, ig3, ni, nj);
+  if (grtyp == 'Z')
+    return find_coord(records, n, ">>  ", ig1, ig2, ig3, ni, 1);
+  return -1;
+}
+int find_yrec(HEADER *records, int n, int varid) {
+  char grtyp = records[varid].grtyp[0];
+  int ig1 = records[varid].ig1;
+  int ig2 = records[varid].ig2;
+  int ig3 = records[varid].ig3;
+  int ni = records[varid].ni;
+  int nj = records[varid].nj;
+  if (grtyp == 'Y')
+    return find_coord(records, n, "^^  ", ig1, ig2, ig3, ni, nj);
+  if (grtyp == 'Z')
+    return find_coord(records, n, "^^  ", ig1, ig2, ig3, 1, nj);
+  return -1;
+}
+
 
 // Construct latitude/longitude fields from the given records
 static PyObject *get_latlon (PyObject *self, PyObject *args) {
@@ -521,69 +467,87 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
   // Keys are (grtyp,ig1,ig2,ig3,ig4,ni,nj)
   PyObject *dict = PyDict_New();
 
-  int var_id;
-  for (var_id = 0; var_id < num_records; var_id++) {
+  int i;
+  for (i = 0; i < num_records; i++) {
     // Skip coordinate records
-    if (strncmp(records[var_id].nomvar,">>  ",4) == 0) continue;
-    if (strncmp(records[var_id].nomvar,"^^  ",4) == 0) continue;
-    if (strncmp(records[var_id].nomvar,"HY  ",4) == 0) continue;
-    if (strncmp(records[var_id].nomvar,"!!  ",4) == 0) continue;
+    if (strncmp(records[i].nomvar,">>  ",4) == 0) continue;
+    if (strncmp(records[i].nomvar,"^^  ",4) == 0) continue;
+    if (strncmp(records[i].nomvar,"HY  ",4) == 0) continue;
+    if (strncmp(records[i].nomvar,"!!  ",4) == 0) continue;
     // Construct the key for this record
-    char grtyp = *records[var_id].grtyp;
-    int ig1 = records[var_id].ig1;
-    int ig2 = records[var_id].ig2;
-    int ig3 = records[var_id].ig3;
-    int ig4 = records[var_id].ig4;
-    int ni = records[var_id].ni;
-    int nj = records[var_id].nj;
-    PyObject *key = Py_BuildValue("s#iiiiii",&grtyp,1,ig1,ig2,ig3,ig4,ni,nj);
+    char *grtyp = records[i].grtyp;
+    int ig1 = records[i].ig1;
+    int ig2 = records[i].ig2;
+    int ig3 = records[i].ig3;
+    int ig4 = records[i].ig4;
+    int ni = records[i].ni;
+    int nj = records[i].nj;
+    PyObject *key = Py_BuildValue("s#iiiiii",grtyp,1,ig1,ig2,ig3,ig4,ni,nj);
     if (key == NULL) return NULL;
     // Check if we've already handled this grid
     if (PyDict_Contains(dict,key)) continue;
 
-    // Check for x/y coordinate records
-    int x_id = find_coord(records, num_records, var_id, ">>  ");
-    int y_id = find_coord(records, num_records, var_id, "^^  ");
+    // Needed for error messages
+    char nomvar[] = "    ";
+    strncpy (nomvar, records[i].nomvar, 4);
 
-    
-    PyObject *lat, *lon;
+    // Get the grid id
+    int gdid;
+    switch (*grtyp) {
+      case 'Y':
+      case 'Z':;
+        int xrec = find_xrec (records, num_records, i);
+        int yrec = find_yrec (records, num_records, i);
 
-    // Check the grid type
-    switch (grtyp) {
+        if (xrec < 0 || yrec < 0) {
+          PyErr_Format (PyExc_ValueError, "Coordinate record(s) not found for '%s'", nomvar);
+          return NULL;
+        }
 
-    case 'A':
-      lon = PyArray_Arange (0., 360., 360./ni, NPY_FLOAT64);
-      double lat0, lat1;
-      double dlat = (ig1 == 0) ? 180./nj : 90./nj;
-      if (ig2 == 0) {  // South to North
-        double south = (ig1==1) ? dlat/2 : -90. + dlat/2;
-        double north = (ig1==2) ? dlat/2 :  90. + dlat/2;
-        lat = PyArray_Arange (south, north, dlat, NPY_FLOAT64);
-      } else {  // North to South
-        south = (ig1==1) ? -dlat/2 : -90. - dlat/2;
-        north = (ig1==2) ? -dlat/2 :  90. - dlat/2;
-        lat = PyArray_Arange (north, south, -dlat, NPY_FLOAT64);
-      }
-      break;
-
-    case 'B'://TODO
-      lon = PyArray_Arange (0., 360.+360./(ni-1), 360./(ni-1), NPY_FLOAT64);
-      double lat0, lat1;
-      if (ig2 == 0) {  // South to North
-        lat0 = (ig1==1) ? 0. : -90.;
-        lat1 = (ig1==2) ? 0. :  90.;
-      } else {  // North to South
-        lat1 = (ig1==1) ? 0. : -90.;
-        lat0 = (ig1==2) ? 0. :  90.;
-      }
-      lat = PyArray_Arange (lat0, lat1, (lat1-lat0)/nj, NPY_FLOAT64);
-      break;
-
+        PyArrayObject *xobj = (PyArrayObject*)PyObject_CallObject(records[xrec].data_func,NULL);
+        PyArrayObject *yobj = (PyArrayObject*)PyObject_CallObject(records[yrec].data_func,NULL);
+        float *ax = (float*)xobj->data;
+        float *ay = (float*)yobj->data;
+        char *grref = records[xrec].grtyp;
+        int ig1ref = records[xrec].ig1;
+        int ig2ref = records[xrec].ig2;
+        int ig3ref = records[xrec].ig3;
+        int ig4ref = records[xrec].ig4;
+        gdid = c_ezgdef_fmem(ni, nj, grtyp, grref, 
+                ig1ref, ig2ref, ig3ref, ig4ref, ax, ay);
+        Py_DECREF(xobj);
+        Py_DECREF(yobj);
+        break;
+      case 'A':
+      case 'B':
+      case 'E':
+      case 'G':
+      case 'L':
+      case 'N':
+      case 'S':
+        gdid = c_ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, 0);
+        break;
+      default:
+        PyErr_Format (PyExc_ValueError, "Unhandled grid type '%c'", *grtyp);
+        return NULL;
     }
+
+    // Extract the latitudes and longitudes
+    npy_intp dims[] = {ni,nj};
+    PyArrayObject *lat = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
+    PyArrayObject *lon = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
+    c_gdll (gdid, (float*)lat->data, (float*)lon->data);
+
+    // Done with the grid
+    c_gdrls (gdid);
+
+
     // Build the value
-    //TODO
-    PyObject *value = Py_BuildValue("OO", Py_None, Py_None);
+    PyObject *value = Py_BuildValue("OO", lat, lon);
+    Py_DECREF(lat);
+    Py_DECREF(lon);
     PyDict_SetItem(dict,key,value);
+    Py_DECREF(key);
     Py_DECREF(value);
   }
 
@@ -601,8 +565,6 @@ static PyMethodDef FST_Methods[] = {
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
   {"decode_levels", decode_levels, METH_VARARGS, "Decode vertical levels"},
   {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
-  {"decode_ig", decode_ig, METH_VARARGS, "Decode IG1, IG2, IG3, IG4"},
-  {"encode_ig", encode_ig, METH_VARARGS, "Encode IG1, IG2, IG3, IG4"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
   {NULL, NULL, 0, NULL}
 };
