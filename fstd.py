@@ -9,7 +9,7 @@ class KAxis(Axis): pass
 # Create a multi-dimensional variable from a set of records
 from pygeode.var import Var
 class FSTD_Var (Var):
-  def __init__ (self, records, coords, squash_forecasts=False):
+  def __init__ (self, records, latlon_arrays={}, latlon_vars={}, squash_forecasts=False):
     from pygeode.formats import fstd_core
     import numpy as np
 
@@ -58,10 +58,6 @@ class FSTD_Var (Var):
     taxis = StandardTime (startdate={'year':1980,'month':1}, values=dates, units='seconds')
     faxis = Forecast (values=forecasts/3600.)
 
-    # Construst the i,j,k,z axes
-
-    iaxis, jaxis, kaxis, zaxis = None, None, None, None
-
     nomvar = str(records[0]['nomvar']).rstrip()
     typvar = str(records[0]['typvar']).rstrip()
     etiket = str(records[0]['etiket']).rstrip()
@@ -74,105 +70,14 @@ class FSTD_Var (Var):
     ig3 = int(records[0]['ig3'])
     ig4 = int(records[0]['ig4'])
 
-    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket)
+    # Construst the i,j,k,z axes
 
+    #TODO
+    iaxis = IAxis(ni)
+    jaxis = JAxis(nj)
     kaxis = KAxis(nk)
 
-    # Lat/Lon grid?
-    if grtyp == 'A':
-      x0 = 0
-      dx = 360./ni
-      x = x0 + np.arange(ni) * dx
-      if ig1 == 0:  # Global
-        dy = 180./nj
-        y_south = -90 + dy/2
-        y_north = 90 - dy/2
-      elif ig1 == 1:# Northern Hemisphere
-        dy = 90./nj
-        y_south = 0 + dy/2
-        y_north = 90 - dy/2
-      else:         # Southern Hemisphere
-        dy = 90./nj
-        y_south = -90 + dy/2
-        y_north = 0 - dy/2
-
-      if ig2 == 0:  # South -> North
-        y = y_south + np.arange(nj) * dy
-      else:         # North -> South
-        y = y_north - np.arange(nj) * dy
-
-      iaxis = Lon(values=x)
-      jaxis = Lat(values=y)
-
-      del x0, dx, y_south, y_north, dy, x, y
-
-    elif grtyp == 'B':
-      x0 = 0
-      dx = 360./(ni-1)
-      x = x0 + np.arange(ni) * dx
-      if ig1 == 0:  # Global
-        dy = 180./(nj-1)
-        y_south = -90
-        y_north = 90
-      elif ig1 == 1:# Northern Hemisphere
-        dy = 90./(nj-1)
-        y_south = 0
-        y_north = 90
-      else:         # Southern Hemisphere
-        dy = 90./(nj-1)
-        y_south = -90
-        y_north = 0
-
-      if ig2 == 0:  # South -> North
-        y = y_south + np.arange(nj) * dy
-      else:         # North -> South
-        y = y_north - np.arange(nj) * dy
-
-      iaxis = Lon(values=x)
-      jaxis = Lat(values=y)
-
-      del x0, dx, y_south, y_north, dy, x, y
-
-    elif grtyp == 'G':
-      from pygeode.quadrulepy import legendre_compute
-      from math import pi
-      x0 = 0
-      dx = 360./ni
-      x = x0 + np.arange(ni) * dx
-
-      y, w = legendre_compute(nj)
-      y = np.arcsin(y) / pi + 0.5  # Range (0,1)
-
-      if ig1 == 0:  # Global
-        y = -90 + y*180
-      elif ig1 == 1:# Northern Hemisphere
-        y = 0 + y*90
-      else:         # Southern Hemisphere
-        y = -90 + y*90
-
-      if ig2 == 0:  # South -> North
-        pass
-      else:         # North -> South
-        y = y[::-1]
-
-      iaxis = Lon(values=x)
-      jaxis = Lat(values=y)
-
-      del x0, dx, x, y, w
-
-    elif grtyp == 'L':
-      xlat0, xlon0, dlat, dlon = fstd_core.decode_ig('L',ig1,ig2,ig3,ig4)
-      iaxis = Lon(values = xlon0 + np.arange(ni) * dlon)
-      jaxis = Lat(values = xlat0 + np.arange(nj) * dlat)
-      del xlat0, xlon0, dlat, dlon
-
-    elif grtyp == 'N': pass #TODO
-
-    else:
-      from warnings import warn
-      warn ("Unable to attach meaningful horizontal axes to %s"%name)
-      iaxis = IAxis(ni)
-      jaxis = JAxis(nj)
+    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket)
 
     # Vertical axis
     zaxis = ZAxis(values=levels) #TODO
@@ -236,15 +141,15 @@ def open (filename):
   # Read the records
   records = fstd_core.read_records(filename)
 
+  # Construct all possible lat/lon arrays from info in the records
+  latlon_arrays = fstd_core.get_latlon(records)
+
   # Pull out the coordinate records
   nomvar = records['nomvar']
   is_coord = (nomvar == '>>  ') | (nomvar == '^^  ') | (nomvar == 'HY  ') | (nomvar == '!!  ')
   coords = records[is_coord]
   records = records[-is_coord]
   del nomvar, is_coord
-
-  # Preload the coords
-  map(preload, coords)
 
   # Group the records together
   all_keys = records[unique_var_atts]
@@ -257,11 +162,10 @@ def open (filename):
   # Create the variables
   varlist = []
   for var_records in var_bins:
-    is_var_coord = coords[['ip1','ip2','ip3']] == var_records[['ig1','ig2','ig3']][0]
-    var_coords = coords[is_var_coord]
-    var = FSTD_Var (var_records, var_coords)
+    var = FSTD_Var (var_records, latlon_arrays)
     varlist.append(var)
-    del var_records, is_var_coord, var_coords
 
   #TODO
+  from pygeode.dataset import Dataset
+  return Dataset(varlist)
 
