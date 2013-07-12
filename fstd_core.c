@@ -26,6 +26,7 @@ extern int c_ezqkdef(int ni, int nj, char *grtyp,
 extern int c_ezgdef_fmem(int ni, int nj, char *grtyp, char *grref, 
                 int ig1ref, int ig2ref, int ig3ref, int ig4ref, float *ax, float *ay);
 extern int c_gdll (int gdid,  float *lat, float *lon);
+extern int c_gdgaxes(int gdid,  float *ax, float *ay);
 extern int c_gdrls(int gdid);
 
 // C struct for accessing records
@@ -515,7 +516,6 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     // Get the grid id
     int gdid;
     switch (*grtyp) {
-      case 'Y':
       case 'Z':;
         int xrec = find_xrec (records, num_records, i);
         int yrec = find_yrec (records, num_records, i);
@@ -559,6 +559,11 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     PyArrayObject *lon = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
     c_gdll (gdid, (float*)lat->data, (float*)lon->data);
 
+    // Extract x and y coordinates
+    PyArrayObject *ax = (PyArrayObject*)PyArray_SimpleNew (1, dims+1, NPY_FLOAT32);
+    PyArrayObject *ay = (PyArrayObject*)PyArray_SimpleNew (1, dims+0, NPY_FLOAT32);
+    c_gdgaxes (gdid, (float*)ax->data, (float*)ay->data);
+
     // Done with the grid
     c_gdrls (gdid);
 
@@ -583,7 +588,9 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     }
 
     // Build the value
-    PyObject *value = Py_BuildValue("OO", lat, lon);
+    PyObject *value = Py_BuildValue("OOOO", ax, ay, lat, lon);
+    Py_DECREF(ax);
+    Py_DECREF(ay);
     Py_DECREF(lat);
     Py_DECREF(lon);
     PyDict_SetItem(dict,key,value);
