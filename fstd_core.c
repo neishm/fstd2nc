@@ -451,6 +451,27 @@ int find_yrec(HEADER *records, int n, int varid) {
 }
 
 
+// Helper functions - determine if latitude/longitude fields are really 1D
+int lat_is_1d (float *lat, int ni, int nj) {
+  int i, j;
+  for (j = 0; j < nj; j++, lat+=ni) {
+    for (i = 1; i < ni; i++) {
+      if (fabsf(lat[0]-lat[i]) > 1E-4) return 0;
+    }
+  }
+  return 1;
+}
+int lon_is_1d (float *lon, int ni, int nj) {
+  int i, j;
+  float *ref = lon;
+  for (j = 0; j < nj; j++, lon+=ni) {
+    for (i = 0; i < ni; i++) {
+      if (fabsf(ref[i]-lon[i]) > 1E-4) return 0;
+    }
+  }
+  return 1;
+}
+
 // Construct latitude/longitude fields from the given records
 static PyObject *get_latlon (PyObject *self, PyObject *args) {
 
@@ -533,7 +554,7 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     }
 
     // Extract the latitudes and longitudes
-    npy_intp dims[] = {ni,nj};
+    npy_intp dims[] = {nj,ni};
     PyArrayObject *lat = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
     PyArrayObject *lon = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
     c_gdll (gdid, (float*)lat->data, (float*)lon->data);
@@ -541,6 +562,25 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     // Done with the grid
     c_gdrls (gdid);
 
+
+    // Can the latitudes and longitudes be reduced to 1D arrays?
+    if (lon_is_1d ((float*)lon->data, ni, nj)) {
+//      printf ("1D longitudes detected\n");
+      PyArrayObject *newlon = (PyArrayObject*)PyArray_SimpleNew (1, dims+1, NPY_FLOAT32);
+      memcpy (newlon->data, lon->data, ni*sizeof(float));
+      Py_DECREF(lon);
+      lon = newlon;
+    }
+    if (lat_is_1d ((float*)lat->data, ni, nj)) {
+//      printf ("1D latitudes detected\n");
+      PyArrayObject *newlat = (PyArrayObject*)PyArray_SimpleNew (1, dims+0, NPY_FLOAT32);
+      int j;
+      for (j = 0; j < nj; j++) {
+        ((float*)newlat->data)[j] = ((float*)lat->data)[j*ni];
+      }
+      Py_DECREF(lat);
+      lat = newlat;
+    }
 
     // Build the value
     PyObject *value = Py_BuildValue("OO", lat, lon);
