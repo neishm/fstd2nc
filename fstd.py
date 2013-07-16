@@ -185,10 +185,9 @@ def open (filename, squash_forecasts=False):
   handled_latlon_vars = {}
   extra_coord_vars = []
 
-  # Pull out the coordinate records
+  # Remove the coordinate records (not needed anymore).
   nomvar = records['nomvar']
   is_coord = (nomvar == '>>  ') | (nomvar == '^^  ') | (nomvar == 'HY  ') | (nomvar == '!!  ')
-  coords = records[is_coord]
   records = records[-is_coord]
   del nomvar, is_coord
 
