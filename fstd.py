@@ -98,7 +98,7 @@ class FSTD_Var (Var):
 
     kaxis = KAxis(nk)
 
-    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket)
+    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig2, ig2=ig2, ig3=ig3, ig4=ig4)
 
     # Vertical axis
     zaxis = ZAxis(values=levels) #TODO
