@@ -160,10 +160,10 @@ def attach_latlon (varlist, latlon_arrays):
     # Convert 2D lat/lon arrays to variables
     if key in handled_latlon_vars: continue
     if lat.ndim == 2:
-      lat_var = Var([axes[ydim],axes[xdim]], values=lat, name="latitudes")
+      lat_var = Var([axes[ydim],axes[xdim]], values=lat, name="lat")
       extra_coord_vars.append(lat_var)
     if lon.ndim == 2:
-      lon_var = Var([axes[ydim],axes[xdim]], values=lon, name="longitudes")
+      lon_var = Var([axes[ydim],axes[xdim]], values=lon, name="lon")
       extra_coord_vars.append(lon_var)
     handled_latlon_vars[key] = True
 
