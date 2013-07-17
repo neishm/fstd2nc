@@ -9,7 +9,7 @@ class KAxis(Axis): pass
 # Create a multi-dimensional variable from a set of records
 from pygeode.var import Var
 class FSTD_Var (Var):
-  def __init__ (self, records, latlon_arrays={}, handled_latlon_vars={}, extra_coord_vars=[], squash_forecasts=False):
+  def __init__ (self, records, squash_forecasts=False):
     from pygeode.var import Var
     from pygeode.formats import fstd_core
     import numpy as np
@@ -73,29 +73,8 @@ class FSTD_Var (Var):
 
     # Construst the i,j,k,z axes
 
-    key = (grtyp,ig1,ig2,ig3,ig4,ni,nj);
-    if key in latlon_arrays:
-      ax, ay, lat, lon = latlon_arrays[key]
-      if lat.ndim == 1: jaxis = Lat(lat)
-      else: jaxis = YAxis(ay)
-      if lon.ndim == 1: iaxis = Lon(lon)
-      else: iaxis = XAxis(ax)
-
-      # Do we need a 2D version of lat/lon?
-      # (will be stored for future use when constructing a dataset)
-      if key not in handled_latlon_vars:
-        if lat.ndim == 2:
-          lat_var = Var([jaxis,iaxis], values=lat, name="latitudes")
-          extra_coord_vars.append(lat_var)
-        if lon.ndim == 2:
-          lon_var = Var([jaxis,iaxis], values=lon, name="longitudes")
-          extra_coord_vars.append(lon_var)
-        handled_latlon_vars[key] = True
-
-    else:
-      iaxis = IAxis(ni)
-      jaxis = JAxis(nj)
-
+    iaxis = IAxis(ni)
+    jaxis = JAxis(nj)
     kaxis = KAxis(nk)
 
     atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig2, ig2=ig2, ig3=ig3, ig4=ig4)
@@ -148,6 +127,44 @@ def preload(record):
   def data_func(): return data
   record['data_func'] = data_func
 
+# Attach lat/lon arrays to a list of FSTD variables
+# For 1D lat/lon, use these arrays as axes.
+# For 2D lat/lon, create 2D coordinate variables.
+def attach_latlon (varlist, latlon_arrays):
+  from pygeode.var import Var
+
+  ydim, xdim = 4, 5
+
+  handled_latlon_vars = {}
+  extra_coord_vars = []
+
+  for i,var in enumerate(varlist):
+    # Generate key into lat/lon lookup table
+    key = tuple(var.atts[a] for a in ['grtyp','ig1','ig2','ig3','ig4'])
+    key += (var.shape[xdim], var.shape[ydim])   # ni, nj
+    if key not in latlon_arrays: continue
+
+    # Attach 1D lat/lon arrays as axes
+    axes = list(var.axes)
+    ax, ay, lat, lon = latlon_arrays[key]
+    if lat.ndim == 1: axes[ydim] = Lat(lat)
+    else: axes[ydim] = YAxis(ay)
+    if lon.ndim == 1: axes[xdim] = Lon(lon)
+    else: axes[xdim] = XAxis(ax)
+    var.axes = tuple(axes)
+
+    # Convert 2D lat/lon arrays to variables
+    if key in handled_latlon_vars: continue
+    if lat.ndim == 2:
+      lat_var = Var([axes[ydim],axes[xdim]], values=lat, name="latitudes")
+      extra_coord_vars.append(lat_var)
+    if lon.ndim == 2:
+      lon_var = Var([axes[ydim],axes[xdim]], values=lon, name="longitudes")
+      extra_coord_vars.append(lon_var)
+    handled_latlon_vars[key] = True
+
+  varlist.extend (extra_coord_vars)
+
 # Reduce the dimensionality of the given FSTD variable
 def reduce_dimensionality (var, squash_forecasts=False):
   remove_axes = []
@@ -180,11 +197,6 @@ def open (filename, squash_forecasts=False):
   # Construct all possible lat/lon arrays from info in the records
   latlon_arrays = fstd_core.get_latlon(records)
 
-  # Dumping place for 2D lat/lon fields (non-orthogonal coordinates)
-  # These will be placed here if variables need them.
-  handled_latlon_vars = {}
-  extra_coord_vars = []
-
   # Remove the coordinate records (not needed anymore).
   nomvar = records['nomvar']
   is_coord = (nomvar == '>>  ') | (nomvar == '^^  ') | (nomvar == 'HY  ') | (nomvar == '!!  ')
@@ -202,14 +214,14 @@ def open (filename, squash_forecasts=False):
   # Create the variables
   varlist = []
   for var_records in var_bins:
-    var = FSTD_Var (var_records, latlon_arrays, handled_latlon_vars, extra_coord_vars, squash_forecasts)
+    var = FSTD_Var (var_records, squash_forecasts)
     varlist.append(var)
+
+  # Attach any lat/lon coordinates
+  attach_latlon (varlist, latlon_arrays)
 
   # Dimensionality reduction
   varlist = [reduce_dimensionality(var,squash_forecasts) for var in varlist]
-
-  # Combine variables and extra 2D coordinates
-  varlist.extend(extra_coord_vars)
 
   # Return the variables as a dataset
   from pygeode.dataset import Dataset
