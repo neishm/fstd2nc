@@ -5,6 +5,7 @@ class Forecast(Axis): pass
 class IAxis(Axis): pass
 class JAxis(Axis): pass
 class KAxis(Axis): pass
+class IP1Axis(Axis): name = 'ip1'
 
 # Create a multi-dimensional variable from a set of records
 from pygeode.var import Var
@@ -28,7 +29,9 @@ class FSTD_Var (Var):
     # Get unique values of these arrays
     dates, idate = np.unique(dates, return_inverse=True)
     forecasts, iforecast = np.unique(forecasts, return_inverse=True)
+    # Decode the numeric values of the levels, just to get to proper order
     levels, ilevel = np.unique(levels, return_inverse=True)
+    ip1 = records['ip1'][ilevel]
 
     # Construct a multidimensional array of data functions.
     # One function per date,forecast,level.
@@ -80,7 +83,8 @@ class FSTD_Var (Var):
     atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig1, ig2=ig2, ig3=ig3, ig4=ig4)
 
     # Vertical axis
-    zaxis = ZAxis(values=levels) #TODO
+    # (to be decoded later)
+    zaxis = IP1Axis(values=ip1)
 
     # Determine the dtype to use
     # Use the first dtype found.
