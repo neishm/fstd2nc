@@ -1,11 +1,34 @@
 
-from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres, Height
+from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres
 from pygeode.timeaxis import StandardTime
 class Forecast(Axis): pass
 class IAxis(Axis): name = 'i'
 class JAxis(Axis): name = 'j'
 class KAxis(Axis): name = 'k'
 class IP1Axis(Axis): name = 'ip1'
+
+# Vertical coordinates
+class Height_wrt_SeaLevel(ZAxis):
+  name = 'height'
+  atts = dict(ZAxis.atts, units='m', standard_name='height_above_sea_level')
+
+class Height_wrt_Ground(ZAxis):
+  name = 'height'
+  atts = dict(ZAxis.atts, units='m', standard_name='height')
+
+class Sigma(ZAxis):
+  name = 'sigma'
+  atts = dict(ZAxis.atts, standard_name='atmosphere_sigma_coordinate')
+  plotatts = dict(ZAxis.plotatts, plotorder=-1, plotscale='log')
+
+class LogHybrid(ZAxis):
+  name = 'zeta'
+  atts = dict(ZAxis.atts, standard_name='atmosphere_hybrid_sigma_log_pressure_coordinate')  # Not really a standard
+
+class Theta(ZAxis):
+  name = 'theta'
+  atts = dict(ZAxis.atts, units='K', standard_name='air_potential_temperature')
+
 
 # Create a multi-dimensional variable from a set of records
 from pygeode.var import Var
@@ -169,6 +192,51 @@ def attach_latlon (varlist, latlon_arrays):
 
   varlist.extend (extra_coord_vars)
 
+# Attach vertical axes to the variables
+def attach_vertical_axes (varlist, vertical_records):
+  from pygeode.formats import fstd_core
+
+  zdim = 2
+
+  vertical_axes = {}
+  for i,var in enumerate(varlist):
+    # Skip derived fields
+    if not isinstance(var,FSTD_Var): continue
+
+    axes = list(var.axes)
+
+    # Decode the values
+    ip1 = var.axes[zdim].values
+    levels, kind = fstd_core.decode_levels(ip1)
+
+    if kind == 0:
+      axes[zdim] = Height_wrt_SeaLevel(levels)
+    elif kind == 1:
+      axes[zdim] = Sigma(levels)
+    elif kind == 2:
+      axes[zdim] = Pres(levels)
+    elif kind == 3:
+      axes[zdim] = ZAxis(levels)
+    elif kind == 4:
+      axes[zdim] = Height_wrt_Ground(levels)
+    elif kind == 5:
+      # Find a vertical record that matches
+      # First, look for a !! record
+      match = (vertical_records['ip1'] == var.atts['ig1']) & (vertical_records['ip2'] == var.atts['ig2']) & (vertical_records['ip3'] == var.atts['ig3'])
+      if any(match):
+        pass #TODO
+      else:
+        # Otherwise, look for a HY record (looser search criteria)
+        match = (vertical_records['nomvar'] == 'HY  ')
+        if any(match):
+          hy_record = vertical_records[match]
+          A, B = fstd_core.get_hybrid_a_b(hy_record, levels)
+          axes[zdim] = Hybrid(values=levels, A=A, B=B)
+    elif kind == 6:
+      axes[zdim] = Theta(levels)
+
+    var.axes = tuple(axes)
+
 # Reduce the dimensionality of the given FSTD variable
 def reduce_dimensionality (var, squash_forecasts=False):
   # Skip derived fields
@@ -206,8 +274,11 @@ def open (filename, squash_forecasts=False):
   latlon_arrays = fstd_core.get_latlon(records)
 
   # Remove the coordinate records (not needed anymore).
+  # Keep vertical descriptors in a separate array, though, because we'll need
+  # to evaluate them once we know the vertical dimension of the variables.
   nomvar = records['nomvar']
   is_coord = (nomvar == '>>  ') | (nomvar == '^^  ') | (nomvar == 'HY  ') | (nomvar == '!!  ')
+  vertical_records = records[ (nomvar == 'HY  ') | (nomvar == '!!  ') ]
   records = records[-is_coord]
   del nomvar, is_coord
 
@@ -227,6 +298,9 @@ def open (filename, squash_forecasts=False):
 
   # Attach any lat/lon coordinates
   attach_latlon (varlist, latlon_arrays)
+
+  # Attach vertical coordinates
+  attach_vertical_axes (varlist, vertical_records)
 
   # Dimensionality reduction
   varlist = [reduce_dimensionality(var,squash_forecasts) for var in varlist]

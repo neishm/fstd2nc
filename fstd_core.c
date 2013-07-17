@@ -19,6 +19,7 @@ extern int c_fstluk (void*, int, int*, int*, int*);
 extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, int, int, char*, char*, char*, char*, int, int, int, int, int, int);
 extern int f77name(newdate) (int*, int*, int*, int*);
 extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
+extern int f77name(ig_to_hybref)(int*, int*, int*, int*, float*, float*, float*, float*);
 extern void f77name(cxgaig)(char*, int*, int*, int*, int*, float*, float*, float*, float*);
 extern void f77name(cigaxg)(char*, float*, float*, float*, float*, int*, int*, int*, int*);
 extern int c_ezqkdef(int ni, int nj, char *grtyp, 
@@ -409,6 +410,61 @@ static PyObject *encode_levels (PyObject *self, PyObject *args) {
   return (PyObject*)ip1_array;
 }
 
+// Get hybrid A and B coefficients
+static PyObject *get_hybrid_a_b (PyObject *self, PyObject *args) {
+  PyArrayObject *hy_record;
+  int ig1, ig2, ig3, ig4;
+  float ptop, rcoef, pref, x1, x2;
+  PyObject *levels_obj;
+  PyArrayObject *levels;
+  PyArrayObject *A, *B;
+  npy_intp n;
+  int i;
+
+  // Parse inputs
+  if (!PyArg_ParseTuple(args, "O!O", &PyArray_Type, &hy_record, &levels_obj)) return NULL;
+  if (hy_record->descr != descr) return NULL;
+  hy_record = (PyArrayObject*) PyArray_GETCONTIGUOUS(hy_record);
+  levels = (PyArrayObject*)PyArray_ContiguousFromAny(levels_obj,NPY_FLOAT32,1,1);
+  if (levels == NULL) return NULL;
+
+  // Get HY parameters
+  HEADER *hy = (HEADER*)hy_record->data;
+  ig1 = hy->ig1;
+  ig2 = hy->ig2;
+  ig3 = hy->ig3;
+  ig4 = hy->ig4;
+
+  // Get ptop
+  {
+    int kind, mode = -1, flag = 0;
+    f77name(convip)(&(hy->ip1), &ptop, &kind, &mode, "", &flag);
+  }
+
+  // Get rcoef and pref
+  f77name(ig_to_hybref)(&ig1, &ig2, &ig3, &ig4, &rcoef, &pref, &x1, &x2);
+
+  // Generate A and B
+  n = PyArray_SIZE(levels);
+  A = (PyArrayObject*) PyArray_SimpleNew(1, &n, NPY_FLOAT32);
+  B = (PyArrayObject*) PyArray_SimpleNew(1, &n, NPY_FLOAT32);
+  float etatop = ptop / pref;
+  for (i = 0; i < n; i++) {
+    float *a = (float*)(A->data) + i;
+    float *b = (float*)(B->data) + i;
+    float eta = ((float*)levels->data)[i];
+    *b = pow((eta - etatop) / (1 - etatop), rcoef);
+    *a = pref * (eta - *b);
+  }
+
+  PyObject *ref = Py_BuildValue("(O,O)", A, B);
+  Py_DECREF(A);
+  Py_DECREF(B);
+  Py_DECREF(hy_record);
+  Py_DECREF(levels);
+  return ref;
+}
+
 // Helper methods - find a coordinate record for the given field
 // (match ig1,ig2,ig3 to a coordinate's ip1,ip2,ip3).
 int find_coord(HEADER *records, int num_records, char nomvar[4], int ig1, int ig2, int ig3, int ni, int nj) {
@@ -612,6 +668,7 @@ static PyMethodDef FST_Methods[] = {
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
   {"decode_levels", decode_levels, METH_VARARGS, "Decode vertical levels"},
   {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
+  {"get_hybrid_a_b", get_hybrid_a_b, METH_VARARGS, "Get A and B arrays from HY IG1,IG2,IG3,IG4"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
   {NULL, NULL, 0, NULL}
 };
