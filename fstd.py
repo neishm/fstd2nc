@@ -77,7 +77,7 @@ class FSTD_Var (Var):
     jaxis = JAxis(nj)
     kaxis = KAxis(nk)
 
-    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig2, ig2=ig2, ig3=ig3, ig4=ig4)
+    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig1, ig2=ig2, ig3=ig3, ig4=ig4)
 
     # Vertical axis
     zaxis = ZAxis(values=levels) #TODO
