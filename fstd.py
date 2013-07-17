@@ -171,6 +171,9 @@ def attach_latlon (varlist, latlon_arrays):
 
 # Reduce the dimensionality of the given FSTD variable
 def reduce_dimensionality (var, squash_forecasts=False):
+  # Skip derived fields
+  if not isinstance(var, FSTD_Var): return var
+
   remove_axes = []
   # Forecast (axis 1)
   if var.shape[1] == 1:
