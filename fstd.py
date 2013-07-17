@@ -2,9 +2,9 @@
 from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres, Height
 from pygeode.timeaxis import StandardTime
 class Forecast(Axis): pass
-class IAxis(Axis): pass
-class JAxis(Axis): pass
-class KAxis(Axis): pass
+class IAxis(Axis): name = 'i'
+class JAxis(Axis): name = 'j'
+class KAxis(Axis): name = 'k'
 class IP1Axis(Axis): name = 'ip1'
 
 # Create a multi-dimensional variable from a set of records
@@ -152,9 +152,9 @@ def attach_latlon (varlist, latlon_arrays):
     axes = list(var.axes)
     ax, ay, lat, lon = latlon_arrays[key]
     if lat.ndim == 1: axes[ydim] = Lat(lat)
-    else: axes[ydim] = YAxis(ay)
+    else: axes[ydim] = YAxis(ay,name='y')
     if lon.ndim == 1: axes[xdim] = Lon(lon)
-    else: axes[xdim] = XAxis(ax)
+    else: axes[xdim] = XAxis(ax,name='x')
     var.axes = tuple(axes)
 
     # Convert 2D lat/lon arrays to variables
