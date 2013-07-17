@@ -173,8 +173,9 @@ def reduce_dimensionality (var, squash_forecasts=False):
     if squash_forecasts:
       remove_axes += [1]
   # Vertical (axis 2)
+  # Surface fields have a 'pressure' coordinate with a value of 0hPa
   if var.shape[2] == 1:
-    if isinstance(var.axes[2], Height) and var.axes[2].values == [0]:
+    if isinstance(var.axes[2], Pres) and var.axes[2].values == [0.]:
       remove_axes += [2]
   # K axis (axis 3)
   if var.shape[3] == 1:
