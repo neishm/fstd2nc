@@ -53,7 +53,7 @@ class FSTD_Var (Var):
     dates, idate = np.unique(dates, return_inverse=True)
     forecasts, iforecast = np.unique(forecasts, return_inverse=True)
     # Decode the numeric values of the levels, just to get to proper order
-    levels, ilevel = np.unique(levels, return_inverse=True)
+    levels, ilevel = np.unique(levels, return_index=True)
     ip1 = records['ip1'][ilevel]
 
     # Construct a multidimensional array of data functions.
