@@ -195,10 +195,12 @@ def attach_latlon (varlist, latlon_arrays):
 # Attach vertical axes to the variables
 def attach_vertical_axes (varlist, vertical_records):
   from pygeode.formats import fstd_core
+  import numpy as np
 
   zdim = 2
 
-  vertical_axes = {}
+  bangbang_cache = {}
+
   for i,var in enumerate(varlist):
     # Skip derived fields
     if not isinstance(var,FSTD_Var): continue
@@ -224,7 +226,19 @@ def attach_vertical_axes (varlist, vertical_records):
       # First, look for a !! record
       match = (vertical_records['ip1'] == var.atts['ig1']) & (vertical_records['ip2'] == var.atts['ig2']) & (vertical_records['ip3'] == var.atts['ig3'])
       if any(match):
-        pass #TODO
+        bangbang_record = vertical_records[match]
+        key = int(bangbang_record['ip1'][0]), int(bangbang_record['ip2'][0]), int(bangbang_record['ip3'][0])
+        if key not in bangbang_cache:
+          bangbang_cache[key] = fstd_core.get_loghybrid_table(bangbang_record)
+        table = bangbang_cache[key]
+        # Determine the specific A & B for this axis
+        A, B = fstd_core.get_loghybrid_a_b(ip1, *table)
+        axes[zdim] = LogHybrid(values=levels, A=A, B=B)
+        # Store some auxiliary vertical information
+        # (needed for going back to FSTD format)
+        for i,a in enumerate(['ip1_m','a_m','b_m','ip1_t','a_t','b_t']):
+          axes[zdim].atts[a] = table[i]
+
       else:
         # Otherwise, look for a HY record (looser search criteria)
         match = (vertical_records['nomvar'] == 'HY  ')
@@ -235,6 +249,7 @@ def attach_vertical_axes (varlist, vertical_records):
     elif kind == 6:
       axes[zdim] = Theta(levels)
 
+    # Save the new axis information back into the variable
     var.axes = tuple(axes)
 
 # Reduce the dimensionality of the given FSTD variable

@@ -465,6 +465,142 @@ static PyObject *get_hybrid_a_b (PyObject *self, PyObject *args) {
   return ref;
 }
 
+// Get zeta (log hybrid) table info (full A and B on momentum & thermodynamic levels)
+static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
+  PyArrayObject *bangbang_record;
+  PyObject *table_obj;
+  PyArrayObject *table_array;
+  double *table;
+  PyArrayObject *IP1_m, *A_m, *B_m, *IP1_t, *A_t, *B_t;
+  int *ip1_m, *ip1_t;
+  double *a_m, *b_m, *a_t, *b_t;
+  npy_intp n_m, n_t;
+  int i;
+
+  // Parse inputs
+  if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &bangbang_record)) return NULL;
+  if (bangbang_record->descr != descr) return NULL;
+  bangbang_record = (PyArrayObject*) PyArray_GETCONTIGUOUS(bangbang_record);
+
+  // Read !! table info
+  table_obj = PyObject_CallObject(((HEADER*)PyArray_DATA(bangbang_record))[0].data_func,NULL);
+  Py_DECREF(bangbang_record);
+  if (table_obj == NULL) return NULL;
+  table_array = (PyArrayObject*)PyArray_ContiguousFromAny(table_obj,NPY_FLOAT64,3,3);
+  if (table_array == NULL) return NULL;
+  Py_DECREF(table_obj);
+  table = (double*)table_array->data;
+  int kind = table[0];
+  int version = table[1];
+  if (kind != 5 || version != 2) {
+    PyErr_Format (PyExc_ValueError, "Only support kind = 5, version = 2.  Found: kind = %i, version = %i", kind, version);
+    return NULL;
+  }
+  // Get number of thermodynamic & momentum levels.
+  double *tab_m, *tab_t;
+  {
+    int skip = table[2];
+    int nj = PyArray_DIMS(table_array)[1];
+    int nk = (nj-3-skip)/2;
+    n_m = nk+1;
+    n_t = nk+2;
+    tab_m = table + 3*skip;
+    tab_t = table + 3*(skip+nk+1);
+  }
+  // Allocate output arrays
+  IP1_m = (PyArrayObject*) PyArray_SimpleNew(1, &n_m, NPY_INT);
+  A_m = (PyArrayObject*) PyArray_SimpleNew(1, &n_m, NPY_FLOAT64);
+  B_m = (PyArrayObject*) PyArray_SimpleNew(1, &n_m, NPY_FLOAT64);
+  IP1_t = (PyArrayObject*) PyArray_SimpleNew(1, &n_t, NPY_INT);
+  A_t = (PyArrayObject*) PyArray_SimpleNew(1, &n_t, NPY_FLOAT64);
+  B_t = (PyArrayObject*) PyArray_SimpleNew(1, &n_t, NPY_FLOAT64);
+  ip1_m = (int*)PyArray_DATA(IP1_m);
+  a_m = (double*)PyArray_DATA(A_m);
+  b_m = (double*)PyArray_DATA(B_m);
+  ip1_t = (int*)PyArray_DATA(IP1_t);
+  a_t = (double*)PyArray_DATA(A_t);
+  b_t = (double*)PyArray_DATA(B_t);
+
+  // Read vertical information from the table
+  for (i = 0; i < n_m; i++) {
+    ip1_m[i] = tab_m[0];
+    a_m[i] = tab_m[1];
+    b_m[i] = tab_m[2];
+    tab_m+=3;
+  }
+  for (i = 0; i < n_t; i++) {
+    ip1_t[i] = tab_t[0];
+    a_t[i] = tab_t[1];
+    b_t[i] = tab_t[2];
+    tab_t+=3;
+  }
+  Py_DECREF(table_array);
+
+  PyObject *ret = Py_BuildValue ("OOOOOO", IP1_m, A_m, B_m, IP1_t, A_t, B_t);
+  Py_DECREF(IP1_m);
+  Py_DECREF(A_m);
+  Py_DECREF(B_m);
+  Py_DECREF(IP1_t);
+  Py_DECREF(A_t);
+  Py_DECREF(B_t);
+
+  return ret;
+}
+
+// Find specific A and B from the given table
+static PyObject *get_loghybrid_a_b (PyObject *self, PyObject *args) {
+  PyArrayObject *IP1, *A, *B, *IP1_m, *A_m, *B_m, *IP1_t, *A_t, *B_t;
+  int *ip1, *ip1_m, *ip1_t;
+  double *a, *b, *a_m, *b_m, *a_t, *b_t;
+  npy_intp n, n_m, n_t;
+  int i, j;
+
+  // Parse inputs
+  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!", &PyArray_Type, &IP1, &PyArray_Type, &IP1_m, &PyArray_Type, &A_m, &PyArray_Type, &B_m, &PyArray_Type, &IP1_t, &PyArray_Type, &A_t, &PyArray_Type, &B_t)) return NULL;
+  // Assume arrays are of the right type and contiguous (and of the right length).
+  n_m = PyArray_SIZE(IP1_m);
+  n_t = PyArray_SIZE(IP1_t);
+  n = PyArray_SIZE(IP1);
+
+  // Define output arrays
+  A = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_FLOAT64);
+  B = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_FLOAT64);
+
+  // Match the levels
+  ip1 = (int*)PyArray_DATA(IP1);
+  a = (double*)PyArray_DATA(A);
+  b = (double*)PyArray_DATA(B);
+  ip1_m = (int*)PyArray_DATA(IP1_m);
+  a_m = (double*)PyArray_DATA(A_m);
+  b_m = (double*)PyArray_DATA(B_m);
+  ip1_t = (int*)PyArray_DATA(IP1_t);
+  a_t = (double*)PyArray_DATA(A_t);
+  b_t = (double*)PyArray_DATA(B_t);
+  for (i = 0; i < n; i++) {
+    a[i] = b[i] = 0.;
+    for (j = 0; j < n_m; j++) {
+      if (ip1[i] == ip1_m[j]) {
+        a[i] = a_m[j];
+        b[i] = b_m[j];
+        break;
+      }
+    }
+    if (j < n_m) continue;
+    for (j = 0; j < n_t; j++) {
+      if (ip1[i] == ip1_t[j]) {
+        a[i] = a_t[j];
+        b[i] = b_t[j];
+        break;
+      }
+    }
+  }
+
+  PyObject *ret = Py_BuildValue ("OO", A, B);
+  Py_DECREF(A);
+  Py_DECREF(B);
+  return ret;
+}
+
 // Helper methods - find a coordinate record for the given field
 // (match ig1,ig2,ig3 to a coordinate's ip1,ip2,ip3).
 int find_coord(HEADER *records, int num_records, char nomvar[4], int ig1, int ig2, int ig3, int ni, int nj) {
@@ -668,7 +804,9 @@ static PyMethodDef FST_Methods[] = {
   {"date2stamp", date2stamp, METH_VARARGS, "Convert seconds since 1980-01-01 00:00:00 to a CMC timestamp"},
   {"decode_levels", decode_levels, METH_VARARGS, "Decode vertical levels"},
   {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
-  {"get_hybrid_a_b", get_hybrid_a_b, METH_VARARGS, "Get A and B arrays from HY IG1,IG2,IG3,IG4"},
+  {"get_hybrid_a_b", get_hybrid_a_b, METH_VARARGS, "Get A and B arrays from HY record and specified levels"},
+  {"get_loghybrid_table", get_loghybrid_table, METH_VARARGS, "Get info table from !! record"},
+  {"get_loghybrid_a_b", get_loghybrid_a_b, METH_VARARGS, "Get A and B from table and specific ip1 values"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
   {NULL, NULL, 0, NULL}
 };
