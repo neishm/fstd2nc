@@ -273,7 +273,11 @@ def reduce_dimensionality (var, squash_forecasts=False):
 
   return var.squeeze(*remove_axes)
 
+#####################################################################
+#
 # Open a file for read access.  Returns a generic 'Dataset' object.
+#
+#####################################################################
 def open (filename, squash_forecasts=False):
 
   from pygeode.formats import fstd_core
@@ -323,4 +327,48 @@ def open (filename, squash_forecasts=False):
   # Return the variables as a dataset
   from pygeode.dataset import Dataset
   return Dataset(varlist)
+
+
+# Convert to FSTD-compatible axes
+# (e.g., detect hybrid / log-hybrid axes)
+def set_fstd_axes (varlist):
+  for var in varlist:
+    pass #TODO
+
+
+#####################################################################
+#
+# Save a dataset into an FSTD file.
+#
+#####################################################################
+def save (filename, varlist):
+  from pygeode.dataset import Dataset
+  if isinstance(varlist,Dataset):
+    varlist = varlist.vars
+
+  varlist = list(varlist)
+
+  # Convert to FSTD-compatible axes
+  # (e.g., detect hybrid / log-hybrid axes)
+  #TODO
+
+  # Extract vertical information
+  #TODO
+
+  # Extract horizontal information
+  #TODO
+
+  # We should now have a subset of (StandardTime,Forecast,IP1Axis,KAxis,JAxis,IAxis)
+
+  # Fill in missing degenerate axes, and put them in the expected order
+  #TODO
+
+  # Convert variables to record arrays
+  #TODO
+
+  # Merge coordinate records and variable records
+  #TODO
+
+  # Save to the file
+  #TODO
 
