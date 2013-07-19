@@ -328,12 +328,74 @@ def open (filename, squash_forecasts=False):
   from pygeode.dataset import Dataset
   return Dataset(varlist)
 
+#####################################################################
 
-# Convert to FSTD-compatible axes
+
+
+
+# Convert to FSTD-compatible vertical axes
 # (e.g., detect hybrid / log-hybrid axes)
-def set_fstd_axes (varlist):
+def set_fstd_vertical_axis (varlist):
+  for varnum,var in enumerate(varlist):
+    axes = list(var.axes)
+    # Look for serialized FSTD axes (represented by metadata)
+    for i,axis in enumerate(axes):
+      standard_name = axis.atts.get('standard_name','')
+      if standard_name == 'height_above_sea_level':
+        axes[i] = Height_wrt_SeaLevel(values=axis.values)
+      elif standard_name == 'height':
+        axes[i] = Height_wrt_Ground(values=axis.values)
+      elif standard_name == 'atmosphere_sigma_coordinate':
+        axes[i] = Sigma(values=axis.values)
+      elif standard_name == 'atmosphere_hybrid_sigma_pressure_coordinate':
+        axes[i] = Hybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
+      elif standard_name == 'atmosphere_hybrid_sigma_log_pressure_coordinate':
+        axes[i] = LogHybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
+      elif standard_name == 'air_potential_temperature':
+        axes[i] = Theta(values=axis.values)
+
+      replacements = {}
+      for original_axis, new_axis in zip(var.axes,axes):
+        if new_axis is not original_axis:
+          replacements[original_axis.name] = new_axis
+      if len(replacements) > 0:
+        varlist[varnum] = var.replace_axes(**replacements)
+
+# Encode vertical information into FSTD records
+def encode_vertical (varlist):
+  vertical_records = []
+
+  # First, check for any hybrid records
+  hy_records = {}
+  for varnum,var in enumerate(varlist):
+    if var.hasaxis(Hybrid):
+      eta = var.getaxis(Hybrid)
+      if eta not in hy_records:
+        #TODO
+        hy_record = fstd_core.make_hy_record(eta.values,eta.A,eta.B)
+  #TODO: check for multiple HY records
+  vertical_records.extend(hy_records.values())
+
+  pass
+#TODO
+
+# Encode latitude/longitude information into FSTD records
+def encode_latlon (varlist):
+  latlon_records = {}
+
   for var in varlist:
-    pass #TODO
+    pass
+#TODO
+
+# Check for incompatible axes
+def check_fstd_axes (varlist):
+  compatible_axes = StandardTime, Forecast, IP1Axis, KAxis, JAxis, IAxis
+  for var in varlist:
+    incompatible_axes = [a for a in var.axes if not isinstance(a,compatible_axes)]
+    if len(incompatible_axes) > 0:
+      raise TypeError, "Cannot fit the following axes from var '%s' into an FSTD structure: %s"%(var.name,incompatible_axes)
+
+#TODO: check for repeated axes
 
 
 #####################################################################
@@ -348,9 +410,9 @@ def save (filename, varlist):
 
   varlist = list(varlist)
 
-  # Convert to FSTD-compatible axes
+  # Convert to FSTD-compatible vertical axes
   # (e.g., detect hybrid / log-hybrid axes)
-  #TODO
+  set_fstd_vertical_axis (varlist)
 
   # Extract vertical information
   #TODO
@@ -371,4 +433,5 @@ def save (filename, varlist):
 
   # Save to the file
   #TODO
+  return varlist
 
