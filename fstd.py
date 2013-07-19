@@ -165,7 +165,7 @@ def attach_latlon (varlist, latlon_arrays):
   handled_latlon_vars = {}
   extra_coord_vars = []
 
-  for i,var in enumerate(varlist):
+  for var in varlist:
     # Generate key into lat/lon lookup table
     key = tuple(var.atts[a] for a in ['grtyp','ig1','ig2','ig3','ig4'])
     key += (var.shape[xdim], var.shape[ydim])   # ni, nj
@@ -201,7 +201,7 @@ def attach_vertical_axes (varlist, vertical_records):
 
   bangbang_cache = {}
 
-  for i,var in enumerate(varlist):
+  for var in varlist:
     # Skip derived fields
     if not isinstance(var,FSTD_Var): continue
 
