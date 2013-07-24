@@ -244,8 +244,9 @@ def attach_vertical_axes (varlist, vertical_records):
         match = (vertical_records['nomvar'] == 'HY  ')
         if any(match):
           hy_record = vertical_records[match]
-          A, B = fstd_core.get_hybrid_a_b(hy_record, levels)
+          ptop, rcoef, pref, A, B = fstd_core.get_hybrid_a_b(hy_record, levels)
           axes[zdim] = Hybrid(values=levels, A=A, B=B)
+          axes[zdim].atts = dict(ptop=ptop, rcoef=rcoef, pref=pref)
     elif kind == 6:
       axes[zdim] = Theta(levels)
 
@@ -349,6 +350,7 @@ def set_fstd_vertical_axis (varlist):
         axes[i] = Sigma(values=axis.values)
       elif standard_name == 'atmosphere_hybrid_sigma_pressure_coordinate':
         axes[i] = Hybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
+        axes[i].atts = dict(**axis.atts)
       elif standard_name == 'atmosphere_hybrid_sigma_log_pressure_coordinate':
         axes[i] = LogHybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
       elif standard_name == 'air_potential_temperature':

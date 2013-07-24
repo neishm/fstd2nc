@@ -457,7 +457,7 @@ static PyObject *get_hybrid_a_b (PyObject *self, PyObject *args) {
     *a = pref * (eta - *b);
   }
 
-  PyObject *ref = Py_BuildValue("(O,O)", A, B);
+  PyObject *ref = Py_BuildValue("(f,f,f,O,O)", ptop, rcoef, pref, A, B);
   Py_DECREF(A);
   Py_DECREF(B);
   Py_DECREF(hy_record);
