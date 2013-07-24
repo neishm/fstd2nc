@@ -324,11 +324,12 @@ static PyObject *stamp2date (PyObject *self, PyObject *args) {
 static PyObject *date2stamp (PyObject *self, PyObject *args) {
   PyObject *date_obj;
   PyArrayObject *date_array, *stamp_array;
-  int *date, *stamp, run = 0, mode = -1;
+  long long *date;
+  int *stamp, run = 0, mode = -1;
   int ier, i;
   npy_intp n;
   if (!PyArg_ParseTuple(args, "O", &date_obj)) return NULL;
-  date_array = (PyArrayObject*)PyArray_ContiguousFromAny(date_obj,NPY_INT,0,0);
+  date_array = (PyArrayObject*)PyArray_ContiguousFromAny(date_obj,NPY_LONGLONG,0,0);
   if (date_array == NULL) return NULL;
   n = PyArray_SIZE(date_array);
   stamp_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
@@ -336,7 +337,7 @@ static PyObject *date2stamp (PyObject *self, PyObject *args) {
     Py_DECREF(date_array);
     return NULL;
   }
-  date = (int*)date_array->data;
+  date = (long long*)date_array->data;
   stamp = (int*)stamp_array->data;
   for (i = 0; i < n; i++) {
     ier = 0;

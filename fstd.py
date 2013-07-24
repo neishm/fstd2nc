@@ -1,6 +1,7 @@
 
 from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres
 from pygeode.timeaxis import StandardTime
+class Dateo(Axis): pass   # Used for writing to FSTD files, not needed for reading
 class Forecast(Axis): pass
 class IAxis(Axis): name = 'i'
 class JAxis(Axis): name = 'j'
@@ -332,6 +333,20 @@ def open (filename, squash_forecasts=False):
 #####################################################################
 
 
+# Encode the time axis
+def encode_time_axis (varlist):
+  from pygeode.timeaxis import StandardTime
+  from pygeode.timeutils import reltime
+  from pygeode.formats import fstd_core
+  import numpy as np
+  for i,var in enumerate(varlist):
+    if not var.hasaxis(StandardTime): continue
+    time = var.getaxis(StandardTime)
+    seconds = reltime (time, startdate=dict(year=1980,month=1,day=1), units='seconds')
+    seconds = np.asarray(seconds,dtype=int)
+    values = fstd_core.date2stamp(seconds)
+    taxis = Dateo(values=values)
+    varlist[i] = var.replace_axes(time=taxis)
 
 
 # Convert to FSTD-compatible vertical axes
@@ -411,6 +426,9 @@ def save (filename, varlist):
     varlist = varlist.vars
 
   varlist = list(varlist)
+
+  # Encode the time axes
+  encode_time_axis (varlist)
 
   # Convert to FSTD-compatible vertical axes
   # (e.g., detect hybrid / log-hybrid axes)
