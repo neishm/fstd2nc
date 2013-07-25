@@ -85,6 +85,7 @@ class FSTD_Var (Var):
     # Construct the time/forecast axes
     taxis = StandardTime (startdate={'year':1980,'month':1}, values=dates, units='seconds')
     faxis = Forecast (values=forecasts/3600.)
+    faxis.atts['deet'] = int(records[0]['deet'])
 
     nomvar = str(records[0]['nomvar']).rstrip()
     typvar = str(records[0]['typvar']).rstrip()
@@ -348,14 +349,14 @@ def encode_time_axis (varlist):
     taxis = Dateo(values=values)
     varlist[i] = var.replace_axes(time=taxis)
 
-
-# Convert to FSTD-compatible vertical axes
-# (e.g., detect hybrid / log-hybrid axes)
-def set_fstd_vertical_axis (varlist):
+# Convert to FSTD-compatible axes
+# (e.g., detect hybrid / log-hybrid axes, forecast axis)
+def detect_fstd_axes (varlist):
   for varnum,var in enumerate(varlist):
     axes = list(var.axes)
     # Look for serialized FSTD axes (represented by metadata)
     for i,axis in enumerate(axes):
+      if isinstance(axis,(Height_wrt_SeaLevel,Height_wrt_Ground,Sigma,Hybrid,LogHybrid,Theta,Forecast,XAxis,YAxis,KAxis)): continue
       standard_name = axis.atts.get('standard_name','')
       if standard_name == 'height_above_sea_level':
         axes[i] = Height_wrt_SeaLevel(values=axis.values)
@@ -370,6 +371,9 @@ def set_fstd_vertical_axis (varlist):
         axes[i] = LogHybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
       elif standard_name == 'air_potential_temperature':
         axes[i] = Theta(values=axis.values)
+
+      elif axis.name == 'forecast':
+        axes[i] = Forecast(values=axis.values, atts=axis.atts)
 
       replacements = {}
       for original_axis, new_axis in zip(var.axes,axes):
@@ -430,9 +434,9 @@ def save (filename, varlist):
   # Encode the time axes
   encode_time_axis (varlist)
 
-  # Convert to FSTD-compatible vertical axes
+  # Convert to FSTD-compatible axes
   # (e.g., detect hybrid / log-hybrid axes)
-  set_fstd_vertical_axis (varlist)
+  detect_fstd_axes (varlist)
 
   # Extract vertical information
   #TODO
