@@ -3,6 +3,7 @@ from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres
 from pygeode.timeaxis import StandardTime
 class Dateo(Axis): pass   # Used for writing to FSTD files, not needed for reading
 class Forecast(Axis): pass
+class NPASAxis(Axis): pass  # Used for writing to FSTD files, not needed for reading
 class IAxis(Axis): name = 'i'
 class JAxis(Axis): name = 'j'
 class KAxis(Axis): name = 'k'
@@ -382,6 +383,17 @@ def detect_fstd_axes (varlist):
       if len(replacements) > 0:
         varlist[varnum] = var.replace_axes(**replacements)
 
+# Encode the forecast axis
+def encode_forecast_axis (varlist):
+  for i,var in enumerate(varlist):
+    if not var.hasaxis(Forecast): continue
+    forecast = var.getaxis(Forecast)
+    if 'deet' not in forecast.atts: continue
+    deet = forecast.atts['deet']
+    npas = forecast.values * 3600 / deet
+    npas_axis = NPASAxis(values=npas, atts={'deet':deet})
+    varlist[i] = var.replace_axes(forecast=npas_axis)
+
 # Encode vertical information into FSTD records
 def encode_vertical (varlist):
   vertical_records = []
@@ -408,13 +420,12 @@ def encode_vertical (varlist):
         if var.hasaxis(Dateo):
           hy_record['dateo'] = var.getaxis(Dateo).values[0]
         # Use the same forecast time as the field
-        if var.hasaxis(Forecast):
-          forecast = var.getaxis(Forecast)
-          if 'deet' in forecast.atts:
-            deet = forecast.atts['deet']
-            npas = forecast.values[0] * 3600. / deet
-            hy_record['npas'] = npas
-            hy_record['deet'] = deet
+        if var.hasaxis(NPASAxis):
+          npas_axis = var.getaxis(NPASAxis)
+          deet = npas_axis.atts['deet']
+          npas = npas_axis.values[0]
+          hy_record['npas'] = npas
+          hy_record['deet'] = deet
         # Dummy data function - just give a zero.
         hy_record['data_func'] = lambda: np.array([[[0]]],dtype='float32')
         hy_records[key] = hy_record
@@ -467,6 +478,9 @@ def save (filename, varlist):
   # Convert to FSTD-compatible axes
   # (e.g., detect hybrid / log-hybrid axes)
   detect_fstd_axes (varlist)
+
+  # Encode the forecast axis
+  encode_forecast_axis (varlist)
 
   # Extract vertical information
   vertical_records = encode_vertical(varlist)
