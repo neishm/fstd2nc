@@ -439,7 +439,12 @@ def encode_vertical (varlist):
   #TODO: convert to IP1Axis
 
   # Convert from list to array
-  return np.concatenate(vertical_records)
+  if len(vertical_records) > 0:
+    vertical_records = np.concatenate(vertical_records)
+  else:
+    vertical_records = np.empty([0], dtype=fstd_core.record_descr)
+
+  return vertical_records
 
 # Encode latitude/longitude information into FSTD records
 def encode_latlon (varlist):
