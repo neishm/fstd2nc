@@ -20,6 +20,7 @@ extern int c_fstecr (void*, void*, int, int, int, int, int, int, int, int, int, 
 extern int f77name(newdate) (int*, int*, int*, int*);
 extern void f77name(convip)(int*, float*, int*, int*, char*, int*);
 extern int f77name(ig_to_hybref)(int*, int*, int*, int*, float*, float*, float*, float*);
+extern int f77name(hybref_to_ig)(int*, int*, int*, int*, float*, float*, float*, float*);
 extern void f77name(cxgaig)(char*, int*, int*, int*, int*, float*, float*, float*, float*);
 extern void f77name(cigaxg)(char*, float*, float*, float*, float*, int*, int*, int*, int*);
 extern int c_ezqkdef(int ni, int nj, char *grtyp, 
@@ -602,6 +603,49 @@ static PyObject *get_loghybrid_a_b (PyObject *self, PyObject *args) {
   return ret;
 }
 
+
+// make_hy_record(eta.values,eta.A,eta.B)
+static PyObject *make_hy_record (PyObject *self, PyObject *args) {
+  float ptop, rcoef, pref;
+
+  if (!PyArg_ParseTuple(args, "fff", &ptop, &rcoef, &pref)) return NULL;
+
+  // Encode in a record
+  Py_INCREF(descr);
+  npy_intp dims[] = {1};
+  PyArrayObject *record = (PyArrayObject*) PyArray_SimpleNewFromDescr (1, dims, descr);
+  if (record == NULL) return NULL;
+
+  HEADER *hy = (HEADER*)record->data;
+
+  // Encode IG1, IG2, IG3, IG4
+  {
+    float x1, x2;
+    f77name(hybref_to_ig)(&hy->ig1, &hy->ig2, &hy->ig3, &hy->ig4, &rcoef, &pref, &x1, &x2);
+  }
+
+  // Encode ptop
+  {
+    int kind = 2, mode = 2, flag = 0;
+    f77name(convip)(&hy->ip1, &ptop, &kind, &mode, "", &flag);
+  }
+
+  // Other parameters
+  strncpy (hy->nomvar, "HY  ", 4);
+  strncpy (hy->grtyp, "X ", 2);
+  strncpy (hy->typvar, "X ", 2);
+  hy->datyp = 5;
+  hy->nbits = 32;
+  hy->ni = 1;
+  hy->nj = 1;
+  hy->nk = 1;
+
+  // NOTE: data function needs to be set from the Python side
+
+  return (PyObject*)record;
+
+}
+
 // Helper methods - find a coordinate record for the given field
 // (match ig1,ig2,ig3 to a coordinate's ip1,ip2,ip3).
 int find_coord(HEADER *records, int num_records, char nomvar[4], int ig1, int ig2, int ig3, int ni, int nj) {
@@ -808,6 +852,7 @@ static PyMethodDef FST_Methods[] = {
   {"get_hybrid_a_b", get_hybrid_a_b, METH_VARARGS, "Get A and B arrays from HY record and specified levels"},
   {"get_loghybrid_table", get_loghybrid_table, METH_VARARGS, "Get info table from !! record"},
   {"get_loghybrid_a_b", get_loghybrid_a_b, METH_VARARGS, "Get A and B from table and specific ip1 values"},
+  {"make_hy_record", make_hy_record, METH_VARARGS, "Construct an HY record from the given eta, a, and b arrays"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
   {NULL, NULL, 0, NULL}
 };

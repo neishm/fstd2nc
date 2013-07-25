@@ -385,20 +385,50 @@ def detect_fstd_axes (varlist):
 # Encode vertical information into FSTD records
 def encode_vertical (varlist):
   vertical_records = []
+  from pygeode.formats import fstd_core
+  import numpy as np
+  from warnings import warn
 
   # First, check for any hybrid records
   hy_records = {}
   for varnum,var in enumerate(varlist):
     if var.hasaxis(Hybrid):
       eta = var.getaxis(Hybrid)
-      if eta not in hy_records:
-        #TODO
-        hy_record = fstd_core.make_hy_record(eta.values,eta.A,eta.B)
-  #TODO: check for multiple HY records
+      if 'ptop' not in eta.atts or 'rcoef' not in eta.atts or 'pref' not in eta.atts:
+        warn ("Not enough information to construct an HY record");
+        continue
+      ptop = eta.atts['ptop']
+      rcoef = eta.atts['rcoef']
+      pref = eta.atts['pref']
+      key = (ptop,rcoef,pref)
+      if key not in hy_records:
+        hy_record = fstd_core.make_hy_record(ptop,rcoef,pref)
+        hy_record['etiket'] = var.atts.get('etiket','        ')
+        # Use the same date as the field
+        if var.hasaxis(Dateo):
+          hy_record['dateo'] = var.getaxis(Dateo).values[0]
+        # Use the same forecast time as the field
+        if var.hasaxis(Forecast):
+          forecast = var.getaxis(Forecast)
+          if 'deet' in forecast.atts:
+            deet = forecast.atts['deet']
+            npas = forecast.values[0] * 3600. / deet
+            hy_record['npas'] = npas
+            hy_record['deet'] = deet
+        # Dummy data function - just give a zero.
+        hy_record['data_func'] = lambda: np.array([[[0]]],dtype='float32')
+        hy_records[key] = hy_record
+
+  if len(hy_records) > 1:
+    warn ("Multiple Hybrid axes detected.  The resulting file may not work the way you expect.")
+
   vertical_records.extend(hy_records.values())
 
-  pass
-#TODO
+  #TODO: !! record encoding
+  #TODO: convert to IP1Axis
+
+  # Convert from list to array
+  return np.concatenate(vertical_records)
 
 # Encode latitude/longitude information into FSTD records
 def encode_latlon (varlist):
@@ -439,6 +469,8 @@ def save (filename, varlist):
   detect_fstd_axes (varlist)
 
   # Extract vertical information
+  vertical_records = encode_vertical(varlist)
+
   #TODO
 
   # Extract horizontal information
