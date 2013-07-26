@@ -478,6 +478,9 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
   double *a_m, *b_m, *a_t, *b_t;
   npy_intp n_m, n_t;
   int i;
+  int kind, version;
+  double ptop, pref, rcoef1, rcoef2;
+  unsigned char ref_name[4];
 
   // Parse inputs
   if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &bangbang_record)) return NULL;
@@ -492,12 +495,24 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
   if (table_array == NULL) return NULL;
   Py_DECREF(table_obj);
   table = (double*)table_array->data;
-  int kind = table[0];
-  int version = table[1];
+  kind = table[0];
+  version = table[1];
   if (kind != 5 || version != 2) {
     PyErr_Format (PyExc_ValueError, "Only support kind = 5, version = 2.  Found: kind = %i, version = %i", kind, version);
     return NULL;
   }
+  ptop = table[3];
+  pref = table[4];
+  rcoef1 = table[5];
+  rcoef2 = table[6];
+  {
+    unsigned long long x = *(unsigned long long*)(table+7);
+    ref_name[0] = x & 255;
+    ref_name[1] = (x>>8) & 255;
+    ref_name[2] = (x>>16) & 255;
+    ref_name[3] = x>>24;
+  }
+
   // Get number of thermodynamic & momentum levels.
   double *tab_m, *tab_t;
   {
@@ -538,7 +553,7 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
   }
   Py_DECREF(table_array);
 
-  PyObject *ret = Py_BuildValue ("OOOOOO", IP1_m, A_m, B_m, IP1_t, A_t, B_t);
+  PyObject *ret = Py_BuildValue ("iiffffs#OOOOOO", kind, version, ptop, pref, rcoef1, rcoef2, ref_name, 4, IP1_m, A_m, B_m, IP1_t, A_t, B_t);
   Py_DECREF(IP1_m);
   Py_DECREF(A_m);
   Py_DECREF(B_m);
