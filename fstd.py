@@ -378,10 +378,10 @@ def detect_fstd_axes (varlist):
       elif standard_name == 'atmosphere_sigma_coordinate':
         axes[i] = Sigma(values=axis.values)
       elif standard_name == 'atmosphere_hybrid_sigma_pressure_coordinate':
-        axes[i] = Hybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
+        axes[i] = Hybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'], atts=axis.atts)
         axes[i].atts = dict(**axis.atts)
       elif standard_name == 'atmosphere_hybrid_sigma_log_pressure_coordinate':
-        axes[i] = LogHybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'])
+        axes[i] = LogHybrid(values=axis.values, A=axis.auxarrays['A'], B=axis.auxarrays['B'], atts=axis.atts)
       elif standard_name == 'air_potential_temperature':
         axes[i] = Theta(values=axis.values)
 
