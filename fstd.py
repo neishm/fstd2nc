@@ -232,27 +232,21 @@ def attach_vertical_axes (varlist, vertical_records):
         bangbang_record = vertical_records[match]
         key = int(bangbang_record['ip1'][0]), int(bangbang_record['ip2'][0]), int(bangbang_record['ip3'][0])
         if key not in bangbang_cache:
-          bangbang_cache[key] = fstd_core.get_loghybrid_table(bangbang_record)
+          data = bangbang_record[0]['data_func']()
+          bangbang_cache[key] = fstd_core.get_loghybrid_table(data)
         table = bangbang_cache[key]
-        kind, version, ptop, pref, rcoef1, rcoef2, ref_name, ip1_m, a_m, b_m, ip1_t, a_t, b_t = table
         # Determine the specific A & B for this axis
+        ip1_m = table['ip1_m']
+        a_m = table['a_m']
+        b_m = table['b_m']
+        ip1_t = table['ip1_t']
+        a_t = table['a_t']
+        b_t = table['b_t']
         A, B = fstd_core.get_loghybrid_a_b(ip1, ip1_m, a_m, b_m, ip1_t, a_t, b_t)
         axes[zdim] = LogHybrid(values=levels, A=A, B=B)
         # Store some auxiliary vertical information
         # (needed for going back to FSTD format)
-        axes[zdim].atts['kind'] = kind
-        axes[zdim].atts['version'] = version
-        axes[zdim].atts['ptop'] = ptop
-        axes[zdim].atts['pref'] = pref
-        axes[zdim].atts['rcoef1'] = rcoef1
-        axes[zdim].atts['rcoef2'] = rcoef2
-        axes[zdim].atts['ref_name'] = ref_name.rstrip()
-        axes[zdim].atts['ip1_m'] = ip1_m
-        axes[zdim].atts['a_m'] = a_m
-        axes[zdim].atts['b_m'] = b_m
-        axes[zdim].atts['ip1_t'] = ip1_t
-        axes[zdim].atts['a_t'] = a_t
-        axes[zdim].atts['b_t'] = b_t
+        axes[zdim].atts.update(table)
 
       else:
         # Otherwise, look for a HY record (looser search criteria)

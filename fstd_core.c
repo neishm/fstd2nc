@@ -469,7 +469,6 @@ static PyObject *get_hybrid_a_b (PyObject *self, PyObject *args) {
 
 // Get zeta (log hybrid) table info (full A and B on momentum & thermodynamic levels)
 static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
-  PyArrayObject *bangbang_record;
   PyObject *table_obj;
   PyArrayObject *table_array;
   double *table;
@@ -483,17 +482,11 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
   unsigned char ref_name[4];
 
   // Parse inputs
-  if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &bangbang_record)) return NULL;
-  if (bangbang_record->descr != descr) return NULL;
-  bangbang_record = (PyArrayObject*) PyArray_GETCONTIGUOUS(bangbang_record);
+  if (!PyArg_ParseTuple(args, "O", &table_obj)) return NULL;
 
   // Read !! table info
-  table_obj = PyObject_CallObject(((HEADER*)PyArray_DATA(bangbang_record))[0].data_func,NULL);
-  Py_DECREF(bangbang_record);
-  if (table_obj == NULL) return NULL;
   table_array = (PyArrayObject*)PyArray_ContiguousFromAny(table_obj,NPY_FLOAT64,3,3);
   if (table_array == NULL) return NULL;
-  Py_DECREF(table_obj);
   table = (double*)table_array->data;
   kind = table[0];
   version = table[1];
@@ -551,9 +544,44 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
     b_t[i] = tab_t[2];
     tab_t+=3;
   }
+
+  // Done reading the table
   Py_DECREF(table_array);
 
-  PyObject *ret = Py_BuildValue ("iiffffs#OOOOOO", kind, version, ptop, pref, rcoef1, rcoef2, ref_name, 4, IP1_m, A_m, B_m, IP1_t, A_t, B_t);
+  // Construct a dictionary with all table information
+  PyObject *kind_obj, *version_obj, *ptop_obj, *pref_obj, *rcoef1_obj, *rcoef2_obj, *ref_name_obj_padded, *ref_name_obj;
+  kind_obj = PyInt_FromLong(kind);
+  version_obj = PyInt_FromLong(version);
+  ptop_obj = PyFloat_FromDouble(ptop);
+  pref_obj = PyFloat_FromDouble(pref);
+  rcoef1_obj = PyFloat_FromDouble(rcoef1);
+  rcoef2_obj = PyFloat_FromDouble(rcoef2);
+  ref_name_obj_padded = PyString_FromStringAndSize((char*)ref_name, 4);
+  ref_name_obj = PyObject_CallMethod(ref_name_obj_padded, "rstrip", NULL);
+  Py_DECREF(ref_name_obj_padded);
+
+  PyObject *dict = PyDict_New();
+  PyDict_SetItemString (dict, "kind", kind_obj);
+  PyDict_SetItemString (dict, "version", version_obj);
+  PyDict_SetItemString (dict, "ptop", ptop_obj);
+  PyDict_SetItemString (dict, "pref", pref_obj);
+  PyDict_SetItemString (dict, "rcoef1", rcoef1_obj);
+  PyDict_SetItemString (dict, "rcoef2", rcoef2_obj);
+  PyDict_SetItemString (dict, "ref_name", ref_name_obj);
+  PyDict_SetItemString (dict, "ip1_m", (PyObject*)IP1_m);
+  PyDict_SetItemString (dict, "a_m", (PyObject*)A_m);
+  PyDict_SetItemString (dict, "b_m", (PyObject*)B_m);
+  PyDict_SetItemString (dict, "ip1_t", (PyObject*)IP1_t);
+  PyDict_SetItemString (dict, "a_t", (PyObject*)A_t);
+  PyDict_SetItemString (dict, "b_t", (PyObject*)B_t);
+
+  Py_DECREF(kind_obj);
+  Py_DECREF(version_obj);
+  Py_DECREF(ptop_obj);
+  Py_DECREF(pref_obj);
+  Py_DECREF(rcoef1_obj);
+  Py_DECREF(rcoef2_obj);
+  Py_DECREF(ref_name_obj);
   Py_DECREF(IP1_m);
   Py_DECREF(A_m);
   Py_DECREF(B_m);
@@ -561,7 +589,7 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
   Py_DECREF(A_t);
   Py_DECREF(B_t);
 
-  return ret;
+  return dict;
 }
 
 // Find specific A and B from the given table
