@@ -468,7 +468,7 @@ static PyObject *get_hybrid_a_b (PyObject *self, PyObject *args) {
 }
 
 // Get zeta (log hybrid) table info (full A and B on momentum & thermodynamic levels)
-static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
+static PyObject *decode_loghybrid_table (PyObject *self, PyObject *args) {
   PyObject *table_obj;
   PyArrayObject *table_array;
   double *table;
@@ -575,6 +575,8 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
   PyDict_SetItemString (dict, "a_t", (PyObject*)A_t);
   PyDict_SetItemString (dict, "b_t", (PyObject*)B_t);
 
+  // The parameters now have a reference in the dictionary, so we can remove
+  // the local reference.
   Py_DECREF(kind_obj);
   Py_DECREF(version_obj);
   Py_DECREF(ptop_obj);
@@ -911,7 +913,7 @@ static PyMethodDef FST_Methods[] = {
   {"decode_levels", decode_levels, METH_VARARGS, "Decode vertical levels"},
   {"encode_levels", encode_levels, METH_VARARGS, "Encode vertical levels"},
   {"get_hybrid_a_b", get_hybrid_a_b, METH_VARARGS, "Get A and B arrays from HY record and specified levels"},
-  {"get_loghybrid_table", get_loghybrid_table, METH_VARARGS, "Get info table from !! record"},
+  {"decode_loghybrid_table", decode_loghybrid_table, METH_VARARGS, "Get info table from !! record"},
   {"get_loghybrid_a_b", get_loghybrid_a_b, METH_VARARGS, "Get A and B from table and specific ip1 values"},
   {"make_hy_record", make_hy_record, METH_VARARGS, "Construct an HY record from the given eta, a, and b arrays"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},

@@ -233,7 +233,7 @@ def attach_vertical_axes (varlist, vertical_records):
         key = int(bangbang_record['ip1'][0]), int(bangbang_record['ip2'][0]), int(bangbang_record['ip3'][0])
         if key not in bangbang_cache:
           data = bangbang_record[0]['data_func']()
-          bangbang_cache[key] = fstd_core.get_loghybrid_table(data)
+          bangbang_cache[key] = fstd_core.decode_loghybrid_table(data)
         table = bangbang_cache[key]
         # Determine the specific A & B for this axis
         A, B = fstd_core.get_loghybrid_a_b(ip1, table)
