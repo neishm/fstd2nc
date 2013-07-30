@@ -236,13 +236,7 @@ def attach_vertical_axes (varlist, vertical_records):
           bangbang_cache[key] = fstd_core.get_loghybrid_table(data)
         table = bangbang_cache[key]
         # Determine the specific A & B for this axis
-        ip1_m = table['ip1_m']
-        a_m = table['a_m']
-        b_m = table['b_m']
-        ip1_t = table['ip1_t']
-        a_t = table['a_t']
-        b_t = table['b_t']
-        A, B = fstd_core.get_loghybrid_a_b(ip1, ip1_m, a_m, b_m, ip1_t, a_t, b_t)
+        A, B = fstd_core.get_loghybrid_a_b(ip1, table)
         axes[zdim] = LogHybrid(values=levels, A=A, B=B)
         # Store some auxiliary vertical information
         # (needed for going back to FSTD format)

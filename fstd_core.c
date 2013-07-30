@@ -594,6 +594,7 @@ static PyObject *get_loghybrid_table (PyObject *self, PyObject *args) {
 
 // Find specific A and B from the given table
 static PyObject *get_loghybrid_a_b (PyObject *self, PyObject *args) {
+  PyObject *dict;
   PyArrayObject *IP1, *A, *B, *IP1_m, *A_m, *B_m, *IP1_t, *A_t, *B_t;
   int *ip1, *ip1_m, *ip1_t;
   double *a, *b, *a_m, *b_m, *a_t, *b_t;
@@ -601,8 +602,16 @@ static PyObject *get_loghybrid_a_b (PyObject *self, PyObject *args) {
   int i, j;
 
   // Parse inputs
-  if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!", &PyArray_Type, &IP1, &PyArray_Type, &IP1_m, &PyArray_Type, &A_m, &PyArray_Type, &B_m, &PyArray_Type, &IP1_t, &PyArray_Type, &A_t, &PyArray_Type, &B_t)) return NULL;
+  if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &IP1, &PyDict_Type, &dict)) return NULL;
   // Assume arrays are of the right type and contiguous (and of the right length).
+  IP1_m = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"ip1_m"),NPY_INT,1,1);
+  A_m = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"a_m"),NPY_FLOAT64,1,1);
+  B_m = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"b_m"),NPY_FLOAT64,1,1);
+  IP1_t = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"ip1_t"),NPY_INT,1,1);
+  A_t = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"a_t"),NPY_FLOAT64,1,1);
+  B_t = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"b_t"),NPY_FLOAT64,1,1);
+  if (IP1_m == NULL || A_m == NULL || B_m == NULL || IP1_t == NULL || A_t == NULL || B_t == NULL) return NULL;
+
   n_m = PyArray_SIZE(IP1_m);
   n_t = PyArray_SIZE(IP1_t);
   n = PyArray_SIZE(IP1);
@@ -643,6 +652,15 @@ static PyObject *get_loghybrid_a_b (PyObject *self, PyObject *args) {
   PyObject *ret = Py_BuildValue ("OO", A, B);
   Py_DECREF(A);
   Py_DECREF(B);
+
+  // Free the contiguated array references
+  Py_DECREF(IP1_m);
+  Py_DECREF(A_m);
+  Py_DECREF(B_m);
+  Py_DECREF(IP1_t);
+  Py_DECREF(A_t);
+  Py_DECREF(B_t);
+
   return ret;
 }
 
