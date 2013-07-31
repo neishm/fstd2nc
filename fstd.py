@@ -404,31 +404,31 @@ def encode_vertical (varlist):
   # First, check for any hybrid records
   hy_records = {}
   for varnum,var in enumerate(varlist):
-    if var.hasaxis(Hybrid):
-      eta = var.getaxis(Hybrid)
-      if 'ptop' not in eta.atts or 'rcoef' not in eta.atts or 'pref' not in eta.atts:
-        warn ("Not enough information to construct an HY record");
-        continue
-      ptop = eta.atts['ptop']
-      rcoef = eta.atts['rcoef']
-      pref = eta.atts['pref']
-      key = (ptop,rcoef,pref)
-      if key not in hy_records:
-        hy_record = fstd_core.make_hy_record(ptop,rcoef,pref)
-        hy_record['etiket'] = var.atts.get('etiket','        ')
-        # Use the same date as the field
-        if var.hasaxis(Dateo):
-          hy_record['dateo'] = var.getaxis(Dateo).values[0]
-        # Use the same forecast time as the field
-        if var.hasaxis(NPASAxis):
-          npas_axis = var.getaxis(NPASAxis)
-          deet = npas_axis.atts['deet']
-          npas = npas_axis.values[0]
-          hy_record['npas'] = npas
-          hy_record['deet'] = deet
-        # Dummy data function - just give a zero.
-        hy_record['data_func'] = lambda: np.array([[[0]]],dtype='float32')
-        hy_records[key] = hy_record
+    if not var.hasaxis(Hybrid): continue
+    eta = var.getaxis(Hybrid)
+    if 'ptop' not in eta.atts or 'rcoef' not in eta.atts or 'pref' not in eta.atts:
+      warn ("Not enough information to construct an HY record");
+      continue
+    ptop = eta.atts['ptop']
+    rcoef = eta.atts['rcoef']
+    pref = eta.atts['pref']
+    key = (ptop,rcoef,pref)
+    if key not in hy_records:
+      hy_record = fstd_core.make_hy_record(ptop,rcoef,pref)
+      hy_record['etiket'] = var.atts.get('etiket','        ')
+      # Use the same date as the field
+      if var.hasaxis(Dateo):
+        hy_record['dateo'] = var.getaxis(Dateo).values[0]
+      # Use the same forecast time as the field
+      if var.hasaxis(NPASAxis):
+        npas_axis = var.getaxis(NPASAxis)
+        deet = npas_axis.atts['deet']
+        npas = npas_axis.values[0]
+        hy_record['npas'] = npas
+        hy_record['deet'] = deet
+      # Dummy data function - just give a zero.
+      hy_record['data_func'] = lambda: np.array([[[0]]],dtype='float32')
+      hy_records[key] = hy_record
 
   if len(hy_records) > 1:
     warn ("Multiple Hybrid axes detected.  The resulting file may not work the way you expect.")
@@ -438,25 +438,25 @@ def encode_vertical (varlist):
   # Check for log-hybrid levels
   bangbang_records = {}
   for varnum,var in enumerate(varlist):
-    if var.hasaxis(LogHybrid):
-      zeta = var.getaxis(LogHybrid)
-      required_atts = 'kind', 'version', 'ptop', 'pref', 'rcoef1', 'rcoef2', 'ref_name', 'ip1_m', 'a_m', 'b_m', 'ip1_t', 'a_t', 'b_t'
-      if any(att not in zeta.atts for att in required_atts):
-        warn ("Not enough information to construct a !! record");
-        continue
-      kind = zeta.atts['kind']
-      version = zeta.atts['version']
-      if (kind != 5 or version != 2):
-        warn ("Only support vgrid kind=5, version=2.  Found: kind=%d, version=%d.  Not encoding !! record"%(kind,version))
-        continue
-      # Define a unique key for this vertical coordinate
-      key = zeta.atts.copy()
-      for a in 'ip1_m', 'a_m', 'b_m', 'ip1_t', 'a_t', 'b_t':
-        key[a] = tuple(key[a])
-      key = tuple(sorted(key.items()))
-      if key not in bangbang_records:
-        bangbang_records[key] = fstd_core.make_bangbang_record (zeta.atts)
-      #TODO: link to variable through IP1,IP2,IP3 (once we have this info)
+    if not var.hasaxis(LogHybrid): continue
+    zeta = var.getaxis(LogHybrid)
+    required_atts = 'kind', 'version', 'ptop', 'pref', 'rcoef1', 'rcoef2', 'ref_name', 'ip1_m', 'a_m', 'b_m', 'ip1_t', 'a_t', 'b_t'
+    if any(att not in zeta.atts for att in required_atts):
+      warn ("Not enough information to construct a !! record");
+      continue
+    kind = zeta.atts['kind']
+    version = zeta.atts['version']
+    if (kind != 5 or version != 2):
+      warn ("Only support vgrid kind=5, version=2.  Found: kind=%d, version=%d.  Not encoding !! record"%(kind,version))
+      continue
+    # Define a unique key for this vertical coordinate
+    key = zeta.atts.copy()
+    for a in 'ip1_m', 'a_m', 'b_m', 'ip1_t', 'a_t', 'b_t':
+      key[a] = tuple(key[a])
+    key = tuple(sorted(key.items()))
+    if key not in bangbang_records:
+      bangbang_records[key] = fstd_core.make_bangbang_record (zeta.atts)
+    #TODO: link to variable through IP1,IP2,IP3 (once we have this info)
 
   vertical_records.extend(bangbang_records.values())
 
