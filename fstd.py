@@ -426,8 +426,6 @@ def encode_vertical (varlist):
         npas = npas_axis.values[0]
         hy_record['npas'] = npas
         hy_record['deet'] = deet
-      # Dummy data function - just give a zero.
-      hy_record['data_func'] = lambda: np.array([[[0]]],dtype='float32')
       hy_records[key] = hy_record
 
   if len(hy_records) > 1:

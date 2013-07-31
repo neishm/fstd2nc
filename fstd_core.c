@@ -867,7 +867,13 @@ static PyObject *make_hy_record (PyObject *self, PyObject *args) {
   hy->nj = 1;
   hy->nk = 1;
 
-  // NOTE: data function needs to be set from the Python side
+  // The data is just a single zero
+  npy_intp data_dims[] = {1,1,1};
+  PyObject *zero = PyArray_ZEROS (3, data_dims, NPY_FLOAT32, 0);
+  if (zero == NULL) return NULL;
+  hy->data_func = make_data_func(zero);
+  if (hy->data_func == NULL) return NULL;
+  Py_DECREF(zero);
 
   return (PyObject*)record;
 
