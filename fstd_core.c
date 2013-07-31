@@ -4,6 +4,8 @@
 #include <string.h>
 #include <math.h>
 
+static PyObject *m;  // Module self-reference
+
 // Wrap a Fortran call
 // Note: change this as needed on your platform.
 #define f77name(name) name ## _
@@ -667,6 +669,162 @@ static PyObject *get_loghybrid_a_b (PyObject *self, PyObject *args) {
 }
 
 
+// Encode table information for a log-hybrid coordinate
+static PyObject *encode_loghybrid_table (PyObject *self, PyObject *args) {
+  PyObject *dict;
+  int kind, version;
+  double ptop, pref, rcoef1, rcoef2;
+  char *ref_name_s; Py_ssize_t ref_name_len; unsigned char ref_name[] = "    ";
+
+  PyArrayObject *IP1_m, *A_m, *B_m, *IP1_t, *A_t, *B_t;
+  int n_m, n_t, i;
+  int *ip1_m, *ip1_t;
+  double *a_m, *b_m, *a_t, *b_t;
+
+  npy_intp dims[] = {1,-1,3};
+  PyArrayObject *table_array;
+  double *table;
+
+  if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) return NULL;
+  kind = PyInt_AsLong(PyDict_GetItemString(dict,"kind"));
+  version = PyInt_AsLong(PyDict_GetItemString(dict,"version"));
+  ptop = PyFloat_AsDouble(PyDict_GetItemString(dict,"ptop"));
+  pref = PyFloat_AsDouble(PyDict_GetItemString(dict,"pref"));
+  rcoef1 = PyFloat_AsDouble(PyDict_GetItemString(dict,"rcoef1"));
+  rcoef2 = PyFloat_AsDouble(PyDict_GetItemString(dict,"rcoef2"));
+  PyString_AsStringAndSize(PyDict_GetItemString(dict,"ref_name"), &ref_name_s, &ref_name_len);
+  if (PyErr_Occurred()!=NULL) return NULL;
+  if (ref_name_len > 4) return NULL;
+  memcpy (ref_name, ref_name_s, ref_name_len);
+
+  if (kind != 5 || version != 2) return NULL;
+
+  IP1_m = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"ip1_m"), NPY_INT,1,1);
+  A_m = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"a_m"), NPY_FLOAT64,1,1);
+  B_m = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"b_m"), NPY_FLOAT64,1,1);
+  IP1_t = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"ip1_t"), NPY_INT,1,1);
+  A_t = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"a_t"), NPY_FLOAT64,1,1);
+  B_t = (PyArrayObject*)PyArray_ContiguousFromAny(PyDict_GetItemString(dict,"b_t"), NPY_FLOAT64,1,1);
+  if (IP1_m == NULL || A_m == NULL || B_m == NULL || IP1_t == NULL || A_t == NULL || B_t == NULL) return NULL;
+
+  n_m = PyArray_SIZE(IP1_m);
+  if (PyArray_SIZE(A_m) != n_m || PyArray_SIZE(B_m) != n_m) {
+    PyErr_SetString (PyExc_ValueError, "Inconsistent A/B/IP1 momentum levels");
+    return NULL;
+  }
+  n_t = PyArray_SIZE(IP1_t);
+  if (PyArray_SIZE(A_t) != n_t || PyArray_SIZE(B_t) != n_t) {
+    PyErr_SetString (PyExc_ValueError, "Inconsistent A/B/IP1 thermodynamic levels");
+    return NULL;
+  }
+  if (n_t != n_m+1) {
+    PyErr_Format (PyExc_ValueError, "Inconsistent number of momentum/thermodynamic levels (N_m = %i, N_t = %i).  Expected N_t = N_m + 1.", n_m, n_t);
+    return NULL;
+  }
+
+  ip1_m = (int*)PyArray_DATA(IP1_m);
+  a_m = (double*)PyArray_DATA(A_m);
+  b_m = (double*)PyArray_DATA(B_m);
+  ip1_t = (int*)PyArray_DATA(IP1_t);
+  a_t = (double*)PyArray_DATA(A_t);
+  b_t = (double*)PyArray_DATA(B_t);
+
+  dims[1] = n_m + n_t + 3;  // nj
+
+  table_array = (PyArrayObject*) PyArray_SimpleNew (3, dims, NPY_FLOAT64);
+  table = (double*)PyArray_DATA(table_array);
+
+  table[0] = kind;
+  table[1] = version;
+  table[2] = 9;  // "skip"
+  table[3] = ptop;
+  table[4] = pref;
+  table[5] = rcoef1;
+  table[6] = rcoef2;
+  {
+    unsigned long long *x = (unsigned long long*)(table+7);
+    *x = (ref_name[3]<<24) | (ref_name[2]<<16) | (ref_name[1]<<8) | ref_name[0];
+  }
+  table[8] = 0.;
+
+  table += 9;  // done with the above parameters
+  for (i = 0; i < n_m; i++) {
+    *(table++) = ip1_m[i];
+    *(table++) = a_m[i];
+    *(table++) = b_m[i];
+  }
+  for (i = 0; i < n_t; i++) {
+    *(table++) = ip1_t[i];
+    *(table++) = a_t[i];
+    *(table++) = b_t[i];
+  }
+
+  Py_DECREF(IP1_m);
+  Py_DECREF(A_m);
+  Py_DECREF(B_m);
+  Py_DECREF(IP1_t);
+  Py_DECREF(A_t);
+  Py_DECREF(B_t);
+
+  return (PyObject*) table_array;
+}
+
+// A function that returns the object that's passed in.
+// Used for partial function application, to get data functions.
+static PyObject *identity_func (PyObject *self, PyObject *args) {
+  PyObject *data;
+  if (!PyArg_ParseTuple(args, "O", &data)) return NULL;
+  Py_INCREF(data);  // We don't "own" the input reference
+  return data;
+}
+
+// Helper method to construct a data function.
+// Given a data array, make a 0-arg function that returns the data.
+PyObject *make_data_func (PyObject *data) {
+  static PyObject *partial=NULL, *ident=NULL;
+  if (partial == NULL) {
+    PyObject *functools = PyImport_ImportModule("functools");
+    if (functools == NULL) return NULL;
+    partial = PyObject_GetAttrString(functools,"partial");
+    Py_DECREF(functools);
+  }
+  if (ident == NULL) ident = PyObject_GetAttrString(m, "_identity_func");
+  if (PyErr_Occurred()!=NULL) return NULL;
+
+  PyObject *data_func = PyObject_CallFunctionObjArgs(partial, ident, data, NULL);
+  if (data_func == NULL) return NULL;
+
+  return data_func;
+}
+
+// Create a loghybrid record from the given dictionary of attributes
+static PyObject *make_bangbang_record (PyObject *self, PyObject *args) {
+  PyObject *table = encode_loghybrid_table (self, args);
+  if (table == NULL) return NULL;
+
+  npy_intp dims[] = {1};
+
+  Py_INCREF(descr);
+  PyArrayObject *record = (PyArrayObject*) PyArray_SimpleNewFromDescr (1, dims, descr);
+  if (record == NULL) return NULL;
+
+  HEADER *r = (HEADER*)PyArray_DATA(record);
+  strncpy (r->nomvar, "!!  ", 4);
+  strncpy (r->typvar, "X ", 2);
+  strncpy (r->etiket, "STG_CP_GEMV4", 12);
+  r->ni = 3;
+  r->nj = PyArray_DIMS((PyArrayObject*)table)[1];
+  r->nk = 1;
+  r->nbits = 64;
+  r->datyp = 5;
+  strncpy (r->grtyp, "X ", 2);
+  r->data_func = make_data_func(table);
+
+  Py_DECREF (table);
+
+  return (PyObject*)record;
+}
+
 // make_hy_record(eta.values,eta.A,eta.B)
 static PyObject *make_hy_record (PyObject *self, PyObject *args) {
   float ptop, rcoef, pref;
@@ -915,13 +1073,16 @@ static PyMethodDef FST_Methods[] = {
   {"get_hybrid_a_b", get_hybrid_a_b, METH_VARARGS, "Get A and B arrays from HY record and specified levels"},
   {"decode_loghybrid_table", decode_loghybrid_table, METH_VARARGS, "Get info table from !! record"},
   {"get_loghybrid_a_b", get_loghybrid_a_b, METH_VARARGS, "Get A and B from table and specific ip1 values"},
+  {"encode_loghybrid_table", encode_loghybrid_table, METH_VARARGS, "Write loghybrid parameters into a table"},
+  {"_identity_func", identity_func, METH_VARARGS, "Identity function (for internal use)"},
+  {"make_bangbang_record", make_bangbang_record, METH_VARARGS, "Consruct a !! record from a dictionary of attributes"},
   {"make_hy_record", make_hy_record, METH_VARARGS, "Construct an HY record from the given eta, a, and b arrays"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
   {NULL, NULL, 0, NULL}
 };
 
 PyMODINIT_FUNC initfstd_core(void) {
-  PyObject *m = Py_InitModule("fstd_core", FST_Methods);
+  m = Py_InitModule("fstd_core", FST_Methods);
   import_array();
 
   Py_INCREF(&FSTD_Unit_Type);

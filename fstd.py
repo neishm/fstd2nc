@@ -435,7 +435,31 @@ def encode_vertical (varlist):
 
   vertical_records.extend(hy_records.values())
 
-  #TODO: !! record encoding
+  # Check for log-hybrid levels
+  bangbang_records = {}
+  for varnum,var in enumerate(varlist):
+    if var.hasaxis(LogHybrid):
+      zeta = var.getaxis(LogHybrid)
+      required_atts = 'kind', 'version', 'ptop', 'pref', 'rcoef1', 'rcoef2', 'ref_name', 'ip1_m', 'a_m', 'b_m', 'ip1_t', 'a_t', 'b_t'
+      if any(att not in zeta.atts for att in required_atts):
+        warn ("Not enough information to construct a !! record");
+        continue
+      kind = zeta.atts['kind']
+      version = zeta.atts['version']
+      if (kind != 5 or version != 2):
+        warn ("Only support vgrid kind=5, version=2.  Found: kind=%d, version=%d.  Not encoding !! record"%(kind,version))
+        continue
+      # Define a unique key for this vertical coordinate
+      key = zeta.atts.copy()
+      for a in 'ip1_m', 'a_m', 'b_m', 'ip1_t', 'a_t', 'b_t':
+        key[a] = tuple(key[a])
+      key = tuple(sorted(key.items()))
+      if key not in bangbang_records:
+        bangbang_records[key] = fstd_core.make_bangbang_record (zeta.atts)
+      #TODO: link to variable through IP1,IP2,IP3 (once we have this info)
+
+  vertical_records.extend(bangbang_records.values())
+
   #TODO: convert to IP1Axis
 
   # Convert from list to array
