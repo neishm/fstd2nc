@@ -802,6 +802,9 @@ static PyObject *make_bangbang_record (PyObject *self, PyObject *args) {
   PyObject *table = encode_loghybrid_table (self, args);
   if (table == NULL) return NULL;
 
+  PyObject *dict;
+  if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &dict)) return NULL;
+
   npy_intp dims[] = {1};
 
   Py_INCREF(descr);
@@ -818,10 +821,13 @@ static PyObject *make_bangbang_record (PyObject *self, PyObject *args) {
   r->nbits = 64;
   r->datyp = 5;
   strncpy (r->grtyp, "X ", 2);
+  r->ig1 = PyInt_AsLong(PyDict_GetItemString(dict,"kind")) * 1000 + PyInt_AsLong(PyDict_GetItemString(dict,"version"));
+  r->ig2 = round(PyFloat_AsDouble(PyDict_GetItemString(dict,"ptop"))*10);
+  r->ig3 = round(PyFloat_AsDouble(PyDict_GetItemString(dict,"rcoef1"))*100);
+  r->ig4 = round(PyFloat_AsDouble(PyDict_GetItemString(dict,"rcoef2"))*100);
   r->data_func = make_data_func(table);
 
   Py_DECREF (table);
-
   return (PyObject*)record;
 }
 
