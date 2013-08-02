@@ -4,8 +4,6 @@
 #include <string.h>
 #include <math.h>
 
-static PyObject *m;  // Module self-reference
-
 // Wrap a Fortran call
 // Note: change this as needed on your platform.
 #define f77name(name) name ## _
@@ -142,6 +140,82 @@ static PyTypeObject RecordGetter_Type = {
   Py_TPFLAGS_DEFAULT,        /*tp_flags*/
   "Closures for reading particular FSTD records",           /* tp_doc */
 };
+
+// Interface for wrapping pre-loaded data into a function call
+typedef struct {
+  PyObject_HEAD
+  PyObject *data;
+} DataWrapper_Object;
+
+static PyObject *DataWrapper_new (PyTypeObject *type, PyObject *args, PyObject *kwargs) {
+  DataWrapper_Object *self;
+  PyObject *data;
+  self = (DataWrapper_Object*)type->tp_alloc(type, 0);
+  if (self == NULL) return NULL;
+  if (!PyArg_ParseTuple(args, "O", &data)) return NULL;
+  Py_INCREF(data);
+  self->data = data;
+  return (PyObject*)self;
+
+}
+
+static PyObject *DataWrapper_call (DataWrapper_Object *self, PyObject *args, PyObject *kwargs) {
+  Py_INCREF(self->data);
+  return self->data;
+}
+
+static void DataWrapper_dealloc (DataWrapper_Object *self) {
+  Py_DECREF(self->data);
+  self->ob_type->tp_free((PyObject*)self);
+}
+
+static PyTypeObject DataWrapper_Type = {
+  PyObject_HEAD_INIT(NULL)
+  0,                         /*ob_size*/
+  "fstd_core.DataWrapper",  /*tp_name*/
+  sizeof(DataWrapper_Object), /*tp_basicsize*/
+  0,                         /*tp_itemsize*/
+  (destructor)DataWrapper_dealloc,      /*tp_dealloc*/
+  0,                         /*tp_print*/
+  0,                         /*tp_getattr*/
+  0,                         /*tp_setattr*/
+  0,                         /*tp_compare*/
+  0,                         /*tp_repr*/
+  0,                         /*tp_as_number*/
+  0,                         /*tp_as_sequence*/
+  0,                         /*tp_as_mapping*/
+  0,                         /*tp_hash */
+  (ternaryfunc)DataWrapper_call,/*tp_call*/
+  0,                         /*tp_str*/
+  0,                         /*tp_getattro*/
+  0,                         /*tp_setattro*/
+  0,                         /*tp_as_buffer*/
+  Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+  "Wrap an array into a call method",           /* tp_doc */
+  0,                         /*tp_traverse*/
+  0,                         /*tp_clear*/
+  0,                         /*tp_richcompare*/
+  0,                         /*tp_weaklistoffset*/
+  0,                         /*tp_iter*/
+  0,                         /*tp_iternext*/
+  0,                         /*tp_methods*/
+  0,                         /*tp_members*/
+  0,                         /*tp_getset*/
+  0,                         /*tp_base*/
+  0,                         /*tp_dict*/
+  0,                         /*tp_descr_get*/
+  0,                         /*tp_descr_set*/
+  0,                         /*tp_dictoffset*/
+  0,                         /*tp_init*/
+  0,                         /*tp_alloc*/
+  DataWrapper_new,           /*tp_new*/
+};
+
+PyObject *make_data_func (PyObject *data) {
+  PyObject *func = PyObject_CallFunctionObjArgs ((PyObject*)&DataWrapper_Type, data, NULL);
+  if (func == NULL) return NULL;
+  return func;
+}
 
 
 // Return all record headers in the given file.
@@ -769,33 +843,6 @@ static PyObject *encode_loghybrid_table (PyObject *self, PyObject *args) {
   return (PyObject*) table_array;
 }
 
-// A function that returns the object that's passed in.
-// Used for partial function application, to get data functions.
-static PyObject *identity_func (PyObject *self, PyObject *args) {
-  PyObject *data;
-  if (!PyArg_ParseTuple(args, "O", &data)) return NULL;
-  Py_INCREF(data);  // We don't "own" the input reference
-  return data;
-}
-
-// Helper method to construct a data function.
-// Given a data array, make a 0-arg function that returns the data.
-PyObject *make_data_func (PyObject *data) {
-  static PyObject *partial=NULL, *ident=NULL;
-  if (partial == NULL) {
-    PyObject *functools = PyImport_ImportModule("functools");
-    if (functools == NULL) return NULL;
-    partial = PyObject_GetAttrString(functools,"partial");
-    Py_DECREF(functools);
-  }
-  if (ident == NULL) ident = PyObject_GetAttrString(m, "_identity_func");
-  if (PyErr_Occurred()!=NULL) return NULL;
-
-  PyObject *data_func = PyObject_CallFunctionObjArgs(partial, ident, data, NULL);
-  if (data_func == NULL) return NULL;
-
-  return data_func;
-}
 
 // Create a loghybrid record from the given dictionary of attributes
 static PyObject *make_bangbang_record (PyObject *self, PyObject *args) {
@@ -826,6 +873,7 @@ static PyObject *make_bangbang_record (PyObject *self, PyObject *args) {
   r->ig3 = round(PyFloat_AsDouble(PyDict_GetItemString(dict,"rcoef1"))*100);
   r->ig4 = round(PyFloat_AsDouble(PyDict_GetItemString(dict,"rcoef2"))*100);
   r->data_func = make_data_func(table);
+  if (r->data_func == NULL) return NULL;
 
   Py_DECREF (table);
   return (PyObject*)record;
@@ -1086,7 +1134,6 @@ static PyMethodDef FST_Methods[] = {
   {"decode_loghybrid_table", decode_loghybrid_table, METH_VARARGS, "Get info table from !! record"},
   {"get_loghybrid_a_b", get_loghybrid_a_b, METH_VARARGS, "Get A and B from table and specific ip1 values"},
   {"encode_loghybrid_table", encode_loghybrid_table, METH_VARARGS, "Write loghybrid parameters into a table"},
-  {"_identity_func", identity_func, METH_VARARGS, "Identity function (for internal use)"},
   {"make_bangbang_record", make_bangbang_record, METH_VARARGS, "Consruct a !! record from a dictionary of attributes"},
   {"make_hy_record", make_hy_record, METH_VARARGS, "Construct an HY record from the given eta, a, and b arrays"},
   {"get_latlon", get_latlon, METH_VARARGS, "Create lat/lon arrays from the given records"},
@@ -1094,7 +1141,7 @@ static PyMethodDef FST_Methods[] = {
 };
 
 PyMODINIT_FUNC initfstd_core(void) {
-  m = Py_InitModule("fstd_core", FST_Methods);
+  PyObject *m = Py_InitModule("fstd_core", FST_Methods);
   import_array();
 
   Py_INCREF(&FSTD_Unit_Type);
@@ -1104,6 +1151,10 @@ PyMODINIT_FUNC initfstd_core(void) {
   Py_INCREF(&RecordGetter_Type);
   if (PyType_Ready(&RecordGetter_Type) < 0) return;
   PyModule_AddObject (m, "RecordGetter", (PyObject*)&RecordGetter_Type);
+
+  Py_INCREF(&DataWrapper_Type);
+  if (PyType_Ready(&DataWrapper_Type) < 0) return;
+  PyModule_AddObject (m, "DataWrapper", (PyObject*)&DataWrapper_Type);
 
   PyObject *header_structure = Py_BuildValue("[(s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s), (s,s)]", "pad", "i4", "dateo", "i4", "deet", "i4", "npas", "i4", "ni", "i4", "nj", "i4", "nk", "i4", "nbits", "i4", "datyp", "i4", "ip1", "i4", "ip2", "i4", "ip3", "i4", "typvar", "a2", "nomvar", "a4", "etiket", "a12", "grtyp", "a2", "ig1", "i4", "ig2", "i4", "ig3", "i4", "ig4", "i4", "swa", "i4", "lng", "i4", "dltf", "i4", "ubc", "i4", "extra1", "i4", "extra2", "i4", "extra3", "i4", "data_func", "O");
   if (header_structure == NULL) return;
