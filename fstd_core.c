@@ -147,18 +147,6 @@ typedef struct {
   PyObject *data;
 } DataWrapper_Object;
 
-static PyObject *DataWrapper_new (PyTypeObject *type, PyObject *args, PyObject *kwargs) {
-  DataWrapper_Object *self;
-  PyObject *data;
-  self = (DataWrapper_Object*)type->tp_alloc(type, 0);
-  if (self == NULL) return NULL;
-  if (!PyArg_ParseTuple(args, "O", &data)) return NULL;
-  Py_INCREF(data);
-  self->data = data;
-  return (PyObject*)self;
-
-}
-
 static PyObject *DataWrapper_call (DataWrapper_Object *self, PyObject *args, PyObject *kwargs) {
   Py_INCREF(self->data);
   return self->data;
@@ -192,28 +180,14 @@ static PyTypeObject DataWrapper_Type = {
   0,                         /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT,        /*tp_flags*/
   "Wrap an array into a call method",           /* tp_doc */
-  0,                         /*tp_traverse*/
-  0,                         /*tp_clear*/
-  0,                         /*tp_richcompare*/
-  0,                         /*tp_weaklistoffset*/
-  0,                         /*tp_iter*/
-  0,                         /*tp_iternext*/
-  0,                         /*tp_methods*/
-  0,                         /*tp_members*/
-  0,                         /*tp_getset*/
-  0,                         /*tp_base*/
-  0,                         /*tp_dict*/
-  0,                         /*tp_descr_get*/
-  0,                         /*tp_descr_set*/
-  0,                         /*tp_dictoffset*/
-  0,                         /*tp_init*/
-  0,                         /*tp_alloc*/
-  DataWrapper_new,           /*tp_new*/
 };
 
 PyObject *make_data_func (PyObject *data) {
-  PyObject *func = PyObject_CallFunctionObjArgs ((PyObject*)&DataWrapper_Type, data, NULL);
+  if (data == NULL) return NULL;
+  PyObject *func = PyType_GenericNew (&DataWrapper_Type, NULL, NULL);
   if (func == NULL) return NULL;
+  Py_INCREF(data);
+  ((DataWrapper_Object*)func)->data = data;
   return func;
 }
 
