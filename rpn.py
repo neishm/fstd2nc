@@ -127,9 +127,9 @@ class RPN_Var (Var):
 
     # Attach additional information, for special coordinates
     if name == '!!':
-      self.atts['ip1'] = headers[0].ip1
-      self.atts['ip2'] = headers[0].ip2
-      self.atts['ip3'] = headers[0].ip3
+      atts['ip1'] = headers[0].ip1
+      atts['ip2'] = headers[0].ip2
+      atts['ip3'] = headers[0].ip3
 
     # Generate a matrix for the order of headers
     header_order = np.empty((len(t),len(f),len(z)), dtype=int)
