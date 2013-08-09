@@ -1,3 +1,7 @@
+Version 0.7.2 (Aug 9, 2013)
+	* Bug fix - pass metadata through Var.__init__() instead of
+	  (accidentally) writing into the static class metadata.
+
 Version 0.7.1 (Jun 6, 2013)
 	* Bug fix - coordinate variables should be distinguished by ip1,ip2,ip3
 	  values (in addition to usual unique attributes).
