@@ -26,6 +26,7 @@ subroutine set_igs2 ( F_ig1, F_ig2,                      &
   integer F_ig1, F_ig2, F_ni, F_nj, F_i0, F_in, F_is, F_j0, F_jn, F_js, &
           F_ig1ro,F_ig2ro, F_ig3ro, F_ig4ro
   real F_longs(F_ni), F_latgs(F_nj)
+  intent(out) :: F_ig1, F_ig2
   !
   !author
   !     Ron McTaggart-Cowan - Aug 2009
