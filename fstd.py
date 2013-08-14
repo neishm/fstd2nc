@@ -518,6 +518,7 @@ def encode_latlon (varlist):
 
     var.atts['ig1'] = ix1
     var.atts['ig2'] = ix2
+    var.atts['grtyp'] = 'Z'
 
     # Add the horizontal records (if they haven't been handled yet)
     key = ('E', ix1, ix2)
@@ -527,6 +528,7 @@ def encode_latlon (varlist):
       lat_record['nomvar'] = '^^  '
       lat_record['typvar'] = 'X '
       lat_record['etiket'] = var.atts.get('etiket','ETIKET      ')
+      lat_record['grtyp'] = 'E'
       lat_record['ni'] = 1
       lat_record['nj'] = len(ycoord)
       lat_record['nk'] = 1
@@ -552,6 +554,7 @@ def encode_latlon (varlist):
       lon_record['nomvar'] = '>>  '
       lon_record['typvar'] = 'X '
       lon_record['etiket'] = var.atts.get('etiket','ETIKET      ')
+      lon_record['grtyp'] = 'E'
       lon_record['ni'] = len(xcoord)
       lon_record['nj'] = 1
       lon_record['nk'] = 1
