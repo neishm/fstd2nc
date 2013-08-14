@@ -485,11 +485,11 @@ def encode_latlon (varlist):
     lat = var.getaxis(Lat).values
     lon = var.getaxis(Lon).values
 
-    xcoord = np.array(lon)
+    xcoord = np.array(lon, dtype='float32')
     # Fix last longitude?
     if xcoord[-1] < xcoord[-2]:
       xcoord[-1] += 360
-    ycoord = lat
+    ycoord = np.array(lat, dtype='float32')
 
     # Set grid IG1,IG2,IG3,IG4
     # (Hard-coded as non-rotated Z grid)
