@@ -578,9 +578,9 @@ def encode_latlon (varlist):
 
       latlon_records[key] = (lon_record,lat_record)
 
-    if len(latlon_records) == 0:
-      return np.empty([0], dtype=fstd_core.record_descr)
-    return np.concatenate(sum(latlon_records.values(),()))
+  if len(latlon_records) == 0:
+    return np.empty([0], dtype=fstd_core.record_descr)
+  return np.concatenate(sum(latlon_records.values(),()))
 
 
 # Coerce the variables into the expected FSTD dimensions
