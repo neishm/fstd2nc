@@ -460,7 +460,23 @@ def encode_vertical (varlist):
 
   vertical_records.extend(bangbang_records.values())
 
-  #TODO: convert to IP1Axis
+  # Convert vertical axes to IP1Axis
+  for varnum,var in enumerate(varlist):
+    if var.hasaxis(ZAxis):
+      zaxis = var.getaxis(ZAxis)
+      if isinstance(zaxis,Height_wrt_SeaLevel): kind = 0
+      elif isinstance(zaxis,Sigma): kind = 1
+      elif isinstance(zaxis,Pres): kind = 2
+      elif isinstance(zaxis,Height_wrt_Ground): kind = 4
+      elif isinstance(zaxis,(Hybrid,LogHybrid)): kind = 5
+      elif isinstance(zaxis,Theta): kind = 6
+      else:
+        from warnings import warn
+        warn ("Vertical coordinate not recognized;  Encoding a generic Z axis")
+        kind = 3
+      ip1 = fstd_core.encode_levels(zaxis.values,kind)
+      ip1_axis = IP1Axis(values=ip1)
+      varlist[varnum] = var.replace_axes({zaxis.name:ip1_axis})
 
   # Convert from list to array
   if len(vertical_records) > 0:
