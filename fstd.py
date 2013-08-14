@@ -576,7 +576,7 @@ def encode_latlon (varlist):
       lon_record['ig4'] = grid_ig4
       lon_record['data_func'] = lambda: xcoord
 
-      latlon_records[key] = (lat_record,lon_record)
+      latlon_records[key] = (lon_record,lat_record)
 
     if len(latlon_records) == 0:
       return np.empty([0], dtype=fstd_core.record_descr)
