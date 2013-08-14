@@ -611,6 +611,64 @@ def normalize_fstd_axes (varlist):
 
     varlist[i] = var
 
+# Convert part of a variable to record data
+def make_data_func (var,i_dateo,i_npas,i_ip1):
+  ni = var.shape[-1]
+  nj = var.shape[-2]
+  nk = var.shape[-3]
+  return lambda: var[i_dateo,i_npas,i_ip1,:,:,:].reshape(ni,nj,nk)
+
+# Convert variables to FSTD records
+def create_records (varlist):
+  from pygeode.formats import fstd_core
+  import numpy as np
+
+  records = []
+  for var in varlist:
+
+    nomvar = (var.name.upper()+'    ')[:4]
+    typvar = (var.atts.get('typvar','P')+'  ')[:2]
+    etiket = (var.atts.get('etiket','ETIKET')+'            ')[:12]
+    ni = var.shape[-1]
+    nj = var.shape[-2]
+    nk = var.shape[-3]
+    deet = var.atts.get('deet',1800) #TODO: better default
+    datyp = 5  #TODO: more types (for packing?)
+    nbits = {'float32':32,'float64':64}[var.dtype.name]
+    grtyp = var.atts.get('grtyp','X')
+    ig1 = var.atts.get('ig1',0)
+    ig2 = var.atts.get('ig2',0)
+    ig3 = var.atts.get('ig3',0)
+    ig4 = var.atts.get('ig4',0)
+
+    for i_dateo,dateo in enumerate(var.axes[0].values):
+      for i_npas,npas in enumerate(var.axes[1].values):
+        for i_ip1,ip1 in enumerate(var.axes[2].values):
+          record = np.zeros([1], dtype=fstd_core.record_descr)
+          record['nomvar'] = nomvar
+          record['typvar'] = typvar
+          record['etiket'] = etiket
+          record['ni'] = ni
+          record['nj'] = nj
+          record['nk'] = nk
+          record['dateo'] = dateo
+          record['ip1'] = ip1
+          record['ip2'] = npas*deet/3600
+          record['deet'] = deet
+          record['npas'] = npas
+          record['datyp'] = datyp
+          record['nbits'] = nbits
+          record['grtyp'] = grtyp
+          record['ig1'] = ig1
+          record['ig2'] = ig2
+          record['ig3'] = ig3
+          record['ig4'] = ig4
+          record['data_func'] = make_data_func (var, i_dateo, i_npas, i_ip1)
+
+          records.append(record)
+
+  if len(records) == 0: return np.empty([0], dtype=fstd_core.record_descr)
+  return np.concatenate(records)
 
 # Check for incompatible axes
 def check_fstd_axes (varlist):
@@ -651,15 +709,13 @@ def save (filename, varlist):
   # Extract vertical information
   vertical_records = encode_vertical(varlist)
 
-  #TODO
-
   # We should now have a subset of (StandardTime,Forecast,IP1Axis,KAxis,JAxis,IAxis)
 
   # Fill in missing degenerate axes, and put them in the expected order
   normalize_fstd_axes (varlist)
 
   # Convert variables to record arrays
-  #TODO
+  var_records = create_records (varlist)
 
   # Merge coordinate records and variable records
   #TODO
