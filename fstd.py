@@ -469,12 +469,98 @@ def encode_vertical (varlist):
   return vertical_records
 
 # Encode latitude/longitude information into FSTD records
+# Set up unique IG1,IG2,IG3,IG4 values for the grid
+#TODO: support non-cartesian lat/lon projections
 def encode_latlon (varlist):
+  from pygeode.formats import fstd_extern, fstd_core
+  import numpy as np
+
   latlon_records = {}
 
-  for var in varlist:
-    pass
-#TODO
+  for i,var in enumerate(varlist):
+
+    # Get the 1D lat/lon arrays
+    lat = var.getaxis(Lat).values
+    lon = var.getaxis(Lon).values
+
+    xcoord = np.array(lon)
+    # Fix last longitude?
+    if xcoord[-1] < xcoord[-2]:
+      xcoord[-1] += 360
+    ycoord = lat
+
+    # Set grid IG1,IG2,IG3,IG4
+    # (Hard-coded as non-rotated Z grid)
+    grid_ig1 = 900
+    grid_ig2 = 0
+    grid_ig3 = 43200
+    grid_ig4 = 43200
+
+    ix1, ix2 = fstd_extern.set_igs2(xcoord, ycoord, grid_ig1, grid_ig2, grid_ig3, grid_ig4, 1, len(xcoord), 1, 1, len(ycoord), 1)
+
+    var.atts['ig1'] = ix1
+    var.atts['ig2'] = ix2
+
+    # Add the horizontal records (if they haven't been handled yet)
+    key = ('E', ix1, ix2)
+    if key not in latlon_records:
+
+      lat_record = np.zeros([1], dtype=fstd_core.record_descr)
+      lat_record['nomvar'] = '^^  '
+      lat_record['typvar'] = 'X '
+      lat_record['etiket'] = var.atts.get('etiket','ETIKET      ')
+      lat_record['ni'] = 1
+      lat_record['nj'] = len(ycoord)
+      lat_record['nk'] = 1
+      if var.hasaxis(Dateo):
+        lat_record['dateo'] = var.getaxis(Dateo).values[0]
+      if var.hasaxis(NPASAxis):
+        npas_axis = var.getaxis(NPASAxis)
+        deet = npas_axis.atts['deet']
+        npas = npas_axis.values[0]
+        lat_record['npas'] = npas
+        lat_record['deet'] = deet
+      lat_record['datyp'] = 5
+      lat_record['nbits'] = 32
+      lat_record['ip1'] = ix1
+      lat_record['ip2'] = ix2
+      lat_record['ig1'] = grid_ig1
+      lat_record['ig2'] = grid_ig2
+      lat_record['ig3'] = grid_ig3
+      lat_record['ig4'] = grid_ig4
+      lat_record['data_func'] = lambda: ycoord
+
+      lon_record = np.zeros([1], dtype=fstd_core.record_descr)
+      lon_record['nomvar'] = '>>  '
+      lon_record['typvar'] = 'X '
+      lon_record['etiket'] = var.atts.get('etiket','ETIKET      ')
+      lon_record['ni'] = len(xcoord)
+      lon_record['nj'] = 1
+      lon_record['nk'] = 1
+      if var.hasaxis(Dateo):
+        lon_record['dateo'] = var.getaxis(Dateo).values[0]
+      if var.hasaxis(NPASAxis):
+        npas_axis = var.getaxis(NPASAxis)
+        deet = npas_axis.atts['deet']
+        npas = npas_axis.values[0]
+        lon_record['npas'] = npas
+        lon_record['deet'] = deet
+      lon_record['datyp'] = 5
+      lon_record['nbits'] = 32
+      lon_record['ip1'] = ix1
+      lon_record['ip2'] = ix2
+      lon_record['ig1'] = grid_ig1
+      lon_record['ig2'] = grid_ig2
+      lon_record['ig3'] = grid_ig3
+      lon_record['ig4'] = grid_ig4
+      lon_record['data_func'] = lambda: xcoord
+
+      latlon_records[key] = (lat_record,lon_record)
+
+    if len(latlon_records) == 0:
+      return np.empty([0], dtype=fstd_core.record_descr)
+    return np.concatenate(sum(latlon_records.values(),()))
+
 
 # Check for incompatible axes
 def check_fstd_axes (varlist):
@@ -509,12 +595,12 @@ def save (filename, varlist):
   # Encode the forecast axis
   encode_forecast_axis (varlist)
 
+  # Extract horizontal information
+  latlon_records = encode_latlon (varlist)
+
   # Extract vertical information
   vertical_records = encode_vertical(varlist)
 
-  #TODO
-
-  # Extract horizontal information
   #TODO
 
   # We should now have a subset of (StandardTime,Forecast,IP1Axis,KAxis,JAxis,IAxis)
