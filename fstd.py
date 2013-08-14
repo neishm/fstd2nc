@@ -593,7 +593,7 @@ def normalize_fstd_axes (varlist):
     if not var.hasaxis(Dateo):
       newaxes.append(Dateo(values=[0]))
     if not var.hasaxis(NPASAxis):
-      newaxes.append(NPASAxis(values=[0],atts={'deet':0}))
+      newaxes.append(NPASAxis(values=[0],atts={'deet':1800})) #TODO: better default
     if not var.hasaxis(IP1Axis):
       newaxes.append(IP1Axis(values=[0]))
     if not var.hasaxis(KAxis):
