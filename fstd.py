@@ -454,7 +454,9 @@ def encode_vertical (varlist):
     key = tuple(sorted(key.items()))
     if key not in bangbang_records:
       bangbang_records[key] = fstd_core.make_bangbang_record (zeta.atts)
-    #TODO: link to variable through IP1,IP2,IP3 (once we have this info)
+      # Link to variable through IP1,IP2
+      bangbang_records[key]['ip1'] = var.atts.get('ig1',0)
+      bangbang_records[key]['ip2'] = var.atts.get('ig2',0)
 
   vertical_records.extend(bangbang_records.values())
 
