@@ -580,6 +580,35 @@ def encode_latlon (varlist):
     return np.concatenate(sum(latlon_records.values(),()))
 
 
+# Coerce the variables into the expected FSTD dimensions
+# Fill in any missing axes (where possible)
+def normalize_fstd_axes (varlist):
+  for i,var in enumerate(varlist):
+
+    # Add any missing FSTD axes
+    newaxes = []
+    if not var.hasaxis(Dateo):
+      newaxes.append(Dateo(values=[0]))
+    if not var.hasaxis(NPASAxis):
+      newaxes.append(NPASAxis(values=[0],atts={'deet':0}))
+    if not var.hasaxis(IP1Axis):
+      newaxes.append(IP1Axis(values=[0]))
+    if not var.hasaxis(KAxis):
+      newaxes.append(KAxis(values=[0]))
+    if not var.hasaxis(YAxis):
+      raise ValueError("missing y axis for '%s'"%var.name)
+    if not var.hasaxis(XAxis):
+      raise ValueError("missing x axis for '%s'"%var.name)
+    if len(newaxes) > 0:
+      var = var.extend(0,*newaxes)
+
+    # Put the axes in the expected order
+    var = var.transpose(Dateo,NPASAxis,IP1Axis,KAxis,YAxis,XAxis)
+    assert var.naxes == 6
+
+    varlist[i] = var
+
+
 # Check for incompatible axes
 def check_fstd_axes (varlist):
   compatible_axes = StandardTime, Forecast, IP1Axis, KAxis, JAxis, IAxis
@@ -624,7 +653,7 @@ def save (filename, varlist):
   # We should now have a subset of (StandardTime,Forecast,IP1Axis,KAxis,JAxis,IAxis)
 
   # Fill in missing degenerate axes, and put them in the expected order
-  #TODO
+  normalize_fstd_axes (varlist)
 
   # Convert variables to record arrays
   #TODO
