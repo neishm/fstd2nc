@@ -1007,6 +1007,7 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
 
     // Get the grid id
     int gdid;
+    int cartesian = 0;
     switch (*grtyp) {
       case 'Z':;
         int xrec = find_xrec (records, num_records, i);
@@ -1028,6 +1029,9 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
         int ig4ref = records[xrec].ig4;
         gdid = c_ezgdef_fmem(ni, nj, grtyp, grref, 
                 ig1ref, ig2ref, ig3ref, ig4ref, ax, ay);
+        // Special case - unrotated 'E' grid
+        // (we can use x and y as lon and lat)
+        if (*grref  == 'E' && ig1ref == 900 && ig2ref == 0 && ig3ref == 43200 && ig4ref == 43200) cartesian = 1;
         Py_DECREF(xobj);
         Py_DECREF(yobj);
         break;
@@ -1077,6 +1081,16 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
       }
       Py_DECREF(lat);
       lat = newlat;
+    }
+
+    // Can they be further reduced to the x/y arrays?
+    if (cartesian) {
+      Py_DECREF(lon);
+      Py_INCREF(ax);
+      lon = ax;
+      Py_DECREF(lat);
+      Py_INCREF(ay);
+      lat = ay;
     }
 
     // Build the value
