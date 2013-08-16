@@ -1,3 +1,11 @@
+Version 0.8.1 (Aug 16, 2013)
+	* Fix some bugs in the packaging mechanism:
+	  - pygeode.formats.fstd was not properly packaged.
+	  - Extra .so files were being erroneously included in the package.
+	  - numpy.distutils breaks down in debuild.  Revert to builtin
+	    distutils, and the Fortran compilation in a separate step in the
+	    Makefile.
+
 Version 0.8.0 (Aug 14, 2013)
 	* Implement a new version of the interface (fstd) that uses the rmnlib
 	  routines for the low-level I/O.  Requires rmnlib to run properly.
