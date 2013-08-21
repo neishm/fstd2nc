@@ -1,3 +1,7 @@
+Version 0.8.2 (Aug 21, 2013)
+	* Fix bug in FSTD_Var.__init__, where the levels were being ordered
+	  incorrectly.
+
 Version 0.8.1 (Aug 16, 2013)
 	* Fix some bugs in the packaging mechanism:
 	  - pygeode.formats.fstd was not properly packaged.
