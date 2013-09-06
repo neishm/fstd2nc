@@ -8,6 +8,7 @@
 // Note: change this as needed on your platform.
 #define f77name(name) name ## _
 
+extern int c_fstopi(char*, int, int);
 extern int c_fnom (int*, char*, char*, int);
 extern int c_fclos (int);
 extern int c_fstouv (int, char*);
@@ -1150,5 +1151,7 @@ PyMODINIT_FUNC initfstd_core(void) {
   Py_DECREF(header_structure);
   PyModule_AddObject (m, "record_descr", (PyObject*)descr);
 
+  // Disable FSTD debug messages
+  c_fstopi("MSGLVL", 4, 0);
 }
 
