@@ -1,3 +1,9 @@
+Version 0.8.3 (Sep 6, 2013)
+
+	* Disable information messages from the FSTD interface. This was producing
+	  a *lot* of messages, drowning out any other information being printed to the
+	  screen.
+
 Version 0.8.2 (Aug 21, 2013)
 	* Fix bug in FSTD_Var.__init__, where the levels were being ordered
 	  incorrectly.
