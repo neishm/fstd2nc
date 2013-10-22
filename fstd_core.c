@@ -212,6 +212,18 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
   FSTD_Unit_Object *file = (FSTD_Unit_Object*) PyType_GenericNew (&FSTD_Unit_Type, NULL, NULL);
   if (file == NULL) return NULL;
   file->iun = iun;
+  if (iun < 500) {
+    printf ("Warning: fstd_core: exhausting the available file unit numbers.  Forcing a garbage collection.\n");
+    PyObject *gc = PyImport_ImportModule("gc");
+    if (gc == NULL) return NULL;
+    PyObject *collect = PyObject_GetAttrString(gc,"collect");
+    if (collect == NULL) return NULL;
+    PyObject *result = PyObject_CallObject(collect,NULL);
+    if (result == NULL) return NULL;
+    Py_DECREF(result);
+    Py_DECREF(collect);
+    Py_DECREF(gc);
+  }
 
   // Allocate the header array
   dims[0] = nrec;
