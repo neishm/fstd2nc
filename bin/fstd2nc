@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+from sys import argv, exit, stdout
+from os.path import exists
+from pygeode.formats import netcdf as nc, fstd as rpn
+
+# Extract keyword options
+kwargs = [a for a in argv if a.startswith('--')]
+argv = [a for a in argv if a not in kwargs]
+
+squash_forecasts = False
+if '--squash-forecasts' in kwargs:
+  squash_forecasts = True
+  kwargs.remove('--squash-forecasts')
+
+if len(kwargs) > 0:
+  print "Unknown keyword arg(s):", kwargs
+  exit(1)
+
+if len(argv) != 3:
+  print "Usage: %s [--squash-forecasts] <rpn_file> <netcdf_file>"%argv[0]
+  exit(1)
+
+rpnfile = argv[1]
+ncfile = argv[2]
+
+# Make sure input file exists
+if not exists(rpnfile):
+  print "Error: '%s' does not exist!"%(rpnfile)
+  exit(1)
+
+# Check if output file already exists
+if exists(ncfile):
+  overwrite = False
+  if stdout.isatty():
+    while True:
+      print "Warning: '%s' already exists!  Overwrite? (y/n):"%(ncfile),
+      ans = raw_input()
+      if ans.lower() in ('y','yes'):
+        overwrite = True
+        break
+      if ans.lower() in ('n','no'):
+        overwrite = False
+        break
+      print "Sorry, invalid response."
+  if overwrite is False:
+    print "Refusing to overwrite existing file '%s'."%(ncfile)
+    exit(1)
+
+
+# Load the input file
+data = rpn.open(rpnfile, squash_forecasts=squash_forecasts)
+
+
+# Write to netcdf
+nc.save(ncfile, data)
+
