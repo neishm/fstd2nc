@@ -282,7 +282,7 @@ def reduce_dimensionality (var, squash_forecasts=False):
 # Open a file for read access.  Returns a generic 'Dataset' object.
 #
 #####################################################################
-def open (filename, squash_forecasts=False, print_warnings=True):
+def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False):
 
   from pygeode.formats import fstd_core
   import numpy as np
@@ -327,6 +327,9 @@ def open (filename, squash_forecasts=False, print_warnings=True):
 
   # Dimensionality reduction
   varlist = [reduce_dimensionality(var,squash_forecasts) for var in varlist]
+
+  if raw_list is True:
+    return varlist
 
   # Return the variables as a dataset
   from pygeode.dataset import Dataset
