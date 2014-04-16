@@ -1,3 +1,9 @@
+Version 0.8.4 (Oct 22, 2013)
+	* Force garbage collection when FSTD unit numbers are being exhausted.
+	  The old units could be lingering in numpy arrays, which may not get
+	  garbage collected right away.  This may be a source of a stubborn
+	  segmentation fault.
+
 Version 0.8.3 (Sep 6, 2013)
 
 	* Disable information messages from the FSTD interface. This was producing
