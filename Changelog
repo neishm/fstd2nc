@@ -1,3 +1,9 @@
+Version 0.9.0 (Apr 16, 2014)
+	* Allow warning messages to be turned off when opening fstd files.
+	* New converter script fstd2nc.
+	* Allow fstd.open() to return a raw list of variables, instead of
+	  processing them into a Dataset (eliminates some axis name munging).
+
 Version 0.8.4 (Oct 22, 2013)
 	* Force garbage collection when FSTD unit numbers are being exhausted.
 	  The old units could be lingering in numpy arrays, which may not get
