@@ -394,8 +394,9 @@ def encode_forecast_axis (varlist):
     if 'deet' not in forecast.atts: continue
     deet = forecast.atts['deet']
     npas = forecast.values * 3600 / deet
-    npas_axis = NPASAxis(values=npas, atts={'deet':deet})
+    npas_axis = NPASAxis(values=npas)
     varlist[i] = var.replace_axes(forecast=npas_axis)
+    varlist[i].atts['deet'] = deet
 
 # Encode vertical information into FSTD records
 def encode_vertical (varlist):
