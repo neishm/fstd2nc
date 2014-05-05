@@ -689,12 +689,10 @@ def check_fstd_axes (varlist):
 # Save a dataset into an FSTD file.
 #
 #####################################################################
-def save (filename, varlist):
+def prepare_records (varlist):
   from pygeode.dataset import Dataset
   from pygeode.formats import fstd_core
   import numpy as np
-  from os.path import exists
-  from os import remove
 
   if isinstance(varlist,Dataset):
     varlist = varlist.vars
@@ -728,7 +726,19 @@ def save (filename, varlist):
   # Merge coordinate records and variable records
   records = np.concatenate([latlon_records, vertical_records, var_records])
 
+  return records
+
+#####################################################################
+#
+# Save a dataset into an FSTD file.
+#
+#####################################################################
+def save (filename, varlist):
+  from os.path import exists
+  from os import remove
+
+  records = prepare_records(varlist)
+
   # Save to the file
   if exists(filename): remove(filename)
   fstd_core.write_records (filename, records)
-
