@@ -1,3 +1,7 @@
+Version 0.9.1 (May 8, 2014)
+	* Fix bug in Hybrid axis 'A' parameter.  The pref in the formula
+	  is supposed to be in units of Pa, but was in units of hPa.
+
 Version 0.9.0 (Apr 16, 2014)
 	* Allow warning messages to be turned off when opening fstd files.
 	* New converter script fstd2nc.
