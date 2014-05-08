@@ -519,7 +519,7 @@ static PyObject *get_hybrid_a_b (PyObject *self, PyObject *args) {
     float *b = (float*)(B->data) + i;
     float eta = ((float*)levels->data)[i];
     *b = pow((eta - etatop) / (1 - etatop), rcoef);
-    *a = pref * (eta - *b);
+    *a = pref*100. * (eta - *b);
   }
 
   PyObject *ref = Py_BuildValue("(f,f,f,O,O)", ptop, rcoef, pref, A, B);
