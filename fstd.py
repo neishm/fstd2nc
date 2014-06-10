@@ -393,7 +393,11 @@ def encode_forecast_axis (varlist):
     forecast = var.getaxis(Forecast)
     if 'deet' not in forecast.atts: continue
     deet = forecast.atts['deet']
-    npas = forecast.values * 3600 / deet
+    # Special case: analysis (deet could be zero)
+    if len(forecast) == 1 and forecast.values[0] == 0:
+      npas = [0]
+    else:
+      npas = forecast.values * 3600 / deet
     npas_axis = NPASAxis(values=npas)
     varlist[i] = var.replace_axes(forecast=npas_axis)
     varlist[i].atts['deet'] = deet
