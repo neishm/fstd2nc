@@ -100,13 +100,11 @@ class FSTD_Var (Var):
     ig3 = int(records[0]['ig3'])
     ig4 = int(records[0]['ig4'])
 
-    # Construst the i,j,k,z axes
+    # Construct the i,j,k,z axes
 
     iaxis = IAxis(ni)
     jaxis = JAxis(nj)
     kaxis = KAxis(nk)
-
-    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig1, ig2=ig2, ig3=ig3, ig4=ig4)
 
     # Vertical axis
     # (to be decoded later)
@@ -121,6 +119,8 @@ class FSTD_Var (Var):
       dtype += str(nbits/8)
     else:
       dtype += '64' if nbits > 32 else '32'
+
+    atts = dict(nomvar=nomvar, typvar=typvar, etiket=etiket, grtyp=grtyp, ig1=ig1, ig2=ig2, ig3=ig3, ig4=ig4, datyp=datyp, nbits=nbits)
 
     # Finish initializing
     Var.__init__(self, [taxis,faxis,zaxis,kaxis,jaxis,iaxis], dtype=dtype, name=name, atts=atts)
@@ -643,8 +643,12 @@ def create_records (varlist):
     nj = var.shape[-2]
     nk = var.shape[-3]
     deet = var.atts.get('deet',1800) #TODO: better default
-    datyp = 5  #TODO: more types (for packing?)
-    nbits = {'float32':32,'float64':64}[var.dtype.name]
+    datyp = var.atts.get('datyp',5)
+    if 'nbits' in var.atts:
+      nbits = var.atts['nbits']
+    else:
+      nbits = {'float32':32,'float64':64}[var.dtype.name]
+      datyp = 5
     grtyp = var.atts.get('grtyp','X')
     ig1 = var.atts.get('ig1',0)
     ig2 = var.atts.get('ig2',0)
