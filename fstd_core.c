@@ -797,7 +797,7 @@ static PyObject *encode_loghybrid_table (PyObject *self, PyObject *args) {
 
   table[0] = kind;
   table[1] = version;
-  table[2] = 9;  // "skip"
+  table[2] = 3;  // "skip"
   table[3] = ptop;
   table[4] = pref;
   table[5] = rcoef1;
