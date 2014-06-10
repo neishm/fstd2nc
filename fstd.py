@@ -737,6 +737,7 @@ def prepare_records (varlist):
 def save (filename, varlist):
   from os.path import exists
   from os import remove
+  from pygeode.formats import fstd_core
 
   records = prepare_records(varlist)
 
