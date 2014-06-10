@@ -557,7 +557,7 @@ def encode_latlon (varlist):
       lat_record['ig2'] = grid_ig2
       lat_record['ig3'] = grid_ig3
       lat_record['ig4'] = grid_ig4
-      lat_record['data_func'] = lambda: ycoord
+      lat_record['data_func'] = lambda ycoord=ycoord: ycoord
 
       lon_record = np.zeros([1], dtype=fstd_core.record_descr)
       lon_record['nomvar'] = '>>  '
@@ -583,7 +583,7 @@ def encode_latlon (varlist):
       lon_record['ig2'] = grid_ig2
       lon_record['ig3'] = grid_ig3
       lon_record['ig4'] = grid_ig4
-      lon_record['data_func'] = lambda: xcoord
+      lon_record['data_func'] = lambda xcoord=xcoord: xcoord
 
       latlon_records[key] = (lon_record,lat_record)
 
