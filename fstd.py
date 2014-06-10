@@ -426,7 +426,7 @@ def encode_vertical (varlist):
       # Use the same forecast time as the field
       if var.hasaxis(NPASAxis):
         npas_axis = var.getaxis(NPASAxis)
-        deet = npas_axis.atts['deet']
+        deet = var.atts['deet']
         npas = npas_axis.values[0]
         hy_record['npas'] = npas
         hy_record['deet'] = deet
@@ -540,7 +540,7 @@ def encode_latlon (varlist):
         lat_record['dateo'] = var.getaxis(Dateo).values[0]
       if var.hasaxis(NPASAxis):
         npas_axis = var.getaxis(NPASAxis)
-        deet = npas_axis.atts['deet']
+        deet = var.atts['deet']
         npas = npas_axis.values[0]
         lat_record['npas'] = npas
         lat_record['deet'] = deet
@@ -566,7 +566,7 @@ def encode_latlon (varlist):
         lon_record['dateo'] = var.getaxis(Dateo).values[0]
       if var.hasaxis(NPASAxis):
         npas_axis = var.getaxis(NPASAxis)
-        deet = npas_axis.atts['deet']
+        deet = var.atts['deet']
         npas = npas_axis.values[0]
         lon_record['npas'] = npas
         lon_record['deet'] = deet
@@ -597,7 +597,8 @@ def normalize_fstd_axes (varlist):
     if not var.hasaxis(Dateo):
       newaxes.append(Dateo(values=[0]))
     if not var.hasaxis(NPASAxis):
-      newaxes.append(NPASAxis(values=[0],atts={'deet':1800})) #TODO: better default
+      newaxes.append(NPASAxis(values=[0]))
+    var.atts.setdefault('deet',1800) #TODO: better default
     if not var.hasaxis(IP1Axis):
       newaxes.append(IP1Axis(values=[0]))
     if not var.hasaxis(KAxis):
