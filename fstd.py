@@ -479,9 +479,10 @@ def encode_vertical (varlist):
       elif isinstance(zaxis,(Hybrid,LogHybrid)): kind = 5
       elif isinstance(zaxis,Theta): kind = 6
       else:
-        from warnings import warn
-        warn ("Vertical coordinate not recognized;  Encoding a generic Z axis")
         kind = 3
+        if zaxis.__class__ != ZAxis:
+          from warnings import warn
+          warn ("Vertical coordinate not recognized;  Encoding a generic Z axis")
       ip1 = fstd_core.encode_levels(zaxis.values,kind)
       ip1_axis = IP1Axis(values=ip1)
       varlist[varnum] = var.replace_axes({zaxis.name:ip1_axis})
