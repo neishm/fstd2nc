@@ -32,6 +32,32 @@ extern int c_gdll (int gdid,  float *lat, float *lon);
 extern int c_gdgaxes(int gdid,  float *ax, float *ay);
 extern int c_gdrls(int gdid);
 
+// Helper function - determine the numpy array type to use for a given datyp
+int datyp_to_numpy (int datyp, int nbits) {
+  switch (datyp) {
+    case 1:
+    case 5:
+    case 134:
+    case 133:
+      return nbits > 32 ? NPY_FLOAT64 : NPY_FLOAT32;
+      break;
+    case 2:
+    case 130:
+      return nbits > 32 ? NPY_UINT64 : NPY_UINT32;
+      break;
+    case 3:
+      return NPY_UINT8;
+      break;
+    case 4:
+    case 132:
+      return nbits > 32 ? NPY_INT64 : NPY_INT32;
+      break;
+    default:
+      printf ("Unhandled datyp = %d\n", datyp);
+      return -1;
+  }
+}
+
 // C struct for accessing records
 typedef struct {
   int pad;
@@ -258,28 +284,8 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
     func->dims[1] = nj;
     func->dims[2] = ni;
 //dtypes = {1:'float', 2:'uint', 3:'a', 4:'int', 5:'float', 134:'float', 130:'uint', 132:'int', 133:'float'}
-    func->typenum = -1;
-    switch (h->datyp) {
-      case 1:
-      case 5:
-      case 134:
-      case 133:
-        func->typenum = h->nbits > 32 ? NPY_FLOAT64 : NPY_FLOAT32;
-        break;
-      case 2:
-      case 130:
-        func->typenum = h->nbits > 32 ? NPY_UINT64 : NPY_UINT32;
-        break;
-      case 3:
-        func->typenum = NPY_UINT8;
-        break;
-      case 4:
-      case 132:
-        func->typenum = h->nbits > 32 ? NPY_INT64 : NPY_INT32;
-        break;
-      default:
-        return NULL;
-    }
+    func->typenum = datyp_to_numpy (h->datyp, h->nbits);
+    if (func->typenum < 0) return NULL;
     h->data_func = (PyObject*)func;
 
     h++;
