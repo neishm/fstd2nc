@@ -325,7 +325,18 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
     if (h->data_func == NULL) return NULL;
     field_obj = PyObject_CallObject (h->data_func, NULL);
     if (field_obj == NULL) return NULL;
-    field = (PyArrayObject*)PyArray_EnsureArray(field_obj);
+    int typenum = datyp_to_numpy(h->datyp,h->nbits);
+    if (typenum < 0) return NULL;
+//    printf ("write %c%c%c%c datyp=%d nbits=%d : trying to convert from numpy type '%c' to numpy typenum %d\n", h->nomvar[0], h->nomvar[1], h->nomvar[2], h->nomvar[3], h->datyp, h->nbits, PyArray_DESCR(field_obj)->kind, typenum);
+    if (PyArray_CanCastSafely (PyArray_TYPE(field_obj), typenum)) {
+//      printf ("Doing normal casting\n");
+      field = (PyArrayObject*)PyArray_ContiguousFromAny(field_obj,typenum,0,0);
+      Py_DECREF(field_obj);
+    } else {
+//      printf ("Doing a forced cast\n");
+      field = (PyArrayObject*)PyArray_Cast((PyArrayObject*)field_obj,typenum);
+      Py_DECREF(field_obj);
+    }
     if (field == NULL) return NULL;
     if (PyArray_SIZE(field) < (h->ni * h->nj * h->nk)) {
       PyErr_SetString (PyExc_TypeError, "Array from data_func is too small");
