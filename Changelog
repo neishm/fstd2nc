@@ -1,3 +1,12 @@
+Version 1.0.0 (Sep 9, 2014)
+	* Add a new 'prepare_records' method, to convert Var objects to FSTD
+	  records.  The result is left as a numpy (record) array, to allow the
+	  use to tweak the raw values before writing to a file.
+	* When writing back to a file, use the variable's own datyp / nbits
+	  attributes for the encoding (if they're defined).
+	* When writing to an FSTD file, do appropriate type casting where
+	  necessary, and choose a type appropriate to the provided numpy array.
+
 Version 0.9.2 (Jun 11, 2014)
 	* Fix some bugs related to writing FSTD files (preserve 'deet' value,
 	  fix bug in lat/lon record data_funcs, fix 'skip' value in loghybrid
