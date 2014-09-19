@@ -13,12 +13,17 @@ if '--squash-forecasts' in kwargs:
   squash_forecasts = True
   kwargs.remove('--squash-forecasts')
 
+oldstyle = False
+if '--old-output-style' in kwargs:
+  oldstyle = True
+  kwargs.remove('--old-output-style')
+
 if len(kwargs) > 0:
   print "Unknown keyword arg(s):", kwargs
   exit(1)
 
 if len(argv) != 3:
-  print "Usage: %s [--squash-forecasts] <rpn_file> <netcdf_file>"%argv[0]
+  print "Usage: %s [--squash-forecasts] [--old-output-style] <rpn_file> <netcdf_file>"%argv[0]
   exit(1)
 
 rpnfile = argv[1]
@@ -51,6 +56,27 @@ if exists(ncfile):
 # Load the input file
 data = rpn.open(rpnfile, squash_forecasts=squash_forecasts)
 
+# Tweak the data?
+if oldstyle:
+  import numpy as np
+  if 'lat' in data:
+    data = data.rename_axes(x='xcoord', y='ycoord')
+    data = data.rename_vars(lat='latitudes', lon='longitudes')
+    # Fudge the longitudes to be from -180..180
+    lon = np.array(data.longitudes.get())
+    lon[lon>180] -= 360
+    data.longitudes.values = lon
+  # Convert relative times to hours (instead of seconds)
+  data.time.values = data.time.values / 3600.
+  data.time.units = 'hours'
+  # Reverse the z-axis order
+  data = list(data.vars)
+  for i, var in enumerate(data):
+    if not var.hasaxis('zaxis'): continue
+    sl = [slice(None)]*var.naxes
+    iz = var.whichaxis('zaxis')
+    sl[iz] = slice(var.shape[iz]-1,None,-1)
+    data[i] = var.slice[sl]
 
 # Write to netcdf
 nc.save(ncfile, data)
