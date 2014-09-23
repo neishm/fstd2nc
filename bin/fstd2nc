@@ -3,6 +3,7 @@
 from sys import argv, exit, stdout
 from os.path import exists
 from pygeode.formats import netcdf as nc, fstd as rpn
+from pygeode.dataset import asdataset
 
 # Extract keyword options
 kwargs = [a for a in argv if a.startswith('--')]
@@ -18,12 +19,26 @@ if '--old-output-style' in kwargs:
   oldstyle = True
   kwargs.remove('--old-output-style')
 
+selected_vars = []
+param = [p for p in kwargs if p.startswith('--vars')]
+for p in param:
+  if '=' not in p:
+    print 'No variables passed to --vars'
+    exit(1)
+  selected_vars.extend(p.split('=')[1].split(','))
+  kwargs.remove(p)
+if len(selected_vars) > 0:
+  print 'Looking for variables:', ' '.join(selected_vars)
+else:
+  selected_vars = None
+
+
 if len(kwargs) > 0:
   print "Unknown keyword arg(s):", kwargs
   exit(1)
 
 if len(argv) != 3:
-  print "Usage: %s [--squash-forecasts] [--old-output-style] <rpn_file> <netcdf_file>"%argv[0]
+  print "Usage: %s [--vars=<var1>,<var2>,...] [--squash-forecasts] [--old-output-style] <rpn_file> <netcdf_file>"%argv[0]
   exit(1)
 
 rpnfile = argv[1]
@@ -54,11 +69,17 @@ if exists(ncfile):
 
 
 # Load the input file
-data = rpn.open(rpnfile, squash_forecasts=squash_forecasts)
+data = rpn.open(rpnfile, squash_forecasts=squash_forecasts, raw_list=True)
+
+if selected_vars is not None:
+  data = [d for d in data if d.name in selected_vars]
+
+print "Found variables:", ' '.join(d.name for d in data)
 
 # Tweak the data?
 if oldstyle:
   import numpy as np
+  data = asdataset(data)
   if 'lat' in data:
     data = data.rename_axes(x='xcoord', y='ycoord')
     data = data.rename_vars(lat='latitudes', lon='longitudes')
