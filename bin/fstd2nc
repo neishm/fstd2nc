@@ -6,6 +6,7 @@ from pygeode.formats import netcdf as nc, fstd as rpn
 from pygeode.dataset import asdataset
 
 # Extract keyword options
+full_command = ' '.join(argv)  # Put this in the output file metadata
 kwargs = [a for a in argv if a.startswith('--')]
 argv = [a for a in argv if a not in kwargs]
 
@@ -98,6 +99,13 @@ if oldstyle:
     iz = var.whichaxis('zaxis')
     sl[iz] = slice(var.shape[iz]-1,None,-1)
     data[i] = var.slice[sl]
+
+# Put the command-line invocation into the output file metadata
+data  = asdataset(data)
+from datetime import datetime
+datestr = datetime.today().strftime('%c')
+data.atts['history'] = datestr + ': ' + full_command
+
 
 # Write to netcdf
 nc.save(ncfile, data)
