@@ -307,8 +307,15 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
   int iun = 0, nrec, i, ier;
   if (!PyArg_ParseTuple(args, "sO!", &filename, &PyArray_Type, &headers)) return NULL;
   ier = c_fnom (&iun, filename, "STD+RND+R/W", 0);
-  if (ier != 0) return NULL;
-  c_fstouv (iun, "RND");
+  if (ier != 0) {
+    PyErr_SetString (PyExc_ValueError, "Unable to make a connection to the file.");
+    return NULL;
+  }
+  ier = c_fstouv (iun, "RND");
+  if (ier != 0) {
+    PyErr_SetString (PyExc_ValueError, "Unable to open the file.");
+    return NULL;
+  }
 
   // Ensure the record array is contiguous (and of the right type)
   if (headers->descr != descr) {
