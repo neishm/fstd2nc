@@ -1,3 +1,12 @@
+Version 1.1.0 (Nov 6, 2014)
+	* Add an option to fstd2nc to force it to use the same output style as
+	  the old rpn2nc utility.
+	* Add a --vars option to fstd2nc, to allow the user to select a subset
+	  of variables to convert.
+	* Put the command-line invocation of fstd2nc into the output file
+	  metadata.
+	* Add better error trapping when trying to write to an FSTD file.
+
 Version 1.0.0 (Sep 9, 2014)
 	* Add a new 'prepare_records' method, to convert Var objects to FSTD
 	  records.  The result is left as a numpy (record) array, to allow the
