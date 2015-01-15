@@ -265,11 +265,15 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
   for (i = 0; i < nrec; i++) {
     int ni, nj, nk;
     handle = c_fstinfx (handle, iun, &ni, &nj, &nk, -1, "", -1, -1, -1, "", "");
-    if (handle < 0) return NULL;
 
     memset (h->typvar, ' ', 2);
     memset (h->nomvar, ' ', 4);
     memset (h->etiket, ' ', 12);
+
+    if (handle < 0) {
+      printf ("Warning: fstd_core: missing record #%d\n",i);
+      continue;
+    }
 
     ier = c_fstprm (handle, &h->dateo, &h->deet, &h->npas, &h->ni, &h->nj, &h->nk, &h->nbits, &h->datyp, &h->ip1, &h->ip2, &h->ip3, h->typvar, h->nomvar, h->etiket, h->grtyp, &h->ig1, &h->ig2, &h->ig3, &h->ig4, &h->swa, &h->lng, &h->dltf, &h->ubc, &h->extra1, &h->extra2, &h->extra3);
 

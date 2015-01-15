@@ -292,6 +292,8 @@ def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False)
 
   # Read the records
   records = fstd_core.read_records(filename)
+  # Filter out any missing records
+  records = records[records['nomvar']!='    ']
 
   # Construct all possible lat/lon arrays from info in the records
   latlon_arrays = fstd_core.get_latlon(records)
