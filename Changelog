@@ -1,3 +1,9 @@
+Version 1.1.1 (Jan 16, 2015)
+	* Workaround a bug in recent versions of numpy (>=1.7) that causes a
+	  crash when trying to select a subset of columns from a record array.
+	* Workaround for FSTD files that have less records than they should.
+	  Print a warning message and continue with whatever records are found.
+
 Version 1.1.0 (Nov 6, 2014)
 	* Add an option to fstd2nc to force it to use the same output style as
 	  the old rpn2nc utility.
