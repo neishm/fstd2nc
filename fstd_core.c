@@ -52,6 +52,9 @@ int datyp_to_numpy (int datyp, int nbits) {
     case 132:
       return nbits > 32 ? NPY_INT64 : NPY_INT32;
       break;
+    case 7:
+      return NPY_STRING;
+      break;
     default:
       printf ("Unhandled datyp = %d\n", datyp);
       return -1;
@@ -130,7 +133,14 @@ typedef struct {
 
 static PyObject *RecordGetter_call (PyObject *self, PyObject *args, PyObject *kwargs) {
   RecordGetter_Object *o = (RecordGetter_Object*)self;
-  PyArrayObject *out = (PyArrayObject*)PyArray_SimpleNew(3, o->dims, o->typenum);
+  // Special case for string data
+  PyArrayObject *out;
+  if (o->typenum == NPY_STRING) {
+    out = (PyArrayObject*)PyArray_New(&PyArray_Type, 3, o->dims, o->typenum, NULL, NULL, 1, 0, NULL);
+  // The usual case
+  } else {
+    out = (PyArrayObject*)PyArray_SimpleNew(3, o->dims, o->typenum);
+  }
   if (out == NULL) return NULL;
   int ni, nj, nk;
   c_fstluk (out->data, o->handle, &ni, &nj, &nk);
