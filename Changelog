@@ -1,3 +1,6 @@
+Version 1.1.2 (Feb 9, 2015)
+	* Allow character data to be read from FSTD files.
+
 Version 1.1.1 (Jan 16, 2015)
 	* Workaround a bug in recent versions of numpy (>=1.7) that causes a
 	  crash when trying to select a subset of columns from a record array.
