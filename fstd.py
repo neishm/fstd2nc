@@ -26,6 +26,7 @@ class Sigma(ZAxis):
 class LogHybrid(ZAxis):
   name = 'zeta'
   atts = dict(ZAxis.atts, standard_name='atmosphere_hybrid_sigma_log_pressure_coordinate')  # Not really a standard
+  plotatts = dict(ZAxis.plotatts, plotorder=-1, plotscale='log')
 
 class Theta(ZAxis):
   name = 'theta'
