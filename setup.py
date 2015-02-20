@@ -10,7 +10,7 @@ fstd_extern = Extension ('pygeode.formats.fstd_extern', sources=['fstd_externmod
 # PyGeode installation script
 
 setup (	name="python-pygeode-rpn",
-	version="1.1.2",
+	version="1.1.3",
         author="Mike Neish",
 	ext_modules=[fstd_core, fstd_extern],
         include_dirs = [np.get_include()],
