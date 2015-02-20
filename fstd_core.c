@@ -1030,7 +1030,11 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
 
   // Create a dictionary to hold unique latitude & longitude arrays.
   // Keys are (grtyp,ig1,ig2,ig3,ig4,ni,nj)
-  PyObject *dict = PyDict_New();
+  // Note: this dictionary is static, so it will be re-used for all
+  // subsequent files.  This is a workaround for an issue with c_gdrls not
+  // actually releasing the grid ids, so we were running out!
+  static PyObject *dict;
+  if (dict==NULL) dict = PyDict_New();
 
   int i;
   for (i = 0; i < num_records; i++) {
@@ -1112,7 +1116,10 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     c_gdgaxes (gdid, (float*)ax->data, (float*)ay->data);
 
     // Done with the grid
-    c_gdrls (gdid);
+//    Note: disabled, now that we're using a single static dictionary to
+//          re-use existing grids from previously read files.
+//          This function wasn't actually freeing the grid ids anyway.
+//    c_gdrls (gdid);
 
 
     // Can the latitudes and longitudes be reduced to 1D arrays?
@@ -1159,6 +1166,7 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
   Py_DECREF(record_array);
 
   // Return the arrays
+  Py_INCREF(dict);  // We want to keep ownership of the original reference.
   return dict;
 }
 
