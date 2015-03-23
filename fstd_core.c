@@ -35,6 +35,7 @@ extern int c_gdrls(int gdid);
 // Helper function - determine the numpy array type to use for a given datyp
 int datyp_to_numpy (int datyp, int nbits) {
   switch (datyp) {
+    case 0:
     case 1:
     case 5:
     case 134:
