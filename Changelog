@@ -1,3 +1,7 @@
+Version 1.1.4 (Mar 23, 2015)
+	* Allow raw binary data to be read from FSTD files (with a warning).
+	* Fix bug when there are multiple erased/overwritten records.
+
 Version 1.1.3 (Feb 20, 2015)
 	* Add appropriate plotatts for LogHybrid axis.
 	* Fix bug with get_latlon running out of available grid ids.
