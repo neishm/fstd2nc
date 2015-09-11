@@ -496,7 +496,12 @@ static PyObject *encode_levels (PyObject *self, PyObject *args) {
   int i;
   npy_intp n;
   if (!PyArg_ParseTuple(args, "Oi", &z_obj, &kind)) return NULL;
-  z_array = (PyArrayObject*)PyArray_ContiguousFromAny(z_obj,NPY_FLOAT32,0,0);
+    if (PyArray_CanCastSafely (PyArray_TYPE(z_obj), NPY_FLOAT32)) {
+      z_array = (PyArrayObject*)PyArray_ContiguousFromAny(z_obj,NPY_FLOAT32,0,0);
+    } else {
+      z_array = (PyArrayObject*)PyArray_Cast((PyArrayObject*)z_obj,NPY_FLOAT32);
+    }
+
   if (z_array == NULL) return NULL;
   n = PyArray_SIZE(z_array);
   ip1_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
