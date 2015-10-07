@@ -1,3 +1,9 @@
+Version 1.1.5 (Oct 7, 2015)
+	* When writing a generic z-axis to FSTD format, may need to force the
+	  casting to floating-point.
+	* Work around an issue with gdll, where longitude at 360 is wrapped to
+	  0.
+
 Version 1.1.4 (Mar 23, 2015)
 	* Allow raw binary data to be read from FSTD files (with a warning).
 	* Fix bug when there are multiple erased/overwritten records.
