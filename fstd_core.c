@@ -1134,6 +1134,12 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
       memcpy (newlon->data, lon->data, ni*sizeof(float));
       Py_DECREF(lon);
       lon = newlon;
+      // Make sure the longitudes are monotonic
+      // (workaround an issue with c_gdll?)
+      float *l = (float*)lon->data;
+      if ((l[ni-2] > l[ni-3]) && (l[ni-1] < l[ni-2])) {
+        l[ni-1] += 360.;
+      }
     }
     if (lat_is_1d ((float*)lat->data, ni, nj)) {
 //      printf ("1D latitudes detected\n");
