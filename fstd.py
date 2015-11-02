@@ -65,7 +65,7 @@ class FSTD_Var (Var):
     data_funcs[:] = None
     data_funcs[idate,iforecast,ilevel] = records['data_func']
 
-    if np.any(data_funcs == None):
+    if any(f is None for f in data_funcs.flatten()):
       print "Unable to construct a full field for %s - missing some expected records:"%name
       from datetime import datetime, timedelta
       for i,date in enumerate(dates):
