@@ -971,7 +971,7 @@ int find_xrec(HEADER *records, int n, int varid) {
   int ig3 = records[varid].ig3;
   int ni = records[varid].ni;
   int nj = records[varid].nj;
-  if (grtyp == 'Y')
+  if (grtyp == 'X' || grtyp == 'Y')
     return find_coord(records, n, ">>  ", ig1, ig2, ig3, ni, nj);
   if (grtyp == 'Z')
     return find_coord(records, n, ">>  ", ig1, ig2, ig3, ni, 1);
@@ -984,7 +984,7 @@ int find_yrec(HEADER *records, int n, int varid) {
   int ig3 = records[varid].ig3;
   int ni = records[varid].ni;
   int nj = records[varid].nj;
-  if (grtyp == 'Y')
+  if (grtyp == 'X' || grtyp == 'Y')
     return find_coord(records, n, "^^  ", ig1, ig2, ig3, ni, nj);
   if (grtyp == 'Z')
     return find_coord(records, n, "^^  ", ig1, ig2, ig3, 1, nj);
@@ -1092,6 +1092,10 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
       case 'S':
         gdid = c_ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, 0);
         break;
+      case 'X':
+        // Should already have the 2D lat/lon fields, so no gdid needed.
+        gdid = -1;
+        break;
       default:
         PyErr_Format (PyExc_ValueError, "Unhandled grid type '%c'", *grtyp);
         return NULL;
@@ -1101,6 +1105,34 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     npy_intp dims[] = {nj,ni};
     PyArrayObject *lat = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
     PyArrayObject *lon = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
+
+    // Special case is X grid, where we read the lat/lon directly.
+    if (*grtyp == 'X') {
+      int xrec = find_xrec (records, num_records, i);
+      int yrec = find_yrec (records, num_records, i);
+      if (xrec < 0 || yrec < 0) {
+        PyErr_Format (PyExc_ValueError, "Coordinate record(s) not found for '%s'", nomvar);
+        return NULL;
+      }
+      PyArrayObject *ydata = (PyArrayObject*)PyObject_CallObject(records[yrec].data_func,NULL);
+      PyArrayObject *xdata = (PyArrayObject*)PyObject_CallObject(records[xrec].data_func,NULL);
+      memcpy (lat->data, ydata->data, ni*nj*sizeof(float));
+      memcpy (lon->data, xdata->data, ni*nj*sizeof(float));
+      Py_DECREF(ydata);
+      Py_DECREF(xdata);
+      // Build the value
+      Py_INCREF(Py_None);
+      Py_INCREF(Py_None);
+      PyObject *value = Py_BuildValue("OOOO", Py_None, Py_None, lat, lon);
+      Py_DECREF(lat);
+      Py_DECREF(lon);
+      PyDict_SetItem(dict,key,value);
+      Py_DECREF(key);
+      Py_DECREF(value);
+      continue;
+    }
+
+    // General case, we need to compute the lat/lon
     c_gdll (gdid, (float*)lat->data, (float*)lon->data);
 
     // Extract x and y coordinates

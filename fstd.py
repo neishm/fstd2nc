@@ -178,9 +178,11 @@ def attach_latlon (varlist, latlon_arrays):
     axes = list(var.axes)
     ax, ay, lat, lon = latlon_arrays[key]
     if lat.ndim == 1: axes[ydim] = Lat(lat)
-    else: axes[ydim] = YAxis(ay,name='y')
+    elif ay is not None: axes[ydim] = YAxis(ay,name='y')
+    else: axes[ydim] = YAxis(lat.shape[0],name='y')
     if lon.ndim == 1: axes[xdim] = Lon(lon)
-    else: axes[xdim] = XAxis(ax,name='x')
+    elif ax is not None: axes[xdim] = XAxis(ax,name='x')
+    else: axes[xdim] = XAxis(lat.shape[1],name='x')
     var.axes = tuple(axes)
 
     # Convert 2D lat/lon arrays to variables
