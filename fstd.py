@@ -157,6 +157,45 @@ def preload(record):
   def data_func(): return data
   record['data_func'] = data_func
 
+# Locate and apply mask (0/1) records to corresponding data records.
+def apply_masks (records, fill_value):
+  import numpy as np
+  from warnings import warn
+  # Exit early if no masks found.
+  is_mask = (records['datyp']==2) & (records['nbits']==1)
+  if not np.any(is_mask): return records
+  # Group the data and masks together.
+  matchers = ('dateo','ni','nj','nk','ip1','ip2','ip3','nomvar','etiket','grtyp','ig1','ig2','ig3','ig4')
+  groups = {}
+  for i in range(len(records)):
+    key = tuple(records[m][i] for m in matchers)
+    groups.setdefault(key,[]).append(i)
+  masked = {}
+  for key, indices in groups.iteritems():
+    the_mask = [i for i in indices if records['datyp'][i] == 2 and records['nbits'][i] == 1]
+    non_mask = sorted(set(indices)-set(the_mask))
+    # If there's no mask for this record, then nothing to do
+    if len(the_mask) == 0: continue
+    # If there's no non-mask data that fits, then there's nothing to apply the
+    # mask to (so, leave it alone).
+    if len(non_mask) == 0: continue
+    # If there's multiple masks, then don't know which one to use
+    if len(the_mask) > 1:
+      warn("Multiple masks found for '%s' - don't know what to do."%records['nomvar'][the_mask[0]])
+      continue
+    # Okay, now we should have exactly one mask to apply.
+    def do_mask(x,y):
+      x[y==0] = fill_value
+      return x
+    the_mask = the_mask[0]
+    for i in non_mask:
+      records['data_func'][i] = lambda f=records['data_func'][i], m=records['data_func'][the_mask]: do_mask(f(),m())
+    # Applied the mask, so we don't need the mask record anymore.
+    indices.remove(the_mask)
+  # Collect all the indices that we will keep.
+  return records[sorted(i for indices in groups.itervalues() for i in indices)]
+
+
 # Attach lat/lon arrays to a list of FSTD variables
 # For 1D lat/lon, use these arrays as axes.
 # For 2D lat/lon, create 2D coordinate variables.
@@ -284,7 +323,7 @@ def reduce_dimensionality (var, squash_forecasts=False):
 # Open a file for read access.  Returns a generic 'Dataset' object.
 #
 #####################################################################
-def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False):
+def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False, fill_value=1e30):
 
   from pygeode.formats import fstd_core
   import numpy as np
@@ -301,6 +340,10 @@ def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False)
     from warnings import warn
     raw_nomvars = list(set(raw_binary_records['nomvar']))
     warn ("Raw binary records detected for %s.  The values may not be properly decoded if you're opening on a different platform."%raw_nomvars)
+
+  # Locate and apply mask (0/1) records to corresponding data records.
+  # (e.g., for RIOPS data).
+  records = apply_masks (records, fill_value)
 
   # Construct all possible lat/lon arrays from info in the records
   latlon_arrays = fstd_core.get_latlon(records)
@@ -326,6 +369,8 @@ def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False)
   varlist = []
   for var_records in var_bins:
     var = FSTD_Var (var_records, squash_forecasts)
+    # Add fill value, in case we applied any masks.
+    var.atts['_FillValue'] = fill_value
     varlist.append(var)
 
   # Attach any lat/lon coordinates
