@@ -2,10 +2,3 @@ This is an interface for reading RPN files from the PyGeode framework.
 
 For information on PyGeode, see http://pygeode.github.io
 
-The RPN format is a binary format used internally at Environment Canada, so
-it's probably of limited use to other people.  I'm sharing it on a public
-repository just in case anyone else have these files, and wants to read them.
-
-Note that this isn't an official interface.  I created it based on a few
-sample files I had lying around.  It may not be 100% compatible with all RPN
-files.
