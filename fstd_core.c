@@ -323,7 +323,7 @@ static PyObject *fstd_write_records (PyObject *self, PyObject *args) {
     return NULL;
   }
   ier = c_fstouv (iun, "RND");
-  if (ier != 0) {
+  if (ier < 0) {
     PyErr_SetString (PyExc_ValueError, "Unable to open the file.");
     return NULL;
   }
