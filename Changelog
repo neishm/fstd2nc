@@ -1,3 +1,6 @@
+Version 1.1.6 (Jul 11, 2016)
+	* Allow writing to existing file (appending records).
+
 Version 1.1.5 (Oct 7, 2015)
 	* When writing a generic z-axis to FSTD format, may need to force the
 	  casting to floating-point.
