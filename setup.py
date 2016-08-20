@@ -14,6 +14,6 @@ setup (	name="python-pygeode-rpn",
         author="Mike Neish",
 	ext_modules=[fstd_core, fstd_extern],
         include_dirs = [np.get_include()],
-	packages=["pygeode.plugins","pygeode.plugins.rpn","pygeode.formats"]
+	packages=["pygeode.formats"]
 )
 
