@@ -1,3 +1,38 @@
+Version 1.1.6 (Jul 11, 2016)
+	* Allow writing to existing file (appending records).
+
+Version 1.1.5 (Oct 7, 2015)
+	* When writing a generic z-axis to FSTD format, may need to force the
+	  casting to floating-point.
+	* Work around an issue with gdll, where longitude at 360 is wrapped to
+	  0.
+
+Version 1.1.4 (Mar 23, 2015)
+	* Allow raw binary data to be read from FSTD files (with a warning).
+	* Fix bug when there are multiple erased/overwritten records.
+
+Version 1.1.3 (Feb 20, 2015)
+	* Add appropriate plotatts for LogHybrid axis.
+	* Fix bug with get_latlon running out of available grid ids.
+
+Version 1.1.2 (Feb 9, 2015)
+	* Allow character data to be read from FSTD files.
+
+Version 1.1.1 (Jan 16, 2015)
+	* Workaround a bug in recent versions of numpy (>=1.7) that causes a
+	  crash when trying to select a subset of columns from a record array.
+	* Workaround for FSTD files that have less records than they should.
+	  Print a warning message and continue with whatever records are found.
+
+Version 1.1.0 (Nov 6, 2014)
+	* Add an option to fstd2nc to force it to use the same output style as
+	  the old rpn2nc utility.
+	* Add a --vars option to fstd2nc, to allow the user to select a subset
+	  of variables to convert.
+	* Put the command-line invocation of fstd2nc into the output file
+	  metadata.
+	* Add better error trapping when trying to write to an FSTD file.
+
 Version 1.0.0 (Sep 9, 2014)
 	* Add a new 'prepare_records' method, to convert Var objects to FSTD
 	  records.  The result is left as a numpy (record) array, to allow the

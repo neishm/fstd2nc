@@ -26,6 +26,7 @@ class Sigma(ZAxis):
 class LogHybrid(ZAxis):
   name = 'zeta'
   atts = dict(ZAxis.atts, standard_name='atmosphere_hybrid_sigma_log_pressure_coordinate')  # Not really a standard
+  plotatts = dict(ZAxis.plotatts, plotorder=-1, plotscale='log')
 
 class Theta(ZAxis):
   name = 'theta'
@@ -64,7 +65,7 @@ class FSTD_Var (Var):
     data_funcs[:] = None
     data_funcs[idate,iforecast,ilevel] = records['data_func']
 
-    if np.any(data_funcs == None):
+    if any(f is None for f in data_funcs.flatten()):
       print "Unable to construct a full field for %s - missing some expected records:"%name
       from datetime import datetime, timedelta
       for i,date in enumerate(dates):
@@ -333,6 +334,15 @@ def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False,
 
   # Read the records
   records = fstd_core.read_records(filename)
+  # Filter out any missing records
+  records = records[records['nomvar']!='']
+
+  # Warn about any raw binary records.
+  raw_binary_records = records[records['datyp'] == 0]
+  if len(raw_binary_records) > 0:
+    from warnings import warn
+    raw_nomvars = list(set(raw_binary_records['nomvar']))
+    warn ("Raw binary records detected for %s.  The values may not be properly decoded if you're opening on a different platform."%raw_nomvars)
 
   # Warn about any raw binary records.
   raw_binary_records = records[records['datyp'] == 0]
@@ -358,7 +368,10 @@ def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False,
   del nomvar, is_coord
 
   # Group the records together
-  all_keys = records[unique_var_atts]
+#  all_keys = records[unique_var_atts]
+  # Above doesn't work in numpy >= 1.8, due to a bug when using record arrays
+  # that contain object fields (http://github.com/numpy/numpy/issues/3256)
+  all_keys = np.array(zip(*[records[a] for a in unique_var_atts]),dtype=[(a,records.dtype[a]) for a in unique_var_atts])
   unique_keys, var_indices = np.unique(all_keys, return_inverse=True)
 
   var_bins = [ records[var_indices==i] for i in range(len(unique_keys)) ]

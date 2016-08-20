@@ -276,7 +276,10 @@ static PyObject *fstd_read_records (PyObject *self, PyObject *args) {
   for (i = 0; i < nrec; i++) {
     int ni, nj, nk;
     handle = c_fstinfx (handle, iun, &ni, &nj, &nk, -1, "", -1, -1, -1, "", "");
-    if (handle < 0) return NULL;
+
+    // May have less records than expected
+    // (E.g., if records are erased or overwritten)
+    if (handle < 0) break;
 
     memset (h->typvar, ' ', 2);
     memset (h->nomvar, ' ', 4);
@@ -493,7 +496,12 @@ static PyObject *encode_levels (PyObject *self, PyObject *args) {
   int i;
   npy_intp n;
   if (!PyArg_ParseTuple(args, "Oi", &z_obj, &kind)) return NULL;
-  z_array = (PyArrayObject*)PyArray_ContiguousFromAny(z_obj,NPY_FLOAT32,0,0);
+    if (PyArray_CanCastSafely (PyArray_TYPE(z_obj), NPY_FLOAT32)) {
+      z_array = (PyArrayObject*)PyArray_ContiguousFromAny(z_obj,NPY_FLOAT32,0,0);
+    } else {
+      z_array = (PyArrayObject*)PyArray_Cast((PyArrayObject*)z_obj,NPY_FLOAT32);
+    }
+
   if (z_array == NULL) return NULL;
   n = PyArray_SIZE(z_array);
   ip1_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
@@ -1027,7 +1035,11 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
 
   // Create a dictionary to hold unique latitude & longitude arrays.
   // Keys are (grtyp,ig1,ig2,ig3,ig4,ni,nj)
-  PyObject *dict = PyDict_New();
+  // Note: this dictionary is static, so it will be re-used for all
+  // subsequent files.  This is a workaround for an issue with c_gdrls not
+  // actually releasing the grid ids, so we were running out!
+  static PyObject *dict;
+  if (dict==NULL) dict = PyDict_New();
 
   int i;
   for (i = 0; i < num_records; i++) {
@@ -1141,7 +1153,10 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
     c_gdgaxes (gdid, (float*)ax->data, (float*)ay->data);
 
     // Done with the grid
-    c_gdrls (gdid);
+//    Note: disabled, now that we're using a single static dictionary to
+//          re-use existing grids from previously read files.
+//          This function wasn't actually freeing the grid ids anyway.
+//    c_gdrls (gdid);
 
 
     // Can the latitudes and longitudes be reduced to 1D arrays?
@@ -1151,6 +1166,12 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
       memcpy (newlon->data, lon->data, ni*sizeof(float));
       Py_DECREF(lon);
       lon = newlon;
+      // Make sure the longitudes are monotonic
+      // (workaround an issue with c_gdll?)
+      float *l = (float*)lon->data;
+      if ((l[ni-2] > l[ni-3]) && (l[ni-1] < l[ni-2])) {
+        l[ni-1] += 360.;
+      }
     }
     if (lat_is_1d ((float*)lat->data, ni, nj)) {
 //      printf ("1D latitudes detected\n");
@@ -1188,6 +1209,7 @@ static PyObject *get_latlon (PyObject *self, PyObject *args) {
   Py_DECREF(record_array);
 
   // Return the arrays
+  Py_INCREF(dict);  // We want to keep ownership of the original reference.
   return dict;
 }
 
