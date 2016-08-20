@@ -566,7 +566,7 @@ def encode_vertical (varlist):
 # Set up unique IG1,IG2,IG3,IG4 values for the grid
 #TODO: support non-cartesian lat/lon projections
 def encode_latlon (varlist):
-  from pygeode.formats import fstd_extern, fstd_core
+  from pygeode.formats import fstd_core
   import numpy as np
 
   latlon_records = {}
@@ -590,7 +590,10 @@ def encode_latlon (varlist):
     grid_ig3 = 43200
     grid_ig4 = 43200
 
-    ix1, ix2 = fstd_extern.set_igs2(xcoord, ycoord, grid_ig1, grid_ig2, grid_ig3, grid_ig4, 1, len(xcoord), 1, 1, len(ycoord), 1)
+    # Create pseudo-unique grid identifiers
+    ix = hash((tuple(xcoord.flatten()), tuple(ycoord.flatten()), grid_ig1, grid_ig2, grid_ig3, grid_ig4))
+    ix1 = (ix%65536) + 32768
+    ix2 = ((ix/65536)%65536) + 32768
 
     var.atts['ig1'] = ix1
     var.atts['ig2'] = ix2
