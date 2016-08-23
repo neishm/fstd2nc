@@ -2,60 +2,37 @@
 
 from sys import argv, exit, stdout
 from os.path import exists
-from pygeode.formats import netcdf as nc, fstd as rpn
+from pygeode.formats import netcdf, fstd
 from pygeode.dataset import asdataset
+from argparse import ArgumentParser
 
 # Extract keyword options
-full_command = ' '.join(argv)  # Put this in the output file metadata
-kwargs = [a for a in argv if a.startswith('--')]
-argv = [a for a in argv if a not in kwargs]
+parser = ArgumentParser(description="Converts an RPN standard file (FSTD) to netCDF format.")
+parser.add_argument('rpnfile', metavar='<fstd_file>', help='The FSTD file to convert.')
+parser.add_argument('ncfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
+parser.add_argument('--vars', metavar='VAR1,VAR2,...', help='Comma-seperated list of variables to convert.  By default, all variables are converted.')
+parser.add_argument('--squash-forecasts', action='store_true', help='Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.')
+parser.add_argument('--old-output-style', action='store_true', dest='oldstyle', help='Use the same naming conventions as an older (deprecated) version of this utility.')
+args = parser.parse_args()
 
-squash_forecasts = False
-if '--squash-forecasts' in kwargs:
-  squash_forecasts = True
-  kwargs.remove('--squash-forecasts')
-
-oldstyle = False
-if '--old-output-style' in kwargs:
-  oldstyle = True
-  kwargs.remove('--old-output-style')
-
-selected_vars = []
-param = [p for p in kwargs if p.startswith('--vars')]
-for p in param:
-  if '=' not in p:
-    print 'No variables passed to --vars'
-    exit(1)
-  selected_vars.extend(p.split('=')[1].split(','))
-  kwargs.remove(p)
-if len(selected_vars) > 0:
+if args.vars is not None:
+  selected_vars = args.vars.split(',')
   print 'Looking for variables:', ' '.join(selected_vars)
 else:
   selected_vars = None
 
 
-if len(kwargs) > 0:
-  print "Unknown keyword arg(s):", kwargs
-  exit(1)
-
-if len(argv) != 3:
-  print "Usage: %s [--vars=<var1>,<var2>,...] [--squash-forecasts] [--old-output-style] <rpn_file> <netcdf_file>"%argv[0]
-  exit(1)
-
-rpnfile = argv[1]
-ncfile = argv[2]
-
 # Make sure input file exists
-if not exists(rpnfile):
-  print "Error: '%s' does not exist!"%(rpnfile)
+if not exists(args.rpnfile):
+  print "Error: '%s' does not exist!"%(args.rpnfile)
   exit(1)
 
 # Check if output file already exists
-if exists(ncfile):
+if exists(args.ncfile):
   overwrite = False
   if stdout.isatty():
     while True:
-      print "Warning: '%s' already exists!  Overwrite? (y/n):"%(ncfile),
+      print "Warning: '%s' already exists!  Overwrite? (y/n):"%(args.ncfile),
       ans = raw_input()
       if ans.lower() in ('y','yes'):
         overwrite = True
@@ -65,12 +42,12 @@ if exists(ncfile):
         break
       print "Sorry, invalid response."
   if overwrite is False:
-    print "Refusing to overwrite existing file '%s'."%(ncfile)
+    print "Refusing to overwrite existing file '%s'."%(args.ncfile)
     exit(1)
 
 
 # Load the input file
-data = rpn.open(rpnfile, squash_forecasts=squash_forecasts, raw_list=True)
+data = fstd.open(args.rpnfile, squash_forecasts=args.squash_forecasts, raw_list=True)
 
 if selected_vars is not None:
   data = [d for d in data if d.name in selected_vars]
@@ -78,7 +55,7 @@ if selected_vars is not None:
 print "Found variables:", ' '.join(d.name for d in data)
 
 # Tweak the data?
-if oldstyle:
+if args.oldstyle:
   import numpy as np
   data = asdataset(data)
   if 'lat' in data:
@@ -104,9 +81,10 @@ if oldstyle:
 data  = asdataset(data)
 from datetime import datetime
 datestr = datetime.today().strftime('%c')
+full_command = ' '.join(argv)
 data.atts['history'] = datestr + ': ' + full_command
 
 
 # Write to netcdf
-nc.save(ncfile, data)
+netcdf.save(args.ncfile, data)
 
