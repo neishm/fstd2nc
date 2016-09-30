@@ -13,6 +13,7 @@ setup (	name="python-pygeode-rpn",
         author="Mike Neish",
 	ext_modules=[fstd_core],
         include_dirs = [np.get_include()],
-	packages=["pygeode.formats"]
+	packages=["pygeode.formats"],
+	scripts=["fstd2nc"]
 )
 
