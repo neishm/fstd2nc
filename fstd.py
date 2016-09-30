@@ -344,13 +344,6 @@ def open (filename, squash_forecasts=False, print_warnings=True, raw_list=False,
     raw_nomvars = list(set(raw_binary_records['nomvar']))
     warn ("Raw binary records detected for %s.  The values may not be properly decoded if you're opening on a different platform."%raw_nomvars)
 
-  # Warn about any raw binary records.
-  raw_binary_records = records[records['datyp'] == 0]
-  if len(raw_binary_records) > 0:
-    from warnings import warn
-    raw_nomvars = list(set(raw_binary_records['nomvar']))
-    warn ("Raw binary records detected for %s.  The values may not be properly decoded if you're opening on a different platform."%raw_nomvars)
-
   # Locate and apply mask (0/1) records to corresponding data records.
   # (e.g., for RIOPS data).
   records = apply_masks (records, fill_value)
