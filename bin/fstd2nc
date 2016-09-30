@@ -12,7 +12,6 @@ parser.add_argument('rpnfile', metavar='<fstd_file>', help='The FSTD file to con
 parser.add_argument('ncfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
 parser.add_argument('--vars', metavar='VAR1,VAR2,...', help='Comma-seperated list of variables to convert.  By default, all variables are converted.')
 parser.add_argument('--squash-forecasts', action='store_true', help='Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.')
-parser.add_argument('--old-output-style', action='store_true', dest='oldstyle', help='Use the same naming conventions as an older (deprecated) version of this utility.')
 args = parser.parse_args()
 
 if args.vars is not None:
@@ -53,29 +52,6 @@ if selected_vars is not None:
   data = [d for d in data if d.name in selected_vars]
 
 print "Found variables:", ' '.join(d.name for d in data)
-
-# Tweak the data?
-if args.oldstyle:
-  import numpy as np
-  data = asdataset(data)
-  if 'lat' in data:
-    data = data.rename_axes(x='xcoord', y='ycoord')
-    data = data.rename_vars(lat='latitudes', lon='longitudes')
-    # Fudge the longitudes to be from -180..180
-    lon = np.array(data.longitudes.get())
-    lon[lon>180] -= 360
-    data.longitudes.values = lon
-  # Convert relative times to hours (instead of seconds)
-  data.time.values = data.time.values / 3600.
-  data.time.units = 'hours'
-  # Reverse the z-axis order
-  data = list(data.vars)
-  for i, var in enumerate(data):
-    if not var.hasaxis('zaxis'): continue
-    sl = [slice(None)]*var.naxes
-    iz = var.whichaxis('zaxis')
-    sl[iz] = slice(var.shape[iz]-1,None,-1)
-    data[i] = var.slice[sl]
 
 # Put the command-line invocation into the output file metadata
 data  = asdataset(data)
