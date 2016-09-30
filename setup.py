@@ -14,6 +14,7 @@ setup (	name="python-pygeode-rpn",
 	ext_modules=[fstd_core],
         include_dirs = [np.get_include()],
 	packages=["pygeode.formats"],
+        package_dir = {"pygeode.formats":""},
 	scripts=["fstd2nc"]
 )
 
