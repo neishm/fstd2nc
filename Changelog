@@ -1,3 +1,9 @@
+Version 2.0.0 (UNRELEASED)
+	* Removed old "rpn" module, which has been superceded by the "fstd"
+	  module.
+	* Removed --old-output-style option for fstd2nc.
+	* Added --time-units option for fstd2nc.
+
 Version 1.1.6 (Jul 11, 2016)
 	* Allow writing to existing file (appending records).
 
