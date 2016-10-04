@@ -51,7 +51,13 @@ data = fstd.open(args.rpnfile, squash_forecasts=args.squash_forecasts, raw_list=
 
 # Subset the variables
 if selected_vars is not None:
-  data = [d for d in data if d.name in selected_vars]
+  all_data = data
+  data = [d for d in all_data if d.name in selected_vars]
+  # Attach any related lat/lon fields.
+  for d in all_data:
+    if d.name in ('lat','lon') and d.hasaxis('xaxis') and d.hasaxis('yaxis'):
+      if any(v.hasaxis(d.xaxis) and v.hasaxis(d.yaxis) for v in data):
+        data.append(d)
 
 print "Found variables:", ' '.join(d.name for d in data)
 

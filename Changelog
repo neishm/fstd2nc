@@ -4,6 +4,10 @@ Version 2.0.0 (UNRELEASED)
 	* Removed --old-output-style option for fstd2nc.
 	* Added --time-units option for fstd2nc.
 
+Version 1.1.7 (Oct 4, 2016)
+	* In fstd2nc, when selecting particular variables to convert to netCDF,
+	  make sure any associated 2D lat/lon fields are included.
+
 Version 1.1.6 (Jul 11, 2016)
 	* Allow writing to existing file (appending records).
 
