@@ -1,15 +1,27 @@
+# Inferface for reading/writing FSTD files within PyGeode.
 
-from pygeode.axis import Axis, XAxis, YAxis, ZAxis, Lat, Lon, Hybrid, Pres
-from pygeode.timeaxis import StandardTime
-class Dateo(Axis): pass   # Used for writing to FSTD files, not needed for reading
-class Forecast(Axis): pass
-class NPASAxis(Axis): pass  # Used for writing to FSTD files, not needed for reading
+from pygeode.axis import Axis
+
+# Low-level axes that are directly mapped to FSTD files.
+class DateoAxis(Axis): name = 'dateo'
 class IAxis(Axis): name = 'i'
 class JAxis(Axis): name = 'j'
 class KAxis(Axis): name = 'k'
 class IP1Axis(Axis): name = 'ip1'
+class IP2Axis(Axis): name = 'ip2'
+class IP3Axis(Axis): name = 'ip3'
+class NPASAxis(Axis): name = 'npas'
+
+# High-level axes that are determined from the specific context of the data.
+# Only define things not already available in the standard PyGeode module.
+
+# Forecast axis
+class Forecast(Axis):
+  name = 'forecast'
+  atts = dict(units='hours')
 
 # Vertical coordinates
+from pygeode.axis import ZAxis
 class Height_wrt_SeaLevel(ZAxis):
   name = 'height'
   atts = dict(ZAxis.atts, units='m', standard_name='height_above_sea_level')
@@ -32,11 +44,176 @@ class Theta(ZAxis):
   name = 'theta'
   atts = dict(ZAxis.atts, units='K', standard_name='air_potential_temperature')
 
+del Axis, ZAxis
 
-# Create a multi-dimensional variable from a set of records
+
 from pygeode.var import Var
 class FSTD_Var (Var):
-  def __init__ (self, records, squash_forecasts=False):
+  @classmethod
+  def create (cls, axes, data_funcs, ni, nj, nk, dtype):
+    '''
+    Creates a PyGeode Var interface for the given data.
+
+    Inputs:
+      axes       - The PyGeode axes of the data (excluding i,j,k dimensions)
+      data_funcs - Multidimensional array of functions, matching the shape
+                   of the axes.  Each function, when invoked, returns an
+                   individual (ni,nj,nk) data record.
+      ni,nj,nk   - The shape of the data returned by the data functions.
+      dtype      - The dtype to assign for the output.
+    '''
+    var = cls(funcs.axes+(KAxis(nk),JAxis(nj),IAxis(ni)), name=funcs.name, dtype=dtype)
+    var._data_funcs = data_funcs
+
+  # Interface for getting chunk of data out of the file.
+  def getview (self, view, pbar):
+    from itertools import product
+    import numpy as np
+    # Allocate space for the output array.
+    out = np.empty(view.shape, dtype=self.dtype)
+    # A different view on the output, with the outer dimensions flattened.
+    flatout = out.reshape(-1,out.shape[-3],out.shape[-2],out.shape[-1])
+
+    # Slices along the i,j,k directions.
+    sl_k = view.slices[-3]
+    sl_j = view.slices[-2]
+    sl_i = view.slices[-1]
+
+    # Loop over outer dimensions
+    for outrec,func_ind in enumerate(product(view.integer_indices[:-3])):
+      # Get the full data record
+      data = self._data_funcs[func_ind]
+      # Data can either be stored in-place, or wrapped in a function call.
+      if not isinstance(data,np.ndarray):
+        data = data()
+      # Apply subsetting on the data.
+      # Do one dimension at a time, to avoid triggering "advanced" numpy
+      # indexing.
+      data = data[sl_k,:,:]
+      data = data[:,sl_j,:]
+      data = data[:,:,sl_i]
+      # Store this in the output.
+      flatout[rec,:,:,:] = data
+
+    return out
+
+del Var
+
+
+# Define a class for encoding / decoding FSTD data.
+# Each step is placed in its own method, to make it easier to patch in new
+# behaviour if more exotic FSTD files are encountered in the future.
+class FSTD_Interface (object):
+
+  def __init__ (self, squash_forecasts=False, allow_missing_records=True):
+    self.squash_forecasts = squash_forecasts
+    self.allow_missing_records = allow_missing_records
+
+  # Some settings used by the I/O methods.
+
+  # Names of coordinate records.
+  coords = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
+
+  # Fields which define the outer dimensions of the low-level Var object.
+  outer_dimensions = ('dateo', 'ip1', 'ip3', 'npas') 
+
+  # Additional fields which should be ignored when finding unique Var objects.
+  # -IP2 is ingored, because in all the data I've seen so far it's just the
+  #  forecast hour (truncated to the nearest integer?).  This information is
+  #  already encoded in deet*npas.
+  # -data_func is ignored, because each record will have its own object.
+  # -other fields are ignored because they're either unused or part of the
+  #  technical details of how the field is stored in the file.
+  ignore_fields = ('pad', 'ip2', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
+
+
+  # Stage 1: FSTD I/O
+
+  # Read raw records from an FSTD file.
+  def read_records (self, filename):
+    from pygeode.formats import fstd_core
+    return fstd_core.read_records(filename)
+
+  # Write raw records to an FSTD file.
+  def write_records (self, filename, records):
+    from pygeode.formats import fstd_core
+    from os.path import exists
+    from os import remove
+    if exists(filename): remove(filename)
+    fstd_core.write_records (filename, records)
+
+
+  # Stage 2: data vs. coordinate records
+
+  # Split records into coords and data.
+  # Data records will be further processed into variables, whereas coord
+  # records will be used for defining the axes.
+  def split_coords_and_data (self, records):
+    from pygeode.formats import fstd_core
+    coord_inds = []
+    data_inds = []
+    for i,nomvar in enumerate(records['nomvar']):
+      if nomvar in self.coords:
+        coord_inds.append(i)
+      else:
+        data_inds.append(i)
+    coords = records[coord_inds]
+    data = records[data_inds]
+
+    # Squash the forecasts into a date of validity?
+    if self.squash_forecasts:
+      dates = fstd_core.stamp2date(data['dateo'])
+      dates += data['npas']*data['deet']
+      data['dateo'] = fstd_core.date2stamp(dates)
+      data['npas'] = 0
+
+    return coords, data
+
+  # Combine coord and data records.
+  def combine_coords_and_data (self, coords, data):
+    import numpy as np
+    return np.concatenate((coords,data))
+
+
+  # Stage 3: mapping between data records and axes/metadata
+
+  # Decode records into variable metadata (and data pointers).
+  def decode_data_records (self, data):
+    from collections import OrderedDict
+
+    # First, get the list of keys for defining a unique variable
+    unique_keys = [n for n in data.dtype.names if n not in self.outer_dimensions and n not in self.ignore_fields]
+
+    # Next, generate identifiers for each variable.
+    # Would be nice to just do ids = data[unique_keys], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
+    # See http://github.com/numpy/numpy/issues/3256
+    ids = zip(*[data[n] for n in unique_keys])
+
+    # Bin the records by unique var id.
+    bins = OrderedDict()
+    for i,key in enumerate(ids):
+      bins.setdefault(key,[]).append(i)
+
+    # Tease out the metadata and field structure from the records.
+    #TODO
+
+
+  # Stage 3: decoding coords??
+
+  # 
+
+
+# Create a default I/O interface, which can be used to manually apply each
+# stage of the encoding / decoding.
+io = FSTD_Interface()
+
+
+
+#####################################################################
+# Everything below this point is old code, which needs to be
+# reorganized or removed.
+
+def old():
     from pygeode.var import Var
     from pygeode.formats import fstd_core
     import numpy as np
@@ -126,31 +303,6 @@ class FSTD_Var (Var):
     # Finish initializing
     Var.__init__(self, [taxis,faxis,zaxis,kaxis,jaxis,iaxis], dtype=dtype, name=name, atts=atts)
 
-  def getview (self, view, pbar):
-
-    import numpy as np
-    out = np.empty(view.shape, dtype=self.dtype)
-
-    itimes = view.integer_indices[0]
-    iforecasts = view.integer_indices[1]
-    ilevels = view.integer_indices[2]
-
-    sl_k = view.slices[3]
-    sl_j = view.slices[4]
-    sl_i = view.slices[5]
-
-    for out_t, in_t in enumerate(itimes):
-      for out_f, in_f in enumerate(iforecasts):
-        for out_l, in_l in enumerate(ilevels):
-          data = self.data_funcs[in_t,in_f,in_l]()
-          data = data[sl_k,:,:]
-          data = data[:,sl_j,:] # Avoid triggering "advanced" numpy indexing
-          data = data[:,:,sl_i]
-          out[out_t,out_f,out_l,:,:,:] = data
-
-    return out
-
-del Var
 
 # Helper function - preload a record.
 def preload(record):
