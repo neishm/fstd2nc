@@ -105,7 +105,7 @@ del Var
 # behaviour if more exotic FSTD files are encountered in the future.
 class FSTD_Interface (object):
 
-  def __init__ (self, squash_forecasts=False, allow_missing_records=True):
+  def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30):
     self.squash_forecasts = squash_forecasts
     self.allow_missing_records = allow_missing_records
 
@@ -115,7 +115,7 @@ class FSTD_Interface (object):
   coords = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
 
   # Fields which define the outer dimensions of the low-level Var object.
-  outer_dimensions = ('dateo', 'ip1', 'ip3', 'npas') 
+  outer_axes = ('dateo', 'ip1', 'ip3', 'npas') 
 
   # Additional fields which should be ignored when finding unique Var objects.
   # -IP2 is ingored, because in all the data I've seen so far it's just the
@@ -180,14 +180,15 @@ class FSTD_Interface (object):
   # Decode records into variable metadata (and data pointers).
   def decode_data_records (self, data):
     from collections import OrderedDict
+    import numpy as np
 
     # First, get the list of keys for defining a unique variable
-    unique_keys = [n for n in data.dtype.names if n not in self.outer_dimensions and n not in self.ignore_fields]
+    unique_atts = [n for n in data.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
 
     # Next, generate identifiers for each variable.
-    # Would be nice to just do ids = data[unique_keys], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
+    # Would be nice to just do ids = data[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
     # See http://github.com/numpy/numpy/issues/3256
-    ids = zip(*[data[n] for n in unique_keys])
+    ids = zip(*[data[n] for n in unique_atts])
 
     # Bin the records by unique var id.
     bins = OrderedDict()
@@ -195,8 +196,22 @@ class FSTD_Interface (object):
       bins.setdefault(key,[]).append(i)
 
     # Tease out the metadata and field structure from the records.
-    #TODO
-
+    for key, ind in bins.iteritems():
+      d = data[ind]
+      # Get invariant attributes
+      atts = OrderedDict([(n,d[n][0]) for n in unique_atts])
+      # Get the outer axes (all unique values)
+      axes = OrderedDict()
+      for r in range(len(d)):
+        for n in self.outer_axes:
+          axes.setdefault(n,set()).add(d[n][r])
+      axes = map(sorted,axes.values())
+      # Construct a multidimensional array to hold the data functions.
+      # Find the inner dimensions
+      ni = d['ni'][0]
+      nj = d['nj'][0]
+      nk = d['nk'][0]
+      # Placeholder function for
 
   # Stage 3: decoding coords??
 
