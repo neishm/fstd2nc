@@ -108,6 +108,7 @@ class FSTD_Interface (object):
   def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30):
     self.squash_forecasts = squash_forecasts
     self.allow_missing_records = allow_missing_records
+    self.fill_value = fill_value
 
   # Some settings used by the I/O methods.
 
@@ -124,7 +125,7 @@ class FSTD_Interface (object):
   # -data_func is ignored, because each record will have its own object.
   # -other fields are ignored because they're either unused or part of the
   #  technical details of how the field is stored in the file.
-  ignore_fields = ('pad', 'ip2', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
+  ignore_fields = ('pad', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
 
 
   # Stage 1: FSTD I/O
@@ -143,52 +144,39 @@ class FSTD_Interface (object):
     fstd_core.write_records (filename, records)
 
 
-  # Stage 2: data vs. coordinate records
 
-  # Split records into coords and data.
-  # Data records will be further processed into variables, whereas coord
-  # records will be used for defining the axes.
-  def split_coords_and_data (self, records):
-    from pygeode.formats import fstd_core
-    coord_inds = []
-    data_inds = []
-    for i,nomvar in enumerate(records['nomvar']):
-      if nomvar in self.coords:
-        coord_inds.append(i)
-      else:
-        data_inds.append(i)
-    coords = records[coord_inds]
-    data = records[data_inds]
-
-    # Squash the forecasts into a date of validity?
-    if self.squash_forecasts:
-      dates = fstd_core.stamp2date(data['dateo'])
-      dates += data['npas']*data['deet']
-      data['dateo'] = fstd_core.date2stamp(dates)
-      data['npas'] = 0
-
-    return coords, data
-
-  # Combine coord and data records.
-  def combine_coords_and_data (self, coords, data):
-    import numpy as np
-    return np.concatenate((coords,data))
-
-
-  # Stage 3: mapping between data records and axes/metadata
+  # Stage 2: process records into axes, metadata, and associated data functions.
 
   # Decode records into variable metadata (and data pointers).
-  def decode_data_records (self, data):
+  def decode_records (self, records):
     from collections import OrderedDict
     import numpy as np
 
-    # First, get the list of keys for defining a unique variable
-    unique_atts = [n for n in data.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
+    # Mark records as being either coordinates or data.
+    iscoord = np.array([nomvar.strip() in self.coords for i,nomvar in enumerate(records['nomvar'])])
+    isdata = ~iscoord
+
+    # Pre-filter: squash the forecasts into a date of validity?
+    if self.squash_forecasts:
+      dates = fstd_core.stamp2date(records['dateo'][isdata])
+      dates += records['npas'][isdata]*records['deet'][isdata]
+      records['dateo'][isdata] = fstd_core.date2stamp(dates)
+      records['npas'][isdata] = 0
+
+    # Pre-filter the ip2 values (assuming they're truncated versions of deet*npas)
+    records['ip2'][isdata] = 0
+
+    # Get the list of keys for defining a unique variable
+    unique_atts = [n for n in records.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
 
     # Next, generate identifiers for each variable.
-    # Would be nice to just do ids = data[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
+    # Would be nice to just do ids = records[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
     # See http://github.com/numpy/numpy/issues/3256
-    ids = zip(*[data[n] for n in unique_atts])
+    ids = zip(*[records[n] for n in unique_atts])
+
+    # Coord records should remain distinct (not merged together).
+    for i in range(len(records)):
+      if iscoord[i]: ids[i] = i  # Assign unique integer as the id.
 
     # Bin the records by unique var id.
     bins = OrderedDict()
@@ -196,22 +184,84 @@ class FSTD_Interface (object):
       bins.setdefault(key,[]).append(i)
 
     # Tease out the metadata and field structure from the records.
-    for key, ind in bins.iteritems():
-      d = data[ind]
+    for ind in bins.itervalues():
+      d = records[ind]
       # Get invariant attributes
-      atts = OrderedDict([(n,d[n][0]) for n in unique_atts])
-      # Get the outer axes (all unique values)
+      if isdata[ind[0]]:
+        atts = OrderedDict([(n,d[n][0]) for n in unique_atts])
+      else:
+        atts = OrderedDict([(n,d[n][0]) for n in records.dtype.names if n not in self.ignore_fields])
+
+      # Trim the string attributes (original records have fixed length)
+      atts = OrderedDict([(n,v.strip() if isinstance(v,str) else v) for n,v in atts.iteritems()])
+
+      # Get the outer axes (all unique values), and arrange the data funcs
+      # in the appropriate locations.
       axes = OrderedDict()
       for r in range(len(d)):
-        for n in self.outer_axes:
-          axes.setdefault(n,set()).add(d[n][r])
-      axes = map(sorted,axes.values())
+        for axis_name in self.outer_axes:
+          a = axes.setdefault(axis_name,OrderedDict())
+          axis_value = d[axis_name][r]
+          a[axis_value] = None
+      axes = OrderedDict((n,a.keys()) for n,a in axes.iteritems())
+
       # Construct a multidimensional array to hold the data functions.
-      # Find the inner dimensions
-      ni = d['ni'][0]
-      nj = d['nj'][0]
-      nk = d['nk'][0]
-      # Placeholder function for
+      data_funcs = np.empty(map(len,axes.values()), dtype='O')
+      # Fill values for missing records
+      def missing(ni=d['ni'][0], nj=d['nj'][0], nk=d['nk'][0]):
+        return np.full((nk,nj,ni),fill_value=self.fill_value)
+      data_funcs[:] = missing
+
+      # Arrange the data funcs in the appropriate locations.
+      for r in range(len(d)):
+        outer_index = []
+        for axis_name, axis_values in axes.iteritems():
+          axis_value = d[axis_name][r]
+          outer_index.append(axis_values.index(axis_value))
+        data_funcs[tuple(outer_index)] = d['data_func'][r]
+
+      #TODO: check for missing records
+
+      yield atts, axes, data_funcs
+
+
+  # Encode attributes, metadata, and data funcs into records.
+  def encode_records (self, data):
+    from pygeode.formats.fstd_core import record_descr
+    import numpy as np
+    from itertools import product
+    records = []
+    # Loop over each variable.
+    for atts, axes, data_funcs in data:
+
+      # Prepare some space for the records.
+      d = np.zeros(len(data_funcs.flatten()),dtype=record_descr)
+
+      # Add the metadata
+      for n,v in atts.iteritems():
+        d[n][:] = v
+
+      # Add the outer axis values.
+      for i,outer_coords in enumerate(product(*axes.values())):
+        for n,v in zip(axes.keys(),outer_coords):
+          d[n][i] = v
+
+      # Add the data funcs.
+      d['data_func'][:] = data_funcs.flatten()
+
+      records.append(d)
+
+    # Concatenate the records for all the variables together.
+    records = np.concatenate(records)
+
+    # Pad out the string records with spaces
+    records['nomvar'] = [s.upper().ljust(4) for s in records['nomvar']]
+    records['etiket'] = [s.upper().ljust(12) for s in records['etiket']]
+    records['typvar'] = [s.upper().ljust(2) for s in records['typvar']]
+    records['grtyp'] = map(str.upper, records['grtyp'])
+
+    return records
+
 
   # Stage 3: decoding coords??
 
