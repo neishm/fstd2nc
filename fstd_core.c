@@ -957,261 +957,61 @@ static PyObject *make_hy_record (PyObject *self, PyObject *args) {
 
 }
 
-// Helper methods - find a coordinate record for the given field
-// (match ig1,ig2,ig3 to a coordinate's ip1,ip2,ip3).
-int find_coord(HEADER *records, int num_records, char nomvar[4], int ig1, int ig2, int ig3, int ni, int nj) {
-  int i;
-  for (i = 0; i < num_records; i++) {
-    if (strncmp(records[i].nomvar,nomvar,4) != 0) continue;
-    if (records[i].ni != ni) continue;
-    if (records[i].nj != nj) continue;
-    if (records[i].ip1 != ig1) continue;
-    if (records[i].ip2 != ig2) continue;
-    if (records[i].ip3 != ig3) continue;
-    return i;
-  }
-  return -1;
-}
-int find_xrec(HEADER *records, int n, int varid) {
-  char grtyp = records[varid].grtyp[0];
-  int ig1 = records[varid].ig1;
-  int ig2 = records[varid].ig2;
-  int ig3 = records[varid].ig3;
-  int ni = records[varid].ni;
-  int nj = records[varid].nj;
-  if (grtyp == 'X' || grtyp == 'Y')
-    return find_coord(records, n, ">>  ", ig1, ig2, ig3, ni, nj);
-  if (grtyp == 'Z')
-    return find_coord(records, n, ">>  ", ig1, ig2, ig3, ni, 1);
-  return -1;
-}
-int find_yrec(HEADER *records, int n, int varid) {
-  char grtyp = records[varid].grtyp[0];
-  int ig1 = records[varid].ig1;
-  int ig2 = records[varid].ig2;
-  int ig3 = records[varid].ig3;
-  int ni = records[varid].ni;
-  int nj = records[varid].nj;
-  if (grtyp == 'X' || grtyp == 'Y')
-    return find_coord(records, n, "^^  ", ig1, ig2, ig3, ni, nj);
-  if (grtyp == 'Z')
-    return find_coord(records, n, "^^  ", ig1, ig2, ig3, 1, nj);
-  return -1;
-}
 
 
-// Helper functions - determine if latitude/longitude fields are really 1D
-int lat_is_1d (float *lat, int ni, int nj) {
-  int i, j;
-  for (j = 0; j < nj; j++, lat+=ni) {
-    for (i = 1; i < ni; i++) {
-      if (fabsf(lat[0]-lat[i]) > 1E-4) return 0;
-    }
-  }
-  return 1;
-}
-int lon_is_1d (float *lon, int ni, int nj) {
-  int i, j;
-  float *ref = lon;
-  for (j = 0; j < nj; j++, lon+=ni) {
-    for (i = 0; i < ni; i++) {
-      if (fabsf(ref[i]-lon[i]) > 1E-4) return 0;
-    }
-  }
-  return 1;
-}
-
-// Construct latitude/longitude fields from the given records
+// Construct latitude/longitude fields from the given parameters
 static PyObject *get_latlon (PyObject *self, PyObject *args) {
 
-  // Get the input records
-  PyArrayObject *record_array;
-  if (!PyArg_ParseTuple(args, "O!", &PyArray_Type, &record_array)) return NULL;
-  if (record_array->descr != descr) return NULL;
-  if (PyArray_ITEMSIZE(record_array) != sizeof(HEADER)) return NULL;
-  record_array = PyArray_GETCONTIGUOUS(record_array);
-  HEADER *records = (HEADER*)record_array->data;
-  int num_records = PyArray_SIZE(record_array);
+  int ni, nj, ig1ref, ig2ref, ig3ref, ig4ref;
+  char *grtyp, *grref;
+  PyObject *ax_obj, *ay_obj;
+  PyArrayObject *ax_array, *ay_array;
+  float *ax, *ay;
 
-  // Create a dictionary to hold unique latitude & longitude arrays.
-  // Keys are (grtyp,ig1,ig2,ig3,ig4,ni,nj)
-  // Note: this dictionary is static, so it will be re-used for all
-  // subsequent files.  This is a workaround for an issue with c_gdrls not
-  // actually releasing the grid ids, so we were running out!
-  static PyObject *dict;
-  if (dict==NULL) dict = PyDict_New();
+  int gdid;
 
-  int i;
-  for (i = 0; i < num_records; i++) {
-    // Skip coordinate records
-    if (strncmp(records[i].nomvar,">>  ",4) == 0) continue;
-    if (strncmp(records[i].nomvar,"^^  ",4) == 0) continue;
-    if (strncmp(records[i].nomvar,"HY  ",4) == 0) continue;
-    if (strncmp(records[i].nomvar,"!!  ",4) == 0) continue;
-    // Construct the key for this record
-    char *grtyp = records[i].grtyp;
-    int ig1 = records[i].ig1;
-    int ig2 = records[i].ig2;
-    int ig3 = records[i].ig3;
-    int ig4 = records[i].ig4;
-    int ni = records[i].ni;
-    int nj = records[i].nj;
-    PyObject *key = Py_BuildValue("s#iiiiii",grtyp,1,ig1,ig2,ig3,ig4,ni,nj);
-    if (key == NULL) return NULL;
-    // Check if we've already handled this grid
-    if (PyDict_Contains(dict,key)) continue;
+  // Get the input parameters
+  if (!PyArg_ParseTuple(args, "iis#z#iiiiOO", &ni, &nj, &grtyp, 1, &grref, 1, &ig1ref, &ig2ref, &ig3ref, &ig4ref, &ax_obj, &ay_obj)) return NULL;
 
-    // Needed for error messages
-    char nomvar[] = "    ";
-    strncpy (nomvar, records[i].nomvar, 4);
-
-    // Get the grid id
-    int gdid;
-    int cartesian = 0;
-    switch (*grtyp) {
-      case 'Z':;
-        int xrec = find_xrec (records, num_records, i);
-        int yrec = find_yrec (records, num_records, i);
-
-        if (xrec < 0 || yrec < 0) {
-          PyErr_Format (PyExc_ValueError, "Coordinate record(s) not found for '%s'", nomvar);
-          return NULL;
-        }
-
-        PyArrayObject *xobj = (PyArrayObject*)PyObject_CallObject(records[xrec].data_func,NULL);
-        PyArrayObject *yobj = (PyArrayObject*)PyObject_CallObject(records[yrec].data_func,NULL);
-        float *ax = (float*)xobj->data;
-        float *ay = (float*)yobj->data;
-        char *grref = records[xrec].grtyp;
-        int ig1ref = records[xrec].ig1;
-        int ig2ref = records[xrec].ig2;
-        int ig3ref = records[xrec].ig3;
-        int ig4ref = records[xrec].ig4;
-        gdid = c_ezgdef_fmem(ni, nj, grtyp, grref, 
-                ig1ref, ig2ref, ig3ref, ig4ref, ax, ay);
-        // Special case - unrotated 'E' grid
-        // (we can use x and y as lon and lat)
-        if (*grref  == 'E' && ig1ref == 900 && ig2ref == 0 && ig3ref == 43200 && ig4ref == 43200) cartesian = 1;
-        Py_DECREF(xobj);
-        Py_DECREF(yobj);
-        break;
-      case 'A':
-      case 'B':
-      case 'E':
-      case 'G':
-      case 'L':
-      case 'N':
-      case 'S':
-        gdid = c_ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, 0);
-        break;
-      case 'X':
-        // Should already have the 2D lat/lon fields, so no gdid needed.
-        gdid = -1;
-        break;
-      default:
-        PyErr_Format (PyExc_ValueError, "Unhandled grid type '%c'", *grtyp);
-        return NULL;
-    }
-
-    // Extract the latitudes and longitudes
-    npy_intp dims[] = {nj,ni};
-    PyArrayObject *lat = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
-    PyArrayObject *lon = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
-
-    // Special case is X grid, where we read the lat/lon directly.
-    if (*grtyp == 'X') {
-      int xrec = find_xrec (records, num_records, i);
-      int yrec = find_yrec (records, num_records, i);
-      if (xrec < 0 || yrec < 0) {
-        PyErr_Format (PyExc_ValueError, "Coordinate record(s) not found for '%s'", nomvar);
-        return NULL;
-      }
-      PyArrayObject *ydata = (PyArrayObject*)PyObject_CallObject(records[yrec].data_func,NULL);
-      PyArrayObject *xdata = (PyArrayObject*)PyObject_CallObject(records[xrec].data_func,NULL);
-      memcpy (lat->data, ydata->data, ni*nj*sizeof(float));
-      memcpy (lon->data, xdata->data, ni*nj*sizeof(float));
-      Py_DECREF(ydata);
-      Py_DECREF(xdata);
-      // Build the value
-      Py_INCREF(Py_None);
-      Py_INCREF(Py_None);
-      PyObject *value = Py_BuildValue("OOOO", Py_None, Py_None, lat, lon);
-      Py_DECREF(lat);
-      Py_DECREF(lon);
-      PyDict_SetItem(dict,key,value);
-      Py_DECREF(key);
-      Py_DECREF(value);
-      continue;
-    }
-
-    // General case, we need to compute the lat/lon
-    c_gdll (gdid, (float*)lat->data, (float*)lon->data);
-
-    // Extract x and y coordinates
-    PyArrayObject *ax = (PyArrayObject*)PyArray_SimpleNew (1, dims+1, NPY_FLOAT32);
-    PyArrayObject *ay = (PyArrayObject*)PyArray_SimpleNew (1, dims+0, NPY_FLOAT32);
-    c_gdgaxes (gdid, (float*)ax->data, (float*)ay->data);
-
-    // Done with the grid
-//    Note: disabled, now that we're using a single static dictionary to
-//          re-use existing grids from previously read files.
-//          This function wasn't actually freeing the grid ids anyway.
-//    c_gdrls (gdid);
-
-
-    // Can the latitudes and longitudes be reduced to 1D arrays?
-    if (lon_is_1d ((float*)lon->data, ni, nj)) {
-//      printf ("1D longitudes detected\n");
-      PyArrayObject *newlon = (PyArrayObject*)PyArray_SimpleNew (1, dims+1, NPY_FLOAT32);
-      memcpy (newlon->data, lon->data, ni*sizeof(float));
-      Py_DECREF(lon);
-      lon = newlon;
-      // Make sure the longitudes are monotonic
-      // (workaround an issue with c_gdll?)
-      float *l = (float*)lon->data;
-      if ((l[ni-2] > l[ni-3]) && (l[ni-1] < l[ni-2])) {
-        l[ni-1] += 360.;
-      }
-    }
-    if (lat_is_1d ((float*)lat->data, ni, nj)) {
-//      printf ("1D latitudes detected\n");
-      PyArrayObject *newlat = (PyArrayObject*)PyArray_SimpleNew (1, dims+0, NPY_FLOAT32);
-      int j;
-      for (j = 0; j < nj; j++) {
-        ((float*)newlat->data)[j] = ((float*)lat->data)[j*ni];
-      }
-      Py_DECREF(lat);
-      lat = newlat;
-    }
-
-    // Can they be further reduced to the x/y arrays?
-    if (cartesian) {
-      Py_DECREF(lon);
-      Py_INCREF(ax);
-      lon = ax;
-      Py_DECREF(lat);
-      Py_INCREF(ay);
-      lat = ay;
-    }
-
-    // Build the value
-    PyObject *value = Py_BuildValue("OOOO", ax, ay, lat, lon);
-    Py_DECREF(ax);
-    Py_DECREF(ay);
-    Py_DECREF(lat);
-    Py_DECREF(lon);
-    PyDict_SetItem(dict,key,value);
-    Py_DECREF(key);
-    Py_DECREF(value);
+  // Get pointers to optional arguments
+  if (ax_obj == Py_None) {
+    ax_array = NULL;
+    ax = NULL;
+  } else {
+    ax_array = (PyArrayObject*)PyArray_ContiguousFromAny(ax_obj,NPY_FLOAT32,0,0);
+    ax = (float*)(ax_array->data);
+  }
+  if (ay_obj == Py_None) {
+    ay_array = NULL;
+    ay = NULL;
+  } else {
+    ay_array = (PyArrayObject*)PyArray_ContiguousFromAny(ay_obj,NPY_FLOAT32,0,0);
+    ay = (float*)(ay_array->data);
   }
 
-  // Clean up local references
-  Py_DECREF(record_array);
+  gdid = c_ezgdef_fmem(ni, nj, grtyp, grref, ig1ref, ig2ref, ig3ref, ig4ref, ax, ay);
+  if (gdid < 0) {
+    PyErr_Format (PyExc_ValueError, "Problem calling c_ezgdef_fmem (error code %d)", gdid);
+    return NULL;
+  }
+  if (ax_array != NULL) Py_DECREF(ax_array);
+  if (ay_array != NULL) Py_DECREF(ay_array);
 
-  // Return the arrays
-  Py_INCREF(dict);  // We want to keep ownership of the original reference.
-  return dict;
+  // Extract the latitudes and longitudes
+  npy_intp dims[] = {nj,ni};
+  PyArrayObject *lat = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
+  PyArrayObject *lon = (PyArrayObject*)PyArray_SimpleNew (2, dims, NPY_FLOAT32);
+  c_gdll (gdid, (float*)lat->data, (float*)lon->data);
+
+  // Build the value
+  PyObject *value = Py_BuildValue("OO", lat, lon);
+  Py_DECREF(lat);
+  Py_DECREF(lon);
+
+  return value;
 }
+
+
 
 static PyMethodDef FST_Methods[] = {
   {"read_records", fstd_read_records, METH_VARARGS, "Get all record headers from an FSTD file"},
