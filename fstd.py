@@ -263,10 +263,29 @@ class FSTD_Interface (object):
     return records
 
 
-  # Stage 3: decoding coords??
+  # Stage 3: decoding axes
 
-  # 
+  # Attach meaningful axes to the data, using all available context info.
+  # Remove coord variables after they're used.
+  def decode_axes (self, data):
+    # Separate out the coords from the data.
+    coords = []
+    data = list(data)
+    for i,(atts,axes,data_funcs) in enumerate(data):
+      if atts['nomvar'] in self.coords:
+        coords.append((atts,axes,data_funcs))
+        data[i] = None
+    data = filter(None,data)
 
+    # Decode lat/lon records
+    # Look for simple grids (completely defined by ig1/ig2/ig3/ig4)
+    #TODO
+    # Look for anything that uses '>>', '^^'.
+    for xcoord in coords:
+      if xcoord.atts['nomvar'] != '>>': continue
+      ycoord = None
+      for ycoord in coords:
+        pass #TODO
 
 # Create a default I/O interface, which can be used to manually apply each
 # stage of the encoding / decoding.
