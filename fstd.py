@@ -195,8 +195,7 @@ class FSTD_Interface (object):
       # Trim the string attributes (original records have fixed length)
       atts = OrderedDict([(n,v.strip() if isinstance(v,str) else v) for n,v in atts.iteritems()])
 
-      # Get the outer axes (all unique values), and arrange the data funcs
-      # in the appropriate locations.
+      # Get the outer axes (all unique values)
       axes = OrderedDict()
       for r in range(len(d)):
         for axis_name in self.outer_axes:
@@ -207,10 +206,6 @@ class FSTD_Interface (object):
 
       # Construct a multidimensional array to hold the data functions.
       data_funcs = np.empty(map(len,axes.values()), dtype='O')
-      # Fill values for missing records
-      def missing(ni=d['ni'][0], nj=d['nj'][0], nk=d['nk'][0]):
-        return np.full((nk,nj,ni),fill_value=self.fill_value)
-      data_funcs[:] = missing
 
       # Arrange the data funcs in the appropriate locations.
       for r in range(len(d)):
@@ -220,9 +215,16 @@ class FSTD_Interface (object):
           outer_index.append(axis_values.index(axis_value))
         data_funcs[tuple(outer_index)] = d['data_func'][r]
 
-      #TODO: check for missing records
+      # Check if we have full coverage along all axes.
+      have_data = np.not_equal(data_funcs,None)
+      if np.all(have_data):
+        yield atts, axes, data_funcs
+        continue
 
-      yield atts, axes, data_funcs
+      #TODO: Find a minimum set of partial coverages for the data.
+      # (e.g., if we have surface-level output for some times, and 3D output
+      # for other times).
+
 
 
   # Encode attributes, metadata, and data funcs into records.
