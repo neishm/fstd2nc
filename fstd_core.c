@@ -462,9 +462,9 @@ static PyObject *date2stamp (PyObject *self, PyObject *args) {
 // Decode vertical levels
 static PyObject *decode_levels (PyObject *self, PyObject *args) {
   PyObject *ip1_obj;
-  PyArrayObject *ip1_array, *z_array;
+  PyArrayObject *ip1_array, *z_array, *kind_array;
   float *z;
-  int *ip1, kind, mode = -1, flag = 0;
+  int *ip1, *kind, mode = -1, flag = 0;
   int i;
   npy_intp n;
   if (!PyArg_ParseTuple(args, "O", &ip1_obj)) return NULL;
@@ -476,14 +476,21 @@ static PyObject *decode_levels (PyObject *self, PyObject *args) {
     Py_DECREF(ip1_array);
     return NULL;
   }
+  kind_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
+  if (kind_array == NULL) {
+    Py_DECREF(ip1_array);
+    return NULL;
+  }
   ip1 = (int*)ip1_array->data;
   z = (float*)z_array->data;
+  kind = (int*)kind_array->data;
   for (i = 0; i < n; i++) {
-    f77name(convip)(ip1++, z++, &kind, &mode, "", &flag);
+    f77name(convip)(ip1++, z++, kind++, &mode, "", &flag);
   }
-  PyObject *ret = Py_BuildValue("(O,i)", z_array, kind);
+  PyObject *ret = Py_BuildValue("(O,O)", z_array, kind_array);
   Py_DECREF (ip1_array);
   Py_DECREF (z_array);
+  Py_DECREF (kind_array);
   return ret;
 }
 

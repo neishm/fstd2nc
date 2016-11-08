@@ -149,6 +149,7 @@ class FSTD_Interface (object):
 
   # Decode records into variable metadata (and data pointers).
   def decode_records (self, records):
+    from pygeode.formats import fstd_core
     from collections import OrderedDict
     import numpy as np
 
@@ -172,7 +173,12 @@ class FSTD_Interface (object):
     # Next, generate identifiers for each variable.
     # Would be nice to just do ids = records[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
     # See http://github.com/numpy/numpy/issues/3256
-    ids = zip(*[records[n] for n in unique_atts])
+    ids = [records[n] for n in unique_atts]
+    # Tweak the ids to also look at the type of ip1 (in case we have
+    # different types of levels mixed together in the same file).
+    levels, kind = fstd_core.decode_levels(records['ip1'])
+    ids.append(kind)
+    ids = zip(*ids)
 
     # Coord records should remain distinct (not merged together).
     for i in range(len(records)):
