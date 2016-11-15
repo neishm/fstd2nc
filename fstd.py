@@ -127,6 +127,32 @@ class FSTD_Interface (object):
   #  technical details of how the field is stored in the file.
   ignore_fields = ('pad', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
 
+  # Helper method - generate unique keys for the given records.
+  def _get_record_keys (self, records):
+    import numpy as np
+    from pygeode.formats import fstd_core
+    # Mark records as being either coordinates or data.
+    iscoord = np.array([nomvar.strip() in self.coords for i,nomvar in enumerate(records['nomvar'])])
+
+    # Get the list of keys for defining a unique variable
+    unique_atts = [n for n in records.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
+
+    # Next, generate identifiers for each variable.
+    # Would be nice to just do ids = records[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
+    # See http://github.com/numpy/numpy/issues/3256
+    ids = [records[n] for n in unique_atts]
+    # Tweak the ids to also look at the type of ip1 (in case we have
+    # different types of levels mixed together in the same file).
+    levels, kind = fstd_core.decode_levels(records['ip1'])
+    ids.append(kind)
+    ids = zip(*ids)
+
+    # Coord records should remain distinct (not merged together).
+    for i in range(len(records)):
+      if iscoord[i]: ids[i] = i  # Assign unique integer as the id.
+
+    return list(set(ids))
+
 
   # Stage 1: FSTD I/O
 
