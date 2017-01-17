@@ -105,6 +105,16 @@ del Var
 # behaviour if more exotic FSTD files are encountered in the future.
 class FSTD_Interface (object):
 
+  # Names of coordinate records.
+  coords = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
+
+  # Fields which define the outer dimensions of the low-level Var object.
+  outer_axes = ('dateo', 'ip1', 'ip2', 'ip3', 'npas')
+
+  # Additional fields which should be ignored when finding unique Var objects.
+  ignore_fields = ('pad', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
+
+
   def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30, ignore_ip2=True):
     self.squash_forecasts = squash_forecasts
     self.allow_missing_records = allow_missing_records
@@ -115,17 +125,6 @@ class FSTD_Interface (object):
     if ignore_ip2:
       self.outer_axes = tuple([a for a in self.outer_axes if a != 'ip2'])
       self.ignore_fields = self.ignore_fields + ('ip2',)
-
-  # Some settings used by the I/O methods.
-
-  # Names of coordinate records.
-  coords = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
-
-  # Fields which define the outer dimensions of the low-level Var object.
-  outer_axes = ('dateo', 'ip1', 'ip2', 'ip3', 'npas')
-
-  # Additional fields which should be ignored when finding unique Var objects.
-  ignore_fields = ('pad', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
 
   # Helper method - generate unique keys for the given records.
   def _get_record_keys (self, records):
