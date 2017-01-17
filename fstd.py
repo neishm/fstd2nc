@@ -105,11 +105,16 @@ del Var
 # behaviour if more exotic FSTD files are encountered in the future.
 class FSTD_Interface (object):
 
-  def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30, zap_ip2=True):
+  def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30, ignore_ip2=True):
     self.squash_forecasts = squash_forecasts
     self.allow_missing_records = allow_missing_records
     self.fill_value = fill_value
-    self.zap_ip2 = zap_ip2
+    self.ignore_ip2 = ignore_ip2
+
+    # Ignore the ip2 values? (assuming they're truncated versions of deet*npas)
+    if ignore_ip2:
+      self.outer_axes = tuple([a for a in self.outer_axes if a != 'ip2'])
+      self.ignore_fields = self.ignore_fields + ('ip2',)
 
   # Some settings used by the I/O methods.
 
@@ -184,10 +189,6 @@ class FSTD_Interface (object):
       dates += records['npas'][isdata]*records['deet'][isdata]
       records['dateo'][isdata] = fstd_core.date2stamp(dates)
       records['npas'][isdata] = 0
-
-    # Pre-filter the ip2 values? (assuming they're truncated versions of deet*npas)
-    if self.zap_ip2:
-      records['ip2'][isdata] = 0
 
     # Get the list of keys for defining a unique variable
     unique_atts = [n for n in records.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
