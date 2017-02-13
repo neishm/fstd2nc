@@ -103,54 +103,200 @@ del Var
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own method, to make it easier to patch in new
 # behaviour if more exotic FSTD files are encountered in the future.
+class Generic_FSTD_Interface (object):
+
+  def __init__ (self, *args, **kwargs):
+    # Names of records that should be kept separate (never grouped into
+    # multidimensional arrays).
+    self.meta_records = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
+
+    # Attributes which could potentially be used as axes.
+    self.outer_axes = ('dateo', 'forecast', 'ip1', 'ip2', 'ip3')
+
+    # Attributes which uniquely identify a variable.
+    # Note: nomvar must always be first entry here.
+    self.var_id = ('nomvar',)
+
+    # Attributes which should be completely ignored when decoding.
+    # They're either not implemented, or are internal info for the file.
+    self.ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
+
+  ###############################################
+  # Basic flow for reading data
+
+  # Read raw records from an FSTD file.
+  # Result goes into a 'records' attribute.
+  def read_records (self, filename):
+    from pygeode.formats import fstd_core
+    self.records = fstd_core.read_records(filename)
+
+  # Modify records in-place?
+  # (stub)
+  def modify_records (self): pass
+
+  # Decode records into variable metadata (and data pointers).
+  # Result is a list of (atts, axes, data_funcs) tuples.
+  def decode_records (self):
+    self.data = list(self._decode_records())
+
+  #
+  ###############################################
+
+  ###############################################
+  # Basic flow for writing data
+
+  #
+  ###############################################
+
+  ###############################################
+  # Implementation details
+
+  # Get any extra (derived) fields needed for doing the decoding.
+  def _extra_data (self):
+    from pygeode.formats import fstd_core
+    from collections import OrderedDict
+    extra = OrderedDict()
+    # Calculate the forecast (in hours) and date of validity.
+    extra['forecast']=self.records['deet']*self.records['npas']
+    dateo = fstd_core.stamp2date(self.records['dateo'])
+    datev = dateo + self.records['deet']*self.records['npas']
+    extra['datev'] = fstd_core.date2stamp(datev)
+    return extra
+
+  # Logic for decoding records and grouping into multidimensional datasets.
+  def _decode_records (self):
+    from pygeode.formats import fstd_core
+    from collections import OrderedDict, namedtuple
+    import numpy as np
+
+    records = self.records
+    extra = self._extra_data()
+
+    # Get the unique variable identifiers.
+    var_ids = zip(*[records[n] if n in records.dtype.names else extra[n] for n in self.var_id])
+    var_id_type = namedtuple('var_id', self.var_id)
+    var_ids = [var_id_type(*var_id) for var_id in var_ids]
+
+    # Get the axis coordinates for each record.
+    all_axis_coords = zip(*[records[n] if n in records.dtype.names else extra[n] for n in self.outer_axes])
+
+    # Get the metadata for each record.
+    all_metadata = [(n,records[n]) for n in records.dtype.names if n not in self.outer_axes]
+    all_metadata.extend([(n,v) for n,v in extra.iteritems() if n not in self.outer_axes])
+    metadata_names, all_metadata = zip(*all_metadata)
+    all_metadata = zip(*all_metadata)
+
+    # Bin the record 'coordinates' by variable.
+    coord_bins = OrderedDict()
+    for var_id, axis_coords in zip(var_ids, all_axis_coords):
+      coord_bins.setdefault(var_id,[]).append(axis_coords)
+
+    # Bin the metadata by variable.
+    metadata_bins = dict()
+    for var_id, metadata in zip(var_ids, all_metadata):
+      metadata_bins.setdefault(var_id,[]).append(metadata)
+
+    # Bin the data readers by variable.
+    data_bins = dict()
+    for i,var_id in enumerate(var_ids):
+      data_bins.setdefault(var_id,[]).append(records['data_func'][i])
+
+    # Loop over each variable
+    for var_id, axis_coords in coord_bins.iteritems():
+
+      # Ignore coordinate records.
+      if var_id.nomvar.strip() in self.meta_records: continue
+
+      # Concatenate axis coordinates from all relevant records.
+      axes = [set() for a in axis_coords[0]]
+      for coord in axis_coords:
+        for axis, newvalue in zip(axes,coord):
+          axis.add(newvalue)
+      # Sort the axis values numerically.
+      axes = map(sorted,axes)
+      # Attach the original names to the axes.
+      axes = OrderedDict(zip(self.outer_axes,axes))
+
+      # Get metadata for this variable.
+      atts = dict()
+      metadata = metadata_bins[var_id]
+      for n,v in zip(metadata_names,zip(*metadata)):
+        # Ignore attributes that are on the ignore list.
+        if n in self.ignore_atts: continue
+        # Ignore attributes that aren't consistent across the records.
+        v = set(v)
+        if len(v) > 1: continue
+        v = v.pop()
+        # Trim string attributes (remove whitespace padding).
+        if isinstance(v,str): v = v.strip()
+        atts[n] = v
+
+      # Construct a multidimensional array to hold the data functions.
+      data_funcs = np.empty(map(len,axes.values()), dtype='O')
+
+      # Arrange the data funcs in the appropriate locations.
+      #TODO
+      continue
+      for r in range(len(d)):
+        outer_index = []
+        for axis_name, axis_values in axes.iteritems():
+          axis_value = d[axis_name][r]
+          outer_index.append(axis_values.index(axis_value))
+        data_funcs[tuple(outer_index)] = d['data_func'][r]
+
+      # Check if we have full coverage along all axes.
+      have_data = np.not_equal(data_funcs,None)
+      if np.all(have_data):
+        yield atts, axes, data_funcs
+        continue
+
+      #TODO: Find a minimum set of partial coverages for the data.
+      # (e.g., if we have surface-level output for some times, and 3D output
+      # for other times).
+
+# Mixins for different behaviour / assumptions about FSTD data.
+
+# Assume the IP2 value is just a truncated version of deet*npas/3600 (forecast
+# hour), so it shouldn't be used for matching records together.
+# For example, 1.0 and 1.5 hour forecasts will both be encoded as IP2=1, which
+# would be confusing when trying to piece the data together.
+class Ignore_IP2 (Generic_FSTD_Interface):
+  def __init__ (self, *args, **kwargs):
+    super(Ignore_IP2,self).__init__(*args,**kwargs)
+    self.outer_axes = tuple([a for a in self.outer_axes if a != 'ip2'])
+
+
+# Allow (date-of-origin,forecast) to be squashed into a single
+# date-of-validity axis.
+class Squashable_Forecasts (Generic_FSTD_Interface):
+  def __init__ (self, squash_forecasts=True, *args, **kwargs):
+    super(Squashable_Forecasts,self).__init__(*args,**kwargs)
+    if squash_forecasts:
+      self.outer_axes = ('datev',) + tuple([a for a in self.outer_axes if a not in ('dateo','forecast')])
+
+
+# Vertical coordinate interface
+class VCoords (Generic_FSTD_Interface):
+  # Don't group records across different level 'kind'.
+  # (otherwise can't create a coherent vertical axis).
+  def __init__ (self, *args, **kwargs):
+    super(VCoords,self).__init__(*args,**kwargs)
+    self.var_id = self.var_id + ('kind',)
+  # Provide 'kind' information to the decoder.
+  def _extra_data (self):
+    from pygeode.formats import fstd_core
+    extra = super(VCoords,self)._extra_data()
+    levels, kind = fstd_core.decode_levels(records['ip1'])
+    extra['kind'] = kind
+    return extra
+
 class FSTD_Interface (object):
-
-  # Names of coordinate records.
-  coords = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
-
-  # Fields which define the outer dimensions of the low-level Var object.
-  outer_axes = ('dateo', 'ip1', 'ip2', 'ip3', 'npas')
-
-  # Additional fields which should be ignored when finding unique Var objects.
-  ignore_fields = ('pad', 'swa', 'lng', 'dltf', 'ubc', 'extra1', 'extra2', 'extra3', 'data_func')
-
 
   def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30, ignore_ip2=True):
     self.squash_forecasts = squash_forecasts
     self.allow_missing_records = allow_missing_records
     self.fill_value = fill_value
     self.ignore_ip2 = ignore_ip2
-
-    # Ignore the ip2 values? (assuming they're truncated versions of deet*npas)
-    if ignore_ip2:
-      self.outer_axes = tuple([a for a in self.outer_axes if a != 'ip2'])
-      self.ignore_fields = self.ignore_fields + ('ip2',)
-
-  # Helper method - generate unique keys for the given records.
-  def _get_record_keys (self, records):
-    import numpy as np
-    from pygeode.formats import fstd_core
-    # Mark records as being either coordinates or data.
-    iscoord = np.array([nomvar.strip() in self.coords for i,nomvar in enumerate(records['nomvar'])])
-
-    # Get the list of keys for defining a unique variable
-    unique_atts = [n for n in records.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
-
-    # Next, generate identifiers for each variable.
-    # Would be nice to just do ids = records[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
-    # See http://github.com/numpy/numpy/issues/3256
-    ids = [records[n] for n in unique_atts]
-    # Tweak the ids to also look at the type of ip1 (in case we have
-    # different types of levels mixed together in the same file).
-    levels, kind = fstd_core.decode_levels(records['ip1'])
-    ids.append(kind)
-    ids = zip(*ids)
-
-    # Coord records should remain distinct (not merged together).
-    for i in range(len(records)):
-      if iscoord[i]: ids[i] = i  # Assign unique integer as the id.
-
-    return list(set(ids))
 
 
   # Stage 1: FSTD I/O
@@ -173,85 +319,6 @@ class FSTD_Interface (object):
   # Stage 2: process records into axes, metadata, and associated data functions.
 
   # Decode records into variable metadata (and data pointers).
-  def decode_records (self, records):
-    from pygeode.formats import fstd_core
-    from collections import OrderedDict
-    import numpy as np
-
-    # Mark records as being either coordinates or data.
-    iscoord = np.array([nomvar.strip() in self.coords for i,nomvar in enumerate(records['nomvar'])])
-    isdata = ~iscoord
-
-    # Pre-filter: squash the forecasts into a date of validity?
-    if self.squash_forecasts:
-      dates = fstd_core.stamp2date(records['dateo'][isdata])
-      dates += records['npas'][isdata]*records['deet'][isdata]
-      records['dateo'][isdata] = fstd_core.date2stamp(dates)
-      records['npas'][isdata] = 0
-
-    # Get the list of keys for defining a unique variable
-    unique_atts = [n for n in records.dtype.names if n not in self.outer_axes and n not in self.ignore_fields]
-
-    # Next, generate identifiers for each variable.
-    # Would be nice to just do ids = records[unique_atts], but numpy >= 1.7 and < 1.10 has a bug that won't let this work with arrays containing objects.
-    # See http://github.com/numpy/numpy/issues/3256
-    ids = [records[n] for n in unique_atts]
-    # Tweak the ids to also look at the type of ip1 (in case we have
-    # different types of levels mixed together in the same file).
-    levels, kind = fstd_core.decode_levels(records['ip1'])
-    ids.append(kind)
-    ids = zip(*ids)
-
-    # Coord records should remain distinct (not merged together).
-    for i in range(len(records)):
-      if iscoord[i]: ids[i] = i  # Assign unique integer as the id.
-
-    # Bin the records by unique var id.
-    bins = OrderedDict()
-    for i,key in enumerate(ids):
-      bins.setdefault(key,[]).append(i)
-
-    # Tease out the metadata and field structure from the records.
-    for ind in bins.itervalues():
-      d = records[ind]
-      # Get invariant attributes
-      if isdata[ind[0]]:
-        atts = OrderedDict([(n,d[n][0]) for n in unique_atts])
-      else:
-        atts = OrderedDict([(n,d[n][0]) for n in records.dtype.names if n not in self.ignore_fields])
-
-      # Trim the string attributes (original records have fixed length)
-      atts = OrderedDict([(n,v.strip() if isinstance(v,str) else v) for n,v in atts.iteritems()])
-
-      # Get the outer axes (all unique values)
-      axes = OrderedDict()
-      for r in range(len(d)):
-        for axis_name in self.outer_axes:
-          a = axes.setdefault(axis_name,OrderedDict())
-          axis_value = d[axis_name][r]
-          a[axis_value] = None
-      axes = OrderedDict((n,a.keys()) for n,a in axes.iteritems())
-
-      # Construct a multidimensional array to hold the data functions.
-      data_funcs = np.empty(map(len,axes.values()), dtype='O')
-
-      # Arrange the data funcs in the appropriate locations.
-      for r in range(len(d)):
-        outer_index = []
-        for axis_name, axis_values in axes.iteritems():
-          axis_value = d[axis_name][r]
-          outer_index.append(axis_values.index(axis_value))
-        data_funcs[tuple(outer_index)] = d['data_func'][r]
-
-      # Check if we have full coverage along all axes.
-      have_data = np.not_equal(data_funcs,None)
-      if np.all(have_data):
-        yield atts, axes, data_funcs
-        continue
-
-      #TODO: Find a minimum set of partial coverages for the data.
-      # (e.g., if we have surface-level output for some times, and 3D output
-      # for other times).
 
 
 
@@ -319,7 +386,7 @@ class FSTD_Interface (object):
 
 # Create a default I/O interface, which can be used to manually apply each
 # stage of the encoding / decoding.
-io = FSTD_Interface()
+#io = FSTD_Interface()
 
 
 
