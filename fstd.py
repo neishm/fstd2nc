@@ -103,40 +103,66 @@ del Var
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own method, to make it easier to patch in new
 # behaviour if more exotic FSTD files are encountered in the future.
-class Generic_FSTD_Interface (object):
+class Base_FSTD_Interface (object):
+  """
+  Interface for reading / writing FSTD files.
 
-  def __init__ (self, *args, **kwargs):
-    # Names of records that should be kept separate (never grouped into
-    # multidimensional arrays).
-    self.meta_records = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
+  The sequence of operations for reading is:
+  1) Instantiate this class, with particular I/O options.
+  2) Call read_file() to collect all the record headers.
+  3) Call _finalize_input_records() to add any extra information 
+  """
 
-    # Attributes which could potentially be used as axes.
-    self.outer_axes = ('dateo', 'forecast', 'ip1', 'ip2', 'ip3')
+  # Names of records that should be kept separate (never grouped into
+  # multidimensional arrays).
+  meta_records = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
 
-    # Attributes which uniquely identify a variable.
-    # Note: nomvar must always be first entry here.
-    self.var_id = ('nomvar',)
+  # Attributes which could potentially be used as axes.
+  outer_axes = ()
 
-    # Attributes which should be completely ignored when decoding.
-    # They're either not implemented, or are internal info for the file.
-    self.ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
+  # Attributes which uniquely identify a variable.
+  # Note: nomvar must always be the first entry here.
+  var_id = ('nomvar','ni','nj','nk')
+
+  # Attributes which should be completely ignored when decoding.
+  # They're either not implemented, or are internal info for the file.
+  ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
+
+  def __init__ (self): pass
+
 
   ###############################################
   # Basic flow for reading data
 
-  # Read raw records from an FSTD file.
-  # Result goes into a 'records' attribute.
-  def read_records (self, filename):
+  def read_file (self, filename):
+    """
+    Read raw records from an FSTD file.
+    Result goes into a 'records' attribute.
+    Multiple files can be read sequentially.
+    """
     from pygeode.formats import fstd_core
-    self.records = fstd_core.read_records(filename)
+    from collections import OrderedDict
+    import numpy as np
+    records = fstd_core.read_records(filename)
+    records = OrderedDict([(n,records[n]) for n in records.dtype.names])
+    # Is this the first file being read into this object?
+    if not hasattr(self,'records'):
+      self.records = records
+    # Otherwise, append to the existing data.
+    else:
+      for n,v in records.iteritems():
+        np.concatenate(self.records[n],v)
 
-  # Modify records in-place?
-  # (stub)
-  def modify_records (self): pass
+  # Some extra work done to the records.
+  # Normally, this means adding extra (derived) attributes to the headers.
+  def _finalize_input_records (self): pass
 
   # Decode records into variable metadata (and data pointers).
   # Result is a list of (atts, axes, data_funcs) tuples.
   def decode_records (self):
+    # First, get any extra info that may be needed for decoding.
+    self._finalize_input_records()
+    # Then, start the work of decoding (implemented below).
     self.data = list(self._decode_records())
 
   #
@@ -151,40 +177,27 @@ class Generic_FSTD_Interface (object):
   ###############################################
   # Implementation details
 
-  # Get any extra (derived) fields needed for doing the decoding.
-  def _extra_data (self):
-    from pygeode.formats import fstd_core
-    from collections import OrderedDict
-    extra = OrderedDict()
-    # Calculate the forecast (in hours) and date of validity.
-    extra['forecast']=self.records['deet']*self.records['npas']
-    dateo = fstd_core.stamp2date(self.records['dateo'])
-    datev = dateo + self.records['deet']*self.records['npas']
-    extra['datev'] = fstd_core.date2stamp(datev)
-    return extra
-
   # Logic for decoding records and grouping into multidimensional datasets.
+  # This version is a generator (wrapped by "decode_records" above), which
+  # iteraters over one variable at a time.
   def _decode_records (self):
     from pygeode.formats import fstd_core
     from collections import OrderedDict, namedtuple
     import numpy as np
 
     records = self.records
-    extra = self._extra_data()
 
     # Get the unique variable identifiers.
-    var_ids = zip(*[records[n] if n in records.dtype.names else extra[n] for n in self.var_id])
+    var_ids = zip(*[records[n] for n in self.var_id])
     var_id_type = namedtuple('var_id', self.var_id)
     var_ids = [var_id_type(*var_id) for var_id in var_ids]
 
     # Get the axis coordinates for each record.
-    all_axis_coords = zip(*[records[n] if n in records.dtype.names else extra[n] for n in self.outer_axes])
+    all_axis_coords = zip(*[records[n] for n in self.outer_axes])
 
     # Get the metadata for each record.
-    all_metadata = [(n,records[n]) for n in records.dtype.names if n not in self.outer_axes]
-    all_metadata.extend([(n,v) for n,v in extra.iteritems() if n not in self.outer_axes])
-    metadata_names, all_metadata = zip(*all_metadata)
-    all_metadata = zip(*all_metadata)
+    metadata_names = [n for n in records.iterkeys() if n not in self.outer_axes and n not in self.ignore_atts]
+    all_metadata = zip(*[records[n] for n in metadata_names]) 
 
     # Bin the record 'coordinates' by variable.
     coord_bins = OrderedDict()
@@ -195,6 +208,16 @@ class Generic_FSTD_Interface (object):
     metadata_bins = dict()
     for var_id, metadata in zip(var_ids, all_metadata):
       metadata_bins.setdefault(var_id,[]).append(metadata)
+
+    # Keep only the metadata that's consistent over all variable records,
+    # and convert to a dictionary.
+    for varid, metadata in metadata_bins.items():
+      final_metadata = OrderedDict()
+      for n, v in zip(metadata_names, metadata):
+        v = set(v)
+        if len(v) == 1:
+          final_metadata[n] = v.pop()
+      metadata_bins[varid] = final_metadata
 
     # Bin the data readers by variable.
     data_bins = dict()
@@ -256,39 +279,49 @@ class Generic_FSTD_Interface (object):
 
 # Mixins for different behaviour / assumptions about FSTD data.
 
-# Assume the IP2 value is just a truncated version of deet*npas/3600 (forecast
-# hour), so it shouldn't be used for matching records together.
-# For example, 1.0 and 1.5 hour forecasts will both be encoded as IP2=1, which
-# would be confusing when trying to piece the data together.
-class Ignore_IP2 (Generic_FSTD_Interface):
-  def __init__ (self, *args, **kwargs):
-    super(Ignore_IP2,self).__init__(*args,**kwargs)
-    self.outer_axes = tuple([a for a in self.outer_axes if a != 'ip2'])
 
-
-# Allow (date-of-origin,forecast) to be squashed into a single
-# date-of-validity axis.
-class Squashable_Forecasts (Generic_FSTD_Interface):
-  def __init__ (self, squash_forecasts=True, *args, **kwargs):
-    super(Squashable_Forecasts,self).__init__(*args,**kwargs)
+# Logic for handling date field.
+class Dates (Base_FSTD_Interface):
+  def __init__ (self, squash_forecasts=False, *args, **kwargs):
+    super(Dates,self).__init__(*args,**kwargs)
     if squash_forecasts:
-      self.outer_axes = ('datev',) + tuple([a for a in self.outer_axes if a not in ('dateo','forecast')])
+      self.outer_axes = ('datev',) + self.outer_axes
+    else:
+      self.outer_axes = ('dateo','forecast') + self.outer_axes
+  # Get any extra (derived) fields needed for doing the decoding.
+  def _finalize_input_records (self):
+    from pygeode.formats import fstd_core
+    from collections import OrderedDict
+    super(Dates,self)._finalize_input_records()
+    # Calculate the forecast (in hours) and date of validity.
+    self.records['forecast']=self.records['deet']*self.records['npas']
+    dateo = fstd_core.stamp2date(self.records['dateo'])
+    datev = dateo + self.records['deet']*self.records['npas']
+    self.records['datev'] = fstd_core.date2stamp(datev)
 
 
-# Vertical coordinate interface
-class VCoords (Generic_FSTD_Interface):
+
+# Logic for handling vertical coordinates.
+class VCoords (Base_FSTD_Interface):
   # Don't group records across different level 'kind'.
   # (otherwise can't create a coherent vertical axis).
   def __init__ (self, *args, **kwargs):
     super(VCoords,self).__init__(*args,**kwargs)
+    # Split data by level kind.
     self.var_id = self.var_id + ('kind',)
-  # Provide 'kind' information to the decoder.
-  def _extra_data (self):
+    # Use decoded IP1 values as the vertical axis.
+    self.outer_axes += ('level',)
+  def _finalize_input_records (self):
     from pygeode.formats import fstd_core
-    extra = super(VCoords,self)._extra_data()
-    levels, kind = fstd_core.decode_levels(records['ip1'])
-    extra['kind'] = kind
-    return extra
+    super(VCoords,self)._finalize_input_records()
+    levels, kind = fstd_core.decode_levels(self.records['ip1'])
+    # Provide 'level' and 'kind' information to the decoder.
+    self.records['level'] = levels
+    self.records['kind'] = kind
+
+class FSTD_Test (Dates,VCoords): pass
+
+
 
 class FSTD_Interface (object):
 
