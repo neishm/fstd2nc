@@ -276,6 +276,7 @@ class Base_FSTD_Interface (object):
     att_type['data_func'] = object
 
     # Construct the records.
+    # The values will be stored in chunks, to be concatenated at the end.
     records = OrderedDict((n,[]) for n in att_type.iterkeys())
 
     # Loop over each variable.
@@ -303,17 +304,18 @@ class Base_FSTD_Interface (object):
       # Add in the data references.
       current_records['data_func'] = data_funcs
 
-      # Check for anything that's not defined (provide some fill values).
+      # Check for anything that's not defined (apply a mask).
       for n,t in att_type.iteritems():
         if n not in current_records:
-          current_records[n] = list(np.zeros(nrecs, dtype=t))
+          bad = np.zeros(nrecs, dtype=t)
+          current_records[n] = np.ma(bad,mask=True)
 
       # Add these records to the master list.
       for n,v in records.iteritems():
-        v.extend(current_records[n])
+        v.append(current_records[n])
 
     # Convert to numpy arrays.
-    records = OrderedDict((n,np.array(v)) for n,v in records.iteritems())
+    records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.iteritems())
 
     self.records = records
     # Fill in any other information that may be missing.
@@ -362,14 +364,18 @@ class Base_FSTD_Interface (object):
 # Mixins for different behaviour / assumptions about FSTD data.
 
 
+#################################################
 # Logic for handling date field.
+
 class Dates (Base_FSTD_Interface):
+
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
     super(Dates,self).__init__(*args,**kwargs)
     if squash_forecasts:
       self.outer_axes = ('datev',) + self.outer_axes
     else:
       self.outer_axes = ('dateo','forecast') + self.outer_axes
+
   # Get any extra (derived) fields needed for doing the decoding.
   def _finalize_input_records (self):
     from pygeode.formats import fstd_core
@@ -381,6 +387,7 @@ class Dates (Base_FSTD_Interface):
     dateo = fstd_core.stamp2date(records['dateo'])
     datev = dateo + records['deet']*records['npas']
     records['datev'] = fstd_core.date2stamp(datev)
+
   # Prepare date info for output.
   def _finalize_output_records (self):
     from pygeode.formats import fstd_core
@@ -390,27 +397,28 @@ class Dates (Base_FSTD_Interface):
 
     nrecs = len(records['nomvar'])
 
-    # Set a default 'deet' value?
-    if 'deet' not in records:
-      records['deet'] = np.empty(nrecs)
-      records['deet'][:] = 3600
+    # Check for missing record attributes
+    for att in 'deet','npas','dateo','datev','forecast':
+      if att not in records:
+        records[att] = np.ma.masked_all(nrecs)
 
-    # Set npas?
-    if 'npas' not in records:
-      if 'forecast' in records:
-        records['npas'] = records['forecast']*3600/records['deet']
-        records['npas'] = np.array(records['npas'],dtype=int)
-      else:
-        records['npas'] = np.zeros(nrecs)
+    # Mask out invalid deet values.
+    records['deet'] = np.ma.masked_equal(records['deet'],0)
+
+    # Calculate npas from forecast?
+    bad_npas = np.ma.getmaskarray(records['npas'])
+    data = records['forecast']/records['deet']*3600
+    records['npas'][bad_npas] = np.asarray(data[bad_npas],dtype='int32')
 
     # Set dateo?
-    if 'dateo' not in records:
-      if 'datev' in records:
-        datev = fstd_core.stamp2date(records['datev'])
-        dateo = datev - records['deet'] * records['npas']
-        records['dateo'] = fstd_core.date2stamp(dateo)
-    else:
-      records['dateo'] = np.zeros(nrecs)
+    bad_dateo = np.ma.getmaskarray(records['dateo'])
+    datev = fstd_core.stamp2date(records['datev'])
+    dateo = datev - records['deet'] * records['npas']
+    records['dateo'][bad_dateo] = fstd_core.date2stamp(dateo[bad_dateo])
+
+    # Fill in missing values
+    for att in 'deet','npas','dateo','datev','forecast':
+      records[att] = np.ma.filled(records[att],0)
 
 
 # Logic for handling vertical coordinates.
