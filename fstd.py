@@ -47,57 +47,55 @@ class Theta(ZAxis):
 del Axis, ZAxis
 
 
-from pygeode.var import Var
-class FSTD_Var (Var):
-  @classmethod
-  def create (cls, axes, data_funcs, ni, nj, nk, dtype):
-    '''
-    Creates a PyGeode Var interface for the given data.
-
-    Inputs:
-      axes       - The PyGeode axes of the data (excluding i,j,k dimensions)
-      data_funcs - Multidimensional array of functions, matching the shape
-                   of the axes.  Each function, when invoked, returns an
-                   individual (ni,nj,nk) data record.
-      ni,nj,nk   - The shape of the data returned by the data functions.
-      dtype      - The dtype to assign for the output.
-    '''
-    var = cls(funcs.axes+(KAxis(nk),JAxis(nj),IAxis(ni)), name=funcs.name, dtype=dtype)
-    var._data_funcs = data_funcs
-
-  # Interface for getting chunk of data out of the file.
-  def getview (self, view, pbar):
+# Helper class - collects data references into a numpy-like object.
+# Makes it more convenient for accessing the underlying data.
+class _Array (object):
+  def __init__ (self, shape, dtype, inner_dims, data_funcs):
+    # Expected shape and type of the array.
+    self.shape = tuple(shape)
+    self.ndim = len(self.shape)
+    self.dtype = dtype
+    # Boolean list, indicating which dimensions are part of the inner data_funcs.
+    self._inner_dims = inner_dims
+    # Array of references to the data from the FSTD records.
+    self._data_funcs = data_funcs
+  def __getitem__ (self, key):
     from itertools import product
+    # Coerce key into a tuple of slice objects.
+    if not isinstance(key,tuple):
+      key = (key,)
+    if Ellipsis in key:
+      i = key.index(Ellipsis)
+      key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
+    key = key + (slice(None),)*(self.ndim-len(key))
+    # Collect keys into inner / outer parts
+    outer_keys = []
+    inner_keys = []
+    for k,is_inner in zip(key,self._inner_dims):
+      if is_inner: inner_keys.append(k)
+      else: outer_keys.append(k)
+    # Apply the outer keys.
+    data_funcs = self._data_funcs[outer_keys]
+    # Apply the inner keys.
+    if inner_keys != [slice(None)]*len(inner_keys):
+      #print "Inner slicing triggered."
+      for ind in product(*map(range,data_funcs.shape)):
+        f = data_funcs[ind]
+        data_funcs[ind] = lambda old_f=f: old_f()[inner_keys]
+    new_shape = [range(s)[k] for s,k in zip(self.shape,key)]
+    # Check for dimensions that have been reduced out.
+    inner_dims = [i for i,s in zip(self._inner_dims,new_shape) if not isinstance(s,int)]
+    new_shape = [len(s) for s in new_shape if not isinstance(s,int)]
+    return _Array (new_shape, self.dtype, inner_dims, data_funcs)
+  def __array__ (self):
     import numpy as np
-    # Allocate space for the output array.
-    out = np.empty(view.shape, dtype=self.dtype)
-    # A different view on the output, with the outer dimensions flattened.
-    flatout = out.reshape(-1,out.shape[-3],out.shape[-2],out.shape[-1])
-
-    # Slices along the i,j,k directions.
-    sl_k = view.slices[-3]
-    sl_j = view.slices[-2]
-    sl_i = view.slices[-1]
-
-    # Loop over outer dimensions
-    for outrec,func_ind in enumerate(product(view.integer_indices[:-3])):
-      # Get the full data record
-      data = self._data_funcs[func_ind]
-      # Data can either be stored in-place, or wrapped in a function call.
-      if not isinstance(data,np.ndarray):
-        data = data()
-      # Apply subsetting on the data.
-      # Do one dimension at a time, to avoid triggering "advanced" numpy
-      # indexing.
-      data = data[sl_k,:,:]
-      data = data[:,sl_j,:]
-      data = data[:,:,sl_i]
-      # Store this in the output.
-      flatout[rec,:,:,:] = data
-
-    return out
-
-del Var
+    from itertools import product
+    data = np.empty(self.shape, object)
+    # Get indices of all dimensions, in preparation for iterating.
+    indices = [[slice(None)] if is_inner else range(s) for is_inner,s in zip(self._inner_dims, self.shape)]
+    for i,ind in enumerate(product(*indices)):
+      data[ind] = self._data_funcs.flatten()[i]()
+    return data
 
 
 # Define a class for encoding / decoding FSTD data.
@@ -219,7 +217,14 @@ class Base_FSTD_Interface (object):
       if not np.all(have_data):
         from warnings import warn
         warn ("Missing some records for %s.")
-      yield var_id, atts, axes, data_funcs
+
+      data = _Array (shape = data_funcs.shape+(var_id.nk,var_id.nj,var_id.ni),
+                     dtype = float,
+                     inner_dims = [False]*data_funcs.ndim+[True,True,True],
+                     data_funcs = data_funcs
+             )
+
+      yield var_id, atts, axes, data
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
