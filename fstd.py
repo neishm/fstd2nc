@@ -144,13 +144,14 @@ class Base_FSTD_Interface (object):
     import numpy as np
     records = fstd_core.read_records(filename)
     records = OrderedDict([(n,records[n]) for n in records.dtype.names])
-    # Is this the first file being read into this object?
-    if not hasattr(self,'records'):
-      self.records = records
-    # Otherwise, append to the existing data.
-    else:
+    #  Do we have existing records to keep?
+    if hasattr(self,'records'):
       for n,v in records.iteritems():
-        np.concatenate(self.records[n],v)
+        records[n] = np.concatenate(self.records[n],v)
+    # Store these records.
+    self.records = records
+    # Before returning, get any extra info that may be needed for decoding.
+    self._finalize_input_records()
 
   # Some extra work done to the records.
   # Normally, this means adding extra (derived) attributes.
@@ -162,8 +163,6 @@ class Base_FSTD_Interface (object):
     Result is a list of (var_id, atts, axes, data_funcs) tuples, stored as
     a 'data' attribute inside this object.
     """
-    # First, get any extra info that may be needed for decoding.
-    self._finalize_input_records()
     # Then, start the work of decoding (implemented below).
     self.data = list(self._decode_records())
 
