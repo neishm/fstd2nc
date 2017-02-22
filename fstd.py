@@ -106,11 +106,6 @@ del Var
 class Base_FSTD_Interface (object):
   """
   Interface for reading / writing FSTD files.
-
-  The sequence of operations for reading is:
-  1) Instantiate this class, with particular I/O options.
-  2) Call read_file() to collect all the record headers.
-  3) Call _finalize_input_records() to add any extra information 
   """
 
   # Names of records that should be kept separate (never grouped into
@@ -133,7 +128,7 @@ class Base_FSTD_Interface (object):
   ###############################################
   # Basic flow for reading data
 
-  def read_file (self, filename):
+  def add_file (self, filename):
     """
     Read raw records from an FSTD file.
     Result goes into a 'records' attribute.
@@ -154,22 +149,21 @@ class Base_FSTD_Interface (object):
     self._finalize_input_records()
 
   # Some extra work done to the records.
-  # Normally, this means adding extra (derived) attributes.
+  # Normally, this means adding extra (derived) attributes that are useful for
+  # decoding the data into multidimensional arrays.
   def _finalize_input_records (self): pass
 
-  def decode_records (self):
+  def get_data (self):
     """
     Decode records into variable metadata (and data pointers).
-    Result is a list of (var_id, atts, axes, data_funcs) tuples, stored as
-    a 'data' attribute inside this object.
+    Returns a list of (var_id, atts, axes, data_array) tuples.
     """
-    # Then, start the work of decoding (implemented below).
-    self.data = list(self._decode_records())
+    return list(self.iter_data())
 
-  # Logic for decoding records and grouping into multidimensional datasets.
-  # This version is a generator (wrapped by "decode_records" above), which
-  # iteraters over one variable at a time.
-  def _decode_records (self):
+  def iter_data (self):
+    """
+    Similar to get_data(), but this version returns an iterator instead of a list.
+    """
     from pygeode.formats import fstd_core
     from collections import OrderedDict, namedtuple
     import numpy as np
@@ -225,7 +219,6 @@ class Base_FSTD_Interface (object):
       if not np.all(have_data):
         from warnings import warn
         warn ("Missing some records for %s.")
-        continue
       yield var_id, atts, axes, data_funcs
 
       #TODO: Find a minimum set of partial coverages for the data.
@@ -240,10 +233,12 @@ class Base_FSTD_Interface (object):
   ###############################################
   # Basic flow for writing data
 
-  def encode_records (self):
+  def add_data (self, data):
     """
-    Encode this object's 'data' attribute into a 'records' attribute,
-    in preparation for writing to an FSTD file.
+    Add some derived data to this object.  The data must follow the same format
+    as the output of get_data().
+    The data will be encoded into the 'records' attribute of this object, ready
+    for writing to an FSTD file.
     """
     import numpy as np
     from itertools import product
@@ -252,7 +247,7 @@ class Base_FSTD_Interface (object):
     # Get the type for each attribute (so we can use appropriate fill values
     # when certain attributes are missing.
     att_type = dict()
-    for var_id, atts, axes, data_funcs in self.data:
+    for var_id, atts, axes, data_funcs in data:
       for n,v in atts.iteritems():
         att_type[n] = type(v)
       for n,v in axes.iteritems():
@@ -263,7 +258,7 @@ class Base_FSTD_Interface (object):
     records = OrderedDict((n,[]) for n in att_type.iterkeys())
 
     # Loop over each variable.
-    for var_id, atts, axes, data_funcs in self.data:
+    for var_id, atts, axes, data_funcs in data:
 
       current_records = OrderedDict()
 
