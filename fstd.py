@@ -416,61 +416,6 @@ class FSTD_Interface (Dates,VCoords): pass
 
 
 
-class old_FSTD_Interface (object):
-
-  def __init__ (self, squash_forecasts=False, allow_missing_records=True, fill_value=1e30, ignore_ip2=True):
-    self.squash_forecasts = squash_forecasts
-    self.allow_missing_records = allow_missing_records
-    self.fill_value = fill_value
-    self.ignore_ip2 = ignore_ip2
-
-
-  # Stage 1: FSTD I/O
-
-  # Read raw records from an FSTD file.
-  def read_records (self, filename):
-    from pygeode.formats import fstd_core
-    return fstd_core.read_records(filename)
-
-  # Write raw records to an FSTD file.
-  def write_records (self, filename, records):
-    from pygeode.formats import fstd_core
-    from os.path import exists
-    from os import remove
-    if exists(filename): remove(filename)
-    fstd_core.write_records (filename, records)
-
-
-
-  # Stage 3: decoding axes
-
-  # Attach meaningful axes to the data, using all available context info.
-  # Remove coord variables after they're used.
-  def decode_axes (self, data):
-    # Separate out the coords from the data.
-    coords = []
-    data = list(data)
-    for i,(atts,axes,data_funcs) in enumerate(data):
-      if atts['nomvar'] in self.coords:
-        coords.append((atts,axes,data_funcs))
-        data[i] = None
-    data = filter(None,data)
-
-    # Decode lat/lon records
-    # Look for simple grids (completely defined by ig1/ig2/ig3/ig4)
-    #TODO
-    # Look for anything that uses '>>', '^^'.
-    for xcoord in coords:
-      if xcoord.atts['nomvar'] != '>>': continue
-      ycoord = None
-      for ycoord in coords:
-        pass #TODO
-
-# Create a default I/O interface, which can be used to manually apply each
-# stage of the encoding / decoding.
-#io = FSTD_Interface()
-
-
 
 #####################################################################
 # Everything below this point is old code, which needs to be
