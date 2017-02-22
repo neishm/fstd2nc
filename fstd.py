@@ -316,6 +316,8 @@ class Base_FSTD_Interface (object):
     records = OrderedDict((n,np.array(v)) for n,v in records.iteritems())
 
     self.records = records
+    # Fill in any other information that may be missing.
+    self._finalize_output_records()
 
   # Final preparation of records, to make sure they're complete for writing
   # to file.
@@ -329,8 +331,6 @@ class Base_FSTD_Interface (object):
     from pygeode.formats.fstd_core import record_descr
     from pygeode.formats import fstd_core
     import numpy as np
-
-    self._finalize_output_records()
 
     assert len(set(len(v) for v in self.records.itervalues())) <= 1, "Inconsistent record data (different number of records for different record attributes)"
 
