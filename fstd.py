@@ -74,14 +74,25 @@ class _Array (object):
     for k,is_inner in zip(key,self._inner_dims):
       if is_inner: inner_keys.append(k)
       else: outer_keys.append(k)
+    outer_keys = tuple(outer_keys)
+    inner_keys = tuple(inner_keys)
+    data_funcs = self._data_funcs
     # Apply the outer keys.
-    data_funcs = self._data_funcs[outer_keys]
+    if len(outer_keys) > 0:
+      data_funcs = data_funcs[outer_keys]
     # Apply the inner keys.
-    if inner_keys != [slice(None)]*len(inner_keys):
+    if inner_keys != (slice(None),)*len(inner_keys):
       #print "Inner slicing triggered."
-      for ind in product(*map(range,data_funcs.shape)):
-        f = data_funcs[ind]
-        data_funcs[ind] = lambda old_f=f: old_f()[inner_keys]
+      if hasattr(data_funcs,'shape'):
+        for ind in product(*map(range,data_funcs.shape)):
+          f = data_funcs[ind]
+          data_funcs[ind] = lambda old_f=f: old_f()[inner_keys]
+      # data_funcs may be completely collapsed, in which case there is no
+      # 'shape' attribute (no longer an ndarray).
+      else:
+        f = data_funcs
+        data_funcs = lambda old_f=f: old_f()[inner_keys]
+
     new_shape = [range(s)[k] for s,k in zip(self.shape,key)]
     # Check for dimensions that have been reduced out.
     inner_dims = [i for i,s in zip(self._inner_dims,new_shape) if not isinstance(s,int)]
@@ -90,11 +101,16 @@ class _Array (object):
   def __array__ (self):
     import numpy as np
     from itertools import product
-    data = np.empty(self.shape, object)
+    data = np.empty(self.shape, dtype=object)
     # Get indices of all dimensions, in preparation for iterating.
     indices = [[slice(None)] if is_inner else range(s) for is_inner,s in zip(self._inner_dims, self.shape)]
-    for i,ind in enumerate(product(*indices)):
-      data[ind] = self._data_funcs.flatten()[i]()
+    if hasattr(self._data_funcs,'flatten'):
+      for i,ind in enumerate(product(*indices)):
+        data[ind] = self._data_funcs.flatten()[i]()
+    # data_funcs is degenerate (single element)?
+    else:
+      data[:] = self._data_funcs()
+
     return data
 
 
@@ -263,7 +279,14 @@ class Base_FSTD_Interface (object):
     records = OrderedDict((n,[]) for n in att_type.iterkeys())
 
     # Loop over each variable.
-    for var_id, atts, axes, data_funcs in data:
+    for var_id, atts, axes, array in data:
+
+      #TODO: check nk,nj,ni dimensions.
+
+      # Wrap the data array into callable functions.
+      data_funcs = []
+      for ind in product(*map(range,array.shape[:-3])):
+        data_funcs.append(lambda a=array[ind]: np.asarray(a))
 
       current_records = OrderedDict()
 
@@ -273,12 +296,12 @@ class Base_FSTD_Interface (object):
           current_records.setdefault(n,[]).append(c)
 
       # Add metadata.
-      nrecs = len(data_funcs.flatten())
+      nrecs = len(data_funcs)
       for n,v in atts.iteritems():
         current_records[n] = [v]*nrecs
 
       # Add in the data references.
-      current_records['data_func'] = list(data_funcs.flatten())
+      current_records['data_func'] = data_funcs
 
       # Check for anything that's not defined (provide some fill values).
       for n,t in att_type.iteritems():
