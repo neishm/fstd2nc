@@ -52,8 +52,9 @@ del Axis, ZAxis
 class _Array (object):
   def __init__ (self, shape, dtype, inner_dims, data_funcs):
     # Expected shape and type of the array.
-    self.shape = tuple(shape)
+    self.shape = tuple(map(int,shape))
     self.ndim = len(self.shape)
+    self.size = reduce(int.__mul__, self.shape, 1)
     self.dtype = dtype
     # Boolean list, indicating which dimensions are part of the inner data_funcs.
     self._inner_dims = inner_dims
@@ -169,8 +170,10 @@ class Base_FSTD_Interface (object):
 
   def get_data (self):
     """
-    Decode records into variable metadata (and data pointers).
-    Returns a list of (var_id, atts, axes, data_array) tuples.
+    Processes the records into multidimensional variables.
+    Returns a list of (varname, atts, axes, array) tuples.
+    Note that array is not a true numpy array (values are not yet loaded
+    in memory).  To load the data, pass it to numpy.array().
     """
     return list(self.iter_data())
 
@@ -238,7 +241,7 @@ class Base_FSTD_Interface (object):
         warn ("Missing some records for %s.")
 
       data = _Array (shape = data_funcs.shape+(var_id.nk,var_id.nj,var_id.ni),
-                     dtype = float,
+                     dtype = 'float32',
                      inner_dims = [False]*data_funcs.ndim+[True,True,True],
                      data_funcs = data_funcs
              )
@@ -453,9 +456,40 @@ class VCoords (Base_FSTD_Interface):
     self.records['kind'] = kind
 
 
+#################################################
+# Logic for reading/writing FSTD data from/to netCDF files.
+# Note: this is not strictly an FSTD thing, but it's
+# provided here for convenience.
+class netCDF_IO (Base_FSTD_Interface):
+  def write_nc_file (self, filename):
+    """
+    Write the records to a netCDF file.
+    Requires the netCDF4 package.
+    """
+    from netCDF4 import Dataset
+    import numpy as np
+    f = Dataset(filename, "w", format="NETCDF4")
+    # First, construct multidimensional data from the records.
+    varlist = self.get_data()
+    # Create the dimensions and variables.
+    dims = dict()
+    for varname, atts, axes, array in varlist:
+      for axisname, axisvalues in axes.items():
+        # Only need to create each dimension once (even if it's in multiple
+        # variables).
+        if axisname not in f.dimensions:
+          f.createDimension(axisname, len(axisvalues))
+      # Write the variable.
+      v = f.createVariable(varname, datatype=array.dtype, dimensions=axes.keys())
+      v[:] = np.asarray(array[:])
+    f.close()
 
 # Default interface for I/O.
-class FSTD_Interface (Dates,VCoords): pass
+class FSTD_Interface (Dates,VCoords,netCDF_IO):
+  """
+  Default interface for FSTD I/O.
+  Contains logic for dealing with most of the common FSTD file conventions.
+  """
 
 
 
