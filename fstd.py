@@ -211,9 +211,12 @@ class Base_FSTD_Interface (object):
 
       # Get the axis coordinates.
       axes = OrderedDict((n,sorted(set(records[n][rec_ids]))) for n in self.outer_axes)
+      axes['k'] = range(var_id.nk)
+      axes['j'] = range(var_id.nj)
+      axes['i'] = range(var_id.ni)
 
       # Construct a multidimensional array to hold the data functions.
-      data_funcs = np.empty(map(len,axes.values()), dtype='O')
+      data_funcs = np.empty(map(len,axes.values()[:-3]), dtype='O')
 
       # Assume missing data (nan) unless filled in later.
       def missing_data(ni=var_id.ni, nj=var_id.nj, nk=var_id.nk):
@@ -272,6 +275,7 @@ class Base_FSTD_Interface (object):
       for n,v in atts.iteritems():
         att_type[n] = type(v)
       for n,v in axes.iteritems():
+        if n in ('k','j','i'): continue
         att_type[n] = type(v)
     att_type['data_func'] = object
 
@@ -282,7 +286,12 @@ class Base_FSTD_Interface (object):
     # Loop over each variable.
     for var_id, atts, axes, array in data:
 
-      #TODO: check nk,nj,ni dimensions.
+      # Make sure we have nk,nj,ni dimensions, and in the right order.
+      for n in 'k','j','i':
+        if n not in axes:
+          raise KeyError("'%s' axis not found in the data.")
+      if axes.keys()[-3:] != ['k','j','i']:
+        raise ValueError("Wrong dimension order - expected (nk,nj,ni) dimensions at the end.")
 
       # Wrap the data array into callable functions.
       data_funcs = []
@@ -292,7 +301,7 @@ class Base_FSTD_Interface (object):
       current_records = OrderedDict()
 
       # Add coordinate info.
-      for coords in product(*axes.values()):
+      for coords in product(*axes.values()[:-3]):
         for n,c in zip(axes.keys(),coords):
           current_records.setdefault(n,[]).append(c)
 
