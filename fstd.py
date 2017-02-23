@@ -243,7 +243,7 @@ class Base_FSTD_Interface (object):
                      data_funcs = data_funcs
              )
 
-      yield var_id, atts, axes, data
+      yield var_id.nomvar.strip(), atts, axes, data
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
@@ -284,7 +284,7 @@ class Base_FSTD_Interface (object):
     records = OrderedDict((n,[]) for n in att_type.iterkeys())
 
     # Loop over each variable.
-    for var_id, atts, axes, array in data:
+    for varname, atts, axes, array in data:
 
       # Make sure we have nk,nj,ni dimensions, and in the right order.
       for n in 'k','j','i':
@@ -292,6 +292,10 @@ class Base_FSTD_Interface (object):
           raise KeyError("'%s' axis not found in the data.")
       if axes.keys()[-3:] != ['k','j','i']:
         raise ValueError("Wrong dimension order - expected (nk,nj,ni) dimensions at the end.")
+
+      # Make sure we have a nomvar.
+      if 'nomvar' not in atts:
+        atts['nomvar'] = varname[:4]
 
       # Wrap the data array into callable functions.
       data_funcs = []
