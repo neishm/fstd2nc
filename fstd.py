@@ -342,15 +342,11 @@ class _Buffer_Base (object):
     records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.iteritems())
 
     # Process this into headers.
-    self._put_fields(records)
+    self._put_fields(nrecs, records)
 
   # Final preparation of records, into proper headers.
-  def _put_fields (self, fields):
+  def _put_fields (self, nrecs, fields):
     import numpy as np
-    lengths = [len(v) for v in fields.itervalues()]
-    if len(lengths) == 0: return # fields is an empty dictionary?
-    assert len(set(lengths)) == 1, "Inconsistent record data (different number of records for different fields)"
-    nrecs = lengths[0]
 
     # Pad out the string records with spaces
     fields['nomvar'] = [s.upper().ljust(4) for s in fields['nomvar']]
@@ -436,12 +432,10 @@ class _Dates (_Buffer_Base):
     return fields
 
   # Prepare date info for output.
-  def _put_fields (self, fields):
+  def _put_fields (self, nrecs, fields):
     from pygeode.formats import fstd_core
     import numpy as np
     from datetime import datetime
-
-    nrecs = len(fields['nomvar'])
 
     # Check for missing record attributes
     for att in 'deet','npas','dateo','forecast':
@@ -473,7 +467,7 @@ class _Dates (_Buffer_Base):
     for att in 'deet','npas','dateo','forecast':
       fields[att] = np.ma.filled(fields[att],0)
 
-    super(_Dates,self)._put_fields(fields)
+    super(_Dates,self)._put_fields(nrecs, fields)
 
 
 # Logic for handling vertical coordinates.
