@@ -118,24 +118,24 @@ class _Array (object):
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own method, to make it easier to patch in new
 # behaviour if more exotic FSTD files are encountered in the future.
-class Base_FSTD_Interface (object):
+class _Buffer_Base (object):
   """
   Interface for reading / writing FSTD files.
   """
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
-  meta_records = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
+  _meta_records = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
 
   # Attributes which could potentially be used as axes.
-  outer_axes = ()
+  _outer_axes = ()
 
   # Attributes which uniquely identify a variable.
-  var_id = ('nomvar','ni','nj','nk')
+  _var_id = ('nomvar','ni','nj','nk')
 
   # Attributes which should be completely ignored when decoding.
   # They're either not implemented, or are internal info for the file.
-  ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
+  _ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
 
   def __init__ (self): pass
 
@@ -143,10 +143,9 @@ class Base_FSTD_Interface (object):
   ###############################################
   # Basic flow for reading data
 
-  def add_file (self, filename):
+  def read_file (self, filename):
     """
-    Read raw records from an FSTD file.
-    Result goes into a 'records' attribute.
+    Read raw records from an FSTD file, into the buffer.
     Multiple files can be read sequentially.
     """
     from pygeode.formats import fstd_core
@@ -155,11 +154,11 @@ class Base_FSTD_Interface (object):
     records = fstd_core.read_records(filename)
     records = OrderedDict([(n,records[n]) for n in records.dtype.names])
     #  Do we have existing records to keep?
-    if hasattr(self,'records'):
+    if hasattr(self,'_records'):
       for n,v in records.iteritems():
-        records[n] = np.concatenate(self.records[n],v)
+        records[n] = np.concatenate(self._records[n],v)
     # Store these records.
-    self.records = records
+    self._records = records
     # Before returning, get any extra info that may be needed for decoding.
     self._finalize_input_records()
 
@@ -185,17 +184,17 @@ class Base_FSTD_Interface (object):
     from collections import OrderedDict, namedtuple
     import numpy as np
 
-    records = self.records
+    records = self._records
     assert len(set(len(v) for v in records.itervalues())) <= 1, "Inconsistent record data (different number of records for different record attributes)"
 
     # Group the records by variable.
     var_records = OrderedDict()
-    var_id_type = namedtuple('var_id', self.var_id)
+    var_id_type = namedtuple('var_id', self._var_id)
     for i in range(len(records['nomvar'])):
       # Get the unique variable identifiers.
-      var_id = var_id_type(*[records[n][i] for n in self.var_id])
+      var_id = var_id_type(*[records[n][i] for n in self._var_id])
       # Ignore coordinate records.
-      if var_id.nomvar.strip() in self.meta_records: continue
+      if var_id.nomvar.strip() in self._meta_records: continue
       var_records.setdefault(var_id,[]).append(i)
 
     # Loop over each variable and construct the data & metadata.
@@ -203,7 +202,7 @@ class Base_FSTD_Interface (object):
       # Get the metadata for each record.
       atts = OrderedDict()
       for n in records.iterkeys():
-        if n in self.outer_axes or n in self.ignore_atts: continue
+        if n in self._outer_axes or n in self._ignore_atts: continue
         v = records[n][rec_ids]
         # Only use attributes that are consistent across all variable records.
         if len(set(v)) > 1: continue
@@ -213,7 +212,7 @@ class Base_FSTD_Interface (object):
         atts[n] = v
 
       # Get the axis coordinates.
-      axes = OrderedDict((n,sorted(set(records[n][rec_ids]))) for n in self.outer_axes)
+      axes = OrderedDict((n,sorted(set(records[n][rec_ids]))) for n in self._outer_axes)
       axes['k'] = range(var_id.nk)
       axes['j'] = range(var_id.nj)
       axes['i'] = range(var_id.ni)
@@ -231,7 +230,7 @@ class Base_FSTD_Interface (object):
       
       # Arrange the data funcs in the appropriate locations.
       for rec_id in rec_ids:
-        index = tuple(axes[n].index(records[n][rec_id]) for n in self.outer_axes)
+        index = tuple(axes[n].index(records[n][rec_id]) for n in self._outer_axes)
         data_funcs[index] = records['data_func'][rec_id]
 
       # Check if we have full coverage along all axes.
@@ -264,8 +263,6 @@ class Base_FSTD_Interface (object):
     """
     Add some derived data to this object.  The data must follow the same format
     as the output of get_data().
-    The data will be encoded into the 'records' attribute of this object, ready
-    for writing to an FSTD file.
     """
     import numpy as np
     from itertools import product
@@ -333,7 +330,7 @@ class Base_FSTD_Interface (object):
     # Convert to numpy arrays.
     records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.iteritems())
 
-    self.records = records
+    self._records = records
     # Fill in any other information that may be missing.
     self._finalize_output_records()
 
@@ -350,15 +347,15 @@ class Base_FSTD_Interface (object):
     from pygeode.formats import fstd_core
     import numpy as np
 
-    assert len(set(len(v) for v in self.records.itervalues())) <= 1, "Inconsistent record data (different number of records for different record attributes)"
+    assert len(set(len(v) for v in self._records.itervalues())) <= 1, "Inconsistent record data (different number of records for different record attributes)"
 
     # Create a numpy structured array to hold the data.
-    records = np.zeros(len(self.records['nomvar']),dtype=record_descr)
+    records = np.zeros(len(self._records['nomvar']),dtype=record_descr)
 
     # Fill in what we have from our existing records.
     for n in record_descr.names:
-      if n in self.records:
-        records[n] = self.records[n]
+      if n in self._records:
+        records[n] = self._records[n]
 
     # Pad out the string records with spaces
     records['nomvar'] = [s.upper().ljust(4) for s in records['nomvar']]
@@ -383,15 +380,15 @@ class Base_FSTD_Interface (object):
 #################################################
 # Logic for handling date field.
 
-class Dates (Base_FSTD_Interface):
+class _Dates (_Buffer_Base):
 
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
-    super(Dates,self).__init__(*args,**kwargs)
+    super(_Dates,self).__init__(*args,**kwargs)
     self.squash_forecasts = squash_forecasts
     if squash_forecasts:
-      self.outer_axes = ('time',) + self.outer_axes
+      self._outer_axes = ('time',) + self._outer_axes
     else:
-      self.outer_axes = ('time','forecast') + self.outer_axes
+      self._outer_axes = ('time','forecast') + self._outer_axes
 
   # Get any extra (derived) fields needed for doing the decoding.
   def _finalize_input_records (self):
@@ -399,8 +396,8 @@ class Dates (Base_FSTD_Interface):
     from collections import OrderedDict
     from datetime import datetime, timedelta
     import numpy as np
-    super(Dates,self)._finalize_input_records()
-    records = self.records
+    super(_Dates,self)._finalize_input_records()
+    records = self._records
     # Calculate the forecast (in hours) and date of validity.
     records['forecast']=records['deet']*records['npas']/3600.
     dateo = fstd_core.stamp2date(records['dateo'])
@@ -422,8 +419,8 @@ class Dates (Base_FSTD_Interface):
     from pygeode.formats import fstd_core
     import numpy as np
     from datetime import datetime
-    super(Dates,self)._finalize_output_records()
-    records = self.records
+    super(_Dates,self)._finalize_output_records()
+    records = self._records
 
     nrecs = len(records['nomvar'])
 
@@ -459,38 +456,38 @@ class Dates (Base_FSTD_Interface):
 
 
 # Logic for handling vertical coordinates.
-class VCoords (Base_FSTD_Interface):
+class _VCoords (_Buffer_Base):
   # Don't group records across different level 'kind'.
   # (otherwise can't create a coherent vertical axis).
   def __init__ (self, *args, **kwargs):
-    super(VCoords,self).__init__(*args,**kwargs)
+    super(_VCoords,self).__init__(*args,**kwargs)
     # Split data by level kind.
-    self.var_id = self.var_id + ('kind',)
+    self._var_id = self._var_id + ('kind',)
     # Use decoded IP1 values as the vertical axis.
-    self.outer_axes += ('level',)
+    self._outer_axes += ('level',)
   def _finalize_input_records (self):
     from pygeode.formats import fstd_core
-    super(VCoords,self)._finalize_input_records()
+    super(_VCoords,self)._finalize_input_records()
     # Provide 'level' and 'kind' information to the decoder.
-    levels, kind = fstd_core.decode_levels(self.records['ip1'])
-    self.records['level'] = levels
-    self.records['kind'] = kind
+    levels, kind = fstd_core.decode_levels(self._records['ip1'])
+    self._records['level'] = levels
+    self._records['kind'] = kind
 
 
 #################################################
 # Logic for reading/writing FSTD data from/to netCDF files.
 # Note: this is not strictly an FSTD thing, but it's
 # provided here for convenience.
-class netCDF_IO (Base_FSTD_Interface):
+class _netCDF_IO (_Buffer_Base):
   # Add a 'time' variable to the processed data.
-  # NOTE: this should ideally go in the 'Dates' mixin, but it's put here
+  # NOTE: this should ideally go in the '_Dates' mixin, but it's put here
   # due to a dependence on the netCDF4 module.
   def get_data (self):
     from datetime import datetime
     from collections import OrderedDict
     import numpy as np
     from netCDF4 import date2num
-    data = super(netCDF_IO,self).get_data()
+    data = super(_netCDF_IO,self).get_data()
     # Keep track of all time axes found in the data.
     time_axes = OrderedDict()
     for varname, atts, axes, array in data:
@@ -530,9 +527,9 @@ class netCDF_IO (Base_FSTD_Interface):
     f.close()
 
 # Default interface for I/O.
-class FSTD_Interface (Dates,VCoords,netCDF_IO):
+class Buffer (_Dates,_VCoords,_netCDF_IO):
   """
-  Default interface for FSTD I/O.
+  High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
   """
 
