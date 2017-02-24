@@ -137,7 +137,19 @@ class _Buffer_Base (object):
   # They're either not implemented, or are internal info for the file.
   _ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
 
-  def __init__ (self): pass
+  def __init__ (self):
+    import numpy as np
+    dtype = [("dateo", "i4"), ("deet", "i4"), ("npas", "i4"), ("ni", "i4"), ("nj", "i4"), ("nk", "i4"), ("nbits", "i4"), ("datyp", "i4"), ("ip1", "i4"), ("ip2", "i4"), ("ip3", "i4"), ("typvar", "a2"), ("nomvar", "a4"), ("etiket", "a12"), ("grtyp", "a2"), ("ig1", "i4"), ("ig2", "i4"), ("ig3", "i4"), ("ig4", "i4"), ("swa", "i4"), ("lng", "i4"), ("dltf", "i4"), ("ubc", "i4"), ("extra1", "i4"), ("extra2", "i4"), ("extra3", "i4")]
+    self.headers = np.array([],dtype=dtype)
+    self._data_funcs = []
+
+  def clear (self):
+    """
+    Removes all existing data from the buffer.
+    """
+    import numpy as np
+    self.headers = np.array([],dtype=self.headers.dtype)
+    self._data_funcs = []
 
 
   ###############################################
@@ -149,23 +161,28 @@ class _Buffer_Base (object):
     Multiple files can be read sequentially.
     """
     from pygeode.formats import fstd_core
+    import numpy as np
+    # Read the data
+    records = fstd_core.read_records(filename)
+    # Store the headers and data interfaces.
+    headers = np.zeros(len(records),dtype=self.headers.dtype)
+    for n in headers.dtype.names:
+      headers[n] = records[n]
+    self.headers = np.concatenate((self.headers,headers))
+    self._data_funcs.extend(records['data_func'])
+
+
+  # Decode the record headers into a dictionary, and
+  # add extra (derived) attributes that are useful for
+  # processing the data into multidimensional arrays.
+  def _get_fields (self):
     from collections import OrderedDict
     import numpy as np
-    records = fstd_core.read_records(filename)
-    records = OrderedDict([(n,records[n]) for n in records.dtype.names])
-    #  Do we have existing records to keep?
-    if hasattr(self,'_records'):
-      for n,v in records.iteritems():
-        records[n] = np.concatenate(self._records[n],v)
-    # Store these records.
-    self._records = records
-    # Before returning, get any extra info that may be needed for decoding.
-    self._finalize_input_records()
-
-  # Some extra work done to the records.
-  # Normally, this means adding extra (derived) attributes that are useful for
-  # decoding the data into multidimensional arrays.
-  def _finalize_input_records (self): pass
+    fields = OrderedDict()
+    for n in self.headers.dtype.names:
+      fields[n] = self.headers[n]
+    fields['data_func'] = np.asarray(self._data_funcs)
+    return fields
 
   def get_data (self):
     """
@@ -184,8 +201,7 @@ class _Buffer_Base (object):
     from collections import OrderedDict, namedtuple
     import numpy as np
 
-    records = self._records
-    assert len(set(len(v) for v in records.itervalues())) <= 1, "Inconsistent record data (different number of records for different record attributes)"
+    records = self._get_fields()
 
     # Group the records by variable.
     var_records = OrderedDict()
@@ -330,13 +346,30 @@ class _Buffer_Base (object):
     # Convert to numpy arrays.
     records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.iteritems())
 
-    self._records = records
-    # Fill in any other information that may be missing.
-    self._finalize_output_records()
+    # Process this into headers.
+    self._put_fields(records)
 
-  # Final preparation of records, to make sure they're complete for writing
-  # to file.
-  def _finalize_output_records (self): pass
+  # Final preparation of records, into proper headers.
+  def _put_fields (self, fields):
+    import numpy as np
+    lengths = [len(v) for v in fields.itervalues()]
+    if len(lengths) == 0: return # fields is an empty dictionary?
+    assert len(set(lengths)) == 1, "Inconsistent record data (different number of records for different fields)"
+    nrecs = lengths[0]
+
+    # Pad out the string records with spaces
+    fields['nomvar'] = [s.upper().ljust(4) for s in fields['nomvar']]
+    fields['etiket'] = [s.upper().ljust(12) for s in fields['etiket']]
+    fields['typvar'] = [s.upper().ljust(2) for s in fields['typvar']]
+    fields['grtyp'] = map(str.upper, fields['grtyp'])
+
+    headers = np.zeros(nrecs,dtype=self.headers.dtype)
+    for n in headers.dtype.names:
+      if n in fields:
+        headers[n] = fields[n]
+    self.headers = np.concatenate((self.headers,headers))
+    self._data_funcs.extend(fields['data_func'])
+
 
 
   def write_file (self, filename):
@@ -347,21 +380,14 @@ class _Buffer_Base (object):
     from pygeode.formats import fstd_core
     import numpy as np
 
-    assert len(set(len(v) for v in self._records.itervalues())) <= 1, "Inconsistent record data (different number of records for different record attributes)"
-
     # Create a numpy structured array to hold the data.
-    records = np.zeros(len(self._records['nomvar']),dtype=record_descr)
+    records = np.zeros(len(self.headers),dtype=record_descr)
 
     # Fill in what we have from our existing records.
     for n in record_descr.names:
-      if n in self._records:
-        records[n] = self._records[n]
-
-    # Pad out the string records with spaces
-    records['nomvar'] = [s.upper().ljust(4) for s in records['nomvar']]
-    records['etiket'] = [s.upper().ljust(12) for s in records['etiket']]
-    records['typvar'] = [s.upper().ljust(2) for s in records['typvar']]
-    records['grtyp'] = map(str.upper, records['grtyp'])
+      if n in self.headers.dtype.names:
+        records[n] = self.headers[n]
+    records['data_func'] = self._data_funcs
 
     # Write out the data.
     fstd_core.write_records (filename, records)
@@ -391,20 +417,19 @@ class _Dates (_Buffer_Base):
       self._outer_axes = ('time','forecast') + self._outer_axes
 
   # Get any extra (derived) fields needed for doing the decoding.
-  def _finalize_input_records (self):
+  def _get_fields (self):
     from pygeode.formats import fstd_core
     from collections import OrderedDict
     from datetime import datetime, timedelta
     import numpy as np
-    super(_Dates,self)._finalize_input_records()
-    records = self._records
+    fields = super(_Dates,self)._get_fields()
     # Calculate the forecast (in hours) and date of validity.
-    records['forecast']=records['deet']*records['npas']/3600.
-    dateo = fstd_core.stamp2date(records['dateo'])
-    datev = dateo + records['deet']*records['npas']
+    fields['forecast']=fields['deet']*fields['npas']/3600.
+    dateo = fstd_core.stamp2date(fields['dateo'])
+    datev = dateo + fields['deet']*fields['npas']
     # This isn't really needed by the decoder, but it provided for
     # convenience to the user.
-    records['datev'] = np.array(fstd_core.date2stamp(datev))
+    fields['datev'] = np.array(fstd_core.date2stamp(datev))
     # Time axis
     if self.squash_forecasts:
       dates = datev
@@ -412,47 +437,48 @@ class _Dates (_Buffer_Base):
       dates = dateo
     date0 = datetime(year=1980,month=1,day=1)
     dt = np.array([timedelta(seconds=int(s)) for s in dates])
-    records['time'] = date0 + dt
+    fields['time'] = date0 + dt
+    return fields
 
   # Prepare date info for output.
-  def _finalize_output_records (self):
+  def _put_fields (self, fields):
     from pygeode.formats import fstd_core
     import numpy as np
     from datetime import datetime
-    super(_Dates,self)._finalize_output_records()
-    records = self._records
 
-    nrecs = len(records['nomvar'])
+    nrecs = len(fields['nomvar'])
 
     # Check for missing record attributes
     for att in 'deet','npas','dateo','forecast':
-      if att not in records:
-        records[att] = np.ma.masked_all(nrecs)
-    if 'time' not in records:
-      records['time'] = np.ma.masked_all(nrecs,dtype='O')
+      if att not in fields:
+        fields[att] = np.ma.masked_all(nrecs)
+    if 'time' not in fields:
+      fields['time'] = np.ma.masked_all(nrecs,dtype='O')
 
     # Mask out invalid deet values.
-    records['deet'] = np.ma.masked_equal(records['deet'],0)
+    fields['deet'] = np.ma.masked_equal(fields['deet'],0)
 
     # Set default values.
     date0 = datetime(year=1980,month=1,day=1)
-    records['forecast'] = np.ma.filled(records['forecast'],0)
-    records['time'] = np.ma.filled(records['time'],date0)
+    fields['forecast'] = np.ma.filled(fields['forecast'],0)
+    fields['time'] = np.ma.filled(fields['time'],date0)
 
     # Get dateo from 'time' field, wherever it's missing.
-    data = fstd_core.date2stamp([t.seconds for t in (records['time']-date0)])
+    data = fstd_core.date2stamp([t.seconds for t in (fields['time']-date0)])
     data = np.array(data)
-    bad_dateo = np.ma.getmaskarray(records['dateo'])
-    records['dateo'][bad_dateo] = data[bad_dateo]
+    bad_dateo = np.ma.getmaskarray(fields['dateo'])
+    fields['dateo'][bad_dateo] = data[bad_dateo]
 
     # Calculate npas from forecast, wherever npas is missing.
-    bad_npas = np.ma.getmaskarray(records['npas'])
-    data = records['forecast']*3600./records['deet']
-    records['npas'][bad_npas] = np.asarray(data[bad_npas],dtype='int32')
+    bad_npas = np.ma.getmaskarray(fields['npas'])
+    data = fields['forecast']*3600./fields['deet']
+    fields['npas'][bad_npas] = np.asarray(data[bad_npas],dtype='int32')
 
     # Fill in missing values
     for att in 'deet','npas','dateo','forecast':
-      records[att] = np.ma.filled(records[att],0)
+      fields[att] = np.ma.filled(fields[att],0)
+
+    super(_Dates,self)._put_fields(fields)
 
 
 # Logic for handling vertical coordinates.
@@ -465,13 +491,14 @@ class _VCoords (_Buffer_Base):
     self._var_id = self._var_id + ('kind',)
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes += ('level',)
-  def _finalize_input_records (self):
+  def _get_fields (self):
     from pygeode.formats import fstd_core
-    super(_VCoords,self)._finalize_input_records()
+    fields = super(_VCoords,self)._get_fields()
     # Provide 'level' and 'kind' information to the decoder.
-    levels, kind = fstd_core.decode_levels(self._records['ip1'])
-    self._records['level'] = levels
-    self._records['kind'] = kind
+    levels, kind = fstd_core.decode_levels(fields['ip1'])
+    fields['level'] = levels
+    fields['kind'] = kind
+    return fields
 
 
 #################################################
