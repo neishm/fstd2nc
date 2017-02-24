@@ -273,7 +273,7 @@ class Base_FSTD_Interface (object):
 
     # Get the type for each attribute (so we can use appropriate fill values
     # when certain attributes are missing.
-    att_type = dict()
+    att_type = OrderedDict()
     for var_id, atts, axes, data_funcs in data:
       for n,v in atts.iteritems():
         att_type[n] = type(v)
@@ -387,53 +387,74 @@ class Dates (Base_FSTD_Interface):
 
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
     super(Dates,self).__init__(*args,**kwargs)
+    self.squash_forecasts = squash_forecasts
     if squash_forecasts:
-      self.outer_axes = ('datev',) + self.outer_axes
+      self.outer_axes = ('time',) + self.outer_axes
     else:
-      self.outer_axes = ('dateo','forecast') + self.outer_axes
+      self.outer_axes = ('time','forecast') + self.outer_axes
 
   # Get any extra (derived) fields needed for doing the decoding.
   def _finalize_input_records (self):
     from pygeode.formats import fstd_core
     from collections import OrderedDict
+    from datetime import datetime, timedelta
+    import numpy as np
     super(Dates,self)._finalize_input_records()
     records = self.records
     # Calculate the forecast (in hours) and date of validity.
     records['forecast']=records['deet']*records['npas']/3600.
     dateo = fstd_core.stamp2date(records['dateo'])
     datev = dateo + records['deet']*records['npas']
-    records['datev'] = fstd_core.date2stamp(datev)
+    # This isn't really needed by the decoder, but it provided for
+    # convenience to the user.
+    records['datev'] = np.array(fstd_core.date2stamp(datev))
+    # Time axis
+    if self.squash_forecasts:
+      dates = datev
+    else:
+      dates = dateo
+    date0 = datetime(year=1980,month=1,day=1)
+    dt = np.array([timedelta(seconds=int(s)) for s in dates])
+    records['time'] = date0 + dt
 
   # Prepare date info for output.
   def _finalize_output_records (self):
     from pygeode.formats import fstd_core
     import numpy as np
+    from datetime import datetime
     super(Dates,self)._finalize_output_records()
     records = self.records
 
     nrecs = len(records['nomvar'])
 
     # Check for missing record attributes
-    for att in 'deet','npas','dateo','datev','forecast':
+    for att in 'deet','npas','dateo','forecast':
       if att not in records:
         records[att] = np.ma.masked_all(nrecs)
+    if 'time' not in records:
+      records['time'] = np.ma.masked_all(nrecs,dtype='O')
 
     # Mask out invalid deet values.
     records['deet'] = np.ma.masked_equal(records['deet'],0)
 
-    # Calculate npas from forecast?
+    # Set default values.
+    date0 = datetime(year=1980,month=1,day=1)
+    records['forecast'] = np.ma.filled(records['forecast'],0)
+    records['time'] = np.ma.filled(records['time'],date0)
+
+    # Get dateo from 'time' field, wherever it's missing.
+    data = fstd_core.date2stamp([t.seconds for t in (records['time']-date0)])
+    data = np.array(data)
+    bad_dateo = np.ma.getmaskarray(records['dateo'])
+    records['dateo'][bad_dateo] = data[bad_dateo]
+
+    # Calculate npas from forecast, wherever npas is missing.
     bad_npas = np.ma.getmaskarray(records['npas'])
-    data = records['forecast']/records['deet']*3600
+    data = records['forecast']*3600./records['deet']
     records['npas'][bad_npas] = np.asarray(data[bad_npas],dtype='int32')
 
-    # Set dateo?
-    bad_dateo = np.ma.getmaskarray(records['dateo'])
-    datev = fstd_core.stamp2date(records['datev'])
-    dateo = datev - records['deet'] * records['npas']
-    records['dateo'][bad_dateo] = fstd_core.date2stamp(dateo[bad_dateo])
-
     # Fill in missing values
-    for att in 'deet','npas','dateo','datev','forecast':
+    for att in 'deet','npas','dateo','forecast':
       records[att] = np.ma.filled(records[att],0)
 
 
@@ -461,6 +482,29 @@ class VCoords (Base_FSTD_Interface):
 # Note: this is not strictly an FSTD thing, but it's
 # provided here for convenience.
 class netCDF_IO (Base_FSTD_Interface):
+  # Add a 'time' variable to the processed data.
+  # NOTE: this should ideally go in the 'Dates' mixin, but it's put here
+  # due to a dependence on the netCDF4 module.
+  def get_data (self):
+    from datetime import datetime
+    from collections import OrderedDict
+    import numpy as np
+    from netCDF4 import date2num
+    data = super(netCDF_IO,self).get_data()
+    # Keep track of all time axes found in the data.
+    time_axes = OrderedDict()
+    for varname, atts, axes, array in data:
+      if 'time' in axes and isinstance(axes['time'][0],datetime):
+        key = tuple(axes['time'])
+        if key in time_axes: continue
+        units = 'hours since %s'%(axes['time'][0])
+        atts = OrderedDict(units=units)
+        axes = OrderedDict(time=axes['time'])
+        array = np.asarray(date2num(axes['time'],units=units))
+        time_axes[key] = ('time',atts,axes,array)
+    # Append the time axes to the data.
+    return data + time_axes.values()
+
   def write_nc_file (self, filename):
     """
     Write the records to a netCDF file.
@@ -481,6 +525,7 @@ class netCDF_IO (Base_FSTD_Interface):
           f.createDimension(axisname, len(axisvalues))
       # Write the variable.
       v = f.createVariable(varname, datatype=array.dtype, dimensions=axes.keys())
+      v.setncatts(atts)
       v[:] = np.asarray(array[:])
     f.close()
 
