@@ -184,18 +184,13 @@ class _Buffer_Base (object):
     fields['data_func'] = np.asarray(self._data_funcs)
     return fields
 
-  def get_data (self):
+
+  def __iter__ (self):
     """
     Processes the records into multidimensional variables.
-    Returns a list of (varname, atts, axes, array) tuples.
-    Note that array is not a true numpy array (values are not yet loaded
-    in memory).  To load the data, pass it to numpy.array().
-    """
-    return list(self.iter_data())
-
-  def iter_data (self):
-    """
-    Similar to get_data(), but this version returns an iterator instead of a list.
+    Iterates over (name, atts, axes, array) tuples.
+    Note that array may not be a true numpy array (values are not yet loaded
+    in memory).  To load the array, pass it to numpy.array().
     """
     from pygeode.formats import fstd_core
     from collections import OrderedDict, namedtuple
@@ -213,6 +208,8 @@ class _Buffer_Base (object):
       if var_id.nomvar.strip() in self._meta_records: continue
       var_records.setdefault(var_id,[]).append(i)
 
+    var_type = namedtuple('var', ('name','atts','axes','array'))
+
     # Loop over each variable and construct the data & metadata.
     for var_id, rec_ids in var_records.iteritems():
       # Get the metadata for each record.
@@ -228,7 +225,7 @@ class _Buffer_Base (object):
         atts[n] = v
 
       # Get the axis coordinates.
-      axes = OrderedDict((n,sorted(set(records[n][rec_ids]))) for n in self._outer_axes)
+      axes = OrderedDict((n,tuple(sorted(set(records[n][rec_ids])))) for n in self._outer_axes)
       axes['k'] = range(var_id.nk)
       axes['j'] = range(var_id.nj)
       axes['i'] = range(var_id.ni)
@@ -261,7 +258,7 @@ class _Buffer_Base (object):
                      data_funcs = data_funcs
              )
 
-      yield var_id.nomvar.strip(), atts, axes, data
+      yield var_type(var_id.nomvar.strip(), atts, axes, data)
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
@@ -275,11 +272,9 @@ class _Buffer_Base (object):
   ###############################################
   # Basic flow for writing data
 
-  def add_data (self, data):
-    """
-    Add some derived data to this object.  The data must follow the same format
-    as the output of get_data().
-    """
+  # Add some derived data to this object.  The data must follow the same format
+  # as the output of __iter__().
+  def _add_data (self, data):
     import numpy as np
     from itertools import product
     from collections import OrderedDict
@@ -509,25 +504,27 @@ class _netCDF_IO (_Buffer_Base):
   # Add a 'time' variable to the processed data.
   # NOTE: this should ideally go in the '_Dates' mixin, but it's put here
   # due to a dependence on the netCDF4 module.
-  def get_data (self):
+  def __iter__ (self):
     from datetime import datetime
     from collections import OrderedDict
     import numpy as np
     from netCDF4 import date2num
-    data = super(_netCDF_IO,self).get_data()
     # Keep track of all time axes found in the data.
     time_axes = OrderedDict()
-    for varname, atts, axes, array in data:
-      if 'time' in axes and isinstance(axes['time'][0],datetime):
-        key = tuple(axes['time'])
-        if key in time_axes: continue
-        units = 'hours since %s'%(axes['time'][0])
-        atts = OrderedDict(units=units)
-        axes = OrderedDict(time=axes['time'])
-        array = np.asarray(date2num(axes['time'],units=units))
-        time_axes[key] = ('time',atts,axes,array)
+    for var in super(_netCDF_IO,self).__iter__():
+      yield var
+      if 'time' not in var.axes: continue
+      taxis = var.axes['time']
+      if not isinstance(taxis[0],datetime): continue
+      if taxis in time_axes: continue
+      units = 'hours since %s'%(taxis[0])
+      atts = OrderedDict(units=units)
+      axes = OrderedDict(time=taxis)
+      array = np.asarray(date2num(taxis,units=units))
+      time_axes[taxis] = type(var)('time',atts,axes,array)
     # Append the time axes to the data.
-    return data + time_axes.values()
+    for times in time_axes.values():
+      yield times
 
   def write_nc_file (self, filename):
     """
@@ -537,11 +534,11 @@ class _netCDF_IO (_Buffer_Base):
     from netCDF4 import Dataset
     import numpy as np
     f = Dataset(filename, "w", format="NETCDF4")
-    # First, construct multidimensional data from the records.
-    varlist = self.get_data()
-    # Create the dimensions and variables.
+
+    # Only write one copy of each unique dimension.
     dims = dict()
-    for varname, atts, axes, array in varlist:
+
+    for varname, atts, axes, array in iter(self):
       for axisname, axisvalues in axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
