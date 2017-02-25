@@ -496,32 +496,41 @@ static PyObject *decode_levels (PyObject *self, PyObject *args) {
 
 // Encode vertical levels
 static PyObject *encode_levels (PyObject *self, PyObject *args) {
-  PyObject *z_obj;
-  PyArrayObject *ip1_array, *z_array;
+  PyObject *z_obj, *kind_obj;
+  PyArrayObject *ip1_array, *z_array, *kind_array;
   float *z;
-  int *ip1, kind, mode = 2, flag = 0;
+  int *ip1, *kind, mode = 2, flag = 0;
   int i;
   npy_intp n;
-  if (!PyArg_ParseTuple(args, "Oi", &z_obj, &kind)) return NULL;
+  if (!PyArg_ParseTuple(args, "OO", &z_obj, &kind_obj)) return NULL;
     if (PyArray_CanCastSafely (PyArray_TYPE(z_obj), NPY_FLOAT32)) {
       z_array = (PyArrayObject*)PyArray_ContiguousFromAny(z_obj,NPY_FLOAT32,0,0);
     } else {
       z_array = (PyArrayObject*)PyArray_Cast((PyArrayObject*)z_obj,NPY_FLOAT32);
     }
-
   if (z_array == NULL) return NULL;
+    if (PyArray_CanCastSafely (PyArray_TYPE(kind_obj), NPY_FLOAT32)) {
+      kind_array = (PyArrayObject*)PyArray_ContiguousFromAny(kind_obj,NPY_INT32,0,0);
+    } else {
+      kind_array = (PyArrayObject*)PyArray_Cast((PyArrayObject*)kind_obj,NPY_INT32);
+    }
+  if (kind_array == NULL) return NULL;
+
   n = PyArray_SIZE(z_array);
   ip1_array = (PyArrayObject*)PyArray_SimpleNew(1, &n, NPY_INT);
   if (ip1_array == NULL) {
     Py_DECREF(z_array);
+    Py_DECREF(kind_array);
     return NULL;
   }
   ip1 = (int*)ip1_array->data;
   z = (float*)z_array->data;
+  kind = (int*)kind_array->data;
   for (i = 0; i < n; i++) {
-    f77name(convip)(ip1++, z++, &kind, &mode, "", &flag);
+    f77name(convip)(ip1++, z++, kind++, &mode, "", &flag);
   }
   Py_DECREF (z_array);
+  Py_DECREF (kind_array);
   return (PyObject*)ip1_array;
 }
 

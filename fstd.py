@@ -77,7 +77,7 @@ class _Buffer_Base (object):
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
-  _meta_records = ('>>', '^^', 'HY', '!!', 'HH', 'STNS', 'SH')
+  _meta_records = ('>>', '^^', 'HH', 'STNS', 'SH')
 
   # Attributes which could potentially be used as axes.
   _outer_axes = ()
@@ -94,6 +94,15 @@ class _Buffer_Base (object):
     dtype = [("dateo", "i4"), ("deet", "i4"), ("npas", "i4"), ("ni", "i4"), ("nj", "i4"), ("nk", "i4"), ("nbits", "i4"), ("datyp", "i4"), ("ip1", "i4"), ("ip2", "i4"), ("ip3", "i4"), ("typvar", "a2"), ("nomvar", "a4"), ("etiket", "a12"), ("grtyp", "a2"), ("ig1", "i4"), ("ig2", "i4"), ("ig3", "i4"), ("ig4", "i4"), ("swa", "i4"), ("lng", "i4"), ("dltf", "i4"), ("ubc", "i4"), ("extra1", "i4"), ("extra2", "i4"), ("extra3", "i4")]
     self.headers = np.array([],dtype=dtype)
     self._data_funcs = []
+
+  # Extract metadata from a particular header.
+  def _get_header_atts (self, header):
+    for n in header.dtype.names:
+      if n in self._ignore_atts: continue
+      v = header[n]
+      if isinstance(v,str):
+        v = v.strip()
+      yield (n,v)
 
   def clear (self):
     """
@@ -421,16 +430,22 @@ class _Dates (_Buffer_Base):
     super(_Dates,self)._put_fields(nrecs, fields)
 
 
+#################################################
 # Logic for handling vertical coordinates.
 class _VCoords (_Buffer_Base):
-  # Don't group records across different level 'kind'.
-  # (otherwise can't create a coherent vertical axis).
+  _vcoord_nomvars = ('HY','!!')
   def __init__ (self, *args, **kwargs):
     super(_VCoords,self).__init__(*args,**kwargs)
-    # Split data by level kind.
+    # Don't group records across different level 'kind'.
+    # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
+    # Also, must have consistent igX records for a variable.
+    if 'ig1' not in self._var_id:
+      self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes += ('level',)
+    # Tell the decoder not to process vertical records as variables.
+    self._meta_records = self._meta_records + self._vcoord_nomvars
   def _get_fields (self):
     import fstd_core
     fields = super(_VCoords,self)._get_fields()
@@ -439,6 +454,97 @@ class _VCoords (_Buffer_Base):
     fields['level'] = levels
     fields['kind'] = kind
     return fields
+  def _put_fields (self,nrecs,fields):
+    import numpy as np
+    import fstd_core
+    # Check for missing fields.
+    for att in 'kind','level','ip1':
+      if att not in fields:
+        fields[att] = np.ma.masked_all(nrecs)
+    # Re-encode ip1 values from kind,level information.
+    have_data = ~np.ma.getmaskarray(fields['level']) & ~np.ma.getmaskarray(fields['kind'])
+    level = fields['level'][have_data]
+    kind = fields['kind'][have_data]
+    fields['ip1'][have_data] = fstd_core.encode_levels(level,kind)
+    # Set default ip1 values.
+    fields['ip1'] = np.ma.filled(fields['ip1'],0)
+    # Continue re-encoding other parts of the field.
+    super(_VCoords,self)._put_fields(nrecs,fields)
+
+  # Add vertical axis as another variable.
+  def __iter__ (self):
+    from collections import OrderedDict
+    import numpy as np
+    # Pre-scan the raw headers for special vertical records.
+    # (these aren't available in the data stream, because we told the decoder
+    # to ignore them).
+    vrecs = OrderedDict()
+    for header in self.headers:
+      if header['nomvar'].strip() not in self._vcoord_nomvars: continue
+      key = (header['ip1'],header['ip2'])
+      if key in vrecs: continue
+      vrecs[key] = header
+
+    # Scan through the data, and look for any use of vertical coordinates.
+    vaxes = set()
+    for var in super(_VCoords,self).__iter__():
+      yield var
+      # Check if this variable uses a vertical coordinate, and determine
+      # what that coordinate is.
+      if 'level' not in var.axes: continue
+      if 'kind' not in var.atts: continue
+      levels = var.axes['level']
+      kind = var.atts['kind']
+      # Only need to provide one copy of the vertical axis.
+      if (levels,kind) in vaxes: continue
+      vaxes.add((levels,kind))
+      # Get metadata that's specific to this axis.
+      # Adapted from pygeode.formats.fstd, pygeode.axis, and
+      # pygeode.format.cfmeta modules.
+      name = 'zaxis'
+      atts = OrderedDict()
+      atts['axis'] = 'Z'
+      if kind == 0:
+        name = 'height'
+        atts['standard_name'] = 'height_above_sea_level'
+        atts['units'] = 'm'
+        atts['positive'] = 'up'
+      elif kind == 1:
+        name = 'sigma'
+        atts['standard_name'] = 'atmosphere_sigma_coordinate'
+        atts['positive'] = 'down'
+      elif kind == 2:
+        name = 'pres'
+        atts['standard_name'] = 'air_pressure'
+        atts['units'] = 'hPa'
+        atts['positive'] = 'down'
+      elif kind == 3:
+        name = 'lev'  # For backwards compatibility with PyGeode.
+      elif kind == 4:
+        name = 'height'
+        atts['standard_name'] = 'height'
+        atts['units'] = 'm'
+        atts['positive'] = 'up'
+      elif kind == 5:
+        atts['positive'] = 'down'
+        key = (var.atts['ig1'],var.atts['ig2'])
+        if key in vrecs:
+          header = vrecs[key]
+          # Add in metadata from the coordinate.
+          atts.update(self._get_header_atts(header))
+          # Add type-specific metadata.
+          #TODO: more robust check.
+          if header['nomvar'].strip() == '!!':
+            name = 'zeta'
+            atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
+          else:
+            name = 'eta'
+            atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+      # Add this vertical axis.
+      axes = OrderedDict(level=levels)
+      array = np.asarray(levels)
+      yield type(var)(name,atts,axes,array)
+
 
 
 #################################################
@@ -455,21 +561,20 @@ class _netCDF_IO (_Buffer_Base):
     import numpy as np
     from netCDF4 import date2num
     # Keep track of all time axes found in the data.
-    time_axes = OrderedDict()
+    time_axes = set()
     for var in super(_netCDF_IO,self).__iter__():
       yield var
       if 'time' not in var.axes: continue
       taxis = var.axes['time']
       if not isinstance(taxis[0],datetime): continue
       if taxis in time_axes: continue
+      time_axes.add(taxis)
       units = 'hours since %s'%(taxis[0])
       atts = OrderedDict(units=units)
       axes = OrderedDict(time=taxis)
       array = np.asarray(date2num(taxis,units=units))
-      time_axes[taxis] = type(var)('time',atts,axes,array)
-    # Append the time axes to the data.
-    for times in time_axes.values():
-      yield times
+      # Add the time axis to the data stream.
+      yield type(var)('time',atts,axes,array)
 
   def write_nc_file (self, filename):
     """
