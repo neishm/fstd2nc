@@ -92,7 +92,7 @@ class _Buffer_Base (object):
   def __init__ (self):
     import numpy as np
     dtype = [("dateo", "i4"), ("deet", "i4"), ("npas", "i4"), ("ni", "i4"), ("nj", "i4"), ("nk", "i4"), ("nbits", "i4"), ("datyp", "i4"), ("ip1", "i4"), ("ip2", "i4"), ("ip3", "i4"), ("typvar", "a2"), ("nomvar", "a4"), ("etiket", "a12"), ("grtyp", "a2"), ("ig1", "i4"), ("ig2", "i4"), ("ig3", "i4"), ("ig4", "i4"), ("swa", "i4"), ("lng", "i4"), ("dltf", "i4"), ("ubc", "i4"), ("extra1", "i4"), ("extra2", "i4"), ("extra3", "i4")]
-    self.headers = np.array([],dtype=dtype)
+    self._headers = np.array([],dtype=dtype)
     self._data_funcs = []
 
   # Extract metadata from a particular header.
@@ -109,7 +109,7 @@ class _Buffer_Base (object):
     Removes all existing data from the buffer.
     """
     import numpy as np
-    self.headers = np.array([],dtype=self.headers.dtype)
+    self._headers = np.array([],dtype=self._headers.dtype)
     self._data_funcs = []
 
 
@@ -126,10 +126,10 @@ class _Buffer_Base (object):
     # Read the data
     records = fstd_core.read_records(filename)
     # Store the headers and data interfaces.
-    headers = np.zeros(len(records),dtype=self.headers.dtype)
+    headers = np.zeros(len(records),dtype=self._headers.dtype)
     for n in headers.dtype.names:
       headers[n] = records[n]
-    self.headers = np.concatenate((self.headers,headers))
+    self._headers = np.concatenate((self._headers,headers))
     self._data_funcs.extend(records['data_func'])
 
 
@@ -140,8 +140,8 @@ class _Buffer_Base (object):
     from collections import OrderedDict
     import numpy as np
     fields = OrderedDict()
-    for n in self.headers.dtype.names:
-      fields[n] = self.headers[n]
+    for n in self._headers.dtype.names:
+      fields[n] = self._headers[n]
     fields['data_func'] = np.asarray(self._data_funcs)
     return fields
 
@@ -315,11 +315,11 @@ class _Buffer_Base (object):
     fields['typvar'] = [s.upper().ljust(2) for s in fields['typvar']]
     fields['grtyp'] = map(str.upper, fields['grtyp'])
 
-    headers = np.zeros(nrecs,dtype=self.headers.dtype)
+    headers = np.zeros(nrecs,dtype=self._headers.dtype)
     for n in headers.dtype.names:
       if n in fields:
         headers[n] = fields[n]
-    self.headers = np.concatenate((self.headers,headers))
+    self._headers = np.concatenate((self._headers,headers))
     self._data_funcs.extend(fields['data_func'])
 
 
@@ -332,12 +332,12 @@ class _Buffer_Base (object):
     import numpy as np
 
     # Create a numpy structured array to hold the data.
-    records = np.zeros(len(self.headers),dtype=fstd_core.record_descr)
+    records = np.zeros(len(self._headers),dtype=fstd_core.record_descr)
 
     # Fill in what we have from our existing records.
     for n in fstd_core.record_descr.names:
-      if n in self.headers.dtype.names:
-        records[n] = self.headers[n]
+      if n in self._headers.dtype.names:
+        records[n] = self._headers[n]
     records['data_func'] = self._data_funcs
 
     # Write out the data.
@@ -479,7 +479,7 @@ class _VCoords (_Buffer_Base):
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
-    for header in self.headers:
+    for header in self._headers:
       if header['nomvar'].strip() not in self._vcoord_nomvars: continue
       key = (header['ip1'],header['ip2'])
       if key in vrecs: continue
