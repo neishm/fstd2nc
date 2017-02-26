@@ -1,3 +1,6 @@
+"""
+High-level interface for FSTD data.
+"""
 
 # Helper class - collects data references into a numpy-like object.
 # Makes it more convenient for accessing the underlying data.
@@ -71,9 +74,6 @@ class _Array (object):
 # Each step is placed in its own method, to make it easier to patch in new
 # behaviour if more exotic FSTD files are encountered in the future.
 class _Buffer_Base (object):
-  """
-  Interface for reading / writing FSTD files.
-  """
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
@@ -486,64 +486,70 @@ class _VCoords (_Buffer_Base):
       vrecs[key] = header
 
     # Scan through the data, and look for any use of vertical coordinates.
-    vaxes = set()
+    vaxes = OrderedDict()
     for var in super(_VCoords,self).__iter__():
-      yield var
       # Check if this variable uses a vertical coordinate, and determine
       # what that coordinate is.
-      if 'level' not in var.axes: continue
-      if 'kind' not in var.atts: continue
+      if 'level' not in var.axes or 'kind' not in var.atts:
+        yield var
+        continue
       levels = var.axes['level']
       kind = var.atts['kind']
       # Only need to provide one copy of the vertical axis.
-      if (levels,kind) in vaxes: continue
-      vaxes.add((levels,kind))
-      # Get metadata that's specific to this axis.
-      # Adapted from pygeode.formats.fstd, pygeode.axis, and
-      # pygeode.format.cfmeta modules.
-      name = 'zaxis'
-      atts = OrderedDict()
-      atts['axis'] = 'Z'
-      if kind == 0:
-        name = 'height'
-        atts['standard_name'] = 'height_above_sea_level'
-        atts['units'] = 'm'
-        atts['positive'] = 'up'
-      elif kind == 1:
-        name = 'sigma'
-        atts['standard_name'] = 'atmosphere_sigma_coordinate'
-        atts['positive'] = 'down'
-      elif kind == 2:
-        name = 'pres'
-        atts['standard_name'] = 'air_pressure'
-        atts['units'] = 'hPa'
-        atts['positive'] = 'down'
-      elif kind == 3:
-        name = 'lev'  # For backwards compatibility with PyGeode.
-      elif kind == 4:
-        name = 'height'
-        atts['standard_name'] = 'height'
-        atts['units'] = 'm'
-        atts['positive'] = 'up'
-      elif kind == 5:
-        atts['positive'] = 'down'
-        key = (var.atts['ig1'],var.atts['ig2'])
-        if key in vrecs:
-          header = vrecs[key]
-          # Add in metadata from the coordinate.
-          atts.update(self._get_header_atts(header))
-          # Add type-specific metadata.
-          #TODO: more robust check.
-          if header['nomvar'].strip() == '!!':
-            name = 'zeta'
-            atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
-          else:
-            name = 'eta'
-            atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
-      # Add this vertical axis.
-      axes = OrderedDict(level=levels)
-      array = np.asarray(levels)
-      yield type(var)(name,atts,axes,array)
+      if (levels,kind) not in vaxes:
+        # Get metadata that's specific to this axis.
+        # Adapted from pygeode.formats.fstd, pygeode.axis, and
+        # pygeode.format.cfmeta modules.
+        name = 'zaxis'
+        atts = OrderedDict()
+        atts['axis'] = 'Z'
+        if kind == 0:
+          name = 'height'
+          atts['standard_name'] = 'height_above_sea_level'
+          atts['units'] = 'm'
+          atts['positive'] = 'up'
+        elif kind == 1:
+          name = 'sigma'
+          atts['standard_name'] = 'atmosphere_sigma_coordinate'
+          atts['positive'] = 'down'
+        elif kind == 2:
+          name = 'pres'
+          atts['standard_name'] = 'air_pressure'
+          atts['units'] = 'hPa'
+          atts['positive'] = 'down'
+        elif kind == 3:
+          name = 'lev'  # For backwards compatibility with PyGeode.
+        elif kind == 4:
+          name = 'height'
+          atts['standard_name'] = 'height'
+          atts['units'] = 'm'
+          atts['positive'] = 'up'
+        elif kind == 5:
+          atts['positive'] = 'down'
+          key = (var.atts['ig1'],var.atts['ig2'])
+          if key in vrecs:
+            header = vrecs[key]
+            # Add in metadata from the coordinate.
+            atts.update(self._get_header_atts(header))
+            # Add type-specific metadata.
+            #TODO: more robust check.
+            if header['nomvar'].strip() == '!!':
+              name = 'zeta'
+              atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
+            else:
+              name = 'eta'
+              atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+        # Add this vertical axis.
+        axes = OrderedDict([(name,levels)])
+        array = np.asarray(levels)
+        vaxes[(levels,kind)] = type(var)(name,atts,axes,array)
+        yield vaxes[(levels,kind)]
+      # Get the vertical axis
+      vaxis = vaxes[(levels,kind)]
+      # Modify the dimension name to match the axis name.
+      axes = OrderedDict(((vaxis.name if n == 'level' else n),v) for n,v in var.axes.iteritems())
+      var = type(var)(var.name,var.atts,axes,var.array)
+      yield var
 
 
 
