@@ -391,6 +391,23 @@ class _Dates (_Buffer_Base):
     fields['time'] = date0 + dt
     return fields
 
+  # Add a time axis to the data stream.
+  def __iter__ (self):
+    from collections import OrderedDict
+    import numpy as np
+    # Keep track of all time axes found in the data.
+    time_axes = set()
+    for var in super(_Dates,self).__iter__():
+      if 'time' in var.axes:
+        times = var.axes['time']
+        if times not in time_axes:
+          time_axes.add(times)
+          atts = OrderedDict()
+          axes = OrderedDict([('time',var.axes['time'])])
+          # Add the time axis to the data stream.
+          yield type(var)('time',atts,axes,np.asarray(times))
+      yield var
+
   # Prepare date info for output.
   def _put_fields (self, nrecs, fields):
     import fstd_core
@@ -558,29 +575,21 @@ class _VCoords (_Buffer_Base):
 # Note: this is not strictly an FSTD thing, but it's
 # provided here for convenience.
 class _netCDF_IO (_Buffer_Base):
-  # Add a 'time' variable to the processed data.
-  # NOTE: this should ideally go in the '_Dates' mixin, but it's put here
-  # due to a dependence on the netCDF4 module.
   def __iter__ (self):
     from datetime import datetime
     from collections import OrderedDict
     import numpy as np
     from netCDF4 import date2num
     # Keep track of all time axes found in the data.
-    time_axes = set()
     for var in super(_netCDF_IO,self).__iter__():
+      # Modify time axes to be relative units instead of datetime objects.
+      if var.name == 'time':
+        units = 'hours since %s'%(var.array[0])
+        var.atts.update(units=units)
+        array = np.asarray(date2num(var.array,units=units))
+        var = type(var)('time',var.atts,var.axes,array)
       yield var
-      if 'time' not in var.axes: continue
-      taxis = var.axes['time']
-      if not isinstance(taxis[0],datetime): continue
-      if taxis in time_axes: continue
-      time_axes.add(taxis)
-      units = 'hours since %s'%(taxis[0])
-      atts = OrderedDict(units=units)
-      axes = OrderedDict(time=taxis)
-      array = np.asarray(date2num(taxis,units=units))
-      # Add the time axis to the data stream.
-      yield type(var)('time',atts,axes,array)
+
 
   def write_nc_file (self, filename):
     """
@@ -607,7 +616,7 @@ class _netCDF_IO (_Buffer_Base):
     f.close()
 
 # Default interface for I/O.
-class Buffer (_Dates,_VCoords,_netCDF_IO):
+class Buffer (_netCDF_IO,_Dates,_VCoords):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
