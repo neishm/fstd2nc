@@ -501,15 +501,18 @@ class _VCoords (_Buffer_Base):
   def __iter__ (self):
     from collections import OrderedDict
     import numpy as np
+    import fstd_core
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
-    for header in self._headers:
+    for header, data_func in zip(self._headers,self._data_funcs):
       if header['nomvar'].strip() not in self._vcoord_nomvars: continue
       key = (header['ip1'],header['ip2'])
+      # For old HY records, there's no matching ipX/igX codes.
+      if header['nomvar'].strip() == 'HY': key = 'HY'
       if key in vrecs: continue
-      vrecs[key] = header
+      vrecs[key] = (header,data_func)
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
@@ -523,6 +526,8 @@ class _VCoords (_Buffer_Base):
       kind = var.atts['kind']
       # Only need to provide one copy of the vertical axis.
       if (levels,kind) not in vaxes:
+        # Keep track of any extra arrays needed for this axis.
+        ancillary_variables = []
         # Get metadata that's specific to this axis.
         # Adapted from pygeode.formats.fstd, pygeode.axis, and
         # pygeode.format.cfmeta modules.
@@ -553,8 +558,9 @@ class _VCoords (_Buffer_Base):
         elif kind == 5:
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
+          if header['nomvar'].strip() == 'HY': key = 'HY'
           if key in vrecs:
-            header = vrecs[key]
+            header, data_func = vrecs[key]
             # Add in metadata from the coordinate.
             atts.update(self._get_header_atts(header))
             # Add type-specific metadata.
@@ -562,15 +568,39 @@ class _VCoords (_Buffer_Base):
             if header['nomvar'].strip() == '!!':
               name = 'zeta'
               atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
+              # Get A and B info.
+              table = fstd_core.decode_loghybrid_table(data_func())
+              ip1 = fstd_core.encode_levels(np.array(levels),np.array([kind]*len(levels)))
+              A, B = fstd_core.get_loghybrid_a_b(ip1, table)
+              A = type(var)(name+'_A', {}, {name:levels}, A)
+              B = type(var)(name+'_B', {}, {name:levels}, B)
+              atts['ancillary_variables'] = A.name + ' ' + B.name
+              ancillary_variables.extend([A,B])
+              # Add the vcoord table to the metadata.
+              atts.update(table)
             else:
               name = 'eta'
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+              # Get A and B info.
+              hy = np.empty(1,dtype=fstd_core.record_descr)
+              for n in header.dtype.names: hy[n] = header[n]
+              hy['data_func'] = data_func
+              ptop, rcoef, pref, A, B = fstd_core.get_hybrid_a_b(hy, np.array(levels))
+              A = type(var)(name+'_A', {}, {name:levels}, A)
+              B = type(var)(name+'_B', {}, {name:levels}, B)
+              atts['ancillary_variables'] = A.name + ' ' + B.name
+              ancillary_variables.extend([A,B])
+              # Add extra HY record metadata.
+              atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
         # Add this vertical axis.
         axes = OrderedDict([(name,levels)])
         array = np.asarray(levels)
         vaxes[(levels,kind)] = type(var)(name,atts,axes,array)
         yield vaxes[(levels,kind)]
-      # Get the vertical axis
+        # Add any ancillary data needed for the axis.
+        for anc in ancillary_variables:
+          yield anc
+      # Get the vertical axis.
       vaxis = vaxes[(levels,kind)]
       # Modify the dimension name to match the axis name.
       axes = OrderedDict(((vaxis.name if n == 'level' else n),v) for n,v in var.axes.iteritems())
