@@ -360,12 +360,12 @@ class _Buffer_Base (object):
 class _Dates (_Buffer_Base):
 
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
-    super(_Dates,self).__init__(*args,**kwargs)
     self.squash_forecasts = squash_forecasts
     if squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
     else:
       self._outer_axes = ('time','forecast') + self._outer_axes
+    super(_Dates,self).__init__(*args,**kwargs)
 
   # Get any extra (derived) fields needed for doing the decoding.
   def _get_fields (self):
@@ -452,7 +452,6 @@ class _Dates (_Buffer_Base):
 class _VCoords (_Buffer_Base):
   _vcoord_nomvars = ('HY','!!')
   def __init__ (self, *args, **kwargs):
-    super(_VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
@@ -463,6 +462,7 @@ class _VCoords (_Buffer_Base):
     self._outer_axes += ('level',)
     # Tell the decoder not to process vertical records as variables.
     self._meta_records = self._meta_records + self._vcoord_nomvars
+    super(_VCoords,self).__init__(*args,**kwargs)
   def _get_fields (self):
     import fstd_core
     fields = super(_VCoords,self)._get_fields()
@@ -616,7 +616,7 @@ class _netCDF_IO (_Buffer_Base):
     f.close()
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_Dates,_VCoords):
+class Buffer (_netCDF_IO,_VCoords,_Dates):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
