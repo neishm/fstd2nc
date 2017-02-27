@@ -391,12 +391,13 @@ class _Dates (_Buffer_Base):
     fields['time'] = date0 + dt
     return fields
 
-  # Add a time axis to the data stream.
+  # Add time and forecast axes to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
     import numpy as np
-    # Keep track of all time axes found in the data.
+    # Keep track of all time and forecast axes found in the data.
     time_axes = set()
+    forecast_axes = set()
     for var in super(_Dates,self).__iter__():
       if 'time' in var.axes:
         times = var.axes['time']
@@ -406,6 +407,14 @@ class _Dates (_Buffer_Base):
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
           yield type(var)('time',atts,axes,np.asarray(times))
+      if 'forecast' in var.axes:
+        forecasts = var.axes['forecast']
+        if forecasts not in forecast_axes:
+          forecast_axes.add(forecasts)
+          atts = OrderedDict(units='hours')
+          axes = OrderedDict([('forecast',var.axes['forecast'])])
+          # Add the forecast axis to the data stream.
+          yield type(var)('forecast',atts,axes,np.asarray(forecasts))
       yield var
 
   # Prepare date info for output.
