@@ -54,19 +54,26 @@ class _Array (object):
     inner_dims = [i for i,s in zip(self._inner_dims,new_shape) if not isinstance(s,int)]
     new_shape = [len(s) for s in new_shape if not isinstance(s,int)]
     return _Array (new_shape, self.dtype, inner_dims, data_funcs)
-  def __array__ (self):
-    import numpy as np
+
+  # Helper method - iterate over all data functions.
+  def _iter_data_funcs (self):
     from itertools import product
-    data = np.empty(self.shape, dtype=object)
     # Get indices of all dimensions, in preparation for iterating.
     indices = [[slice(None)] if is_inner else range(s) for is_inner,s in zip(self._inner_dims, self.shape)]
     if hasattr(self._data_funcs,'flatten'):
       for i,ind in enumerate(product(*indices)):
-        data[ind] = self._data_funcs.flatten()[i]()
+        yield ind, self._data_funcs.flatten()[i]
     # data_funcs is degenerate (single element)?
     else:
-      data[:] = self._data_funcs()
+      yield [slice(None)]*self.ndim, self._data_funcs()
 
+  # Allow this object to be loaded into a numpy array.
+  def __array__ (self):
+    import numpy as np
+    from itertools import product
+    data = np.empty(self.shape, dtype=object)
+    for ind,data_func in self._iter_data_funcs():
+      data[ind] = data_func()
     return data
 
 
@@ -619,14 +626,13 @@ class _netCDF_IO (_Buffer_Base):
     from collections import OrderedDict
     import numpy as np
     from netCDF4 import date2num
-    # Keep track of all time axes found in the data.
     for var in super(_netCDF_IO,self).__iter__():
       # Modify time axes to be relative units instead of datetime objects.
-      if var.name == 'time':
+      if var.name in var.axes and isinstance(var.array[0],datetime):
         units = 'hours since %s'%(var.array[0])
         var.atts.update(units=units)
         array = np.asarray(date2num(var.array,units=units))
-        var = type(var)('time',var.atts,var.axes,array)
+        var = type(var)(var.name,var.atts,var.axes,array)
       yield var
 
 
@@ -651,7 +657,13 @@ class _netCDF_IO (_Buffer_Base):
       # Write the variable.
       v = f.createVariable(varname, datatype=array.dtype, dimensions=axes.keys())
       v.setncatts(atts)
-      v[:] = np.asarray(array[:])
+      # Write one FSTD record at a time to avoid out-of-memory errors.
+      if isinstance(array,_Array):
+        for ind, data_func in array._iter_data_funcs():
+          v[ind] = data_func()
+      # Otherwise, data is already in memory so no problems?
+      else:
+        v[:] = np.asarray(array[:])
     f.close()
 
 # Default interface for I/O.
