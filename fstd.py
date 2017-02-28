@@ -150,11 +150,12 @@ class _Buffer_Base (object):
     f = _FSTD_File(filename,FST_RO)
     keys = fstinl(f.funit)
     headers = np.zeros(len(keys),dtype=self._headers.dtype)
+    prms = dict()
     data_funcs = []
     for i,key in enumerate(keys):
       prm = fstprm(key)
-      for n in headers.dtype.names:
-        headers[n][i] = prm[n]
+      for n,v in prm.iteritems():
+        prms.setdefault(n,[]).append(v)
       def data_func (_f=f, _key=key):
         atts = fstluk(_key,rank=3)
         data = atts['d']
@@ -162,6 +163,8 @@ class _Buffer_Base (object):
         data = data.transpose(2,1,0)
         return data
       data_funcs.append(data_func)
+    for n in headers.dtype.names:
+      headers[n] = prms[n]
     self._headers = np.concatenate((self._headers,headers))
     self._data_funcs.extend(data_funcs)
 
