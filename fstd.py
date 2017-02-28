@@ -76,6 +76,21 @@ class _Array (object):
       data[ind] = data_func()
     return data
 
+# Helper class - keep an FSTD file open until all references are destroyed.
+class _FSTD_File (object):
+  def __init__ (self, filename, mode):
+    import rpnpy.librmn.all as rmn
+    from rpnpy.librmn.base import fnom
+    from rpnpy.librmn.fstd98 import fstouv
+    self.filename = filename
+    self.funit = fnom(filename, mode)
+    fstouv(self.funit, mode)
+  def __del__ (self):
+    from rpnpy.librmn.fstd98 import fstfrm
+    from rpnpy.librmn.base import fclos
+    istat = fstfrm(self.funit)
+    istat = fclos(self.funit)
+
 
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own method, to make it easier to patch in new
@@ -94,11 +109,11 @@ class _Buffer_Base (object):
 
   # Attributes which should be completely ignored when decoding.
   # They're either not implemented, or are internal info for the file.
-  _ignore_atts = ('pad','swa','lng','dltf','ubc','extra1','extra2','extra3','data_func')
+  _ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3')
 
   def __init__ (self):
     import numpy as np
-    dtype = [("dateo", "i4"), ("deet", "i4"), ("npas", "i4"), ("ni", "i4"), ("nj", "i4"), ("nk", "i4"), ("nbits", "i4"), ("datyp", "i4"), ("ip1", "i4"), ("ip2", "i4"), ("ip3", "i4"), ("typvar", "a2"), ("nomvar", "a4"), ("etiket", "a12"), ("grtyp", "a2"), ("ig1", "i4"), ("ig2", "i4"), ("ig3", "i4"), ("ig4", "i4"), ("swa", "i4"), ("lng", "i4"), ("dltf", "i4"), ("ubc", "i4"), ("extra1", "i4"), ("extra2", "i4"), ("extra3", "i4")]
+    dtype = [("dateo", "i4"), ("deet", "i4"), ("npas", "i4"), ("ni", "i4"), ("nj", "i4"), ("nk", "i4"), ("nbits", "i4"), ("datyp", "i4"), ("ip1", "i4"), ("ip2", "i4"), ("ip3", "i4"), ("typvar", "a2"), ("nomvar", "a4"), ("etiket", "a12"), ("grtyp", "a2"), ("ig1", "i4"), ("ig2", "i4"), ("ig3", "i4"), ("ig4", "i4"), ("swa", "i4"), ("lng", "i4"), ("dltf", "i4"), ("ubc", "i4"), ("xtra1", "i4"), ("xtra2", "i4"), ("xtra3", "i4"), ("datev", "i4")]
     self._headers = np.array([],dtype=dtype)
     self._data_funcs = []
 
@@ -128,17 +143,27 @@ class _Buffer_Base (object):
     Read raw records from an FSTD file, into the buffer.
     Multiple files can be read sequentially.
     """
-    import fstd_core
     import numpy as np
+    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
+    from rpnpy.librmn.const import FST_RO
     # Read the data
-    records = fstd_core.read_records(filename)
-    # Store the headers and data interfaces.
-    headers = np.zeros(len(records),dtype=self._headers.dtype)
-    for n in headers.dtype.names:
-      headers[n] = records[n]
+    f = _FSTD_File(filename,FST_RO)
+    keys = fstinl(f.funit)
+    headers = np.zeros(len(keys),dtype=self._headers.dtype)
+    data_funcs = []
+    for i,key in enumerate(keys):
+      prm = fstprm(key)
+      for n in headers.dtype.names:
+        headers[n][i] = prm[n]
+      def data_func (_f=f, _key=key):
+        atts = fstluk(_key,rank=3)
+        data = atts['d']
+        # Transpose the axes to C-order.
+        data = data.transpose(2,1,0)
+        return data
+      data_funcs.append(data_func)
     self._headers = np.concatenate((self._headers,headers))
-    self._data_funcs.extend(records['data_func'])
-
+    self._data_funcs.extend(data_funcs)
 
   # Decode the record headers into a dictionary, and
   # add extra (derived) attributes that are useful for
@@ -160,7 +185,6 @@ class _Buffer_Base (object):
     Note that array may not be a true numpy array (values are not yet loaded
     in memory).  To load the array, pass it to numpy.array().
     """
-    import fstd_core
     from collections import OrderedDict, namedtuple
     import numpy as np
 
@@ -335,21 +359,14 @@ class _Buffer_Base (object):
     """
     Write the records from this object into the specified FSTD file.
     """
-    import fstd_core
-    import numpy as np
+    from rpnpy.librmn.fstd98 import fstecr
+    from rpnpy.librmn.const import FST_RW
 
-    # Create a numpy structured array to hold the data.
-    records = np.zeros(len(self._headers),dtype=fstd_core.record_descr)
-
-    # Fill in what we have from our existing records.
-    for n in fstd_core.record_descr.names:
-      if n in self._headers.dtype.names:
-        records[n] = self._headers[n]
-    records['data_func'] = self._data_funcs
-
-    # Write out the data.
-    fstd_core.write_records (filename, records)
-
+    f = _FSTD_File(filename, FST_RW)
+    for header, data_func in zip(self._headers, self._data_funcs):
+      meta = dict([(n,header[n]) for n in header.dtype.names])
+      data = data_func().transpose(2,1,0)  # Put back in Fortran order.
+      fstecr(f.funit, data, meta)
 
   #
   ###############################################
@@ -376,26 +393,19 @@ class _Dates (_Buffer_Base):
 
   # Get any extra (derived) fields needed for doing the decoding.
   def _get_fields (self):
-    import fstd_core
-    from collections import OrderedDict
-    from datetime import datetime, timedelta
+    from rpnpy.rpndate import  RPNDate
     import numpy as np
     fields = super(_Dates,self)._get_fields()
-    # Calculate the forecast (in hours) and date of validity.
+    # Calculate the forecast (in hours).
     fields['forecast']=fields['deet']*fields['npas']/3600.
-    dateo = fstd_core.stamp2date(fields['dateo'])
-    datev = dateo + fields['deet']*fields['npas']
-    # This isn't really needed by the decoder, but it provided for
-    # convenience to the user.
-    fields['datev'] = np.array(fstd_core.date2stamp(datev))
     # Time axis
     if self.squash_forecasts:
-      dates = datev
+      dates = map(int,fields['datev'])
     else:
-      dates = dateo
-    date0 = datetime(year=1980,month=1,day=1)
-    dt = np.array([timedelta(seconds=int(s)) for s in dates])
-    fields['time'] = date0 + dt
+      dates = map(int,fields['dateo'])
+    dates = [RPNDate(d).toDateTime().replace(tzinfo=None) if d > 0 else None for d in dates]
+    dates = np.ma.masked_equal(dates,None)
+    fields['time'] = dates
     return fields
 
   # Add time and forecast axes to the data stream.
@@ -426,9 +436,8 @@ class _Dates (_Buffer_Base):
 
   # Prepare date info for output.
   def _put_fields (self, nrecs, fields):
-    import fstd_core
     import numpy as np
-    from datetime import datetime
+    from rpnpy.rpndate import RPNDate
 
     # Check for missing record attributes
     for att in 'deet','npas','dateo','forecast':
@@ -441,12 +450,10 @@ class _Dates (_Buffer_Base):
     fields['deet'] = np.ma.masked_equal(fields['deet'],0)
 
     # Set default values.
-    date0 = datetime(year=1980,month=1,day=1)
     fields['forecast'] = np.ma.filled(fields['forecast'],0)
-    fields['time'] = np.ma.filled(fields['time'],date0)
 
     # Get dateo from 'time' field, wherever it's missing.
-    data = fstd_core.date2stamp([t.seconds for t in (fields['time']-date0)])
+    data = [RPNDate(d).dateo if d is not None else 0 for d in fields['time']]
     data = np.array(data)
     bad_dateo = np.ma.getmaskarray(fields['dateo'])
     fields['dateo'][bad_dateo] = data[bad_dateo]
@@ -480,16 +487,22 @@ class _VCoords (_Buffer_Base):
     self._meta_records = self._meta_records + self._vcoord_nomvars
     super(_VCoords,self).__init__(*args,**kwargs)
   def _get_fields (self):
-    import fstd_core
+    from rpnpy.librmn.fstd98 import DecodeIp
+    import numpy as np
     fields = super(_VCoords,self)._get_fields()
     # Provide 'level' and 'kind' information to the decoder.
-    levels, kind = fstd_core.decode_levels(fields['ip1'])
+    decoded = map(DecodeIp,fields['ip1'],fields['ip2'],fields['ip3'])
+    rp1 = zip(*decoded)[0]
+    levels = np.array([r.v1 for r in rp1])
+    kind = np.array([r.kind for r in rp1])
+    # Only use first set of levels (can't handle ranges yet).
     fields['level'] = levels
     fields['kind'] = kind
     return fields
   def _put_fields (self,nrecs,fields):
     import numpy as np
-    import fstd_core
+    from rpnpy.librmn.fstd98 import EncodeIp
+    from rpnpy.librmn.proto import FLOAT_IP
     # Check for missing fields.
     for att in 'kind','level','ip1':
       if att not in fields:
@@ -498,7 +511,13 @@ class _VCoords (_Buffer_Base):
     have_data = ~np.ma.getmaskarray(fields['level']) & ~np.ma.getmaskarray(fields['kind'])
     level = fields['level'][have_data]
     kind = fields['kind'][have_data]
-    fields['ip1'][have_data] = fstd_core.encode_levels(level,kind)
+    # Doesn't handle level ranges.
+    rp1 = [FLOAT_IP(z,z,k) for z,k in zip(level,kind)]
+    rp2 = [FLOAT_IP(0.0,0.0,0)] * len(rp1)
+    rp3 = rp2
+    encoded = map(EncodeIp, rp1, rp2, rp3)
+    ip1 = zip(*encoded)[0]
+    fields['ip1'][have_data] = np.array(ip1)
     # Set default ip1 values.
     fields['ip1'] = np.ma.filled(fields['ip1'],0)
     # Continue re-encoding other parts of the field.
@@ -508,7 +527,10 @@ class _VCoords (_Buffer_Base):
   def __iter__ (self):
     from collections import OrderedDict
     import numpy as np
-    import fstd_core
+    from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
+    from rpnpy.vgd.const import VGD_KEYS
+    from rpnpy.vgd import VGDError
+    from rpnpy.librmn.fstd98 import DecodeIp
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
@@ -571,36 +593,70 @@ class _VCoords (_Buffer_Base):
             # Add in metadata from the coordinate.
             atts.update(self._get_header_atts(header))
             # Add type-specific metadata.
-            #TODO: more robust check.
             if header['nomvar'].strip() == '!!':
-              name = 'zeta'
-              atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
               # Get A and B info.
-              table = fstd_core.decode_loghybrid_table(data_func())
-              ip1 = fstd_core.encode_levels(np.array(levels),np.array([kind]*len(levels)))
-              A, B = fstd_core.get_loghybrid_a_b(ip1, table)
-              A = type(var)(name+'_A', {}, {name:levels}, A)
-              B = type(var)(name+'_B', {}, {name:levels}, B)
-              atts['ancillary_variables'] = A.name + ' ' + B.name
-              ancillary_variables.extend([A,B])
-              # Add the vcoord table to the metadata.
-              atts.update(table)
+              vgd_id = vgd_fromlist(data_func().transpose(2,1,0))
+              if vgd_get (vgd_id,'LOGP'):
+                name = 'zeta'
+                atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
+              else:
+                name = 'eta'
+                atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+              # Add all parameters for this coordinate.
+              for key in VGD_KEYS:
+                try:
+                  val = vgd_get(vgd_id,key)
+                  # Skip multidimensional arrays (can't be encoded as metadata).
+                  if getattr(val,'ndim',1) > 1: continue
+                  atts[key] = val
+                except (KeyError,VGDError):
+                  pass  # Some keys not available in some vgrids?
+              # Some attribute aliases that are needed for reverse-compatibility
+              # with old PyGeode.formats.fstd
+              aliases = OrderedDict(CA_M='a_m',CA_T='a_t',CB_M='b_m',CB_T='b_t',VIPM='ip1_m',VIPT='ip1_t',VERS='version',RC_1='rcoef1',RC_2='rcoef2',RFLD='ref_name')
+              for oldname,newname in aliases.iteritems():
+                if oldname in atts: atts[newname] = atts[oldname]
+              # Attempt to fill in A/B ancillary data (if available).
+              try:
+                all_z = list(atts['VCDM'])+list(atts['VCDT'])
+                all_a = list(atts['CA_M'])+list(atts['CA_T'])
+                all_b = list(atts['CB_M'])+list(atts['CB_T'])
+                A = []
+                B = []
+                for z in levels:
+                  ind = all_z.index(z)
+                  A.append(all_a[ind])
+                  B.append(all_b[ind])
+                A = type(var)(name+'_A', {}, {name:levels}, np.asarray(A))
+                B = type(var)(name+'_B', {}, {name:levels}, np.asarray(B))
+                ancillary_variables.extend([A,B])
+              except (KeyError,ValueError,VGDError):
+                from warnings import warn
+                warn ("Unable to get A/B coefficients.")
+              vgd_free (vgd_id)
+            # Not a '!!' coordinate, so must be 'HY'?
             else:
               name = 'eta'
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
               # Get A and B info.
-              hy = np.empty(1,dtype=fstd_core.record_descr)
-              for n in header.dtype.names: hy[n] = header[n]
-              hy['data_func'] = data_func
-              ptop, rcoef, pref, A, B = fstd_core.get_hybrid_a_b(hy, np.array(levels))
-              A = type(var)(name+'_A', {}, {name:levels}, A)
+              eta = np.asarray(levels)
+              ptop = DecodeIp(header['ip1'],0,0)[0].v1
+              # Conversion taken from 'ig_to_hybref' function in librmn:
+              pref = float(header['ig1'])
+              rcoef = header['ig2']/1000.0
+              # Apply the formula to compue A & B (from old fstd_core.c code):
+              etatop = ptop/pref
+              B = ((eta - etatop) / (1 - etatop)) ** rcoef
+              A = pref * 100. * (eta - B)
               B = type(var)(name+'_B', {}, {name:levels}, B)
-              atts['ancillary_variables'] = A.name + ' ' + B.name
+              A = type(var)(name+'_A', {}, {name:levels}, A)
               ancillary_variables.extend([A,B])
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
         # Add this vertical axis.
         axes = OrderedDict([(name,levels)])
+        if len(ancillary_variables) > 0:
+          atts['ancillary_variables'] = ' '.join(v.name for v in ancillary_variables)
         array = np.asarray(levels)
         vaxes[(levels,kind)] = type(var)(name,atts,axes,array)
         yield vaxes[(levels,kind)]
@@ -609,7 +665,7 @@ class _VCoords (_Buffer_Base):
           yield anc
       # Get the vertical axis.
       vaxis = vaxes[(levels,kind)]
-      # Modify the dimension name to match the axis name.
+      # Modify the variable's dimension name to match the axis name.
       axes = OrderedDict(((vaxis.name if n == 'level' else n),v) for n,v in var.axes.iteritems())
       var = type(var)(var.name,var.atts,axes,var.array)
       yield var
