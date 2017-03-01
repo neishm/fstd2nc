@@ -616,7 +616,7 @@ class _VCoords (_Buffer_Base):
                   pass  # Some keys not available in some vgrids?
               # Some attribute aliases that are needed for reverse-compatibility
               # with old PyGeode.formats.fstd
-              aliases = OrderedDict(CA_M='a_m',CA_T='a_t',CB_M='b_m',CB_T='b_t',VIPM='ip1_m',VIPT='ip1_t',VERS='version',RC_1='rcoef1',RC_2='rcoef2',RFLD='ref_name')
+              aliases = OrderedDict([('CA_M','a_m'),('CA_T','a_t'),('CB_M','b_m'),('CB_T','b_t'),('VIPM','ip1_m'),('VIPT','ip1_t'),('VERS','version'),('RC_1','rcoef1'),('RC_2','rcoef2'),('RFLD','ref_name')])
               for oldname,newname in aliases.iteritems():
                 if oldname in atts: atts[newname] = atts[oldname]
               # Attempt to fill in A/B ancillary data (if available).
