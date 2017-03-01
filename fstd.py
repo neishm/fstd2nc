@@ -99,7 +99,7 @@ class _Buffer_Base (object):
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
-  _meta_records = ('>>', '^^', 'HH', 'STNS', 'SH')
+  _meta_records = ('HH', 'STNS', 'SH')
 
   # Attributes which could potentially be used as axes.
   _outer_axes = ()
@@ -674,6 +674,117 @@ class _VCoords (_Buffer_Base):
       yield var
 
 
+#################################################
+# Logic for handling lat/lon coordinates.
+class _XYCoords (_Buffer_Base):
+  _xycoord_nomvars = ('^^','>>')
+  def __init__ (self, *args, **kwargs):
+    # Variables must have an internally consistent horizontal grid.
+    self._var_id = self._var_id + ('grtyp',)
+    # Also, must have consistent igX records for a variable.
+    if 'ig1' not in self._var_id:
+      self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
+    # Tell the decoder not to process horizontal records as variables.
+    self._meta_records = self._meta_records + self._xycoord_nomvars
+    super(_XYCoords,self).__init__(*args,**kwargs)
+  # Add horizontal coordinate info to the data stream.
+  def __iter__ (self):
+    from collections import OrderedDict
+    from rpnpy.librmn.interp import ezgdef_fmem, gdll, EzscintError
+    import numpy as np
+
+    # Scan through the data, and look for any use of horizontal coordinates.
+    latlon = OrderedDict()
+    for var in super(_XYCoords,self).__iter__():
+      # Don't touch variables that have no horizontal extent.
+      if 'i' not in var.axes or 'j' not in var.axes:
+        yield var
+        continue
+      # Get basic information about this grid.
+      gridinfo = OrderedDict()
+      for n in ('ni','nj','grtyp','ig1','ig2','ig3','ig4'):
+        v = var.atts[n]
+        if isinstance(v,str):
+          gridinfo[n] = v
+        else:
+          gridinfo[n] = int(v)  # ezgdef_fmem is very picky about types.
+      # Check if we already defined this grid.
+      key = tuple(gridinfo.values())
+      if key not in latlon:
+        # Check for reference grid data.
+        for header, data_func in zip(self._headers,self._data_funcs):
+          nomvar = header['nomvar'].strip()
+          if nomvar not in self._xycoord_nomvars: continue
+          k1 = (header['ip1'],header['ip2'],header['ip3'])
+          k2 = (var.atts['ig1'],var.atts['ig2'],var.atts['ig3'])
+          if k1 == k2:
+            gridinfo['grref'] = header['grtyp'].strip()
+            gridinfo['ig1'] = int(header['ig1'])
+            gridinfo['ig2'] = int(header['ig2'])
+            gridinfo['ig3'] = int(header['ig3'])
+            gridinfo['ig4'] = int(header['ig4'])
+            if nomvar == '>>':
+              gridinfo['ax'] = data_func().transpose(2,1,0)
+            if nomvar == '^^':
+              gridinfo['ay'] = data_func().transpose(2,1,0)
+        try:
+          # Get the lat & lon data.
+          gdid = ezgdef_fmem (**gridinfo)
+          ll = gdll(gdid)
+        except (TypeError,EzscintError):
+          from warnings import warn
+          warn("Unable to get grid info for '%s'"%var.name)
+          raise
+          yield var
+          continue
+        latarray = ll['lat'].transpose() # Switch from Fortran to C order.
+        latatts = OrderedDict()
+        latatts['long_name'] = 'latitude'
+        latatts['standard_name'] = 'latitude'
+        latatts['units'] = 'degrees_north'
+        lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
+        lonatts = OrderedDict()
+        lonatts['long_name'] = 'longitude'
+        lonatts['standard_name'] = 'longitude'
+        lonatts['units'] = 'degrees_east'
+        axes = OrderedDict([('j',var.axes['j']),('i',var.axes['i'])])
+        if 'ax' in gridinfo and 'ay' in gridinfo:
+          axes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
+        lat = type(var)('lat',latatts,axes,latarray)
+        lon = type(var)('lon',lonatts,axes,lonarray)
+        # Try to resolve lat/lon to 1D Cartesian coordinates, if possible.
+        # Calculate the mean lat/lon arrays in double precision.
+        meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
+        meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
+        if np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
+          # Reduce back to single precision for writing out.
+          meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
+          meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
+          # Ensure monotonicity of longitude field.
+          # (gdll may sometimes wrap last longitude to zero).
+          # Taken from old fstd_core.c code.
+          if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
+            meanlon[-1] += 360.
+          lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
+          lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
+        yield lat
+        yield lon
+        latlon[key] = (lat,lon)
+      lat,lon = latlon[key]
+      # Update the var's horizontal coordinates.
+      axes = OrderedDict()
+      for axisname,axisvalues in var.axes.iteritems():
+        if axisname == 'j':
+          axisname,axisvalues = lat.axes.items()[0]
+        elif axisname == 'i':
+          axisname,axisvalues = lon.axes.items()[-1]
+        axes[axisname] = axisvalues
+      # For 2D lat/lon, add these to the metadata.
+      if 'lat' not in axes or 'lon' not in axes:
+        var.atts['coordinates'] = 'lon lat'
+
+      yield type(var)(var.name,var.atts,axes,var.array)
+
 
 #################################################
 # Logic for reading/writing FSTD data from/to netCDF files.
@@ -726,7 +837,7 @@ class _netCDF_IO (_Buffer_Base):
     f.close()
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_VCoords,_Dates):
+class Buffer (_netCDF_IO,_XYCoords,_VCoords,_Dates):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
