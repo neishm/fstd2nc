@@ -809,6 +809,19 @@ class _XYCoords (_Buffer_Base):
 
 
 #################################################
+# Remove extraneous dimensions from the output.
+class _NoNK (_Buffer_Base):
+  def __iter__ (self):
+    for var in super(_NoNK,self).__iter__():
+      axes = var.axes
+      array = var.array
+      if 'k' in axes and len(axes['k']) == 1:
+        array = array.squeeze(axis=axes.keys().index('k'))
+        del axes['k']
+      yield type(var)(var.name,var.atts,axes,array)
+
+
+#################################################
 # Logic for reading/writing FSTD data from/to netCDF files.
 # Note: this is not strictly an FSTD thing, but it's
 # provided here for convenience.
@@ -862,7 +875,7 @@ class _netCDF_IO (_Buffer_Base):
     f.close()
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_XYCoords,_VCoords,_Dates):
+class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
