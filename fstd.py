@@ -5,75 +5,97 @@ High-level interface for FSTD data.
 # Helper class - collects data references into a numpy-like object.
 # Makes it more convenient for accessing the underlying data.
 class _Array (object):
-  def __init__ (self, shape, dtype, inner_dims, data_funcs):
+  @classmethod
+  def create (cls, shape, dtype, data_funcs):
+    # Define a map from outer axes to inner axes.
+    num_inner_dims = len(shape) - len(data_funcs.shape)
+    num_outer_dims = len(data_funcs.shape)
+    inner_dimids = [None]*num_outer_dims + range(num_inner_dims)
+    inner_slices = [slice(0,n,1) for n in shape[num_outer_dims:]]
+    assert tuple(shape[:num_outer_dims]) == data_funcs.shape
+    return cls(shape, dtype, inner_dimids, data_funcs, inner_slices)
+  def __init__ (self, shape, dtype, inner_dimids, data_funcs, inner_slices):
+    assert len(shape) == len(inner_dimids)
+    # Check outer dimensions
+    if hasattr(data_funcs,'ndim'):
+      assert sum(i is None for i in inner_dimids) == data_funcs.ndim
     # Expected shape and type of the array.
     self.shape = tuple(map(int,shape))
     self.ndim = len(self.shape)
     self.size = reduce(int.__mul__, self.shape, 1)
     self.dtype = dtype
-    # Boolean list, indicating which dimensions are part of the inner data_funcs.
-    self._inner_dims = inner_dims
+    # Map the full axes to the inner (record) axes.
+    # Set to 'None' for outer axes not part of the record.
+    self._inner_dimids = tuple(inner_dimids)
     # Array of references to the data from the FSTD records.
     self._data_funcs = data_funcs
+    # Extra slicing to be done to the record data after reading it in.
+    self._inner_slices = tuple(inner_slices)
   def __getitem__ (self, key):
     from itertools import product
     # Coerce key into a tuple of slice objects.
     if not isinstance(key,tuple):
-      key = (key,)
+      if hasattr(key,'__len__'): key = tuple(key)
+      else: key = (key,)
+    if len(key) == 1 and hasattr(key[0],'__len__'):
+      key = tuple(key[0])
     if Ellipsis in key:
       i = key.index(Ellipsis)
       key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
     key = key + (slice(None),)*(self.ndim-len(key))
-    # Collect keys into inner / outer parts
-    outer_keys = []
-    inner_keys = []
-    for k,is_inner in zip(key,self._inner_dims):
-      if is_inner: inner_keys.append(k)
-      else: outer_keys.append(k)
-    outer_keys = tuple(outer_keys)
-    inner_keys = tuple(inner_keys)
-    data_funcs = self._data_funcs
-    # Apply the outer keys.
-    if len(outer_keys) > 0:
-      data_funcs = data_funcs[outer_keys]
-    # Apply the inner keys.
-    if inner_keys != (slice(None),)*len(inner_keys):
-      #print "Inner slicing triggered."
-      if hasattr(data_funcs,'shape'):
-        for ind in product(*map(range,data_funcs.shape)):
-          f = data_funcs[ind]
-          data_funcs[ind] = lambda old_f=f: old_f()[inner_keys]
-      # data_funcs may be completely collapsed, in which case there is no
-      # 'shape' attribute (no longer an ndarray).
+    shape = []
+    inner_dimids = []
+    outer_slices = []
+    inner_slices = list(self._inner_slices)
+    for sl,n,i in zip(key,self.shape,self._inner_dimids):
+      # Only retain dimenions that aren't reduced out.
+      if not isinstance(sl,int):
+        shape.append(len(range(n)[sl]))
+        inner_dimids.append(i)
+      # Outer slice?
+      if i is None:
+        outer_slices.append(sl)
+      # Inner slice?
       else:
-        f = data_funcs
-        data_funcs = lambda old_f=f: old_f()[inner_keys]
+        S = inner_slices[i]
+        if isinstance(sl,int):
+          inner_slices[i] = S.start + S.step*sl
+        else:
+          start = S.start + S.step*(sl.start or 0)
+          step = S.step * (sl.step or 1)
+          if sl.stop is not None:
+            stop = S.start + S.step*sl.stop
+          else:
+            stop = S.stop
+          inner_slices[i] = slice(start,stop,step)
+    data_funcs = self._data_funcs.__getitem__(tuple(outer_slices))
+    return _Array(shape, self.dtype, inner_dimids, data_funcs, inner_slices)
 
-    new_shape = [range(s)[k] for s,k in zip(self.shape,key)]
-    # Check for dimensions that have been reduced out.
-    inner_dims = [i for i,s in zip(self._inner_dims,new_shape) if not isinstance(s,int)]
-    new_shape = [len(s) for s in new_shape if not isinstance(s,int)]
-    return _Array (new_shape, self.dtype, inner_dims, data_funcs)
-
-  # Helper method - iterate over all data functions.
-  def _iter_data_funcs (self):
-    from itertools import product
-    # Get indices of all dimensions, in preparation for iterating.
-    indices = [[slice(None)] if is_inner else range(s) for is_inner,s in zip(self._inner_dims, self.shape)]
-    if hasattr(self._data_funcs,'flatten'):
-      for i,ind in enumerate(product(*indices)):
-        yield ind, self._data_funcs.flatten()[i]
-    # data_funcs is degenerate (single element)?
-    else:
-      yield [slice(None)]*self.ndim, self._data_funcs()
+  # Remove degenerate dimensions from the array.
+  def squeeze (self, axis=None):
+    if isinstance(axis,int):
+      axis = (axis,)
+    if axis is None:
+      axis = [i for i,s in enumerate(self.shape) if s == 1]
+    key = [slice(None)]*self.ndim
+    for a in axis:
+      if self.shape[a] > 1:
+        raise ValueError("Can only squeeze axes of length 1.")
+      key[a] = 0
+    return self.__getitem__(tuple(key))
 
   # Allow this object to be loaded into a numpy array.
   def __array__ (self):
     import numpy as np
     from itertools import product
-    data = np.empty(self.shape, dtype=object)
-    for ind,data_func in self._iter_data_funcs():
-      data[ind] = data_func()
+    # data_funcs is degenerate (single element)?
+    if not hasattr(self._data_funcs,'flatten'):
+      return self._data_funcs()[self._inner_slices]
+    # Get indices of all dimensions, in preparation for iterating.
+    indices = [range(s) if i is None else [slice(None)] for i,s in zip(self._inner_dimids, self.shape)]
+    data = np.empty(self.shape, dtype=self.dtype)
+    for i,ind in enumerate(product(*indices)):
+      data[ind] = self._data_funcs.flatten()[i]()[self._inner_slices]
     return data
 
 # Helper class - keep an FSTD file open until all references are destroyed.
@@ -247,10 +269,10 @@ class _Buffer_Base (object):
         from warnings import warn
         warn ("Missing some records for %s.")
 
-      data = _Array (shape = data_funcs.shape+(var_id.nk,var_id.nj,var_id.ni),
-                     dtype = 'float32',
-                     inner_dims = [False]*data_funcs.ndim+[True,True,True],
-                     data_funcs = data_funcs
+      data = _Array.create (
+               shape = data_funcs.shape+(var_id.nk,var_id.nj,var_id.ni),
+               dtype = 'float32',
+               data_funcs = data_funcs
              )
 
       yield var_type(var_id.nomvar.strip(), atts, axes, data)
@@ -791,6 +813,10 @@ class _XYCoords (_Buffer_Base):
 # Note: this is not strictly an FSTD thing, but it's
 # provided here for convenience.
 class _netCDF_IO (_Buffer_Base):
+  def __init__ (self, buffer_size=1000000, *args, **kwargs):
+    self.buffer_size = int(buffer_size)
+    super(_netCDF_IO,self).__init__(*args,**kwargs)
+
   def __iter__ (self):
     from datetime import datetime
     from collections import OrderedDict
@@ -813,10 +839,8 @@ class _netCDF_IO (_Buffer_Base):
     """
     from netCDF4 import Dataset
     import numpy as np
+    from itertools import product
     f = Dataset(filename, "w", format="NETCDF4")
-
-    # Only write one copy of each unique dimension.
-    dims = dict()
 
     for varname, atts, axes, array in iter(self):
       for axisname, axisvalues in axes.items():
@@ -827,13 +851,14 @@ class _netCDF_IO (_Buffer_Base):
       # Write the variable.
       v = f.createVariable(varname, datatype=array.dtype, dimensions=axes.keys())
       v.setncatts(atts)
-      # Write one FSTD record at a time to avoid out-of-memory errors.
-      if isinstance(array,_Array):
-        for ind, data_func in array._iter_data_funcs():
-          v[ind] = data_func()
-      # Otherwise, data is already in memory so no problems?
-      else:
-        v[:] = np.asarray(array[:])
+      # Don't write too much at a time.
+      a = 0
+      check = array.size
+      while check > self.buffer_size:
+        check /= array.shape[a]
+        a = a + 1
+      for ind in product(*map(range,array.shape[:a])):
+        v[ind] = np.asarray(array[ind])
     f.close()
 
 # Default interface for I/O.
