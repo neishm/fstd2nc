@@ -538,7 +538,7 @@ class _VCoords (_Buffer_Base):
     if 'ig1' not in self._var_id:
       self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
     # Use decoded IP1 values as the vertical axis.
-    self._outer_axes += ('level',)
+    self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
     self._meta_records = self._meta_records + self._vcoord_nomvars
     super(_VCoords,self).__init__(*args,**kwargs)
