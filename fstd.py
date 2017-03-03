@@ -133,6 +133,11 @@ class _Buffer_Base (object):
   # They're either not implemented, or are internal info for the file.
   _ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3')
 
+  # Define any command-line arguments for reading FSTD files.
+  @classmethod
+  def _input_args (cls, parser):
+    pass
+
   def __init__ (self):
     import numpy as np
     dtype = [("dateo", "i4"), ("deet", "i4"), ("npas", "i4"), ("ni", "i4"), ("nj", "i4"), ("nk", "i4"), ("nbits", "i4"), ("datyp", "i4"), ("ip1", "i4"), ("ip2", "i4"), ("ip3", "i4"), ("typvar", "a2"), ("nomvar", "a4"), ("etiket", "a12"), ("grtyp", "a2"), ("ig1", "i4"), ("ig2", "i4"), ("ig3", "i4"), ("ig4", "i4"), ("swa", "i4"), ("lng", "i4"), ("dltf", "i4"), ("ubc", "i4"), ("xtra1", "i4"), ("xtra2", "i4"), ("xtra3", "i4"), ("datev", "i4")]
@@ -404,12 +409,37 @@ class _Buffer_Base (object):
 
 
 #################################################
+# Selecting for particular fields.
+class _SelectVars (_Buffer_Base):
+  @classmethod
+  def _input_args (cls, parser):
+    super(_SelectVars,cls)._input_args(parser)
+    parser.add_argument('--vars', metavar='VAR1,VAR2,...', help='Comma-seperated list of variables to convert.  By default, all variables are converted.')
+  def __init__ (self, vars=None, *args, **kwargs):
+    if vars is not None:
+      self._selected_vars = vars.split(',')
+      print 'Looking for variables:', ' '.join(self._selected_vars)
+    else:
+      self._selected_vars = None
+    super(_SelectVars,self).__init__(*args,**kwargs)
+  def __iter__ (self):
+    for var in super(_SelectVars,self).__iter__():
+      if self._selected_vars is not None:
+        if var.name not in self._selected_vars:
+          continue
+      yield var
+
+#################################################
 # Logic for handling date field.
 
 class _Dates (_Buffer_Base):
+  @classmethod
+  def _input_args (cls, parser):
+    super(_Dates,cls)._input_args(parser)
+    parser.add_argument('--squash-forecasts', action='store_true', help='Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.')
 
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
-    self.squash_forecasts = squash_forecasts
+    self._squash_forecasts = squash_forecasts
     if squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
     else:
@@ -424,7 +454,7 @@ class _Dates (_Buffer_Base):
     # Calculate the forecast (in hours).
     fields['forecast']=fields['deet']*fields['npas']/3600.
     # Time axis
-    if self.squash_forecasts:
+    if self._squash_forecasts:
       dates = map(int,fields['datev'])
     else:
       dates = map(int,fields['dateo'])
@@ -497,6 +527,7 @@ class _Dates (_Buffer_Base):
 
 #################################################
 # Logic for handling vertical coordinates.
+
 class _VCoords (_Buffer_Base):
   _vcoord_nomvars = ('HY','!!')
   def __init__ (self, *args, **kwargs):
@@ -698,6 +729,7 @@ class _VCoords (_Buffer_Base):
 
 #################################################
 # Logic for handling lat/lon coordinates.
+
 class _XYCoords (_Buffer_Base):
   _xycoord_nomvars = ('^^','>>')
   def __init__ (self, *args, **kwargs):
@@ -810,6 +842,7 @@ class _XYCoords (_Buffer_Base):
 
 #################################################
 # Remove extraneous dimensions from the output.
+
 class _NoNK (_Buffer_Base):
   def __iter__ (self):
     for var in super(_NoNK,self).__iter__():
@@ -823,11 +856,17 @@ class _NoNK (_Buffer_Base):
 
 #################################################
 # Logic for reading/writing FSTD data from/to netCDF files.
-# Note: this is not strictly an FSTD thing, but it's
-# provided here for convenience.
+
 class _netCDF_IO (_Buffer_Base):
-  def __init__ (self, buffer_size=1000000, *args, **kwargs):
-    self.buffer_size = int(buffer_size)
+  @classmethod
+  def _input_args (cls, parser):
+    super(_netCDF_IO,cls)._input_args(parser)
+    parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help='The units of time for the netCDF file.  Default is %(default)s.')
+    parser.add_argument('--buffer_size', type=int, default=1, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
+
+  def __init__ (self, time_units='hours', buffer_size=1, *args, **kwargs):
+    self._time_units = time_units
+    self._buffer_size = int(buffer_size)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
   def __iter__ (self):
@@ -838,7 +877,7 @@ class _netCDF_IO (_Buffer_Base):
     for var in super(_netCDF_IO,self).__iter__():
       # Modify time axes to be relative units instead of datetime objects.
       if var.name in var.axes and isinstance(var.array[0],datetime):
-        units = 'hours since %s'%(var.array[0])
+        units = '%s since %s'%(self._time_units,var.array[0])
         var.atts.update(units=units)
         array = np.asarray(date2num(var.array,units=units))
         var = type(var)(var.name,var.atts,var.axes,array)
@@ -867,18 +906,38 @@ class _netCDF_IO (_Buffer_Base):
       # Don't write too much at a time.
       a = 0
       check = array.size
-      while check > self.buffer_size:
+      while check > self._buffer_size*1E6:
         check /= array.shape[a]
         a = a + 1
       for ind in product(*map(range,array.shape[:a])):
         v[ind] = np.asarray(array[ind])
     f.close()
 
+
+
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates):
+class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
   """
 
+
+# Command-line invocation:
+def _fstd2nc (BufferType):
+  from argparse import ArgumentParser
+  parser = ArgumentParser(description="Converts an RPN standard file (FSTD) to netCDF format.")
+  parser.add_argument('infile', metavar='<fstd_file>', help='The FSTD file to convert.')
+  parser.add_argument('outfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
+  BufferType._input_args(parser)
+  args = parser.parse_args()
+  args = vars(args)
+  infile = args.pop('infile')
+  outfile = args.pop('outfile')
+  buf = BufferType(**args)
+  buf.read_file(infile)
+  buf.write_nc_file(outfile)
+
+if __name__ == '__main__':
+  _fstd2nc (Buffer)
 
