@@ -905,7 +905,11 @@ class _XYCoords (_Buffer_Base):
             meanlon[-1] += 360.
           lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
           lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
-        #TODO: add 'x' and 'y' as variables, with the coord values and header metadata.
+        # Add x and y as variables, with the coord values and header metadata.
+        if 'x' in lat.axes:
+          yield type(var)('x',OrderedDict(),{'x':axes['x']},np.array(axes['x']))
+        if 'y' in lat.axes:
+          yield type(var)('y',OrderedDict(),{'y':axes['y']},np.array(axes['y']))
         yield lat
         yield lon
         latlon[key] = (lat,lon)
