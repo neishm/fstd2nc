@@ -1,5 +1,5 @@
 """
-High-level interface for FSTD data.
+Functionality for converting between FSTD and netCDF files.
 """
 
 # Helper classes for lazy-array evaluation.
@@ -15,6 +15,8 @@ class _Array_Base (object):
     self.dtype = dtype
 
 # Data from a record.
+# Has a 'shape' like a numpy array, but values aren't loaded from file until
+# the array is sliced, or passed through np.asarray().
 class _Record_Array (_Array_Base):
   def __init__ (self, fstdfile, params):
     from rpnpy.librmn.fstd98 import dtype_fst2numpy
@@ -59,6 +61,11 @@ class _NaN_Array (_Array_Base):
 
 # Combine multiple array-like objects into a higher-dimensional array-like
 # object.
+# E.g., If you have a numpy array of dimensions (time,level), of type 'object',
+# and each element is a _Record_Array object of dimenions (ni,nj,nk), then
+# this will give you a new array-like object of dimenions (time,level,ni,nj,nk)
+# that can be manipulated like a numpy array (e.g. sliced, tranposed).
+# The values won't be loaded until the object is passed to numpy.asarray().
 class _Array (_Array_Base):
   @classmethod
   # Create the object from an array of array-like objects.
@@ -207,8 +214,8 @@ class _FSTD_File (object):
 
 
 # Define a class for encoding / decoding FSTD data.
-# Each step is placed in its own method, to make it easier to patch in new
-# behaviour if more exotic FSTD files are encountered in the future.
+# Each step is placed in its own "mixin" class, to make it easier to patch in 
+# new behaviour if more exotic FSTD files are encountered in the future.
 class _Buffer_Base (object):
 
   # Names of records that should be kept separate (never grouped into
@@ -222,7 +229,7 @@ class _Buffer_Base (object):
   _var_id = ('nomvar','ni','nj','nk')
 
   # Record parameters which should not be used as nc variable attributes.
-  # (They're either internal to the file, or part of the data (not metadata).
+  # (They're either internal to the file, or part of the data, not metadata).
   _ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d')
 
   # Define any command-line arguments for reading FSTD files.
@@ -231,6 +238,9 @@ class _Buffer_Base (object):
     pass
 
   def __init__ (self):
+    """
+    Create a new, empty buffer.
+    """
     self._params = []
 
   # Extract metadata from a particular header.
@@ -296,7 +306,7 @@ class _Buffer_Base (object):
     Processes the records into multidimensional variables.
     Iterates over (name, atts, axes, array) tuples.
     Note that array may not be a true numpy array (values are not yet loaded
-    in memory).  To load the array, pass it to numpy.array().
+    in memory).  To load the array, pass it to numpy.asarray().
     """
     from collections import OrderedDict, namedtuple
     import numpy as np
@@ -489,7 +499,7 @@ class _Buffer_Base (object):
 
 
 #####################################################################
-# Mixins for different behaviour / assumptions about FSTD data.
+# Mixins for different features / behaviour for the conversions.
 
 
 #################################################
@@ -738,6 +748,8 @@ class _VCoords (_Buffer_Base):
               vgd_id = vgd_fromlist(header['d'][...])
               if vgd_get (vgd_id,'LOGP'):
                 name = 'zeta'
+                # Not really a "standard" name, but used for backwards
+                # compatibility with PyGeode.
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
               else:
                 name = 'eta'
@@ -1013,20 +1025,20 @@ class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates,_SelectVars):
 
 
 # Command-line invocation:
-def _fstd2nc (BufferType):
+def _fstd2nc (buffer_type):
   from argparse import ArgumentParser
   parser = ArgumentParser(description="Converts an RPN standard file (FSTD) to netCDF format.")
   parser.add_argument('infile', metavar='<fstd_file>', help='The FSTD file to convert.')
   parser.add_argument('outfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
-  BufferType._input_args(parser)
+  buffer_type._input_args(parser)
   args = parser.parse_args()
   args = vars(args)
   infile = args.pop('infile')
   outfile = args.pop('outfile')
-  buf = BufferType(**args)
+  buf = buffer_type(**args)
   buf.read_file(infile)
   buf.write_nc_file(outfile)
 
 if __name__ == '__main__':
-  _fstd2nc (Buffer)
+  _fstd2nc (buffer_type=Buffer)
 
