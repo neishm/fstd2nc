@@ -978,16 +978,58 @@ class _netCDF_IO (_Buffer_Base):
 
   def __iter__ (self):
     from datetime import datetime
-    from collections import OrderedDict
+    from collections import Counter, OrderedDict
     import numpy as np
     from netCDF4 import date2num
+    # Keep track of all used variable / dimension names
+    varcount = Counter()
+    dimcount = Counter()
+    # Mappings from original dimension names to unique names
+    dimmap = dict()
+
     for var in super(_netCDF_IO,self).__iter__():
+
       # Modify time axes to be relative units instead of datetime objects.
       if var.name in var.axes and isinstance(var.array[0],datetime):
         units = '%s since %s'%(self._time_units,var.array[0])
         var.atts.update(units=units)
         array = np.asarray(date2num(var.array,units=units))
         var = type(var)(var.name,var.atts,var.axes,array)
+
+      # Make variable / dimension names unique, by appending integer suffices
+      # when necessary.
+      # Also check for illegal characters in names.
+      varname = var.name
+      # Name must start with alphanumeric, or underscore.
+      if not varname[0].isalnum():
+        if not varname.startswith('_'):
+          varname = '_'+varname
+      varcount.update([varname])
+      # Do we need to add an integer suffix?
+      num = varcount.get(varname)
+      if num > 1:
+        varname = var.name+str(num)
+      # Do we need to clobber the dimension names?
+      axes = []
+      for name,values in var.axes.iteritems():
+        # Name must start with alphanumeric, or underscore.
+        if not name[0].isalnum():
+          if not name.startswith('_'):
+            name = '_'+name
+        # Append integer suffix to make unique dimension name?
+        if (name,values) not in dimmap:
+          dimcount.update([name])
+          num = dimcount.get(name)
+          if num > 1:
+            dimmap[(name,values)] = name+str(num)
+          else:
+            dimmap[(name,values)] = name
+        name = dimmap[(name,values)]
+        axes.append((name,values))
+      axes = OrderedDict(axes)
+      var = type(var)(varname,var.atts,axes,var.array)
+      # (end of name checks)
+
       yield var
 
 
@@ -1019,7 +1061,6 @@ class _netCDF_IO (_Buffer_Base):
       for ind in product(*map(range,array.shape[:a])):
         v[ind] = np.asarray(array[ind])
     f.close()
-
 
 
 # Default interface for I/O.
