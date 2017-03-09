@@ -861,6 +861,9 @@ class _XYCoords (_Buffer_Base):
       # Check if we already defined this grid.
       key = tuple(gridinfo.values())
       if key not in latlon:
+        # Remember the associated '>>','^^' metadata for later.
+        xatts = OrderedDict()
+        yatts = OrderedDict()
         # Check for reference grid data.
         for header in self._params:
           nomvar = header['nomvar'].strip()
@@ -875,8 +878,10 @@ class _XYCoords (_Buffer_Base):
             gridinfo['ig4'] = int(header['ig4'])
             if nomvar == '>>':
               gridinfo['ax'] = header['d'][...]
+              xatts = OrderedDict(self._get_header_atts(header))
             if nomvar == '^^':
               gridinfo['ay'] = header['d'][...]
+              yatts = OrderedDict(self._get_header_atts(header))
         try:
           # Get the lat & lon data.
           gdid = ezgdef_fmem (**gridinfo)
@@ -915,13 +920,14 @@ class _XYCoords (_Buffer_Base):
           # Taken from old fstd_core.c code.
           if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
             meanlon[-1] += 360.
+          latatts.update(yatts)
+          lonatts.update(xatts)
           lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
           lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
         # Add x and y as variables, with the coord values and header metadata.
         if 'x' in lat.axes:
-          yield type(var)('x',OrderedDict(),{'x':axes['x']},np.array(axes['x']))
-        if 'y' in lat.axes:
-          yield type(var)('y',OrderedDict(),{'y':axes['y']},np.array(axes['y']))
+          yield type(var)('x',xatts,{'x':axes['x']},np.array(axes['x']))
+          yield type(var)('y',yatts,{'y':axes['y']},np.array(axes['y']))
         yield lat
         yield lon
         latlon[key] = (lat,lon)
