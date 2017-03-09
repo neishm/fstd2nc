@@ -696,11 +696,13 @@ class _VCoords (_Buffer_Base):
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
     for var in super(_VCoords,self).__iter__():
-      # Check if this variable uses a vertical coordinate, and determine
-      # what that coordinate is.
+      # Degenerate vertical axis?
+      if 'ip1' in var.atts and var.atts['ip1'] == 0:
+        del var.axes['level']
       if 'level' not in var.axes or 'kind' not in var.atts:
         yield var
         continue
+      # Decode the vertical coordinate.
       levels = var.axes['level']
       kind = var.atts['kind']
       # Only need to provide one copy of the vertical axis.
