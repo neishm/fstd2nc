@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 Functionality for converting between FSTD and netCDF files.
 """
