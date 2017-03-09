@@ -809,6 +809,12 @@ class _VCoords (_Buffer_Base):
               ancillary_variables.extend([A,B])
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
+        elif kind == 6:
+          name = 'theta'
+          atts['standard_name'] = 'air_potential_temperature'
+          atts['units'] = 'K'
+          atts['positive'] = 'up'
+
         # Add this vertical axis.
         axes = OrderedDict([(name,levels)])
         if len(ancillary_variables) > 0:
