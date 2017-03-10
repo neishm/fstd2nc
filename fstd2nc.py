@@ -263,7 +263,7 @@ class _Buffer_Base (object):
   ###############################################
   # Basic flow for reading data
 
-  def read_file (self, filename):
+  def read_fstd_file (self, filename):
     """
     Read raw records from an FSTD file, into the buffer.
     Multiple files can be read sequentially.
@@ -487,7 +487,7 @@ class _Buffer_Base (object):
       #TODO
 
 
-  def write_file (self, filename):
+  def write_fstd_file (self, filename):
     """
     Write the records from this object into the specified FSTD file.
     """
@@ -1123,7 +1123,7 @@ def _fstd2nc_cmdline (buffer_type):
   infile = args.pop('infile')
   outfile = args.pop('outfile')
   buf = buffer_type(**args)
-  buf.read_file(infile)
+  buf.read_fstd_file(infile)
   buf.write_nc_file(outfile)
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ From Python
 ```python
 import fstd2nc
 data = fstd2nc.Buffer()
-data.read_file("myfile.fst")
+data.read_fstd_file("myfile.fst")
 data.write_nc_file("myfile.nc")
 ```
 
