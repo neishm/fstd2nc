@@ -1,6 +1,0 @@
-This module converts FSTD files to netCDF format.
-
-Usage: python -m fstd2nc <infile> <outfile>
-
-For help, run "python -m fstd2nc --help".
-
