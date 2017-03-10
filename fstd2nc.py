@@ -531,6 +531,20 @@ class _SelectVars (_Buffer_Base):
           continue
       yield var
 
+
+#################################################
+# TODO: Logic for handling masks.
+#
+# Need some sample files first.
+# In the old PyGeode-RPN code, I detected a mask by
+# looking for fields with datyp=2 and nbits=1, and
+# then pairing that with a data field with the same
+# nomvar/etiket/etc.
+# However, I can't find the original test file (RIOPS 2?)
+# that I based this code on, and I don't know how
+# general my assumptions were in the first place.
+
+
 #################################################
 # Logic for handling date field.
 
