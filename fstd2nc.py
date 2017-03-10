@@ -279,10 +279,15 @@ class _Buffer_Base (object):
       prm['d'] = _Record_Array(f,prm)
       self._params.append(prm)
 
-  # Decode the record headers into a dictionary, and
-  # add extra (derived) attributes that are useful for
-  # processing the data into multidimensional arrays.
-  def _get_fields (self):
+  # Collect the list of params from all the FSTD records, and concatenate them
+  # into arrays.  Result is a single dictionary containing the vectorized
+  # parameters of all records.
+  # The sole purpose of this routine is to put the metiadata in a structure
+  # that's more efficient for doing bulk (vectorized) manipulations, instead
+  # of manipulating each record param dictionary one at a time.
+  # Subclasses may also insert extra (non-FSTD) parameters in here which are
+  # needed for doing the variable decoding.
+  def _vectorize_params (self):
     from collections import OrderedDict
     import numpy as np
     # Make sure the parameter names are consistent for all records.
@@ -316,7 +321,7 @@ class _Buffer_Base (object):
     # Degenerate case: no data in buffer
     if len(self._params) == 0: return
 
-    records = self._get_fields()
+    records = self._vectorize_params()
 
     # Group the records by variable.
     var_records = OrderedDict()
@@ -459,11 +464,15 @@ class _Buffer_Base (object):
     records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.iteritems())
 
     # Process this into headers.
-    self._put_fields(nrecs, records)
+    self._params.extend(list(self._unvectorize_params(nrecs, records)))
 
-  # Final preparation of records, into proper headers.
-  def _put_fields (self, nrecs, fields):
-    raise NotImplementedError #TODO: update this code.
+
+  # Take vectorized version of record param dictionary, and convert it back
+  # to a list of individual record params (ready for writing to file).
+  # Sub-classes may also do extra work here to re-encode FSTD params from
+  # their own metadata.
+  def _unvectorize_params (self, nrecs, fields):
+    raise NotImplementedError #TODO
     import numpy as np
     # Pad out the string records with spaces
     fields['nomvar'] = [s.upper().ljust(4) for s in fields['nomvar']]
@@ -471,13 +480,10 @@ class _Buffer_Base (object):
     fields['typvar'] = [s.upper().ljust(2) for s in fields['typvar']]
     fields['grtyp'] = map(str.upper, fields['grtyp'])
 
-    headers = np.zeros(nrecs,dtype=self._headers.dtype)
-    for n in headers.dtype.names:
-      if n in fields:
-        headers[n] = fields[n]
-    self._headers = np.concatenate((self._headers,headers))
-    self._data_funcs.extend(fields['data_func'])
-
+    params = []
+    for i in range(nrecs):
+      prm = dict()
+      #TODO
 
 
   def write_file (self, filename):
@@ -543,10 +549,10 @@ class _Dates (_Buffer_Base):
     super(_Dates,self).__init__(*args,**kwargs)
 
   # Get any extra (derived) fields needed for doing the decoding.
-  def _get_fields (self):
+  def _vectorize_params (self):
     from rpnpy.rpndate import  RPNDate
     import numpy as np
-    fields = super(_Dates,self)._get_fields()
+    fields = super(_Dates,self)._vectorize_params()
     # Calculate the forecast (in hours).
     fields['forecast']=fields['deet']*fields['npas']/3600.
     # Time axis
@@ -586,7 +592,7 @@ class _Dates (_Buffer_Base):
       yield var
 
   # Prepare date info for output.
-  def _put_fields (self, nrecs, fields):
+  def _unvectorize_params (self, nrecs, fields):
     import numpy as np
     from rpnpy.rpndate import RPNDate
 
@@ -618,7 +624,7 @@ class _Dates (_Buffer_Base):
     for att in 'deet','npas','dateo','forecast':
       fields[att] = np.ma.filled(fields[att],0)
 
-    super(_Dates,self)._put_fields(nrecs, fields)
+    return super(_Dates,self)._unvectorize_params(nrecs, fields)
 
 
 #################################################
@@ -638,10 +644,10 @@ class _VCoords (_Buffer_Base):
     # Tell the decoder not to process vertical records as variables.
     self._meta_records = self._meta_records + self._vcoord_nomvars
     super(_VCoords,self).__init__(*args,**kwargs)
-  def _get_fields (self):
+  def _vectorize_params (self):
     from rpnpy.librmn.fstd98 import DecodeIp
     import numpy as np
-    fields = super(_VCoords,self)._get_fields()
+    fields = super(_VCoords,self)._vectorize_params()
     # Provide 'level' and 'kind' information to the decoder.
     decoded = map(DecodeIp,fields['ip1'],fields['ip2'],fields['ip3'])
     rp1 = zip(*decoded)[0]
@@ -651,7 +657,7 @@ class _VCoords (_Buffer_Base):
     fields['level'] = levels
     fields['kind'] = kind
     return fields
-  def _put_fields (self,nrecs,fields):
+  def _unvectorize_params (self,nrecs,fields):
     import numpy as np
     from rpnpy.librmn.fstd98 import EncodeIp
     from rpnpy.librmn.proto import FLOAT_IP
@@ -673,7 +679,7 @@ class _VCoords (_Buffer_Base):
     # Set default ip1 values.
     fields['ip1'] = np.ma.filled(fields['ip1'],0)
     # Continue re-encoding other parts of the field.
-    super(_VCoords,self)._put_fields(nrecs,fields)
+    return super(_VCoords,self)._unvectorize_params(nrecs,fields)
 
   # Add vertical axis as another variable.
   def __iter__ (self):
