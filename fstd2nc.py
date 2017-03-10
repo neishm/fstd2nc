@@ -236,7 +236,7 @@ class _Buffer_Base (object):
 
   # Define any command-line arguments for reading FSTD files.
   @classmethod
-  def _input_args (cls, parser):
+  def _cmdline_args (cls, parser):
     pass
 
   def __init__ (self):
@@ -397,6 +397,7 @@ class _Buffer_Base (object):
   # Add some derived data to this object.  The data must follow the same format
   # as the output of __iter__().
   def _add_data (self, data):
+    raise NotImplementedError  #TODO
     import numpy as np
     from itertools import product
     from collections import OrderedDict
@@ -514,8 +515,8 @@ class _Buffer_Base (object):
 # Selecting for particular fields.
 class _SelectVars (_Buffer_Base):
   @classmethod
-  def _input_args (cls, parser):
-    super(_SelectVars,cls)._input_args(parser)
+  def _cmdline_args (cls, parser):
+    super(_SelectVars,cls)._cmdline_args(parser)
     parser.add_argument('--vars', metavar='VAR1,VAR2,...', help='Comma-seperated list of variables to convert.  By default, all variables are converted.')
   def __init__ (self, vars=None, *args, **kwargs):
     if vars is not None:
@@ -550,8 +551,8 @@ class _SelectVars (_Buffer_Base):
 
 class _Dates (_Buffer_Base):
   @classmethod
-  def _input_args (cls, parser):
-    super(_Dates,cls)._input_args(parser)
+  def _cmdline_args (cls, parser):
+    super(_Dates,cls)._cmdline_args(parser)
     parser.add_argument('--squash-forecasts', action='store_true', help='Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.')
 
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
@@ -1004,10 +1005,10 @@ class _NoNK (_Buffer_Base):
 
 class _netCDF_IO (_Buffer_Base):
   @classmethod
-  def _input_args (cls, parser):
-    super(_netCDF_IO,cls)._input_args(parser)
+  def _cmdline_args (cls, parser):
+    super(_netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help='The units of time for the netCDF file.  Default is %(default)s.')
-    parser.add_argument('--buffer_size', type=int, default=1, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
+    parser.add_argument('--buffer-size', type=int, default=1, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
 
   def __init__ (self, time_units='hours', buffer_size=1, *args, **kwargs):
     self._time_units = time_units
@@ -1111,12 +1112,12 @@ class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates,_SelectVars):
 
 
 # Command-line invocation:
-def _fstd2nc (buffer_type):
+def _fstd2nc_cmdline (buffer_type):
   from argparse import ArgumentParser
   parser = ArgumentParser(description="Converts an RPN standard file (FSTD) to netCDF format.")
   parser.add_argument('infile', metavar='<fstd_file>', help='The FSTD file to convert.')
   parser.add_argument('outfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
-  buffer_type._input_args(parser)
+  buffer_type._cmdline_args(parser)
   args = parser.parse_args()
   args = vars(args)
   infile = args.pop('infile')
@@ -1126,5 +1127,5 @@ def _fstd2nc (buffer_type):
   buf.write_nc_file(outfile)
 
 if __name__ == '__main__':
-  _fstd2nc (buffer_type=Buffer)
+  _fstd2nc_cmdline (buffer_type=Buffer)
 
