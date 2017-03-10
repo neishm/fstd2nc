@@ -351,6 +351,7 @@ class _Buffer_Base (object):
         atts[n] = v
 
       # Get the axis coordinates.
+      #TODO: check for masked values (can't be hashed).
       axes = OrderedDict((n,tuple(sorted(set(records[n][rec_ids])))) for n in self._outer_axes)
       axes['i'] = range(var_id.ni)
       axes['j'] = range(var_id.nj)
