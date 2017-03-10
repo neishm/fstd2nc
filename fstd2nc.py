@@ -222,7 +222,7 @@ class _Buffer_Base (object):
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
-  _meta_records = ('HH', 'STNS', 'SH')
+  _meta_records = ()
 
   # Attributes which could potentially be used as axes.
   _outer_axes = ()
@@ -639,6 +639,15 @@ class _Dates (_Buffer_Base):
       fields[att] = np.ma.filled(fields[att],0)
 
     return super(_Dates,self)._unvectorize_params(nrecs, fields)
+
+
+#################################################
+# TODO: Logic for handling timeseries data
+
+class _Series (_Buffer_Base):
+  def __init__ (self, *args, **kwargs):
+    # Don't process series time/station/height records as variables.
+    self._meta_records = self._meta_records + ('HH', 'STNS', 'SH')
 
 
 #################################################
