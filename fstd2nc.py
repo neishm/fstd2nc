@@ -293,7 +293,7 @@ class _Buffer_Base (object):
     # Make sure the parameter names are consistent for all records.
     if len(set(map(frozenset,self._params))) != 1:
       raise ValueError("Inconsistent parameter names for the records.")
-    fields = dict()
+    fields = OrderedDict()
     for prm in self._params:
       for n,v in prm.iteritems():
         fields.setdefault(n,[]).append(v)
@@ -919,7 +919,6 @@ class _XYCoords (_Buffer_Base):
         except (TypeError,EzscintError):
           from warnings import warn
           warn("Unable to get grid info for '%s'"%var.name)
-          raise
           yield var
           continue
         latarray = ll['lat'].transpose() # Switch from Fortran to C order.
@@ -1042,6 +1041,7 @@ class _netCDF_IO (_Buffer_Base):
       # Do we need to clobber the dimension names?
       axes = []
       for name,values in var.axes.iteritems():
+        values = tuple(values)  # Values need to be hashable for lookup table.
         # Name must start with alphanumeric, or underscore.
         if not name[0].isalnum():
           if not name.startswith('_'):
