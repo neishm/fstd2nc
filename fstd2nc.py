@@ -1102,6 +1102,11 @@ class _netCDF_IO (_Buffer_Base):
         a = a + 1
       for ind in product(*map(range,array.shape[:a])):
         v[ind] = np.asarray(array[ind])
+    # We need to explicitly state that we're using CF conventions in our
+    # output files, or some utilities (like IDV) won't accept the data.
+    # Adapted from pygeode.formats.cfmeta.
+    f.Conventions = "CF-1.0"
+
     f.close()
 
 
