@@ -10,6 +10,7 @@ Functionality for converting between FSTD and netCDF files.
 class _Array_Base (object):
   # Set some common attributes for the object.
   def __init__ (self, shape, dtype):
+    from functools import reduce
     # Expected shape and type of the array.
     self.shape = tuple(map(int,shape))
     self.ndim = len(self.shape)
@@ -89,7 +90,7 @@ class _Array (_Array_Base):
       dtype = np.result_type(*data.flatten())
     shape = tuple(outer_shape) + tuple(inner_shape)
     # Define a map from outer axes to inner axes.
-    inner_dimids = [None]*len(outer_shape) + range(len(inner_shape))
+    inner_dimids = [None]*len(outer_shape) + list(range(len(inner_shape)))
     inner_slices = [slice(None)]*len(inner_shape)
     return cls(shape, dtype, inner_dimids, data, inner_slices)
   def __init__ (self, shape, dtype, inner_dimids, data, inner_slices):
@@ -172,7 +173,7 @@ class _Array (_Array_Base):
       axes = tuple(axes[0])
     if len(axes) != self.ndim:
       raise ValueError("Wrong number of dimenions for transpose.")
-    if sorted(axes) != range(self.ndim):
+    if sorted(axes) != list(range(self.ndim)):
       raise ValueError("Bad axis arguments.")
     shape = [self.shape[a] for a in axes]
     inner_dimids = [self._inner_dimids[a] for a in axes]
@@ -247,7 +248,7 @@ class _Buffer_Base (object):
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
-    for n,v in header.iteritems():
+    for n,v in header.items():
       if n in self._ignore_atts: continue
       if isinstance(v,str):
         v = v.strip()
@@ -295,9 +296,9 @@ class _Buffer_Base (object):
       raise ValueError("Inconsistent parameter names for the records.")
     fields = OrderedDict()
     for prm in self._params:
-      for n,v in prm.iteritems():
+      for n,v in prm.items():
         fields.setdefault(n,[]).append(v)
-    for n,v in fields.items():
+    for n,v in list(fields.items()):
       # Treat array-like objects specially (don't want numpy to try to
       # read the data).
       if hasattr(v[0],'__array__'):
@@ -336,10 +337,10 @@ class _Buffer_Base (object):
     var_type = namedtuple('var', ('name','atts','axes','array'))
 
     # Loop over each variable and construct the data & metadata.
-    for var_id, rec_ids in var_records.iteritems():
+    for var_id, rec_ids in var_records.items():
       # Get the metadata for each record.
       atts = OrderedDict()
-      for n in records.iterkeys():
+      for n in records.keys():
         if n in self._outer_axes or n in self._ignore_atts: continue
         v = records[n][rec_ids]
         # Only use attributes that are consistent across all variable records.
@@ -375,8 +376,8 @@ class _Buffer_Base (object):
       data = _Array.create (data)
 
       # Put the i,j,k dimensions in C order.
-      data = data.transpose(range(data.ndim-3)+[data.ndim-1,data.ndim-2,data.ndim-3])
-      axes = axes.items()
+      data = data.transpose(list(range(data.ndim-3))+[data.ndim-1,data.ndim-2,data.ndim-3])
+      axes = list(axes.items())
       axes = axes[:-3] + axes[-3:][::-1]
       axes = OrderedDict(axes)
 
@@ -406,16 +407,16 @@ class _Buffer_Base (object):
     # when certain attributes are missing.
     att_type = OrderedDict()
     for var_id, atts, axes, array in data:
-      for n,v in atts.iteritems():
+      for n,v in atts.items():
         att_type[n] = type(v)
-      for n,v in axes.iteritems():
+      for n,v in axes.items():
         if n in ('k','j','i'): continue
         att_type[n] = type(v)
     att_type['d'] = object
 
     # Construct the records.
     # The values will be stored in chunks, to be concatenated at the end.
-    records = OrderedDict((n,[]) for n in att_type.iterkeys())
+    records = OrderedDict((n,[]) for n in att_type.keys())
 
     # Loop over each variable.
     for varname, atts, axes, array in data:
@@ -424,7 +425,7 @@ class _Buffer_Base (object):
       for n in 'k','j','i':
         if n not in axes:
           raise KeyError("'%s' axis not found in the data.")
-      if axes.keys()[-3:] != ['k','j','i']:
+      if list(axes.keys())[-3:] != ['k','j','i']:
         raise ValueError("Wrong dimension order - expected (nk,nj,ni) dimensions at the end.")
 
       # Make sure we have a nomvar.
@@ -445,14 +446,14 @@ class _Buffer_Base (object):
 
       # Add metadata.
       nrecs = len(data)
-      for n,v in atts.iteritems():
+      for n,v in atts.items():
         current_records[n] = [v]*nrecs
 
       # Add in the data references.
       current_records['d'] = data
 
       # Check for anything that's not defined (apply a mask).
-      for n,t in att_type.iteritems():
+      for n,t in att_type.items():
         if n not in current_records:
           bad = np.zeros(nrecs, dtype=t)
           current_records[n] = np.ma(bad,mask=True)
@@ -462,7 +463,7 @@ class _Buffer_Base (object):
         v.append(current_records[n])
 
     # Convert to numpy arrays.
-    records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.iteritems())
+    records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.items())
 
     # Process this into headers.
     self._params.extend(list(self._unvectorize_params(nrecs, records)))
@@ -479,7 +480,7 @@ class _Buffer_Base (object):
     fields['nomvar'] = [s.upper().ljust(4) for s in fields['nomvar']]
     fields['etiket'] = [s.upper().ljust(12) for s in fields['etiket']]
     fields['typvar'] = [s.upper().ljust(2) for s in fields['typvar']]
-    fields['grtyp'] = map(str.upper, fields['grtyp'])
+    fields['grtyp'] = list(map(str.upper, fields['grtyp']))
 
     params = []
     for i in range(nrecs):
@@ -521,7 +522,7 @@ class _SelectVars (_Buffer_Base):
   def __init__ (self, vars=None, *args, **kwargs):
     if vars is not None:
       self._selected_vars = vars.split(',')
-      print 'Looking for variables:', ' '.join(self._selected_vars)
+      print ('Looking for variables: ' + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
     super(_SelectVars,self).__init__(*args,**kwargs)
@@ -800,7 +801,7 @@ class _VCoords (_Buffer_Base):
               # Some attribute aliases that are needed for reverse-compatibility
               # with old PyGeode.formats.fstd
               aliases = OrderedDict([('CA_M','a_m'),('CA_T','a_t'),('CB_M','b_m'),('CB_T','b_t'),('VIPM','ip1_m'),('VIPT','ip1_t'),('VERS','version'),('RC_1','rcoef1'),('RC_2','rcoef2'),('RFLD','ref_name')])
-              for oldname,newname in aliases.iteritems():
+              for oldname,newname in aliases.items():
                 if oldname in atts: atts[newname] = atts[oldname]
               # Attempt to fill in A/B ancillary data (if available).
               try:
@@ -858,7 +859,7 @@ class _VCoords (_Buffer_Base):
       # Get the vertical axis.
       vaxis = vaxes[(levels,kind)]
       # Modify the variable's dimension name to match the axis name.
-      axes = OrderedDict(((vaxis.name if n == 'level' else n),v) for n,v in var.axes.iteritems())
+      axes = OrderedDict(((vaxis.name if n == 'level' else n),v) for n,v in var.axes.items())
       var = type(var)(var.name,var.atts,axes,var.array)
       yield var
 
@@ -973,11 +974,11 @@ class _XYCoords (_Buffer_Base):
       lat,lon = latlon[key]
       # Update the var's horizontal coordinates.
       axes = OrderedDict()
-      for axisname,axisvalues in var.axes.iteritems():
+      for axisname,axisvalues in var.axes.items():
         if axisname == 'j':
-          axisname,axisvalues = lat.axes.items()[0]
+          axisname,axisvalues = list(lat.axes.items())[0]
         elif axisname == 'i':
-          axisname,axisvalues = lon.axes.items()[-1]
+          axisname,axisvalues = list(lon.axes.items())[-1]
         axes[axisname] = axisvalues
       # For 2D lat/lon, add these to the metadata.
       if 'lat' not in axes or 'lon' not in axes:
@@ -995,7 +996,7 @@ class _NoNK (_Buffer_Base):
       axes = var.axes
       array = var.array
       if 'k' in axes and len(axes['k']) == 1:
-        array = array.squeeze(axis=axes.keys().index('k'))
+        array = array.squeeze(axis=list(axes.keys()).index('k'))
         del axes['k']
       yield type(var)(var.name,var.atts,axes,array)
 
@@ -1050,7 +1051,7 @@ class _netCDF_IO (_Buffer_Base):
         varname = var.name+str(num)
       # Do we need to clobber the dimension names?
       axes = []
-      for name,values in var.axes.iteritems():
+      for name,values in var.axes.items():
         values = tuple(values)  # Values need to be hashable for lookup table.
         # Name must start with alphanumeric, or underscore.
         if not name[0].isalnum():
@@ -1090,7 +1091,7 @@ class _netCDF_IO (_Buffer_Base):
         if axisname not in f.dimensions:
           f.createDimension(axisname, len(axisvalues))
       # Write the variable.
-      v = f.createVariable(varname, datatype=array.dtype, dimensions=axes.keys())
+      v = f.createVariable(varname, datatype=array.dtype, dimensions=list(axes.keys()))
       v.setncatts(atts)
       # Don't write too much at a time.
       a = 0
