@@ -351,11 +351,19 @@ class _Buffer_Base (object):
         atts[n] = v
 
       # Get the axis coordinates.
-      #TODO: check for masked values (can't be hashed).
-      axes = OrderedDict((n,tuple(sorted(set(records[n][rec_ids])))) for n in self._outer_axes)
-      axes['i'] = range(var_id.ni)
-      axes['j'] = range(var_id.nj)
-      axes['k'] = range(var_id.nk)
+      axes =  OrderedDict()
+      for n in self._outer_axes:
+        values = records[n][rec_ids]
+        # Remove missing values before continuing.
+        values = np.ma.compressed(values)
+        # Ignore axes that have no actual coordinate values.
+        if len(values) == 0: continue
+        # Get all unique values (sorted).
+        values = tuple(sorted(set(values)))
+        axes[n] = values
+      axes['i'] = tuple(range(var_id.ni))
+      axes['j'] = tuple(range(var_id.nj))
+      axes['k'] = tuple(range(var_id.nk))
 
       # Construct a multidimensional array to hold the data functions.
       data = np.empty(map(len,axes.values()[:-3]), dtype='O')
@@ -365,7 +373,7 @@ class _Buffer_Base (object):
       
       # Arrange the data funcs in the appropriate locations.
       for rec_id in rec_ids:
-        index = tuple(axes[n].index(records[n][rec_id]) for n in self._outer_axes)
+        index = tuple(axes[n].index(records[n][rec_id]) for n in self._outer_axes if n in axes)
         data[index] = records['d'][rec_id]
 
       # Check if we have full coverage along all axes.
