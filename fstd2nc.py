@@ -361,19 +361,16 @@ class _Buffer_Base (object):
         # Get all unique values (sorted).
         values = tuple(sorted(set(values)))
         axes[n] = values
-      axes['i'] = tuple(range(var_id.ni))
-      axes['j'] = tuple(range(var_id.nj))
-      axes['k'] = tuple(range(var_id.nk))
 
       # Construct a multidimensional array to hold the data functions.
-      data = np.empty(map(len,axes.values()[:-3]), dtype='O')
+      data = np.empty(map(len,axes.values()), dtype='O')
 
       # Assume missing data (nan) unless filled in later.
       data.fill(_NaN_Array(var_id.ni, var_id.nj, var_id.nk))
       
       # Arrange the data funcs in the appropriate locations.
       for rec_id in rec_ids:
-        index = tuple(axes[n].index(records[n][rec_id]) for n in self._outer_axes if n in axes)
+        index = tuple(axes[n].index(records[n][rec_id]) for n in axes.keys())
         data[index] = records['d'][rec_id]
 
       # Check if we have full coverage along all axes.
@@ -386,9 +383,10 @@ class _Buffer_Base (object):
 
       # Put the i,j,k dimensions in C order.
       data = data.transpose(list(range(data.ndim-3))+[data.ndim-1,data.ndim-2,data.ndim-3])
-      axes = list(axes.items())
-      axes = axes[:-3] + axes[-3:][::-1]
-      axes = OrderedDict(axes)
+
+      axes['k'] = tuple(range(var_id.nk))
+      axes['j'] = tuple(range(var_id.nj))
+      axes['i'] = tuple(range(var_id.ni))
 
       yield var_type(var_id.nomvar.strip(), atts, axes, data)
 
