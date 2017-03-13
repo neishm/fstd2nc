@@ -925,10 +925,12 @@ class _XYCoords (_Buffer_Base):
             gridinfo['ig3'] = int(header['ig3'])
             gridinfo['ig4'] = int(header['ig4'])
             if nomvar == '>>':
-              gridinfo['ax'] = header['d'][...]
+              # Need to reduce out 'nk' dimension, or ezgdef_fmem aborts
+              # on 'Y' grid.
+              gridinfo['ax'] = header['d'][...].squeeze(axis=2)
               xatts = OrderedDict(self._get_header_atts(header))
             if nomvar == '^^':
-              gridinfo['ay'] = header['d'][...]
+              gridinfo['ay'] = header['d'][...].squeeze(axis=2)
               yatts = OrderedDict(self._get_header_atts(header))
         try:
           # Get the lat & lon data.
@@ -950,27 +952,31 @@ class _XYCoords (_Buffer_Base):
         lonatts['standard_name'] = 'longitude'
         lonatts['units'] = 'degrees_east'
         axes = OrderedDict([('j',var.axes['j']),('i',var.axes['i'])])
-        if 'ax' in gridinfo and 'ay' in gridinfo:
+        # Do we have a non-trivial structured 2D field?
+        # If so, use the appropriate (x,y) coordinate system.
+        if 'ax' in gridinfo and 'ay' in gridinfo and gridinfo['grtyp'] != 'Y':
           axes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
+        # Set default lat/lon variables, possibly overriden below.
         lat = type(var)('lat',latatts,axes,latarray)
         lon = type(var)('lon',lonatts,axes,lonarray)
         # Try to resolve lat/lon to 1D Cartesian coordinates, if possible.
         # Calculate the mean lat/lon arrays in double precision.
-        meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
-        meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
-        if np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
-          # Reduce back to single precision for writing out.
-          meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
-          meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
-          # Ensure monotonicity of longitude field.
-          # (gdll may sometimes wrap last longitude to zero).
-          # Taken from old fstd_core.c code.
-          if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
-            meanlon[-1] += 360.
-          latatts.update(yatts)
-          lonatts.update(xatts)
-          lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
-          lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
+        if latarray.shape[1] > 1 and lonarray.shape[1] > 1:
+          meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
+          meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
+          if np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
+            # Reduce back to single precision for writing out.
+            meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
+            meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
+            # Ensure monotonicity of longitude field.
+            # (gdll may sometimes wrap last longitude to zero).
+            # Taken from old fstd_core.c code.
+            if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
+              meanlon[-1] += 360.
+            latatts.update(yatts)
+            lonatts.update(xatts)
+            lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
+            lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
         # Add x and y as variables, with the coord values and header metadata.
         if 'x' in lat.axes:
           yield type(var)('x',xatts,{'x':axes['x']},np.array(axes['x']))
