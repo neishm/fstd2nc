@@ -976,14 +976,19 @@ class _XYCoords (_Buffer_Base):
             # Taken from old fstd_core.c code.
             if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
               meanlon[-1] += 360.
-            latatts.update(yatts)
-            lonatts.update(xatts)
             lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
             lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
-        # Add x and y as variables, with the coord values and header metadata.
+        # For non-cartesian (but structured) 2D grids, add x and y coordinates.
         if 'x' in lat.axes:
           yield type(var)('x',xatts,{'x':axes['x']},np.array(axes['x']))
           yield type(var)('y',yatts,{'y':axes['y']},np.array(axes['y']))
+        # Otherwise, assume '^^' / '>>' correspond to lat/lon, so any metadata
+        # can go into the lat and lon fields.
+        else:
+          latatts.update(yatts)
+          lonatts.update(xatts)
+        # Put the lat/lon variables in the data stream, before any dependent
+        # data variables.
         yield lat
         yield lon
         latlon[key] = (lat,lon)
