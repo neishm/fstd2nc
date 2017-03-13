@@ -888,7 +888,7 @@ class _XYCoords (_Buffer_Base):
   # Add horizontal coordinate info to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
-    from rpnpy.librmn.interp import ezgdef_fmem, gdll, EzscintError
+    from rpnpy.librmn.interp import ezqkdef, ezgdef_fmem, gdll, EzscintError
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
@@ -934,7 +934,10 @@ class _XYCoords (_Buffer_Base):
               yatts = OrderedDict(self._get_header_atts(header))
         try:
           # Get the lat & lon data.
-          gdid = ezgdef_fmem (**gridinfo)
+          if gridinfo['grtyp'] in ('A','B','E','G','L','N','S'):
+            gdid = ezqkdef (**gridinfo)
+          else:
+            gdid = ezgdef_fmem (**gridinfo)
           ll = gdll(gdid)
         except (TypeError,EzscintError):
           from warnings import warn
