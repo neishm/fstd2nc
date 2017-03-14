@@ -1030,9 +1030,9 @@ class _netCDF_IO (_Buffer_Base):
   def _cmdline_args (cls, parser):
     super(_netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help='The units of time for the netCDF file.  Default is %(default)s.')
-    parser.add_argument('--buffer-size', type=int, default=1, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
+    parser.add_argument('--buffer-size', type=int, default=100, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
 
-  def __init__ (self, time_units='hours', buffer_size=1, *args, **kwargs):
+  def __init__ (self, time_units='hours', buffer_size=100, *args, **kwargs):
     self._time_units = time_units
     self._buffer_size = int(buffer_size)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
@@ -1116,7 +1116,7 @@ class _netCDF_IO (_Buffer_Base):
       v.setncatts(atts)
       # Don't write too much at a time.
       a = 0
-      check = array.size
+      check = array.size * array.dtype.itemsize
       while check > self._buffer_size*1E6:
         check /= array.shape[a]
         a = a + 1
