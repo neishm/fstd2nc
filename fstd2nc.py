@@ -1152,7 +1152,14 @@ def _fstd2nc_cmdline (buffer_type):
   infile = args.pop('infile')
   outfile = args.pop('outfile')
   buf = buffer_type(**args)
+
+  # Make sure input file exists
+  if not exists(infile):
+    print ("Error: '%s' does not exist!"%(infile))
+    exit(1)
+
   buf.read_fstd_file(infile)
+
   # Check if output file already exists
   if exists(outfile):
     overwrite = False
