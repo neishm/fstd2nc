@@ -1141,6 +1141,8 @@ class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates,_SelectVars):
 # Command-line invocation:
 def _fstd2nc_cmdline (buffer_type):
   from argparse import ArgumentParser
+  from sys import stdout, exit
+  from os.path import exists
   parser = ArgumentParser(description="Converts an RPN standard file (FSTD) to netCDF format.")
   parser.add_argument('infile', metavar='<fstd_file>', help='The FSTD file to convert.')
   parser.add_argument('outfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
@@ -1151,6 +1153,25 @@ def _fstd2nc_cmdline (buffer_type):
   outfile = args.pop('outfile')
   buf = buffer_type(**args)
   buf.read_fstd_file(infile)
+  # Check if output file already exists
+  if exists(outfile):
+    overwrite = False
+    if stdout.isatty():
+      while True:
+        print ("Warning: '%s' already exists!  Overwrite? (y/n):"%(outfile)),
+        try: ans = raw_input()
+        except NameError: ans = input()
+        if ans.lower() in ('y','yes'):
+          overwrite = True
+          break
+        if ans.lower() in ('n','no'):
+          overwrite = False
+          break
+        print ("Sorry, invalid response.")
+    if overwrite is False:
+      print ("Refusing to overwrite existing file '%s'."%(outfile))
+      exit(1)
+
   buf.write_nc_file(outfile)
 
 if __name__ == '__main__':
