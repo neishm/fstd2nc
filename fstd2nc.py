@@ -976,17 +976,23 @@ class _XYCoords (_Buffer_Base):
       if 'i' not in var.axes or 'j' not in var.axes:
         yield var
         continue
-      # Get basic information about this grid.
-      gridinfo = OrderedDict()
-      for n in ('ni','nj','grtyp','ig1','ig2','ig3','ig4'):
-        v = var.atts[n]
-        if isinstance(v,str):
-          gridinfo[n] = v
-        else:
-          gridinfo[n] = int(v)  # ezgdef_fmem is very picky about types.
       # Check if we already defined this grid.
-      key = tuple(gridinfo[n] for n in ('grtyp','ig1','ig2','ig3','ig4'))
+      # First, construct a key identifying the grid.
+      key = var.atts['grtyp']
+      # Special case for timeseries data:
+      # Ignore grtyp, since e.g. grtyp='Y' and grtyp='+' both use same grids.
+      # See _Series mixing for more info about timeseries data.
+      if var.atts['typvar'] == 'T': key = 'T'
+      key = (key,) + tuple(var.atts[n] for n in ('ig1','ig2','ig3','ig4'))
       if key not in latlon:
+        # Get basic information about this grid.
+        gridinfo = OrderedDict()
+        for n in ('ni','nj','grtyp','ig1','ig2','ig3','ig4'):
+          v = var.atts[n]
+          if isinstance(v,str):
+            gridinfo[n] = v
+          else:
+            gridinfo[n] = int(v)  # ezgdef_fmem is very picky about types.
         # Remember the associated '>>','^^' metadata for later.
         xatts = OrderedDict()
         yatts = OrderedDict()
