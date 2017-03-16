@@ -346,6 +346,9 @@ class _Buffer_Base (object):
       for n in records.keys():
         if n in self._outer_axes or n in self._ignore_atts: continue
         v = records[n][rec_ids]
+        # Remove missing values before continuing.
+        v = np.ma.compressed(v)
+        if len(v) == 0: continue
         # Only use attributes that are consistent across all variable records.
         if len(set(v)) > 1: continue
         v = v[0]
@@ -698,6 +701,11 @@ class _Series (_Buffer_Base):
     # For non-timeseries data, ignore this info.
     station_id.mask = ~is_t_plus
     fields['station_id'] = station_id
+    # For timeseries data, the usual 'forecast' axis (from deet*npas) is not
+    # used.  Instead, we will get forecast info from nj coordinate.
+    if 'forecast' in fields:
+      fields['forecast'] = np.ma.asarray(fields['forecast'])
+      fields['forecast'].mask = is_t_plus
     # For timeseries data, ig1,ig2,ig3,ig4 have some other meaning.
     # Move these values into different parameters, so the decoder doesn't
     # get confused in the XYCoords logic.
@@ -713,6 +721,7 @@ class _Series (_Buffer_Base):
     return fields
   def __iter__ (self):
     from collections import OrderedDict
+    import numpy as np
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
@@ -721,7 +730,11 @@ class _Series (_Buffer_Base):
       if header['nomvar'] == 'STNS':
         station = header
       if header['nomvar'] == 'HH  ':
-        forecast = header
+        atts = OrderedDict(units='hours')
+        array = np.asarray(header['d']).flatten()
+        axes = OrderedDict(forecast=tuple(array))
+        forecast = _var_type('forecast',atts,axes,array)
+    forecast_outputted = False
     for var in super(_Series,self).__iter__():
       # Modify timeseries axes so XYCoords recognizes it.
       if var.atts.get('grtyp') == '+':
@@ -730,10 +743,21 @@ class _Series (_Buffer_Base):
           # ni is actually vertical level.
           if n == 'i': axes.append(('station_level',v))
           # nj is actually forecast time.
-          elif n == 'j': axes.append(('station_forecast',v))
+          elif n == 'j':
+            if forecast is not None:
+              # Output forecast hours as a separate variable.
+              if not forecast_outputted:
+                yield forecast
+                forecast_outputted = True
+              axes.append(('forecast',forecast.axes['forecast']))
+            else:
+              # Deal with case where forecast (HH) record isn't available
+              axes.append(('t',v))
           # station_id (from ip3) should become new i axis.
           elif n == 'station_id': axes.append(('i',v))
           # "borrow" k dimension to be new "j" dimension.
+          # XYCoords expects both i and j dimensions, even though only 'i'
+          # is really needed for unstructured lat/lon data.
           elif n == 'k' and len(v) == 1: axes.append(('j',v))
           else: axes.append((n,v))
         axes = OrderedDict(axes)
