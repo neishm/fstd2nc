@@ -215,6 +215,11 @@ class _FSTD_File (object):
     istat = fstfrm(self.funit)
     istat = fclos(self.funit)
 
+# The type of data returned by the Buffer iterator.
+from collections import namedtuple
+_var_type = namedtuple('var', ('name','atts','axes','array'))
+del namedtuple
+
 
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
@@ -334,8 +339,6 @@ class _Buffer_Base (object):
       if var_id.nomvar.strip() in self._meta_records: continue
       var_records.setdefault(var_id,[]).append(i)
 
-    var_type = namedtuple('var', ('name','atts','axes','array'))
-
     # Loop over each variable and construct the data & metadata.
     for var_id, rec_ids in var_records.items():
       # Get the metadata for each record.
@@ -388,7 +391,7 @@ class _Buffer_Base (object):
       axes['j'] = tuple(range(var_id.nj))
       axes['i'] = tuple(range(var_id.ni))
 
-      yield var_type(var_id.nomvar.strip(), atts, axes, data)
+      yield _var_type(var_id.nomvar.strip(), atts, axes, data)
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
