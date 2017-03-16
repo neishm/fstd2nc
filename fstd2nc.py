@@ -728,8 +728,10 @@ class _Series (_Buffer_Base):
           if n == 'i': axes.append(('station_level',v))
           # nj is actually forecast time.
           elif n == 'j': axes.append(('station_forecast',v))
-          # station_id (from ip3) should become i axis.
-          #TODO
+          # station_id (from ip3) should become new i axis.
+          elif n == 'station_id': axes.append(('i',v))
+          # "borrow" k dimension to be new "j" dimension.
+          elif n == 'k' and len(v) == 1: axes.append(('j',v))
           else: axes.append((n,v))
         axes = OrderedDict(axes)
         var = type(var)(var.name,var.atts,axes,var.array)
@@ -1042,7 +1044,7 @@ class _XYCoords (_Buffer_Base):
         axes = OrderedDict([('j',var.axes['j']),('i',var.axes['i'])])
         # Do we have a non-trivial structured 2D field?
         # If so, use the appropriate (x,y) coordinate system.
-        if 'ax' in gridinfo and 'ay' in gridinfo and gridinfo['grtyp'] != 'Y':
+        if 'ax' in gridinfo and 'ay' in gridinfo and latarray.shape[0] > 1 and lonarray.shape[0] > 1:
           axes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
         # Set default lat/lon variables, possibly overriden below.
         lat = type(var)('lat',latatts,axes,latarray)
