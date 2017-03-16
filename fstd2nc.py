@@ -651,13 +651,89 @@ class _Dates (_Buffer_Base):
 
 
 #################################################
-# TODO: Logic for handling timeseries data
+# Logic for handling timeseries data.
+#
+# This is a first attempt at handling these 'series' files as output from
+# the GEM model, and may be incomplete / inaccurate.  Please correct this
+# section if you notice anything wrong.
+#
+# There are two types of timeseries records I've seen:
+#
+# - typvar='T', grtyp='Y'.
+#   Here, ni corresponds to horizontal points (like the usual Y-grid).
+#   There should be corresponding '^^' and '>>' fields in this case.
+#
+# - Vertical profiles, which have typvar='T', grtype='+'.
+#   This data uses a different meaning for ni and nj.
+#   Here, 'ni' is actually the # of vertical levels, and 'nj' is the number of
+#   forecast times.  The horizontal points are split per record, and enumerated
+#   by the 'ip3' parameter.
+#   ig1/ig2 is set to zero in my sample - coincidentally matches ip1/ip2 of
+#   !! record.
+#   ig3/ig4 give some kind of horizontal coordinate info (?).
+#   ip1/ip2 seem to match ip1/ip2 of '^^', '>>' records.
+#   'HH' record gives forecast hours corresponding to nj.
+#   'SH' and 'SV' give some kind of vertical info corresponding to ni, but
+#   with one extra level?
+#   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
 class _Series (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH', 'STNS', 'SH')
-
+    self._meta_records = self._meta_records + ('HH', 'STNS', 'SH', 'SV')
+    # Add station # as another axis.
+    self._outer_axes = ('station_id',) + self._outer_axes
+    super(_Series,self).__init__(*args,**kwargs)
+  def _vectorize_params (self):
+    import numpy as np
+    fields = super(_Series,self)._vectorize_params()
+    nrecs = len(fields['nomvar'])
+    # Identify timeseries records for further processing.
+    is_t_plus = (fields['typvar'] == 'T ') & (fields['grtyp'] == '+')
+    # For timeseries data, station # is provided by 'ip3'.
+    station_id = np.ma.array(fields['ip3'])
+    # For non-timeseries data, ignore this info.
+    station_id.mask = ~is_t_plus
+    fields['station_id'] = station_id
+    # For timeseries data, ig1,ig2,ig3,ig4 have some other meaning.
+    # Move these values into different parameters, so the decoder doesn't
+    # get confused in the XYCoords logic.
+    fields['ig1_series'] = np.array(fields['ig1'])
+    fields['ig2_series'] = np.array(fields['ig2'])
+    fields['ig3_series'] = np.array(fields['ig3'])
+    fields['ig4_series'] = np.array(fields['ig4'])
+    # Some grid key info is in ip1/ip2?
+    fields['ig1'][is_t_plus] = fields['ip1'][is_t_plus]
+    fields['ig2'][is_t_plus] = fields['ip2'][is_t_plus]
+    fields['ig3'][is_t_plus] = 0
+    fields['ig4'][is_t_plus] = 0
+    return fields
+  def __iter__ (self):
+    from collections import OrderedDict
+    # Get station and forecast info.
+    # Need to read from original records, because this into isn't in the
+    # data stream.
+    station = forecast = None
+    for header in self._params:
+      if header['nomvar'] == 'STNS':
+        station = header
+      if header['nomvar'] == 'HH  ':
+        forecast = header
+    for var in super(_Series,self).__iter__():
+      # Modify timeseries axes so XYCoords recognizes it.
+      if var.atts.get('grtyp') == '+':
+        axes = []
+        for n,v in var.axes.items():
+          # ni is actually vertical level.
+          if n == 'i': axes.append(('station_level',v))
+          # nj is actually forecast time.
+          elif n == 'j': axes.append(('station_forecast',v))
+          # station_id (from ip3) should become i axis.
+          #TODO
+          else: axes.append((n,v))
+        axes = OrderedDict(axes)
+        var = type(var)(var.name,var.atts,axes,var.array)
+      yield var
 
 #################################################
 # Logic for handling vertical coordinates.
@@ -907,7 +983,7 @@ class _XYCoords (_Buffer_Base):
         else:
           gridinfo[n] = int(v)  # ezgdef_fmem is very picky about types.
       # Check if we already defined this grid.
-      key = tuple(gridinfo.values())
+      key = tuple(gridinfo[n] for n in ('grtyp','ig1','ig2','ig3','ig4'))
       if key not in latlon:
         # Remember the associated '>>','^^' metadata for later.
         xatts = OrderedDict()
@@ -935,10 +1011,19 @@ class _XYCoords (_Buffer_Base):
         try:
           # Get the lat & lon data.
           if gridinfo['grtyp'] in ('A','B','E','G','L','N','S'):
+            #TODO: free this grid after use?
             gdid = ezqkdef (**gridinfo)
+            ll = gdll(gdid)
+          # Timeseries data already has lat/lon info, nothing to decode?
+          # (see _Series mixin).
+          # ezgdef_fmem doesn't seem to handle this grid type (get garbage)
+          # so get it directly here (assuming ^^ and >> are already lat/lon).
+          elif gridinfo.get('grref') == 'T':
+            ll = dict(lat=gridinfo['ay'],lon=gridinfo['ax'])
+          # Fall back to more general grid routine?
           else:
             gdid = ezgdef_fmem (**gridinfo)
-          ll = gdll(gdid)
+            ll = gdll(gdid)
         except (TypeError,EzscintError):
           from warnings import warn
           warn("Unable to get grid info for '%s'"%var.name)
@@ -1131,7 +1216,7 @@ class _netCDF_IO (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Dates,_SelectVars):
+class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
