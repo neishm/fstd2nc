@@ -1206,7 +1206,12 @@ class _netCDF_IO (_Buffer_Base):
         check /= array.shape[a]
         a = a + 1
       for ind in product(*map(range,array.shape[:a])):
-        v[ind] = np.asarray(array[ind])
+        try:
+          v[ind] = np.asarray(array[ind])
+        except (IndexError,ValueError):
+          from warnings import warn
+          warn("Internal problem with the script - unable to get data for '%s'"%varname)
+          continue
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
     # Adapted from pygeode.formats.cfmeta.
