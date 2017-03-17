@@ -550,16 +550,79 @@ class _SelectVars (_Buffer_Base):
 
 
 #################################################
-# TODO: Logic for handling masks.
-#
-# Need some sample files first.
-# In the old PyGeode-RPN code, I detected a mask by
-# looking for fields with datyp=2 and nbits=1, and
-# then pairing that with a data field with the same
-# nomvar/etiket/etc.
-# However, I can't find the original test file (RIOPS 2?)
-# that I based this code on, and I don't know how
-# general my assumptions were in the first place.
+# Logic for handling masks.
+
+class _MaskedArray (_Array_Base):
+  def __init__ (self, data, mask, fill):
+    _Array_Base.__init__(self,data.shape,data.dtype)
+    self._data = data
+    self._mask = mask
+    self._fill = fill
+  def __array__ (self):
+    import numpy as np
+    data = np.array(self._data)
+    mask = np.array(self._mask)
+    data[mask==0] = self._fill
+    return data
+  def __getitem__ (self, key):
+    return _MaskedArray(self._data.__getitem__(key), self._mask.__getitem__(key), self._fill)
+  def squeeze (self, axis=None):
+    return _MaskedArray(self._data.squeeze(axis), self._mask.squeeze(axis), self._fill)
+  def transpose (self, *axes):
+    return MaskedArray(self._data.transpos(*axes), self._mask.transpose(*axes), self._fill)
+class _Masks (_Buffer_Base):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(_Masks,cls)._cmdline_args(parser)
+    parser.add_argument('--fill-value', type=float, default=1e30, help="The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the netCDF file.  Default is '%(default)s'.")
+  def __init__ (self, fill_value=1e30, *args, **kwargs):
+    # Assume we have a 1:1 correspondence between data records and mask
+    # records, and that mask records are identified by nbits=1.
+    # Under these assumptions, can attach the mask by defining an outer 'axis'
+    # of length 2, which selects between mask/data arrays.
+    #TODO: Make this more robust if necessary.
+    #      E.g., are there cases where we have a 2D mask (lat,lon)
+    #      applied to a 3D field (time,lat,lon) or (lat,lon,level)?
+    self._outer_axes = ('is_mask',) + self._outer_axes
+    self._fill_value = fill_value
+    super(_Masks,self).__init__(*args,**kwargs)
+  # Identify whether a record is a mask or data field.
+  # Allows the decoder to stick these fields together over an 'is_mask' axis.
+  def _vectorize_params (self):
+    import numpy as np
+    fields = super(_Masks,self)._vectorize_params()
+    nrecs = len(fields['nomvar'])
+    # Organize records based on whether they're mask or data.
+    fields['is_mask'] = fields['nbits'] == 1
+    # Typvar may be different between mask / data, so store both versions.
+    # Blank out 'typvar' for mask records, and blank out 'mask_typvar'
+    # for mask records.  Obviously.
+    fields['mask_typvar'] = np.ma.array(fields['typvar'])
+    fields['mask_typvar'].mask = ~fields['is_mask']
+    fields['typvar'] = np.ma.asarray(fields['typvar'])
+    fields['typvar'].mask = fields['is_mask']
+    return fields
+  # Apply the mask to the data.
+  def __iter__ (self):
+    from collections import OrderedDict
+    import numpy as np
+    for var in super(_Masks,self).__iter__():
+      if 'is_mask' not in var.axes:
+        yield var
+        continue
+      axes = OrderedDict(var.axes)
+      mask_dim = list(axes.keys()).index('is_mask')
+      # Do we have a mask/data pair?
+      if len(axes['is_mask']) > 1:
+        data = var.array[(slice(None),)*mask_dim+(0,)]
+        mask = var.array[(slice(None),)*mask_dim+(1,)]
+        # Apply the mask
+        data = _MaskedArray(data,mask,fill=self._fill_value)
+        var.atts['_FillValue'] = self._fill_value
+      else:
+        data = var.array.squeeze(axis=mask_dim)
+      del axes['is_mask']
+      yield type(var)(var.name, var.atts, axes, data)
 
 
 #################################################
@@ -1307,7 +1370,7 @@ class _netCDF_IO (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_SelectVars):
+class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
