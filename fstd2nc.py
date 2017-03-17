@@ -1036,7 +1036,7 @@ class _XYCoords (_Buffer_Base):
       # Special case for timeseries data:
       # Ignore grtyp, since e.g. grtyp='Y' and grtyp='+' both use same grids.
       # See _Series mixin for more info about timeseries data.
-      if var.atts['typvar'] == 'T': key = 'T'
+      if var.atts.get('typvar') == 'T': key = 'T'
       key = (key,) + tuple(var.atts[n] for n in ('ig1','ig2','ig3','ig4'))
       if key not in latlon:
         # Get basic information about this grid.
