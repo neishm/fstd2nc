@@ -771,14 +771,10 @@ class _Series (_Buffer_Base):
     if 'forecast' in fields:
       fields['forecast'] = np.ma.asarray(fields['forecast'])
       fields['forecast'].mask = is_t_plus
-    # For timeseries data, ig1,ig2,ig3,ig4 have some other meaning.
-    # Move these values into different parameters, so the decoder doesn't
-    # get confused in the XYCoords logic.
-    fields['ig1_series'] = np.array(fields['ig1'])
-    fields['ig2_series'] = np.array(fields['ig2'])
-    fields['ig3_series'] = np.array(fields['ig3'])
-    fields['ig4_series'] = np.array(fields['ig4'])
-    # Some grid key info is in ip1/ip2?
+    # True grid identifier is in ip1/ip2?
+    # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
+    # identifiers in this case (they're just the lat/lon coordinates of each
+    # station?)
     fields['ig1'][is_t_plus] = fields['ip1'][is_t_plus]
     fields['ig2'][is_t_plus] = fields['ip2'][is_t_plus]
     fields['ig3'][is_t_plus] = 0
