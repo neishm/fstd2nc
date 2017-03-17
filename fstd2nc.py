@@ -58,6 +58,7 @@ class _NaN_Array (_Array_Base):
   def __getitem__ (self,key):
     return self.__array__().__getitem__(key)
   def __array__ (self):
+    import numpy as np
     data = np.empty(self.shape,dtype=self.dtype,order='FORTRAN')
     data[()] = float('nan')
     return data
@@ -288,7 +289,7 @@ class _Buffer_Base (object):
   # Collect the list of params from all the FSTD records, and concatenate them
   # into arrays.  Result is a single dictionary containing the vectorized
   # parameters of all records.
-  # The sole purpose of this routine is to put the metiadata in a structure
+  # The sole purpose of this routine is to put the metadata in a structure
   # that's more efficient for doing bulk (vectorized) manipulations, instead
   # of manipulating each record param dictionary one at a time.
   # Subclasses may also insert extra (non-FSTD) parameters in here which are
@@ -372,7 +373,8 @@ class _Buffer_Base (object):
       data = np.empty(map(len,axes.values()), dtype='O')
 
       # Assume missing data (nan) unless filled in later.
-      data.fill(_NaN_Array(var_id.ni, var_id.nj, var_id.nk))
+      missing = _NaN_Array(var_id.ni, var_id.nj, var_id.nk)
+      data.fill(missing)
       
       # Arrange the data funcs in the appropriate locations.
       for rec_id in rec_ids:
@@ -380,10 +382,10 @@ class _Buffer_Base (object):
         data[index] = records['d'][rec_id]
 
       # Check if we have full coverage along all axes.
-      have_data = np.not_equal(data,None)
+      have_data = [d is not missing for d in data.flatten()]
       if not np.all(have_data):
         from warnings import warn
-        warn ("Missing some records for %s.")
+        warn ("Missing some records for %s."%var_id.nomvar)
 
       data = _Array.create (data)
 
@@ -1033,7 +1035,7 @@ class _XYCoords (_Buffer_Base):
       key = var.atts['grtyp']
       # Special case for timeseries data:
       # Ignore grtyp, since e.g. grtyp='Y' and grtyp='+' both use same grids.
-      # See _Series mixing for more info about timeseries data.
+      # See _Series mixin for more info about timeseries data.
       if var.atts['typvar'] == 'T': key = 'T'
       key = (key,) + tuple(var.atts[n] for n in ('ig1','ig2','ig3','ig4'))
       if key not in latlon:
