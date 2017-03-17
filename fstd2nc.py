@@ -608,7 +608,7 @@ class _Dates (_Buffer_Base):
         times = var.axes['time']
         if times not in time_axes:
           time_axes.add(times)
-          atts = OrderedDict()
+          atts = OrderedDict([('axis','T')])
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
           yield type(var)('time',atts,axes,np.asarray(times))
@@ -1048,8 +1048,8 @@ class _XYCoords (_Buffer_Base):
           else:
             gridinfo[n] = int(v)  # ezgdef_fmem is very picky about types.
         # Remember the associated '>>','^^' metadata for later.
-        xatts = OrderedDict()
-        yatts = OrderedDict()
+        xatts = OrderedDict([('axis','X')])
+        yatts = OrderedDict([('axis','Y')])
         # Check for reference grid data.
         for header in self._params:
           nomvar = header['nomvar'].strip()
@@ -1066,10 +1066,10 @@ class _XYCoords (_Buffer_Base):
               # Need to reduce out 'nk' dimension, or ezgdef_fmem aborts
               # on 'Y' grid.
               gridinfo['ax'] = header['d'][...].squeeze(axis=2)
-              xatts = OrderedDict(self._get_header_atts(header))
+              xatts.update(self._get_header_atts(header))
             if nomvar == '^^':
               gridinfo['ay'] = header['d'][...].squeeze(axis=2)
-              yatts = OrderedDict(self._get_header_atts(header))
+              yatts.update(self._get_header_atts(header))
         try:
           # Get the lat & lon data.
           if gridinfo['grtyp'] in ('A','B','E','G','L','N','S'):
