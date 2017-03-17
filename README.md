@@ -26,15 +26,26 @@ import fstd2nc
 import numpy as np
 data = fstd2nc.Buffer()
 data.read_fstd_file("myfile.fst")
-for var in data:
-  print (var.name)
-  print (var.atts)
-  print (list(var.axes.keys()))
-  # var.array points to a "symbolic" array, which isn't yet loaded in memory.
+
+for name, atts, axes, array in data:
+
+  # The name of the field
+  print (name)
+
+  # 'atts' is a dictionary of metadata associated with this field.
+  # Contains info from the FSTD record header(s), as well as extra metadata
+  # that's useful for netCDF utilities.
+  print (atts)
+
+  # 'axes' is an ordered dictionary containing the coordinate system.
+  print (list(axes.keys()))   # Names of the dimensions
+
+  # 'array' points to a "symbolic" array, which isn't yet loaded in memory.
   # That way, you can slice it to select only the subset of data you need.
-  # To load the values, pass it to numpy.asarray()
-  values = np.asarray(var.array)
-  print (np.mean(values))
+  # To load the values, pass it to numpy.asarray(), or do a numpy operation
+  # on it.
+  print (array.shape)
+  print (np.mean(array))
 ```
 
 Requirements
