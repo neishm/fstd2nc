@@ -1101,14 +1101,12 @@ class _XYCoords (_Buffer_Base):
         lonatts['long_name'] = 'longitude'
         lonatts['standard_name'] = 'longitude'
         lonatts['units'] = 'degrees_east'
-        axes = OrderedDict([('j',var.axes['j']),('i',var.axes['i'])])
+        # Start with generic (i,j) axes for lat/lon data.
+        lataxes = lonaxes = OrderedDict([('j',var.axes['j']),('i',var.axes['i'])])
         # Do we have a non-trivial structured 2D field?
         # If so, use the appropriate (x,y) coordinate system.
         if 'ax' in gridinfo and 'ay' in gridinfo and latarray.shape[0] > 1 and lonarray.shape[0] > 1:
-          axes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
-        # Set default lat/lon variables, possibly overriden below.
-        lat = type(var)('lat',latatts,axes,latarray)
-        lon = type(var)('lon',lonatts,axes,lonarray)
+          lataxes = lonaxes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
         # Try to resolve lat/lon to 1D Cartesian coordinates, if possible.
         # Calculate the mean lat/lon arrays in double precision.
         if latarray.shape[1] > 1 and lonarray.shape[1] > 1:
@@ -1123,17 +1121,28 @@ class _XYCoords (_Buffer_Base):
             # Taken from old fstd_core.c code.
             if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
               meanlon[-1] += 360.
-            lat = type(var)('lat',latatts,{'lat':tuple(meanlat)},meanlat)
-            lon = type(var)('lon',lonatts,{'lon':tuple(meanlon)},meanlon)
+            lataxes = OrderedDict([('lat',tuple(meanlat))])
+            lonaxes = OrderedDict([('lon',tuple(meanlon))])
+            latarray = meanlat
+            lonarray = meanlon
+        # Detect 1D unstructured lat/lon, and remove degenerate dimension.
+        if latarray.shape[0] == 1 and lonarray.shape[0] == 1:
+          lataxes = OrderedDict(list(lataxes.items())[1:])
+          lonaxes = OrderedDict(list(lonaxes.items())[1:])
+          latarray = latarray.flatten()
+          lonarray = lonarray.flatten()
         # For non-cartesian (but structured) 2D grids, add x and y coordinates.
-        if 'x' in lat.axes:
-          yield type(var)('x',xatts,{'x':axes['x']},np.array(axes['x']))
-          yield type(var)('y',yatts,{'y':axes['y']},np.array(axes['y']))
+        if 'x' in lonaxes and 'y' in lataxes:
+          yield type(var)('x',xatts,{'x':lonaxes['x']},np.array(lonaxes['x']))
+          yield type(var)('y',yatts,{'y':lataxes['y']},np.array(lataxes['y']))
         # Otherwise, assume '^^' / '>>' correspond to lat/lon, so any metadata
         # can go into the lat and lon fields.
         else:
           latatts.update(yatts)
           lonatts.update(xatts)
+        # Define lat/lon variables.
+        lat = type(var)('lat',latatts,lataxes,latarray)
+        lon = type(var)('lon',lonatts,lonaxes,lonarray)
         # Put the lat/lon variables in the data stream, before any dependent
         # data variables.
         yield lat
@@ -1142,17 +1151,32 @@ class _XYCoords (_Buffer_Base):
       lat,lon = latlon[key]
       # Update the var's horizontal coordinates.
       axes = OrderedDict()
-      for axisname,axisvalues in var.axes.items():
-        if axisname == 'j':
-          axisname,axisvalues = list(lat.axes.items())[0]
-        elif axisname == 'i':
-          axisname,axisvalues = list(lon.axes.items())[-1]
+      array = var.array
+      for dim,(axisname,axisvalues) in enumerate(var.axes.items()):
+        # Use appropriate x-dimension.
+        if axisname == 'i':
+          if 'lon' in lon.axes:
+            axisname, axisvalues = 'lon', lon.axes['lon']
+          elif 'x' in lon.axes:
+            axisname, axisvalues = 'x', lon.axes['x']
+        # Use appropriate y-dimension.
+        elif axisname == 'j':
+          if 'lat' in lat.axes:
+            axisname, axisvalues = 'lat', lat.axes['lat']
+          elif 'y' in lat.axes:
+            axisname, axisvalues = 'y', lat.axes['y']
+          # Do we have 1D unstructured lat/lon?
+          elif len(axisvalues) == 1 and len(lat.axes) == 1:
+            # Remove 2nd (degenerate) dimension from the variable.
+            array = array.squeeze(axis=dim)
+            continue
         axes[axisname] = axisvalues
+
       # For 2D lat/lon, add these to the metadata.
       if 'lat' not in axes or 'lon' not in axes:
         var.atts['coordinates'] = 'lon lat'
 
-      yield type(var)(var.name,var.atts,axes,var.array)
+      yield type(var)(var.name,var.atts,axes,array)
 
 
 #################################################
