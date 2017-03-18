@@ -4,6 +4,18 @@
 Functionality for converting between FSTD and netCDF files.
 """
 
+# Override default dtype for "binary" data.
+# The one example I've seen has "float32" data encoded in it.
+# https://wiki.cmc.ec.gc.ca/wiki/Talk:Python-RPN/2.0/examples#Plot_GIOPS_Forecast_Data_with_Basemap
+def dtype_fst2numpy (datyp, nbits=None):
+  from rpnpy.librmn.fstd98 import dtype_fst2numpy
+  if datyp == 0:
+    from warnings import warn
+    warn ("Raw binary records detected.  The values may not be properly decoded if you're opening on a different platform.")
+    datyp = 5
+  return dtype_fst2numpy(datyp,nbits)
+
+
 # Helper classes for lazy-array evaluation.
 
 # Common base class for all the numpy-like arrays defined below.
@@ -22,7 +34,6 @@ class _Array_Base (object):
 # the array is sliced, or passed through np.asarray().
 class _Record_Array (_Array_Base):
   def __init__ (self, fstdfile, params):
-    from rpnpy.librmn.fstd98 import dtype_fst2numpy
     shape = (params['ni'],params['nj'],params['nk'])
     dtype = dtype_fst2numpy(params['datyp'], params['nbits'])
     _Array_Base.__init__(self, shape, dtype)
