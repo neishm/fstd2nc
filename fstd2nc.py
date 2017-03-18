@@ -1152,6 +1152,9 @@ class _XYCoords (_Buffer_Base):
           # so get it directly here (assuming ^^ and >> are already lat/lon).
           elif gridinfo.get('grref') == 'T':
             ll = dict(lat=gridinfo['ay'],lon=gridinfo['ax'])
+          #TODO: add 'X' grid support to rpnpy.librmn.interp.ezgdef_fmem?
+          elif gridinfo.get('grtyp') == 'X' and gridinfo.get('grref') == 'L':
+            ll = dict(lat=gridinfo['ay'],lon=gridinfo['ax'])
           # Fall back to more general grid routine?
           else:
             gdid = ezgdef_fmem (**gridinfo)
@@ -1176,7 +1179,9 @@ class _XYCoords (_Buffer_Base):
         # Do we have a non-trivial structured 2D field?
         # If so, use the appropriate (x,y) coordinate system.
         if 'ax' in gridinfo and 'ay' in gridinfo and latarray.shape[0] > 1 and lonarray.shape[0] > 1:
-          lataxes = lonaxes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
+          # Only do this for 1D ax and ay parameters!
+          if gridinfo['ax'].shape[0] == 1 and gridinfo['ay'].shape[0] == 1:
+            lataxes = lonaxes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
         # Try to resolve lat/lon to 1D Cartesian coordinates, if possible.
         # Calculate the mean lat/lon arrays in double precision.
         if latarray.shape[1] > 1 and lonarray.shape[1] > 1:
