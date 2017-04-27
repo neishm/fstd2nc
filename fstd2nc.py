@@ -1384,10 +1384,12 @@ class _netCDF_IO (_Buffer_Base):
       # Write the variable.
       v = f.createVariable(varname, datatype=array.dtype, dimensions=list(axes.keys()))
       v.setncatts(atts)
-      # Don't write too much at a time.
+      # Determine how much we can write at a time.
+      # Try to keep it under the buffer size, but make sure the last 2
+      # dimensions don't get split (represent a single FSTD record?)
       a = 0
       check = array.size * array.dtype.itemsize
-      while check > self._buffer_size*1E6:
+      while check > self._buffer_size*1E6 and a < array.ndim-2:
         check /= array.shape[a]
         a = a + 1
       for ind in product(*map(range,array.shape[:a])):
