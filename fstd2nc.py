@@ -276,13 +276,15 @@ class _Buffer_Base (object):
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
-    pass
+    parser.add_argument('--ignore-etiket', action='store_true', help='Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.')
 
-  def __init__ (self):
+  def __init__ (self, ignore_etiket=False):
     """
     Create a new, empty buffer.
     """
     self._params = []
+    if not ignore_etiket:
+      self._var_id = self._var_id + ('etiket',)
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
@@ -1298,8 +1300,9 @@ class _netCDF_IO (_Buffer_Base):
     super(_netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help='The units of time for the netCDF file.  Default is %(default)s.')
     parser.add_argument('--buffer-size', type=int, default=100, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
+    parser.add_argument('--nc-version', type=int, choices=[4], default=4, help='The version of netCDF format to use.  The only valid value is 4.  This option is provided only for backwards-compatibility with the fstd2nc utility in the PyGeode-RPN package.')
 
-  def __init__ (self, time_units='hours', buffer_size=100, *args, **kwargs):
+  def __init__ (self, time_units='hours', buffer_size=100, nc_version=4, *args, **kwargs):
     self._time_units = time_units
     self._buffer_size = int(buffer_size)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
