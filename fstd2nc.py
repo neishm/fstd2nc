@@ -1416,7 +1416,7 @@ class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectV
 
 
 # Command-line invocation:
-def _fstd2nc_cmdline (buffer_type):
+def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
   from sys import stdout, exit
   from os.path import exists
@@ -1459,5 +1459,5 @@ def _fstd2nc_cmdline (buffer_type):
   buf.write_nc_file(outfile)
 
 if __name__ == '__main__':
-  _fstd2nc_cmdline (buffer_type=Buffer)
+  _fstd2nc_cmdline ()
 
