@@ -828,8 +828,10 @@ class _Series (_Buffer_Base):
         # Re-cast array as string.
         # I don't know why I have to subtract 128 - maybe something to do with
         # how the characters are encoded in the file?
+        # This isn't always needed.  Have test files for both cases.
         # Need help making this more robust!
-        array -= 128
+        if array.flatten()[0] >= 128:
+          array -= 128
         array = array.view('|S1')
         nstations, strlen = array.shape
         # Strip out trailing whitespace.
