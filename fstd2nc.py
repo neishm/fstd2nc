@@ -1426,10 +1426,19 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('infile', metavar='<fstd_file>', help='The FSTD file to convert.')
   parser.add_argument('outfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
   buffer_type._cmdline_args(parser)
+  parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help='Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.')
   args = parser.parse_args()
+  # Delegate to a different backend?
+  if args.backend == 'pygeode':
+    try:
+      from pygeode.formats import _fstd2nc
+    except ImportError:
+      parser.error("'pygeode' backend is not installed.")
+    quit()
   args = vars(args)
   infile = args.pop('infile')
   outfile = args.pop('outfile')
+  del args['backend']
   buf = buffer_type(**args)
 
   # Make sure input file exists
