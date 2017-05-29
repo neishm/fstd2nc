@@ -1294,6 +1294,39 @@ class _NoNK (_Buffer_Base):
 
 
 #################################################
+# Add netCDF metadata to the variables
+
+class _netCDF_Atts (_Buffer_Base):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    import argparse
+    super(_netCDF_Atts,cls)._cmdline_args(parser)
+    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help='Apply netCDF metadata from the specified file.')
+  def __init__ (self, metadata_file=None, *args, **kwargs):
+    import ConfigParser
+    from collections import OrderedDict
+    if metadata_file is None:
+      metafiles = []
+    else:
+      metafiles = metadata_file
+    metadata = OrderedDict()
+    configparser = ConfigParser.SafeConfigParser()
+    for metafile in metafiles:
+      configparser.readfp(metafile)
+    for varname in configparser.sections():
+      metadata[varname] = OrderedDict(configparser.items(varname))
+    self._metadata = metadata
+    super(_netCDF_Atts,self).__init__(*args,**kwargs)
+  def __iter__ (self):
+    from collections import OrderedDict
+    for var in super(_netCDF_Atts,self).__iter__():
+      atts = OrderedDict(var.atts)
+      if var.name in self._metadata:
+        atts.update(self._metadata[var.name])
+      yield type(var)(var.name,atts,var.axes,var.array)
+
+
+#################################################
 # Logic for reading/writing FSTD data from/to netCDF files.
 
 class _netCDF_IO (_Buffer_Base):
@@ -1410,7 +1443,7 @@ class _netCDF_IO (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (_netCDF_IO,_netCDF_Atts,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
