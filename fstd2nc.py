@@ -25,6 +25,9 @@
 Functionality for converting between FSTD and netCDF files.
 """
 
+# Shortcut for text translation function
+from gettext import gettext as _
+
 # Override default dtype for "binary" data.
 # The one example I've seen has "float32" data encoded in it.
 # https://wiki.cmc.ec.gc.ca/wiki/Talk:Python-RPN/2.0/examples#Plot_GIOPS_Forecast_Data_with_Basemap
@@ -32,7 +35,7 @@ def dtype_fst2numpy (datyp, nbits=None):
   from rpnpy.librmn.fstd98 import dtype_fst2numpy
   if datyp == 0:
     from warnings import warn
-    warn ("Raw binary records detected.  The values may not be properly decoded if you're opening on a different platform.")
+    warn (_("Raw binary records detected.  The values may not be properly decoded if you're opening on a different platform."))
     datyp = 5
   return dtype_fst2numpy(datyp,nbits)
 
@@ -118,7 +121,7 @@ class _Array (_Array_Base):
       # Inner array objects must all have the same shape.
       inner_shape = set(map(np.shape,data.flatten()))
       if len(inner_shape) > 1:
-        raise ValueError ("Different shapes for inner array objects.  Found shapes: %s"%list(inner_shape))
+        raise ValueError (_("Different shapes for inner array objects.  Found shapes: %s")%list(inner_shape))
       inner_shape = inner_shape.pop()
       dtype = np.result_type(*data.flatten())
     shape = tuple(outer_shape) + tuple(inner_shape)
@@ -154,7 +157,7 @@ class _Array (_Array_Base):
       key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
     key = key + (slice(None),)*(self.ndim-len(key))
     if len(key) > self.ndim:
-      raise ValueError("Too many dimensions for slicing.")
+      raise ValueError(_("Too many dimensions for slicing."))
     shape = []
     inner_dimids = []
     outer_slices = []
@@ -194,7 +197,7 @@ class _Array (_Array_Base):
     key = [slice(None)]*self.ndim
     for a in axis:
       if self.shape[a] > 1:
-        raise ValueError("Can only squeeze axes of length 1.")
+        raise ValueError(_("Can only squeeze axes of length 1."))
       key[a] = 0
     return self.__getitem__(tuple(key))
 
@@ -205,9 +208,9 @@ class _Array (_Array_Base):
     if len(axes) == 1 and hasattr(axes[0],'__len__'):
       axes = tuple(axes[0])
     if len(axes) != self.ndim:
-      raise ValueError("Wrong number of dimenions for transpose.")
+      raise ValueError(_("Wrong number of dimenions for transpose."))
     if sorted(axes) != list(range(self.ndim)):
-      raise ValueError("Bad axis arguments.")
+      raise ValueError(_("Bad axis arguments."))
     shape = [self.shape[a] for a in axes]
     inner_dimids = [self._inner_dimids[a] for a in axes]
     return _Array(shape, self.dtype, inner_dimids, self._data, self._inner_slices)
@@ -276,7 +279,7 @@ class _Buffer_Base (object):
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
-    parser.add_argument('--ignore-etiket', action='store_true', help='Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.')
+    parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
   def __init__ (self, ignore_etiket=False):
     """
@@ -333,7 +336,7 @@ class _Buffer_Base (object):
     import numpy as np
     # Make sure the parameter names are consistent for all records.
     if len(set(map(frozenset,self._params))) != 1:
-      raise ValueError("Inconsistent parameter names for the records.")
+      raise ValueError(_("Inconsistent parameter names for the records."))
     fields = OrderedDict()
     for prm in self._params:
       for n,v in prm.items():
@@ -419,7 +422,7 @@ class _Buffer_Base (object):
       have_data = [d is not missing for d in data.flatten()]
       if not np.all(have_data):
         from warnings import warn
-        warn ("Missing some records for %s."%var_id.nomvar)
+        warn (_("Missing some records for %s.")%var_id.nomvar)
 
       data = _Array.create (data)
 
@@ -567,11 +570,11 @@ class _SelectVars (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_SelectVars,cls)._cmdline_args(parser)
-    parser.add_argument('--vars', metavar='VAR1,VAR2,...', help='Comma-seperated list of variables to convert.  By default, all variables are converted.')
+    parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-seperated list of variables to convert.  By default, all variables are converted.'))
   def __init__ (self, vars=None, *args, **kwargs):
     if vars is not None:
       self._selected_vars = vars.split(',')
-      print ('Looking for variables: ' + ' '.join(self._selected_vars))
+      print (_('Looking for variables: ') + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
     super(_SelectVars,self).__init__(*args,**kwargs)
@@ -608,7 +611,7 @@ class _Masks (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_Masks,cls)._cmdline_args(parser)
-    parser.add_argument('--fill-value', type=float, default=1e30, help="The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the netCDF file.  Default is '%(default)s'.")
+    parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the netCDF file.  Default is '%(default)s'."))
   def __init__ (self, fill_value=1e30, *args, **kwargs):
     # Assume we have a 1:1 correspondence between data records and mask
     # records, and that mask records are identified by nbits=1.
@@ -666,7 +669,7 @@ class _Dates (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_Dates,cls)._cmdline_args(parser)
-    parser.add_argument('--squash-forecasts', action='store_true', help='Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.')
+    parser.add_argument('--squash-forecasts', action='store_true', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
 
   def __init__ (self, squash_forecasts=False, *args, **kwargs):
     self._squash_forecasts = squash_forecasts
@@ -1053,7 +1056,7 @@ class _VCoords (_Buffer_Base):
                 ancillary_variables.extend([A,B])
               except (KeyError,ValueError,VGDError):
                 from warnings import warn
-                warn ("Unable to get A/B coefficients.")
+                warn (_("Unable to get A/B coefficients."))
               vgd_free (vgd_id)
             # Not a '!!' coordinate, so must be 'HY'?
             else:
@@ -1186,7 +1189,7 @@ class _XYCoords (_Buffer_Base):
             ll = gdll(gdid)
         except (TypeError,EzscintError):
           from warnings import warn
-          warn("Unable to get grid info for '%s'"%var.name)
+          warn(_("Unable to get grid info for '%s'")%var.name)
           yield var
           continue
         latarray = ll['lat'].transpose() # Switch from Fortran to C order.
@@ -1301,7 +1304,7 @@ class _netCDF_Atts (_Buffer_Base):
   def _cmdline_args (cls, parser):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
-    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help='Apply netCDF metadata from the specified file.')
+    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.'))
   def __init__ (self, metadata_file=None, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
@@ -1333,9 +1336,9 @@ class _netCDF_IO (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_netCDF_IO,cls)._cmdline_args(parser)
-    parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help='The units of time for the netCDF file.  Default is %(default)s.')
-    parser.add_argument('--buffer-size', type=int, default=100, help='How much data to write at a time (in MBytes).  Default is %(default)s.')
-    parser.add_argument('--nc-version', type=int, choices=[4], default=4, help='The version of netCDF format to use.  The only valid value is 4.  This option is provided only for backwards-compatibility with the fstd2nc utility in the PyGeode-RPN package.')
+    parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
+    parser.add_argument('--buffer-size', type=int, default=100, help=_('How much data to write at a time (in MBytes).  Default is %(default)s.'))
+    parser.add_argument('--nc-version', type=int, choices=[4], default=4, help=_('The version of netCDF format to use.  The only valid value is 4.  This option is provided only for backwards-compatibility with the fstd2nc utility in the PyGeode-RPN package.'))
 
   def __init__ (self, time_units='hours', buffer_size=100, nc_version=4, *args, **kwargs):
     self._time_units = time_units
@@ -1432,7 +1435,7 @@ class _netCDF_IO (_Buffer_Base):
           v[ind] = np.asarray(array[ind])
         except (IndexError,ValueError):
           from warnings import warn
-          warn("Internal problem with the script - unable to get data for '%s'"%varname)
+          warn(_("Internal problem with the script - unable to get data for '%s'")%varname)
           continue
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
@@ -1455,18 +1458,18 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
   from sys import stdout, exit
   from os.path import exists
-  parser = ArgumentParser(description="Converts an RPN standard file (FSTD) to netCDF format.")
-  parser.add_argument('infile', metavar='<fstd_file>', help='The FSTD file to convert.')
-  parser.add_argument('outfile', metavar='<netcdf_file>', help='The name of the netCDF file to create.')
+  parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
+  parser.add_argument('infile', metavar='<fstd_file>', help=_('The FSTD file to convert.'))
+  parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
-  parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help='Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.')
+  parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help=_('Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.'))
   args = parser.parse_args()
   # Delegate to a different backend?
   if args.backend == 'pygeode':
     try:
       from pygeode.formats import _fstd2nc
     except ImportError:
-      parser.error("'pygeode' backend is not installed.")
+      parser.error(_("'pygeode' backend is not installed."))
     quit()
   args = vars(args)
   infile = args.pop('infile')
@@ -1476,7 +1479,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
 
   # Make sure input file exists
   if not exists(infile):
-    print ("Error: '%s' does not exist!"%(infile))
+    print (_("Error: '%s' does not exist!")%(infile))
     exit(1)
 
   buf.read_fstd_file(infile)
@@ -1486,18 +1489,18 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     overwrite = False
     if stdout.isatty():
       while True:
-        print ("Warning: '%s' already exists!  Overwrite? (y/n):"%(outfile)),
+        print (_("Warning: '%s' already exists!  Overwrite? (y/n):")%(outfile)),
         try: ans = raw_input()
         except NameError: ans = input()
-        if ans.lower() in ('y','yes'):
+        if ans.lower() in ('y','yes','o','oui'):
           overwrite = True
           break
-        if ans.lower() in ('n','no'):
+        if ans.lower() in ('n','no','non'):
           overwrite = False
           break
-        print ("Sorry, invalid response.")
+        print (_("Sorry, invalid response."))
     if overwrite is False:
-      print ("Refusing to overwrite existing file '%s'."%(outfile))
+      print (_("Refusing to overwrite existing file '%s'.")%(outfile))
       exit(1)
 
   buf.write_nc_file(outfile)
@@ -1506,6 +1509,6 @@ if __name__ == '__main__':
   try:
     _fstd2nc_cmdline ()
   except KeyboardInterrupt:
-    print ("Aborted by user.")
+    print (_("Aborted by user."))
     exit(1)
 
