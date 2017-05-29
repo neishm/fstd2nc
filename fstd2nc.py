@@ -1503,5 +1503,9 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   buf.write_nc_file(outfile)
 
 if __name__ == '__main__':
-  _fstd2nc_cmdline ()
+  try:
+    _fstd2nc_cmdline ()
+  except KeyboardInterrupt:
+    print ("Aborted by user.")
+    exit(1)
 
