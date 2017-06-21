@@ -1323,10 +1323,15 @@ class _netCDF_Atts (_Buffer_Base):
   def __iter__ (self):
     from collections import OrderedDict
     for var in super(_netCDF_Atts,self).__iter__():
+      name = var.name
       atts = OrderedDict(var.atts)
       if var.name in self._metadata:
+        # Update the metadata
         atts.update(self._metadata[var.name])
-      yield type(var)(var.name,atts,var.axes,var.array)
+        # Rename the field? (Using special 'rename' key in the metadata file).
+        if 'rename' in atts:
+          name = atts.pop('rename')
+      yield type(var)(name,atts,var.axes,var.array)
 
 
 #################################################
