@@ -279,13 +279,15 @@ class _Buffer_Base (object):
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
+    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include FSTD record attributes and other internal information in the output file."))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
-  def __init__ (self, ignore_etiket=False):
+  def __init__ (self, minimal_metadata=False, ignore_etiket=False):
     """
     Create a new, empty buffer.
     """
     self._params = []
+    self._minimal_metadata = minimal_metadata
     if not ignore_etiket:
       self._var_id = self._var_id + ('etiket',)
 
@@ -1027,24 +1029,29 @@ class _VCoords (_Buffer_Base):
                 name = 'eta'
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
               # Add all parameters for this coordinate.
+              internal_atts = OrderedDict()
               for key in VGD_KEYS:
                 try:
                   val = vgd_get(vgd_id,key)
                   # Skip multidimensional arrays (can't be encoded as metadata).
                   if getattr(val,'ndim',1) > 1: continue
-                  atts[key] = val
+                  internal_atts[key] = val
                 except (KeyError,VGDError):
                   pass  # Some keys not available in some vgrids?
               # Some attribute aliases that are needed for reverse-compatibility
               # with old PyGeode.formats.fstd
               aliases = OrderedDict([('CA_M','a_m'),('CA_T','a_t'),('CB_M','b_m'),('CB_T','b_t'),('VIPM','ip1_m'),('VIPT','ip1_t'),('VERS','version'),('RC_1','rcoef1'),('RC_2','rcoef2'),('RFLD','ref_name')])
               for oldname,newname in aliases.items():
-                if oldname in atts: atts[newname] = atts[oldname]
+                if oldname in internal_atts:
+                  internal_atts[newname] = internal_atts[oldname]
+              # Put this information in the final output file?
+              if not self._minimal_metadata:
+                atts.update(internal_atts)
               # Attempt to fill in A/B ancillary data (if available).
               try:
-                all_z = list(atts['VCDM'])+list(atts['VCDT'])
-                all_a = list(atts['CA_M'])+list(atts['CA_T'])
-                all_b = list(atts['CB_M'])+list(atts['CB_T'])
+                all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
+                all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
+                all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
                 A = []
                 B = []
                 for z in levels:
@@ -1304,12 +1311,10 @@ class _netCDF_Atts (_Buffer_Base):
   def _cmdline_args (cls, parser):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
-    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include FSTD record attributes and other internal information in the output file."))
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.'))
-  def __init__ (self, minimal_metadata=False, metadata_file=None, *args, **kwargs):
+  def __init__ (self, metadata_file=None, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
-    self._minimal_metadata = minimal_metadata
     if metadata_file is None:
       metafiles = []
     else:
@@ -1324,14 +1329,18 @@ class _netCDF_Atts (_Buffer_Base):
     super(_netCDF_Atts,self).__init__(*args,**kwargs)
   def __iter__ (self):
     from collections import OrderedDict
+    # List of metadata keys that are internal to the FSTD file.
+    internal_meta = list(self._vectorize_params().keys())
+
     for var in super(_netCDF_Atts,self).__iter__():
       name = var.name
+      atts = OrderedDict(var.atts)
+      # Strip out FSTD-specific metadata?
       if self._minimal_metadata:
-        atts = OrderedDict()
-      else:
-        atts = OrderedDict(var.atts)
+        for n in internal_meta:
+          atts.pop(n,None)
+      # Add extra metadata provided by the user?
       if var.name in self._metadata:
-        # Update the metadata
         atts.update(self._metadata[var.name])
         # Rename the field? (Using special 'rename' key in the metadata file).
         if 'rename' in atts:
