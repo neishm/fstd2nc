@@ -9,6 +9,31 @@ From the command-line
 ---------------------
 ```
 python -m fstd2nc [options] <infile> <outfile>
+
+optional arguments:
+  --minimal-metadata    Don't include FSTD record attributes and other
+                        internal information in the output file.
+  --ignore-etiket       Tells the converter to ignore the etiket when deciding
+                        if two records are part of the same field. Default is
+                        to split the variable on different etikets.
+  --vars VAR1,VAR2,...  Comma-seperated list of variables to convert. By
+                        default, all variables are converted.
+  --fill-value FILL_VALUE
+                        The fill value to use for masked (missing) data. Gets
+                        stored as '_FillValue' attribute in the netCDF file.
+                        Default is '1e+30'.
+  --squash-forecasts    Use the date of validity for the "time" axis.
+                        Otherwise, the default is to use the date of original
+                        analysis, and the forecast length goes in a "forecast"
+                        axis.
+  --metadata-file METADATA_FILE
+                        Apply netCDF metadata from the specified file.
+  --time-units {seconds,minutes,hours,days}
+                        The units of time for the netCDF file. Default is
+                        hours.
+  --buffer-size BUFFER_SIZE
+                        How much data to write at a time (in MBytes). Default
+                        is 100.
 ```
 
 From Python
