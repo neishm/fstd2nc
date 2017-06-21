@@ -1304,10 +1304,12 @@ class _netCDF_Atts (_Buffer_Base):
   def _cmdline_args (cls, parser):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
+    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include FSTD record attributes and other internal information in the output file."))
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.'))
-  def __init__ (self, metadata_file=None, *args, **kwargs):
+  def __init__ (self, minimal_metadata=False, metadata_file=None, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
+    self._minimal_metadata = minimal_metadata
     if metadata_file is None:
       metafiles = []
     else:
@@ -1324,7 +1326,10 @@ class _netCDF_Atts (_Buffer_Base):
     from collections import OrderedDict
     for var in super(_netCDF_Atts,self).__iter__():
       name = var.name
-      atts = OrderedDict(var.atts)
+      if self._minimal_metadata:
+        atts = OrderedDict()
+      else:
+        atts = OrderedDict(var.atts)
       if var.name in self._metadata:
         # Update the metadata
         atts.update(self._metadata[var.name])
