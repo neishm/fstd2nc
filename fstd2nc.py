@@ -1478,7 +1478,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from sys import stdout, exit
   from os.path import exists
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
-  parser.add_argument('infile', metavar='<fstd_file>', help=_('The FSTD file to convert.'))
+  parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The FSTD file to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
   parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help=_('Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.'))
@@ -1491,17 +1491,18 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
       parser.error(_("'pygeode' backend is not installed."))
     quit()
   args = vars(args)
-  infile = args.pop('infile')
+  infiles = args.pop('infile')
   outfile = args.pop('outfile')
   del args['backend']
   buf = buffer_type(**args)
 
   # Make sure input file exists
-  if not exists(infile):
-    print (_("Error: '%s' does not exist!")%(infile))
-    exit(1)
+  for infile in infiles:
+    if not exists(infile):
+      print (_("Error: '%s' does not exist!")%(infile))
+      exit(1)
 
-  buf.read_fstd_file(infile)
+    buf.read_fstd_file(infile)
 
   # Check if output file already exists
   if exists(outfile):
