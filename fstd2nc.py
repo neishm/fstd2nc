@@ -1465,7 +1465,7 @@ class _netCDF_IO (_netCDF_Atts):
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
     # Adapted from pygeode.formats.cfmeta.
-    f.Conventions = "CF-1.0"
+    f.Conventions = "CF-1.6"
 
     f.close()
 
@@ -1481,12 +1481,13 @@ class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectV
 # Command-line invocation:
 def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
-  from sys import stdout, exit
+  from sys import stdout, exit, argv
   from os.path import exists
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
   parser.add_argument('infile', nargs='+', metavar='<fstd_file(s)>', help=_('The FSTD file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
+  parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help=_('Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.'))
   args = parser.parse_args()
   # Delegate to a different backend?
@@ -1499,6 +1500,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   args = vars(args)
   infiles = args.pop('infile')
   outfile = args.pop('outfile')
+  no_history = args.pop('no_history')
   del args['backend']
   buf = buffer_type(**args)
 
@@ -1529,7 +1531,22 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
       print (_("Refusing to overwrite existing file '%s'.")%(outfile))
       exit(1)
 
-  buf.write_nc_file(outfile)
+  # Append the command invocation to the netCDF metadata?
+  if no_history:
+    global_metadata = None
+  else:
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    command = list(argv)
+    # Any arguments with spaces should be surrounded by quotes.
+    for i,c in enumerate(command):
+      if " " in c:
+        command[i] = "'"+c+"'"
+    command = " ".join(command)
+    history = timestamp + ": " + command
+    global_metadata = {"history":history}
+
+  buf.write_nc_file(outfile, global_metadata)
 
 if __name__ == '__main__':
   try:
