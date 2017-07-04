@@ -1548,10 +1548,16 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
 
   buf.write_nc_file(outfile, global_metadata)
 
-if __name__ == '__main__':
+# Command-line invocation with error trapping.
+# Hides the Python stack trace when the user aborts the command.
+def _fstd2nc_cmdline_trapped (*args, **kwargs):
   try:
     _fstd2nc_cmdline ()
   except KeyboardInterrupt:
     print (_("Aborted by user."))
     exit(1)
+
+
+if __name__ == '__main__':
+  _fstd2nc_cmdline_trapped()
 
