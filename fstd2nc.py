@@ -1311,7 +1311,7 @@ class _netCDF_Atts (_Buffer_Base):
   def _cmdline_args (cls, parser):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
-    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.'))
+    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
   def __init__ (self, metadata_file=None, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
@@ -1351,7 +1351,7 @@ class _netCDF_Atts (_Buffer_Base):
 #################################################
 # Logic for reading/writing FSTD data from/to netCDF files.
 
-class _netCDF_IO (_Buffer_Base):
+class _netCDF_IO (_netCDF_Atts):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_netCDF_IO,cls)._cmdline_args(parser)
@@ -1422,7 +1422,7 @@ class _netCDF_IO (_Buffer_Base):
       yield var
 
 
-  def write_nc_file (self, filename):
+  def write_nc_file (self, filename, global_metadata=None):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
@@ -1431,6 +1431,12 @@ class _netCDF_IO (_Buffer_Base):
     import numpy as np
     from itertools import product
     f = Dataset(filename, "w", format="NETCDF4")
+
+    # Apply global metadata (from config files and global_metadata argument).
+    if 'global' in self._metadata:
+      f.setncatts(self._metadata['global'])
+    if global_metadata is not None:
+      f.setncatts(global_metadata)
 
     for varname, atts, axes, array in iter(self):
       for axisname, axisvalues in axes.items():
@@ -1465,7 +1471,7 @@ class _netCDF_IO (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_netCDF_Atts,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
