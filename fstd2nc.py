@@ -572,7 +572,7 @@ class _SelectVars (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_SelectVars,cls)._cmdline_args(parser)
-    parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-seperated list of variables to convert.  By default, all variables are converted.'))
+    parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables to convert.  By default, all variables are converted.'))
   def __init__ (self, vars=None, *args, **kwargs):
     if vars is not None:
       self._selected_vars = vars.split(',')
@@ -1464,7 +1464,6 @@ class _netCDF_IO (_netCDF_Atts):
           continue
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
-    # Adapted from pygeode.formats.cfmeta.
     f.Conventions = "CF-1.6"
 
     f.close()
