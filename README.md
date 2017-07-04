@@ -27,13 +27,17 @@ optional arguments:
                         analysis, and the forecast length goes in a "forecast"
                         axis.
   --metadata-file METADATA_FILE
-                        Apply netCDF metadata from the specified file.
+                        Apply netCDF metadata from the specified file. You can
+                        repeat this option multiple times to build metadata
+                        from different sources.
   --time-units {seconds,minutes,hours,days}
                         The units of time for the netCDF file. Default is
                         hours.
   --buffer-size BUFFER_SIZE
                         How much data to write at a time (in MBytes). Default
                         is 100.
+  --no-history          Don't put the command-line invocation in the netCDF
+                        metadata.
 ```
 
 From Python
