@@ -1478,7 +1478,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from sys import stdout, exit
   from os.path import exists
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
-  parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The FSTD file to convert.'))
+  parser.add_argument('infile', nargs='+', metavar='<fstd_file(s)>', help=_('The FSTD file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
   parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help=_('Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.'))
