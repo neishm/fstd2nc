@@ -454,121 +454,6 @@ class _Buffer_Base (object):
 
 
 
-  ###############################################
-  # Basic flow for writing data
-
-  # Add some derived data to this object.  The data must follow the same format
-  # as the output of __iter__().
-  def _add_data (self, data):
-    raise NotImplementedError  #TODO
-    import numpy as np
-    from itertools import product
-    from collections import OrderedDict
-
-    # Get the type for each attribute (so we can use appropriate fill values
-    # when certain attributes are missing.
-    att_type = OrderedDict()
-    for var_id, atts, axes, array in data:
-      for n,v in atts.items():
-        att_type[n] = type(v)
-      for n,v in axes.items():
-        if n in ('k','j','i'): continue
-        att_type[n] = type(v)
-    att_type['d'] = object
-
-    # Construct the records.
-    # The values will be stored in chunks, to be concatenated at the end.
-    records = OrderedDict((n,[]) for n in att_type.keys())
-
-    # Loop over each variable.
-    for varname, atts, axes, array in data:
-
-      # Make sure we have nk,nj,ni dimensions, and in the right order.
-      for n in 'k','j','i':
-        if n not in axes:
-          raise KeyError("'%s' axis not found in the data.")
-      if list(axes.keys())[-3:] != ['k','j','i']:
-        raise ValueError("Wrong dimension order - expected (nk,nj,ni) dimensions at the end.")
-
-      # Make sure we have a nomvar.
-      if 'nomvar' not in atts:
-        atts['nomvar'] = varname[:4]
-
-      # Wrap the data array so we defer reading the values.
-      data = []
-      for ind in product(*map(range,array.shape[:-3])):
-        data.append(_Array(array)[ind])
-
-      current_records = OrderedDict()
-
-      # Add coordinate info.
-      for coords in product(*axes.values()[:-3]):
-        for n,c in zip(axes.keys(),coords):
-          current_records.setdefault(n,[]).append(c)
-
-      # Add metadata.
-      nrecs = len(data)
-      for n,v in atts.items():
-        current_records[n] = [v]*nrecs
-
-      # Add in the data references.
-      current_records['d'] = data
-
-      # Check for anything that's not defined (apply a mask).
-      for n,t in att_type.items():
-        if n not in current_records:
-          bad = np.zeros(nrecs, dtype=t)
-          current_records[n] = np.ma(bad,mask=True)
-
-      # Add these records to the master list.
-      for n,v in records.iteritems():
-        v.append(current_records[n])
-
-    # Convert to numpy arrays.
-    records = OrderedDict((n,np.ma.concatenate(v)) for n,v in records.items())
-
-    # Process this into headers.
-    self._params.extend(list(self._unvectorize_params(nrecs, records)))
-
-
-  # Take vectorized version of record param dictionary, and convert it back
-  # to a list of individual record params (ready for writing to file).
-  # Sub-classes may also do extra work here to re-encode FSTD params from
-  # their own metadata.
-  def _unvectorize_params (self, nrecs, fields):
-    raise NotImplementedError #TODO
-    import numpy as np
-    # Pad out the string records with spaces
-    fields['nomvar'] = [s.upper().ljust(4) for s in fields['nomvar']]
-    fields['etiket'] = [s.upper().ljust(12) for s in fields['etiket']]
-    fields['typvar'] = [s.upper().ljust(2) for s in fields['typvar']]
-    fields['grtyp'] = list(map(str.upper, fields['grtyp']))
-
-    params = []
-    for i in range(nrecs):
-      prm = dict()
-      #TODO
-
-
-  def write_fstd_file (self, filename):
-    """
-    Write the records from this object into the specified FSTD file.
-    """
-    raise NotImplementedError #TODO: update this code.
-    from rpnpy.librmn.fstd98 import fstecr
-    from rpnpy.librmn.const import FST_RW
-
-    f = _FSTD_File(filename, FST_RW)
-    for header, data_func in zip(self._headers, self._data_funcs):
-      meta = dict([(n,header[n]) for n in header.dtype.names])
-      data = data_func().transpose(2,1,0)  # Put back in Fortran order.
-      fstecr(f.funit, data, meta)
-
-  #
-  ###############################################
-
-
-
 
 #####################################################################
 # Mixins for different features / behaviour for the conversions.
@@ -732,40 +617,6 @@ class _Dates (_Buffer_Base):
           yield type(var)('forecast',atts,axes,np.asarray(forecasts))
       yield var
 
-  # Prepare date info for output.
-  def _unvectorize_params (self, nrecs, fields):
-    import numpy as np
-    from rpnpy.rpndate import RPNDate
-
-    # Check for missing record attributes
-    for att in 'deet','npas','dateo','forecast':
-      if att not in fields:
-        fields[att] = np.ma.masked_all(nrecs)
-    if 'time' not in fields:
-      fields['time'] = np.ma.masked_all(nrecs,dtype='O')
-
-    # Mask out invalid deet values.
-    fields['deet'] = np.ma.masked_equal(fields['deet'],0)
-
-    # Set default values.
-    fields['forecast'] = np.ma.filled(fields['forecast'],0)
-
-    # Get dateo from 'time' field, wherever it's missing.
-    data = [RPNDate(d).dateo if d is not None else 0 for d in fields['time']]
-    data = np.array(data)
-    bad_dateo = np.ma.getmaskarray(fields['dateo'])
-    fields['dateo'][bad_dateo] = data[bad_dateo]
-
-    # Calculate npas from forecast, wherever npas is missing.
-    bad_npas = np.ma.getmaskarray(fields['npas'])
-    data = fields['forecast']*3600./fields['deet']
-    fields['npas'][bad_npas] = np.asarray(data[bad_npas],dtype='int32')
-
-    # Fill in missing values
-    for att in 'deet','npas','dateo','forecast':
-      fields[att] = np.ma.filled(fields[att],0)
-
-    return super(_Dates,self)._unvectorize_params(nrecs, fields)
 
 
 #################################################
@@ -929,30 +780,6 @@ class _VCoords (_Buffer_Base):
     fields['level'] = levels
     fields['kind'] = kind
     return fields
-  def _unvectorize_params (self,nrecs,fields):
-    import numpy as np
-    from rpnpy.librmn.fstd98 import EncodeIp
-    from rpnpy.librmn.proto import FLOAT_IP
-    # Check for missing fields.
-    for att in 'kind','level','ip1':
-      if att not in fields:
-        fields[att] = np.ma.masked_all(nrecs)
-    # Re-encode ip1 values from kind,level information.
-    have_data = ~np.ma.getmaskarray(fields['level']) & ~np.ma.getmaskarray(fields['kind'])
-    level = fields['level'][have_data]
-    kind = fields['kind'][have_data]
-    # Doesn't handle level ranges.
-    rp1 = [FLOAT_IP(z,z,k) for z,k in zip(level,kind)]
-    rp2 = [FLOAT_IP(0.0,0.0,0)] * len(rp1)
-    rp3 = rp2
-    encoded = map(EncodeIp, rp1, rp2, rp3)
-    ip1 = zip(*encoded)[0]
-    fields['ip1'][have_data] = np.array(ip1)
-    # Set default ip1 values.
-    fields['ip1'] = np.ma.filled(fields['ip1'],0)
-    # Continue re-encoding other parts of the field.
-    return super(_VCoords,self)._unvectorize_params(nrecs,fields)
-
   # Add vertical axis as another variable.
   def __iter__ (self):
     from collections import OrderedDict
