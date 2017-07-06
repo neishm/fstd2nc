@@ -130,7 +130,7 @@ class _Array (_Array_Base):
       # Inner array objects must all have the same shape.
       inner_shape = set(map(np.shape,data.flatten()))
       if len(inner_shape) > 1:
-        raise ValueError (_("Different shapes for inner array objects.  Found shapes: %s")%list(inner_shape))
+        raise ValueError (("Different shapes for inner array objects.  Found shapes: %s")%list(inner_shape))
       inner_shape = inner_shape.pop()
       dtype = np.result_type(*data.flatten())
     shape = tuple(outer_shape) + tuple(inner_shape)
@@ -166,7 +166,7 @@ class _Array (_Array_Base):
       key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
     key = key + (slice(None),)*(self.ndim-len(key))
     if len(key) > self.ndim:
-      raise ValueError(_("Too many dimensions for slicing."))
+      raise ValueError(("Too many dimensions for slicing."))
     shape = []
     inner_dimids = []
     outer_slices = []
@@ -206,7 +206,7 @@ class _Array (_Array_Base):
     key = [slice(None)]*self.ndim
     for a in axis:
       if self.shape[a] > 1:
-        raise ValueError(_("Can only squeeze axes of length 1."))
+        raise ValueError(("Can only squeeze axes of length 1."))
       key[a] = 0
     return self.__getitem__(tuple(key))
 
@@ -217,9 +217,9 @@ class _Array (_Array_Base):
     if len(axes) == 1 and hasattr(axes[0],'__len__'):
       axes = tuple(axes[0])
     if len(axes) != self.ndim:
-      raise ValueError(_("Wrong number of dimenions for transpose."))
+      raise ValueError(("Wrong number of dimenions for transpose."))
     if sorted(axes) != list(range(self.ndim)):
-      raise ValueError(_("Bad axis arguments."))
+      raise ValueError(("Bad axis arguments."))
     shape = [self.shape[a] for a in axes]
     inner_dimids = [self._inner_dimids[a] for a in axes]
     return _Array(shape, self.dtype, inner_dimids, self._data, self._inner_slices)
@@ -347,7 +347,7 @@ class _Buffer_Base (object):
     import numpy as np
     # Make sure the parameter names are consistent for all records.
     if len(set(map(frozenset,self._params))) != 1:
-      raise ValueError(_("Inconsistent parameter names for the records."))
+      raise ValueError(("Inconsistent parameter names for the records."))
     fields = OrderedDict()
     for prm in self._params:
       for n,v in prm.items():
