@@ -1319,7 +1319,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from sys import stdout, exit, argv
   from os.path import exists
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
-  parser.add_argument('infile', nargs='+', metavar='<fstd_file(s)>', help=_('The FSTD file(s) to convert.'))
+  parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The FSTD file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
