@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup (
   name="fstd2nc",
@@ -15,9 +15,12 @@ setup (
     'Programming Language :: Python :: 2.7',
     'Topic :: Scientific/Engineering :: Atmospheric Science',
   ],
+  packages = find_packages(),
   py_modules = ['fstd2nc'],
   install_requires = ['numpy','pytz','netcdf4'],
-  package_data = {}, #TODO: language files
+  package_data = {
+    'fstd2nc_locale': ['*/LC_MESSAGES/fstd2nc.mo'],
+  },
   entry_points={
     'console_scripts': [
       'fstd2nc = fstd2nc:_fstd2nc_cmdline_trapped',

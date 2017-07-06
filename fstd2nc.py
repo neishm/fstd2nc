@@ -29,12 +29,13 @@ Functionality for converting between FSTD and netCDF files.
 from gettext import gettext as _
 import gettext
 from os import path, environ
-gettext.bindtextdomain('fstd2nc', path.join(path.dirname(__file__),'locale'))
+import fstd2nc_locale
+gettext.bindtextdomain('fstd2nc', path.dirname(fstd2nc_locale.__file__))
 gettext.textdomain('fstd2nc')
 # Check for special CMCLNG environment variable
 if environ.get('CMCLNG') == 'francais':
   environ['LANGUAGE'] = 'fr_CA'
-del gettext, path, environ
+del gettext, path, environ, fstd2nc_locale
 
 # Override default dtype for "binary" data.
 # The one example I've seen has "float32" data encoded in it.
