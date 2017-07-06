@@ -22,6 +22,15 @@ fstd2nc.pot: ../fstd2nc.py
 	xgettext $< -d fstd2nc --package-name=fstd2nc --no-location
 	mv fstd2nc.po fstd2nc.pot
 
+# Generate a table of translations in mediawiki format.
+# Could be pasted into a wiki page, to solicit translations from users.
+table: fr_CA.po
+	echo '{| width="80%" cellspacing="1" cellpadding="10" border="1"' > $@
+	echo '! style="width:50%;" |English' >> $@
+	echo '! style="width:50%;" |Français' >> $@
+	sed '1,/^$$/d;s/^msgid /|-\n|/;s/^msgstr /|/;/^#/d;s/"//g;' $< >> $@
+	echo '|}' >> $@
+
 .PHONY: clean
 
 # Rule for cleaning up the files.
