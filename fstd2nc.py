@@ -1169,16 +1169,10 @@ class _netCDF_Atts (_Buffer_Base):
     super(_netCDF_Atts,self).__init__(*args,**kwargs)
   def __iter__ (self):
     from collections import OrderedDict
-    # List of metadata keys that are internal to the FSTD file.
-    internal_meta = list(self._vectorize_params().keys())
 
     for var in super(_netCDF_Atts,self).__iter__():
       name = var.name
       atts = OrderedDict(var.atts)
-      # Strip out FSTD-specific metadata?
-      if self._minimal_metadata:
-        for n in internal_meta:
-          atts.pop(n,None)
       # Add extra metadata provided by the user?
       if var.name in self._metadata:
         atts.update(self._metadata[var.name])
@@ -1272,6 +1266,9 @@ class _netCDF_IO (_netCDF_Atts):
     from itertools import product
     f = Dataset(filename, "w", format="NETCDF4")
 
+    # List of metadata keys that are internal to the FSTD file.
+    internal_meta = list(self._vectorize_params().keys())
+
     # Apply global metadata (from config files and global_metadata argument).
     if 'global' in self._metadata:
       f.setncatts(self._metadata['global'])
@@ -1286,6 +1283,11 @@ class _netCDF_IO (_netCDF_Atts):
           f.createDimension(axisname, len(axisvalues))
       # Write the variable.
       v = f.createVariable(varname, datatype=array.dtype, dimensions=list(axes.keys()))
+      # Write the metadata.
+      # Strip out FSTD-specific metadata?
+      if self._minimal_metadata:
+        for n in internal_meta:
+          atts.pop(n,None)
       v.setncatts(atts)
       # Determine how much we can write at a time.
       # Try to keep it under the buffer size, but make sure the last 2
