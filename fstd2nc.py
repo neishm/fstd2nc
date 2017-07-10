@@ -39,13 +39,17 @@ if environ.get('CMCLNG') == 'francais':
   environ['LANGUAGE'] = 'fr_CA'
 del gettext, path, environ, fstd2nc_locale
 
+# How to handle warning messages.
+# E.g., can either pass them through warnings.warn, or simply print them.
+def warn (msg):
+  print (_("Warning: %s")%msg)
+
 # Override default dtype for "binary" data.
 # The one example I've seen has "float32" data encoded in it.
 # https://wiki.cmc.ec.gc.ca/wiki/Talk:Python-RPN/2.0/examples#Plot_GIOPS_Forecast_Data_with_Basemap
 def dtype_fst2numpy (datyp, nbits=None):
   from rpnpy.librmn.fstd98 import dtype_fst2numpy
   if datyp == 0:
-    from warnings import warn
     warn (_("Raw binary records detected.  The values may not be properly decoded if you're opening on a different platform."))
     datyp = 5
   return dtype_fst2numpy(datyp,nbits)
@@ -435,7 +439,6 @@ class _Buffer_Base (object):
       # Check if we have full coverage along all axes.
       have_data = [d is not missing for d in data.flatten()]
       if not np.all(have_data):
-        from warnings import warn
         warn (_("Missing some records for %s.")%var_id.nomvar)
 
       data = _Array.create (data)
@@ -901,7 +904,6 @@ class _VCoords (_Buffer_Base):
                 B = type(var)(name+'_B', {}, {name:levels}, np.asarray(B))
                 ancillary_variables.extend([A,B])
               except (KeyError,ValueError,VGDError):
-                from warnings import warn
                 warn (_("Unable to get A/B coefficients."))
               vgd_free (vgd_id)
             # Not a '!!' coordinate, so must be 'HY'?
@@ -1034,7 +1036,6 @@ class _XYCoords (_Buffer_Base):
             gdid = ezgdef_fmem (**gridinfo)
             ll = gdll(gdid)
         except (TypeError,EzscintError):
-          from warnings import warn
           warn(_("Unable to get grid info for '%s'")%var.name)
           yield var
           continue
@@ -1298,7 +1299,6 @@ class _netCDF_IO (_netCDF_Atts):
         try:
           v[ind] = np.asarray(array[ind])
         except (IndexError,ValueError):
-          from warnings import warn
           warn(_("Internal problem with the script - unable to get data for '%s'")%varname)
           continue
     # We need to explicitly state that we're using CF conventions in our
