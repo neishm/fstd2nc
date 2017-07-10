@@ -1,8 +1,9 @@
 from setuptools import setup, find_packages
+from fstd2nc import __version__
 
 setup (
   name="fstd2nc",
-  version="0.20170705",
+  version=__version__,
   description = 'Converts FSTD files (from Environment Canada) to netCDF files.',
   url = 'https://github.com/neishm/fstd2nc',
   author="Mike Neish",

@@ -25,6 +25,8 @@
 Functionality for converting between FSTD and netCDF files.
 """
 
+__version__ = "0.20170710"
+
 # Enable multi-language support.
 from gettext import gettext as _
 import gettext
@@ -288,6 +290,7 @@ class _Buffer_Base (object):
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
+    parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include FSTD record attributes and other internal information in the output file."))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
