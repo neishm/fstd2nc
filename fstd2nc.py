@@ -1300,6 +1300,20 @@ class _netCDF_IO (_netCDF_Atts):
         # Some derived axes may not have enough metadata to generate an id,
         # so the best we can do is append an integer suffix.
         var_ids = [(str(r),) for r in range(1,len(var_indices)+1)]
+
+      var_ids = zip(*var_ids)
+
+      # Omit parts of the var_id that are invariant over all the variables.
+      var_ids = [var_id for var_id in var_ids if len(set(var_id)) > 1]
+      # Starting from the rightmost key, remove as many keys as possible while
+      # maintaining uniqueness.
+      for j in reversed(range(len(var_ids))):
+        test = var_ids[:j] + var_ids[j+1:]
+        if len(set(zip(*test))) == len(var_indices):
+          var_ids = var_ids[:j] + var_ids[j+1:]
+
+      var_ids = zip(*var_ids)
+
       for i, var_id in zip(var_indices, var_ids):
         varname, atts, axes, array = varlist[i]
         varname = varname + '_' + '_'.join(var_id)
