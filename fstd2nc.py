@@ -287,6 +287,11 @@ class _Buffer_Base (object):
   # Attributes which uniquely identify a variable.
   _var_id = ('nomvar','ni','nj','nk')
 
+  # Similar to above, but a human-readable version of the id.
+  # Could be used for appending suffixes to variable names to make them unique.
+  # Uses string formatting operations on the variable metadata.
+  _human_var_id = ('%(nomvar)s', '%(ni)sx%(nj)s', '%(nk)sL')
+
   # Record parameters which should not be used as nc variable attributes.
   # (They're either internal to the file, or part of the data, not metadata).
   _ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d')
@@ -307,6 +312,7 @@ class _Buffer_Base (object):
     if not ignore_etiket:
       # Insert etiket value just after nomvar.
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
+      self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
@@ -772,9 +778,7 @@ class _VCoords (_Buffer_Base):
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
-    # Also, must have consistent igX records for a variable.
-    if 'ig1' not in self._var_id:
-      self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
+    self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
   def _vectorize_params (self):
     from rpnpy.librmn.fstd98 import DecodeIp
     import numpy as np
@@ -961,9 +965,11 @@ class _XYCoords (_Buffer_Base):
     super(_XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)
+    self._human_var_id = self._human_var_id + ('%(grtyp)s',)
     # Also, must have consistent igX records for a variable.
     if 'ig1' not in self._var_id:
       self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
+      self._human_var_id = self._human_var_id + ('grid_%(ig1)s_%(ig2)s_%(ig3)s_%(ig4)s',)
   # Add horizontal coordinate info to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
@@ -1274,11 +1280,8 @@ class _netCDF_IO (_netCDF_Atts):
     # (needs metadata like etiket, etc.)
     def get_var_id (var):
       out = []
-      for key in self._var_id:
-        val = var.atts[key]
-        if not isinstance(val,str):
-          val = key+str(val)
-        out.append(val)
+      for fmt in self._human_var_id:
+        out.append(fmt%var.atts)
       return tuple(out)
 
     # Generate unique variable names.
