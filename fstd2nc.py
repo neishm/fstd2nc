@@ -1257,6 +1257,7 @@ class _netCDF_IO (_netCDF_Atts):
     axis_renames = dict()
     for axisname, axisvalues_list in axis_table.items():
       if len(axisvalues_list) == 1: continue
+      warn (_("Multiple %s axes.  Appending integer suffixes to their names.")%axisname)
       for i,axisvalues in enumerate(axisvalues_list):
         axis_renames[(axisname,axisvalues)] = axisname+str(i+1)
 
@@ -1314,9 +1315,13 @@ class _netCDF_IO (_netCDF_Atts):
 
       var_ids = zip(*var_ids)
 
+      var_ids = ['_'.join(var_id) for var_id in var_ids]
+
+      warn (_("Multiple definitions of %s.  Adding unique suffixes %s.")%(varname, ', '.join(var_ids)))
+
       for i, var_id in zip(var_indices, var_ids):
         varname, atts, axes, array = varlist[i]
-        varname = varname + '_' + '_'.join(var_id)
+        varname = varname + '_' + var_id
         varlist[i] = _var_type(varname,atts,axes,array)
 
     #TODO: Make sure names don't start with a digit?
