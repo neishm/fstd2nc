@@ -1200,14 +1200,8 @@ class _netCDF_IO (_netCDF_Atts):
 
   def __iter__ (self):
     from datetime import datetime
-    from collections import Counter, OrderedDict
     import numpy as np
     from netCDF4 import date2num
-    # Keep track of all used variable / dimension names
-    varcount = Counter()
-    dimcount = Counter()
-    # Mappings from original dimension names to unique names
-    dimmap = dict()
 
     for var in super(_netCDF_IO,self).__iter__():
 
@@ -1217,41 +1211,6 @@ class _netCDF_IO (_netCDF_Atts):
         var.atts.update(units=units)
         array = np.asarray(date2num(var.array,units=units))
         var = type(var)(var.name,var.atts,var.axes,array)
-
-      # Make variable / dimension names unique, by appending integer suffices
-      # when necessary.
-      # Also check for illegal characters in names.
-      varname = var.name
-      # Name must start with alphanumeric, or underscore.
-      if not varname[0].isalnum():
-        if not varname.startswith('_'):
-          varname = '_'+varname
-      varcount.update([varname])
-      # Do we need to add an integer suffix?
-      num = varcount.get(varname)
-      if num > 1:
-        varname = var.name+str(num)
-      # Do we need to clobber the dimension names?
-      axes = []
-      for name,values in var.axes.items():
-        values = tuple(values)  # Values need to be hashable for lookup table.
-        # Name must start with alphanumeric, or underscore.
-        if not name[0].isalnum():
-          if not name.startswith('_'):
-            name = '_'+name
-        # Append integer suffix to make unique dimension name?
-        if (name,values) not in dimmap:
-          dimcount.update([name])
-          num = dimcount.get(name)
-          if num > 1:
-            dimmap[(name,values)] = name+str(num)
-          else:
-            dimmap[(name,values)] = name
-        name = dimmap[(name,values)]
-        axes.append((name,values))
-      axes = OrderedDict(axes)
-      var = type(var)(varname,var.atts,axes,var.array)
-      # (end of name checks)
 
       yield var
 
@@ -1264,6 +1223,7 @@ class _netCDF_IO (_netCDF_Atts):
     from netCDF4 import Dataset
     import numpy as np
     from itertools import product
+    from collections import OrderedDict
     f = Dataset(filename, "w", format="NETCDF4")
 
     # List of metadata keys that are internal to the FSTD file.
@@ -1275,7 +1235,76 @@ class _netCDF_IO (_netCDF_Atts):
     if global_metadata is not None:
       f.setncatts(global_metadata)
 
-    for varname, atts, axes, array in iter(self):
+    # Need to pre-scan all the variables to generate unique names.
+    varlist = list(iter(self))
+
+    # Generate unique axis names.
+    axis_table = dict()
+    for varname, atts, axes, array in varlist:
+      for axisname, axisvalues in axes.items():
+        axisvalues = tuple(axisvalues)
+        if axisname not in axis_table:
+          axis_table[axisname] = []
+        if axisvalues not in axis_table[axisname]:
+          axis_table[axisname].append(axisvalues)
+    axis_renames = dict()
+    for axisname, axisvalues_list in axis_table.items():
+      if len(axisvalues_list) == 1: continue
+      for i,axisvalues in enumerate(axisvalues_list):
+        axis_renames[(axisname,axisvalues)] = axisname+str(i+1)
+
+    # Apply axis renames.
+    def rename_axis ((axisname,axisvalues)):
+      key = (axisname,tuple(axisvalues))
+      if key in axis_renames:
+        return (axis_renames[key],axisvalues)
+      return (axisname,axisvalues)
+    for i, var in enumerate(varlist):
+      varname = var.name
+      # If this is a coordinate variable, use same renaming rules as the
+      # dimension name.
+      if varname in var.axes:
+        varname, axisvalues = rename_axis((varname,var.axes[varname]))
+      axes = OrderedDict(map(rename_axis,var.axes.items()))
+      varlist[i] = _var_type(varname, var.atts, axes, var.array)
+
+    # Generate a string-based variable id.
+    # Only works for true variables from the FSTD source
+    # (needs metadata like etiket, etc.)
+    def get_var_id (var):
+      out = []
+      for key in self._var_id:
+        val = var.atts[key]
+        if not isinstance(val,str):
+          val = key+str(val)
+        out.append(val)
+      return tuple(out)
+
+    # Generate unique variable names.
+    var_table = dict()
+    for i, var in enumerate(varlist):
+      if var.name not in var_table:
+        var_table[var.name] = []
+      # Identify the variables by their index in the master list.
+      var_table[var.name].append(i)
+    for varname, var_indices in var_table.items():
+      # Only need to rename variables that are non-unique.
+      if len(var_indices) == 1: continue
+      try:
+        var_ids = [get_var_id(varlist[i]) for i in var_indices]
+      except KeyError:
+        # Some derived axes may not have enough metadata to generate an id,
+        # so the best we can do is append an integer suffix.
+        var_ids = [(str(r),) for r in range(1,len(var_indices)+1)]
+      for i, var_id in zip(var_indices, var_ids):
+        varname, atts, axes, array = varlist[i]
+        varname = varname + '_' + '_'.join(var_id)
+        varlist[i] = _var_type(varname,atts,axes,array)
+
+    #TODO: Make sure names don't start with a digit?
+    # However, this seems to work okay through this interface.
+
+    for varname, atts, axes, array in varlist:
       for axisname, axisvalues in axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
