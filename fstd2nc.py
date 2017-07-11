@@ -1319,10 +1319,21 @@ class _netCDF_IO (_netCDF_Atts):
 
       warn (_("Multiple definitions of %s.  Adding unique suffixes %s.")%(varname, ', '.join(var_ids)))
 
+      # Apply the name changes.
       for i, var_id in zip(var_indices, var_ids):
         varname, atts, axes, array = varlist[i]
-        varname = varname + '_' + var_id
-        varlist[i] = _var_type(varname,atts,axes,array)
+        newname = varname + '_' + var_id
+        varlist[i] = _var_type(newname,atts,axes,array)
+        # Apply the name changes to any metadata that references this variable.
+        for var in varlist:
+          # Must match axes.
+          if not set(axes.keys()) <= set(var.axes.keys()): continue
+          for key,val in list(var.atts.items()):
+            if not isinstance(val,str): continue
+            val = val.split()
+            if varname in val:
+              val[val.index(varname)] = newname
+            var.atts[key] = ' '.join(val)
 
     #TODO: Make sure names don't start with a digit?
     # However, this seems to work okay through this interface.
