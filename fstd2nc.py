@@ -305,7 +305,8 @@ class _Buffer_Base (object):
     self._params = []
     self._minimal_metadata = minimal_metadata
     if not ignore_etiket:
-      self._var_id = self._var_id + ('etiket',)
+      # Insert etiket value just after nomvar.
+      self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
@@ -763,17 +764,17 @@ class _Series (_Buffer_Base):
 class _VCoords (_Buffer_Base):
   _vcoord_nomvars = ('HY','!!')
   def __init__ (self, *args, **kwargs):
+    # Use decoded IP1 values as the vertical axis.
+    self._outer_axes = ('level',) + self._outer_axes
+    # Tell the decoder not to process vertical records as variables.
+    self._meta_records = self._meta_records + self._vcoord_nomvars
+    super(_VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
     # Also, must have consistent igX records for a variable.
     if 'ig1' not in self._var_id:
       self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
-    # Use decoded IP1 values as the vertical axis.
-    self._outer_axes = ('level',) + self._outer_axes
-    # Tell the decoder not to process vertical records as variables.
-    self._meta_records = self._meta_records + self._vcoord_nomvars
-    super(_VCoords,self).__init__(*args,**kwargs)
   def _vectorize_params (self):
     from rpnpy.librmn.fstd98 import DecodeIp
     import numpy as np
@@ -955,14 +956,14 @@ class _VCoords (_Buffer_Base):
 class _XYCoords (_Buffer_Base):
   _xycoord_nomvars = ('^^','>>')
   def __init__ (self, *args, **kwargs):
+    # Tell the decoder not to process horizontal records as variables.
+    self._meta_records = self._meta_records + self._xycoord_nomvars
+    super(_XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)
     # Also, must have consistent igX records for a variable.
     if 'ig1' not in self._var_id:
       self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
-    # Tell the decoder not to process horizontal records as variables.
-    self._meta_records = self._meta_records + self._xycoord_nomvars
-    super(_XYCoords,self).__init__(*args,**kwargs)
   # Add horizontal coordinate info to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
