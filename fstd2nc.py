@@ -31,13 +31,16 @@ __version__ = "0.20170710"
 from gettext import gettext as _
 import gettext
 from os import path, environ
-import fstd2nc_locale
-gettext.bindtextdomain('fstd2nc', path.dirname(fstd2nc_locale.__file__))
+try:
+  import fstd2nc_locale
+  gettext.bindtextdomain('fstd2nc', path.dirname(fstd2nc_locale.__file__))
+  del fstd2nc_locale
+except ImportError: pass
 gettext.textdomain('fstd2nc')
 # Check for special CMCLNG environment variable
 if environ.get('CMCLNG') == 'francais':
   environ['LANGUAGE'] = 'fr_CA'
-del gettext, path, environ, fstd2nc_locale
+del gettext, path, environ
 
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
