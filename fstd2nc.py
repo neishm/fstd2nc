@@ -4,20 +4,20 @@
 # Copyright 2017 - Climate Research Division
 #                  Environment and Climate Change Canada
 #
-# This file is part of the "PyGeode-RPN" package.
+# This file is part of the "fstd2nc" package.
 #
-# "PyGeode-RPN" is free software: you can redistribute it and/or modify
+# "fstd2nc" is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# "PyGeode-RPN" is distributed in the hope that it will be useful,
+# "fstd2nc" is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with "PyGeode-RPN".  If not, see <http://www.gnu.org/licenses/>.
+# along with "fstd2nc".  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
 
@@ -839,33 +839,39 @@ class _VCoords (_Buffer_Base):
         # Keep track of any extra arrays needed for this axis.
         ancillary_variables = []
         # Get metadata that's specific to this axis.
-        # Adapted from pygeode.formats.fstd, pygeode.axis, and
-        # pygeode.format.cfmeta modules.
         name = 'zaxis'
         atts = OrderedDict()
         atts['axis'] = 'Z'
+        # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
         if kind == 0:
+          # height [m] (metres)
           name = 'height'
-          atts['standard_name'] = 'height_above_sea_level'
+          atts['standard_name'] = 'height'
           atts['units'] = 'm'
           atts['positive'] = 'up'
         elif kind == 1:
+          # sigma [sg] (0.0->1.0)
           name = 'sigma'
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['positive'] = 'down'
         elif kind == 2:
+          # pressure [mb] (millibars)
           name = 'pres'
           atts['standard_name'] = 'air_pressure'
           atts['units'] = 'hPa'
           atts['positive'] = 'down'
         elif kind == 3:
-          name = 'lev'  # For backwards compatibility with PyGeode.
+          # arbitrary code
+          name = 'code'
+          atts.pop('axis',None)  # Not really a vertical axis?
         elif kind == 4:
+          # height [M] (metres) with respect to ground level
           name = 'height'
           atts['standard_name'] = 'height'
           atts['units'] = 'm'
           atts['positive'] = 'up'
         elif kind == 5:
+          # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
           if header['nomvar'].strip() == 'HY': key = 'HY'
@@ -879,9 +885,12 @@ class _VCoords (_Buffer_Base):
               vgd_id = vgd_fromlist(header['d'][...])
               if vgd_get (vgd_id,'LOGP'):
                 name = 'zeta'
-                # Not really a "standard" name, but used for backwards
-                # compatibility with PyGeode.
-                atts['standard_name'] = 'atmosphere_hybrid_sigma_log_pressure_coordinate'
+                # Not really a "standard" name, but there's nothing in the
+                # CF convensions document on how to encode this.
+                # I just merged the atmosphere_ln_pressure_coordinate and
+                # atmosphere_hybrid_sigma_pressure_coordinate together.
+                # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
+                atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
               else:
                 name = 'eta'
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
@@ -895,12 +904,6 @@ class _VCoords (_Buffer_Base):
                   internal_atts[key] = val
                 except (KeyError,VGDError):
                   pass  # Some keys not available in some vgrids?
-              # Some attribute aliases that are needed for reverse-compatibility
-              # with old PyGeode.formats.fstd
-              aliases = OrderedDict([('CA_M','a_m'),('CA_T','a_t'),('CB_M','b_m'),('CB_T','b_t'),('VIPM','ip1_m'),('VIPT','ip1_t'),('VERS','version'),('RC_1','rcoef1'),('RC_2','rcoef2'),('RFLD','ref_name')])
-              for oldname,newname in aliases.items():
-                if oldname in internal_atts:
-                  internal_atts[newname] = internal_atts[oldname]
               # Put this information in the final output file?
               if not self._minimal_metadata:
                 atts.update(internal_atts)
@@ -941,6 +944,7 @@ class _VCoords (_Buffer_Base):
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
         elif kind == 6:
+          # theta [th]
           name = 'theta'
           atts['standard_name'] = 'air_potential_temperature'
           atts['units'] = 'K'
@@ -1209,7 +1213,6 @@ class _netCDF_IO (_netCDF_Atts):
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
     parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the file.'))
     parser.add_argument('--buffer-size', type=int, default=100, help=_('How much data to write at a time (in MBytes).  Default is %(default)s.'))
-    parser.add_argument('--nc-version', type=int, choices=[4], default=4, help=_('The version of netCDF format to use.  The only valid value is 4.  This option is provided only for backwards-compatibility with the fstd2nc utility in the PyGeode-RPN package.'))
 
   @classmethod
   def _check_args (cls, parser, args):
@@ -1222,7 +1225,7 @@ class _netCDF_IO (_netCDF_Atts):
       except ValueError:
         parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
 
-  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, nc_version=4, *args, **kwargs):
+  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, *args, **kwargs):
     self._time_units = time_units
     self._reference_date = reference_date
     self._buffer_size = int(buffer_size)
@@ -1419,21 +1422,12 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
-  parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help=_('Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.'))
   args = parser.parse_args()
   buffer_type._check_args(parser, args)
-  # Delegate to a different backend?
-  if args.backend == 'pygeode':
-    try:
-      from pygeode.formats import _fstd2nc
-    except ImportError:
-      parser.error(_("'pygeode' backend is not installed."))
-    quit()
   args = vars(args)
   infiles = args.pop('infile')
   outfile = args.pop('outfile')
   no_history = args.pop('no_history')
-  del args['backend']
   buf = buffer_type(**args)
 
   # Make sure input file exists
