@@ -4,7 +4,7 @@ from fstd2nc import __version__
 setup (
   name="fstd2nc",
   version=__version__,
-  description = 'Converts FSTD files (from Environment Canada) to netCDF files.',
+  description = 'Converts RPN standard files (from Environment Canada) to netCDF files.',
   url = 'https://github.com/neishm/fstd2nc',
   author="Mike Neish",
   license = 'LGPL-3',
