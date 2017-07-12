@@ -301,14 +301,19 @@ class _Buffer_Base (object):
   def _cmdline_args (cls, parser):
     parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include FSTD record attributes and other internal information in the output file."))
+    parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
-  def __init__ (self, minimal_metadata=False, ignore_etiket=False):
+  def __init__ (self, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
     """
     Create a new, empty buffer.
     """
     self._params = []
     self._minimal_metadata = minimal_metadata
+    if not ignore_typvar:
+      # Insert typvar value just after nomvar.
+      self._var_id = self._var_id[0:1] + ('typvar',) + self._var_id[1:]
+      self._human_var_id = self._human_var_id[0:1] + ('%(typvar)s',) + self._human_var_id[1:]
     if not ignore_etiket:
       # Insert etiket value just after nomvar.
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
