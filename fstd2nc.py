@@ -1194,6 +1194,8 @@ class _netCDF_Atts (_Buffer_Base):
   def __iter__ (self):
     from collections import OrderedDict
 
+    axis_renames = {}
+
     for var in super(_netCDF_Atts,self).__iter__():
       name = var.name
       atts = OrderedDict(var.atts)
@@ -1203,7 +1205,15 @@ class _netCDF_Atts (_Buffer_Base):
         # Rename the field? (Using special 'rename' key in the metadata file).
         if 'rename' in atts:
           name = atts.pop('rename')
-      yield type(var)(name,atts,var.axes,var.array)
+          # Also rename any axis with this name.
+          axis_renames[var.name] = name
+
+      # Check if any of the axes in this variable need to be renamed.
+      axis_names, axis_values = zip(*var.axes.items())
+      axis_names = [axis_renames.get(n,n) for n in axis_names]
+      axes = OrderedDict(zip(axis_names,axis_values))
+
+      yield type(var)(name,atts,axes,var.array)
 
 
 #################################################
