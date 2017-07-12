@@ -11,12 +11,16 @@ From the command-line
 python -m fstd2nc [options] <infile> <outfile>
 
 optional arguments:
+  --version             show program's version number and exit
   --minimal-metadata    Don't include FSTD record attributes and other
                         internal information in the output file.
+  --ignore-typvar       Tells the converter to ignore the typvar when deciding
+                        if two records are part of the same field. Default is
+                        to split the variable on different typvars.
   --ignore-etiket       Tells the converter to ignore the etiket when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different etikets.
-  --vars VAR1,VAR2,...  Comma-seperated list of variables to convert. By
+  --vars VAR1,VAR2,...  Comma-separated list of variables to convert. By
                         default, all variables are converted.
   --fill-value FILL_VALUE
                         The fill value to use for masked (missing) data. Gets
@@ -33,6 +37,9 @@ optional arguments:
   --time-units {seconds,minutes,hours,days}
                         The units of time for the netCDF file. Default is
                         hours.
+  --reference-date YYYY-MM-DD
+                        The reference date for the netCDF time axis. The
+                        default is the starting date in the file.
   --buffer-size BUFFER_SIZE
                         How much data to write at a time (in MBytes). Default
                         is 100.
