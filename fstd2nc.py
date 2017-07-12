@@ -304,6 +304,11 @@ class _Buffer_Base (object):
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
+  # Do some checks on the command-line arguments after parsing them.
+  @classmethod
+  def _check_args (cls, parser, args):
+    return  # Nothing to check here.
+
   def __init__ (self, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
     """
     Create a new, empty buffer.
@@ -1202,11 +1207,24 @@ class _netCDF_IO (_netCDF_Atts):
   def _cmdline_args (cls, parser):
     super(_netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
+    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the file.'))
     parser.add_argument('--buffer-size', type=int, default=100, help=_('How much data to write at a time (in MBytes).  Default is %(default)s.'))
     parser.add_argument('--nc-version', type=int, choices=[4], default=4, help=_('The version of netCDF format to use.  The only valid value is 4.  This option is provided only for backwards-compatibility with the fstd2nc utility in the PyGeode-RPN package.'))
 
-  def __init__ (self, time_units='hours', buffer_size=100, nc_version=4, *args, **kwargs):
+  @classmethod
+  def _check_args (cls, parser, args):
+    from datetime import datetime
+    super(_netCDF_IO,cls)._check_args(parser,args)
+    # Parse the reference date into a datetime object.
+    if args.reference_date is not None:
+      try:
+        datetime.strptime(args.reference_date,'%Y-%m-%d')
+      except ValueError:
+        parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
+
+  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, nc_version=4, *args, **kwargs):
     self._time_units = time_units
+    self._reference_date = reference_date
     self._buffer_size = int(buffer_size)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
@@ -1215,11 +1233,16 @@ class _netCDF_IO (_netCDF_Atts):
     import numpy as np
     from netCDF4 import date2num
 
+    if self._reference_date is None:
+      reference_date = None
+    else:
+      reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
+
     for var in super(_netCDF_IO,self).__iter__():
 
       # Modify time axes to be relative units instead of datetime objects.
       if var.name in var.axes and isinstance(var.array[0],datetime):
-        units = '%s since %s'%(self._time_units,var.array[0])
+        units = '%s since %s'%(self._time_units, reference_date or var.array[0])
         var.atts.update(units=units)
         array = np.asarray(date2num(var.array,units=units))
         var = type(var)(var.name,var.atts,var.axes,array)
@@ -1398,6 +1421,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   parser.add_argument('--backend', choices=['rpnpy','pygeode'], default='rpnpy', help=_('Which backend to use for converting the file.  Different backends may result in different netCDF file layouts.  Default is %(default)s.'))
   args = parser.parse_args()
+  buffer_type._check_args(parser, args)
   # Delegate to a different backend?
   if args.backend == 'pygeode':
     try:
