@@ -25,7 +25,7 @@
 Functionality for converting between FSTD and netCDF files.
 """
 
-__version__ = "0.20170712"
+__version__ = "0.20170712.1"
 
 # Enable multi-language support.
 from gettext import gettext as _
@@ -41,6 +41,16 @@ gettext.textdomain('fstd2nc')
 if environ.get('CMCLNG') == 'francais':
   environ['LANGUAGE'] = 'fr_CA'
 del gettext, path, environ
+
+# Check for rpnpy package.
+try:
+  import rpnpy
+except ImportError:
+  try:
+    # If not available in a standard location, check if it's bundled.
+    import fstd2nc_deps
+  except ImportError:
+    pass
 
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.

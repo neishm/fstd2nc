@@ -18,7 +18,7 @@ setup (
   ],
   packages = find_packages(),
   py_modules = ['fstd2nc'],
-  install_requires = ['numpy','pytz','netcdf4'],
+  install_requires = ['numpy','netcdf4','fstd2nc-deps'],
   package_data = {
     'fstd2nc_locale': ['*/LC_MESSAGES/fstd2nc.mo'],
   },
