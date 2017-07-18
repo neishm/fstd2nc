@@ -42,15 +42,15 @@ if environ.get('CMCLNG') == 'francais':
   environ['LANGUAGE'] = 'fr_CA'
 del gettext, path, environ
 
-# Check for rpnpy package.
+# Check for bundled rpnpy package.
+# Fall back to this one if no standard rpnpy package available.
 try:
-  import rpnpy
+  # Importing the module will set up the appropriate search paths.
+  import fstd2nc_deps
+  # Don't need a reference to the module after the paths are set.
+  del fstd2nc_deps
 except ImportError:
-  try:
-    # If not available in a standard location, check if it's bundled.
-    import fstd2nc_deps
-  except ImportError:
-    pass
+  pass
 
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
