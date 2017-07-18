@@ -1297,7 +1297,8 @@ class _netCDF_IO (_netCDF_Atts):
       f.setncatts(global_metadata)
 
     # Need to pre-scan all the variables to generate unique names.
-    varlist = list(iter(self))
+    # Make sure they're structured as namedtuples.
+    varlist = [_var_type(*var) for var in iter(self)]
 
     # Generate unique axis names.
     axis_table = dict()
