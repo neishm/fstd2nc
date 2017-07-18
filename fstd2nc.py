@@ -1366,7 +1366,7 @@ class _netCDF_IO (_netCDF_Atts):
       for j in reversed(range(len(var_ids))):
         test = var_ids[:j] + var_ids[j+1:]
         if len(set(zip(*test))) == len(var_indices):
-          var_ids = var_ids[:j] + var_ids[j+1:]
+          var_ids = test
 
       var_ids = zip(*var_ids)
 
@@ -1398,7 +1398,11 @@ class _netCDF_IO (_netCDF_Atts):
         # Only need to create each dimension once (even if it's in multiple
         # variables).
         if axisname not in f.dimensions:
-          f.createDimension(axisname, len(axisvalues))
+          # Special case: make the time dimension unlimited.
+          if axisname == 'time':
+            f.createDimension(axisname, None)
+          else:
+            f.createDimension(axisname, len(axisvalues))
       # Write the variable.
       v = f.createVariable(varname, datatype=array.dtype, dimensions=list(axes.keys()))
       # Write the metadata.
