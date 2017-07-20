@@ -1506,7 +1506,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
 # Hides the Python stack trace when the user aborts the command.
 def _fstd2nc_cmdline_trapped (*args, **kwargs):
   try:
-    _fstd2nc_cmdline ()
+    _fstd2nc_cmdline (*args, **kwargs)
   except KeyboardInterrupt:
     print (_("Aborted by user."))
     exit(1)
