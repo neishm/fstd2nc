@@ -43,6 +43,8 @@ optional arguments:
   --buffer-size BUFFER_SIZE
                         How much data to write at a time (in MBytes). Default
                         is 100.
+  --nc-format {NETCDF4,NETCDF4_CLASSIC,NETCDF3_CLASSIC,NETCDF3_64BIT_OFFSET,NETCDF3_64BIT_DATA}
+                        Which variant of netCDF to write. Default is NETCDF4.
   --no-history          Don't put the command-line invocation in the netCDF
                         metadata.
 ```

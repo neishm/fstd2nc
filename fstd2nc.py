@@ -1236,6 +1236,7 @@ class _netCDF_IO (_netCDF_Atts):
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
     parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the file.'))
     parser.add_argument('--buffer-size', type=int, default=100, help=_('How much data to write at a time (in MBytes).  Default is %(default)s.'))
+    parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
 
   @classmethod
   def _check_args (cls, parser, args):
@@ -1248,10 +1249,11 @@ class _netCDF_IO (_netCDF_Atts):
       except ValueError:
         parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
 
-  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, *args, **kwargs):
+  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, nc_format='NETCDF4', *args, **kwargs):
     self._time_units = time_units
     self._reference_date = reference_date
     self._buffer_size = int(buffer_size)
+    self._nc_format = nc_format
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
   def __iter__ (self):
@@ -1285,7 +1287,7 @@ class _netCDF_IO (_netCDF_Atts):
     import numpy as np
     from itertools import product
     from collections import OrderedDict
-    f = Dataset(filename, "w", format="NETCDF4")
+    f = Dataset(filename, "w", format=self._nc_format)
 
     # List of metadata keys that are internal to the FSTD file.
     internal_meta = list(self._vectorize_params().keys())
