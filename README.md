@@ -11,9 +11,10 @@ From the command-line
 python -m fstd2nc [options] <infile> <outfile>
 
 optional arguments:
+  -h, --help            show this help message and exit
   --version             show program's version number and exit
-  --minimal-metadata    Don't include FSTD record attributes and other
-                        internal information in the output file.
+  --minimal-metadata    Don't include RPN record attributes and other internal
+                        information in the output file.
   --ignore-typvar       Tells the converter to ignore the typvar when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different typvars.
@@ -39,7 +40,7 @@ optional arguments:
                         hours.
   --reference-date YYYY-MM-DD
                         The reference date for the netCDF time axis. The
-                        default is the starting date in the file.
+                        default is the starting date in the RPN file.
   --buffer-size BUFFER_SIZE
                         How much data to write at a time (in MBytes). Default
                         is 100.

@@ -313,7 +313,7 @@ class _Buffer_Base (object):
   @classmethod
   def _cmdline_args (cls, parser):
     parser.add_argument('--version', action='version', version=__version__)
-    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include FSTD record attributes and other internal information in the output file."))
+    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output file."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
@@ -1234,7 +1234,7 @@ class _netCDF_IO (_netCDF_Atts):
   def _cmdline_args (cls, parser):
     super(_netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
-    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the file.'))
+    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the RPN file.'))
     parser.add_argument('--buffer-size', type=int, default=100, help=_('How much data to write at a time (in MBytes).  Default is %(default)s.'))
     parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
 
@@ -1449,7 +1449,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from os.path import exists
   from rpnpy.librmn.fstd98 import isFST
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
-  parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The FSTD file(s) to convert.'))
+  parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
