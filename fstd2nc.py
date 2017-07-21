@@ -506,16 +506,22 @@ class _SelectVars (_Buffer_Base):
   def __init__ (self, vars=None, *args, **kwargs):
     if vars is not None:
       self._selected_vars = vars.split(',')
-      print (_('Looking for variables: ') + ' '.join(self._selected_vars))
+      print (_('Will look for variables: ') + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
     super(_SelectVars,self).__init__(*args,**kwargs)
   def __iter__ (self):
+    found = set()
     for var in super(_SelectVars,self).__iter__():
       if self._selected_vars is not None:
         if var.name not in self._selected_vars:
           continue
+      found.add(var.name)
       yield var
+    if self._selected_vars is None: return
+    missing = set(self._selected_vars) - found
+    if len(missing) > 0:
+      warn(_('Unable to find variables: ') + ' '.join(missing))
 
 
 #################################################
