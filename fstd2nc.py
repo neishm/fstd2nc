@@ -1447,6 +1447,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
   from sys import stdout, exit, argv
   from os.path import exists
+  from rpnpy.librmn.fstd98 import isFST
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The FSTD file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
@@ -1464,6 +1465,9 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   for infile in infiles:
     if not exists(infile):
       print (_("Error: '%s' does not exist!")%(infile))
+      exit(1)
+    if not isFST(infile):
+      print (_("Error: '%s' is not an RPN standard file!")%(infile))
       exit(1)
 
     buf.read_fstd_file(infile)
