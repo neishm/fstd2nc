@@ -1039,7 +1039,7 @@ class _VCoords (_Buffer_Base):
 # Logic for handling lat/lon coordinates.
 
 class _XYCoords (_Buffer_Base):
-  _xycoord_nomvars = ('^^','>>')
+  _xycoord_nomvars = ('^^','>>','^>')
   def __init__ (self, *args, **kwargs):
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
