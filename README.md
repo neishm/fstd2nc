@@ -31,6 +31,9 @@ optional arguments:
                         Otherwise, the default is to use the date of original
                         analysis, and the forecast length goes in a "forecast"
                         axis.
+  --filter CONDITION    Subset RPN file records using the given criteria. For
+                        example, to convert only 24-hour forecasts you could
+                        use --filter ip2==24
   --metadata-file METADATA_FILE
                         Apply netCDF metadata from the specified file. You can
                         repeat this option multiple times to build metadata

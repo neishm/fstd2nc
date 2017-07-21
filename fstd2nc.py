@@ -525,6 +525,46 @@ class _SelectVars (_Buffer_Base):
 
 
 #################################################
+# Pre-filtering the RPN file records.
+class _FilterRecords (_Buffer_Base):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(_FilterRecords,cls)._cmdline_args(parser)
+    parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
+  def __init__ (self, filter=[], *args, **kwargs):
+    self._filters = tuple(filter)
+    super(_FilterRecords,self).__init__(*args,**kwargs)
+  @staticmethod
+  def _do_filter (p, cmd):
+    try:
+      return eval(cmd, None, p)
+    except SyntaxError:
+      print (_("Error: unable to parse the filter: %s")%cmd)
+      exit(1)
+    except NameError as e:
+      print (_("Error: %s")%e.message)
+      exit(1)
+  def _vectorize_params (self):
+    import numpy as np
+    records = super(_FilterRecords,self)._vectorize_params()
+    if len(self._filters) == 0: return records
+    for cmd in self._filters:
+      flags = []
+      # Loop over each record, and apply the filter.
+      for i in range(len(records['nomvar'])):
+        p = dict((k,v[i]) for k,v in records.items())
+        flags.append(self._do_filter(p, cmd))
+      flags = np.array(flags)
+      for k,v in list(records.items()):
+        try:
+          records[k] = v[flags]
+        except IndexError:
+          print (_("Error: unable to apply the filter: %s")%cmd)
+          exit(1)
+    return records
+
+
+#################################################
 # Logic for handling masks.
 
 class _MaskedArray (_Array_Base):
@@ -1441,7 +1481,7 @@ class _netCDF_IO (_netCDF_Atts):
 
 
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
