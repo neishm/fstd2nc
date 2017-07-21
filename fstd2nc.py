@@ -888,7 +888,13 @@ class _VCoords (_Buffer_Base):
     for var in super(_VCoords,self).__iter__():
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
-        del var.axes['level']
+        if 'level' in var.axes:
+          i = list(var.axes).index('level')
+          del var.axes['level']
+          array = var.array.squeeze(axis=i)
+          yield type(var)(var.name, var.atts, var.axes, array)
+          continue
+      # No vertical axis?
       if 'level' not in var.axes or 'kind' not in var.atts:
         yield var
         continue
