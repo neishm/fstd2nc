@@ -1452,12 +1452,14 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The FSTD file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
+  parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   args = parser.parse_args()
   buffer_type._check_args(parser, args)
   args = vars(args)
   infiles = args.pop('infile')
   outfile = args.pop('outfile')
+  force = args.pop('force')
   no_history = args.pop('no_history')
   buf = buffer_type(**args)
 
@@ -1473,7 +1475,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     buf.read_fstd_file(infile)
 
   # Check if output file already exists
-  if exists(outfile):
+  if exists(outfile) and not force:
     overwrite = False
     if stdout.isatty():
       while True:

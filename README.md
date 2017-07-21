@@ -45,6 +45,7 @@ optional arguments:
                         is 100.
   --nc-format {NETCDF4,NETCDF4_CLASSIC,NETCDF3_CLASSIC,NETCDF3_64BIT_OFFSET,NETCDF3_64BIT_DATA}
                         Which variant of netCDF to write. Default is NETCDF4.
+  -f, --force           Overwrite the output file if it already exists.
   --no-history          Don't put the command-line invocation in the netCDF
                         metadata.
 ```
