@@ -267,17 +267,16 @@ class _Array (_Array_Base):
 # Helper class - keep an FSTD file open until all references are destroyed.
 class _FSTD_File (object):
   def __init__ (self, filename, mode):
-    import rpnpy.librmn.all as rmn
-    from rpnpy.librmn.base import fnom
-    from rpnpy.librmn.fstd98 import fstouv
-    self.filename = filename
-    self.funit = fnom(filename, mode)
-    fstouv(self.funit, mode)
+    from rpnpy.librmn.fstd98 import fstopenall
+    if isinstance(filename,str):
+      filelist = [filename]
+    else:
+      filelist = list(filename)
+    self.filelist = filelist
+    self.funit = fstopenall(filelist, mode)
   def __del__ (self):
-    from rpnpy.librmn.fstd98 import fstfrm
-    from rpnpy.librmn.base import fclos
-    istat = fstfrm(self.funit)
-    istat = fclos(self.funit)
+    from rpnpy.librmn.fstd98 import fstcloseall
+    istat = fstcloseall(self.funit)
 
 # The type of data returned by the Buffer iterator.
 from collections import namedtuple
@@ -345,31 +344,28 @@ class _Buffer_Base (object):
         v = v.strip()
       yield (n,v)
 
-  def clear (self):
-    """
-    Removes all existing data from the buffer.
-    """
-    self._params = []
-
 
   ###############################################
   # Basic flow for reading data
 
   def read_fstd_file (self, filename):
     """
-    Read raw records from an FSTD file, into the buffer.
-    Multiple files can be read sequentially.
+    Read raw records from FSTD files, into the buffer.
+    Multiple files can be read simultaneously.
     """
     import numpy as np
     from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
     from rpnpy.librmn.const import FST_RO
-    # Read the data
+    # Remove existing data from the buffer.
+    self._params = []
+    # Read the new data.
     f = _FSTD_File(filename,FST_RO)
     keys = fstinl(f.funit)
     for i,key in enumerate(keys):
       prm = fstprm(key)
       prm['d'] = _Record_Array(f,prm)
       self._params.append(prm)
+    self._funit = f.funit
 
   # Collect the list of params from all the FSTD records, and concatenate them
   # into arrays.  Result is a single dictionary containing the vectorized
@@ -1526,7 +1522,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
       print (_("Error: '%s' is not an RPN standard file!")%(infile))
       exit(1)
 
-    buf.read_fstd_file(infile)
+  buf.read_fstd_file(infiles)
 
   # Check if output file already exists
   if exists(outfile) and not force:
