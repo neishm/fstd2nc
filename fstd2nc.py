@@ -1051,82 +1051,82 @@ class _XYCoords (_Buffer_Base):
     if 'ig1' not in self._var_id:
       self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
       self._human_var_id = self._human_var_id + ('grid_%(ig1)s_%(ig2)s_%(ig3)s_%(ig4)s',)
+
+  # Helper method - look up a coordinate record for the given variable.
+  # Need this for manual lookup of 'X' grids, since ezgdef doesn't support
+  # them?
+  def _find_coord (self, var, coordname):
+    for header in self._params:
+      if header['nomvar'].strip() != coordname: continue
+      if header['ip1'] != var.atts['ig1']: continue
+      if header['ip2'] != var.atts['ig2']: continue
+      if header['ip3'] != var.atts['ig3']: continue
+      return header
+    raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
+
+
   # Add horizontal coordinate info to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
-    from rpnpy.librmn.interp import ezqkdef, ezgdef_fmem, gdll, EzscintError
+    from rpnpy.librmn.interp import ezqkdef, gdgaxes, gdll, EzscintError
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
-    latlon = OrderedDict()
+    grids = OrderedDict()
     for var in super(_XYCoords,self).__iter__():
       # Don't touch variables that have no horizontal extent.
       if 'i' not in var.axes or 'j' not in var.axes:
         yield var
         continue
+      # Get grid parameters.
+      ni = int(var.atts['ni'])
+      nj = int(var.atts['nj'])
+      grtyp = var.atts['grtyp']
+      ig1 = int(var.atts['ig1'])
+      ig2 = int(var.atts['ig2'])
+      ig3 = int(var.atts['ig3'])
+      ig4 = int(var.atts['ig4'])
       # Check if we already defined this grid.
-      # First, construct a key identifying the grid.
-      key = var.atts['grtyp']
-      # Special case for timeseries data:
-      # Ignore grtyp, since e.g. grtyp='Y' and grtyp='+' both use same grids.
-      # See _Series mixin for more info about timeseries data.
-      if var.atts.get('typvar') == 'T': key = 'T'
-      key = (key,) + tuple(var.atts[n] for n in ('ni','nj','ig1','ig2','ig3','ig4'))
-      if key not in latlon:
-        # Get basic information about this grid.
-        gridinfo = OrderedDict()
-        for n in ('ni','nj','grtyp','ig1','ig2','ig3','ig4'):
-          v = var.atts[n]
-          if isinstance(v,str):
-            gridinfo[n] = v
-          else:
-            gridinfo[n] = int(v)  # ezgdef_fmem is very picky about types.
-        # Remember the associated '>>','^^' metadata for later.
-        xatts = OrderedDict([('axis','X')])
-        yatts = OrderedDict([('axis','Y')])
-        # Check for reference grid data.
-        for header in self._params:
-          nomvar = header['nomvar'].strip()
-          if nomvar not in self._xycoord_nomvars: continue
-          k1 = (header['ip1'],header['ip2'],header['ip3'])
-          k2 = (var.atts['ig1'],var.atts['ig2'],var.atts['ig3'])
-          if k1 == k2:
-            gridinfo['grref'] = header['grtyp'].strip()
-            gridinfo['ig1'] = int(header['ig1'])
-            gridinfo['ig2'] = int(header['ig2'])
-            gridinfo['ig3'] = int(header['ig3'])
-            gridinfo['ig4'] = int(header['ig4'])
-            if nomvar == '>>':
-              # Need to reduce out 'nk' dimension, or ezgdef_fmem aborts
-              # on 'Y' grid.
-              gridinfo['ax'] = header['d'][...].squeeze(axis=2)
-              xatts.update(self._get_header_atts(header))
-            if nomvar == '^^':
-              gridinfo['ay'] = header['d'][...].squeeze(axis=2)
-              yatts.update(self._get_header_atts(header))
+      key = (grtyp,ni,nj,ig1,ig2,ig3,ig4)
+      if key not in grids:
+
         try:
-          # Get the lat & lon data.
-          if gridinfo['grtyp'] in ('A','B','E','G','L','N','S'):
-            #TODO: free this grid after use?
-            gdid = ezqkdef (**gridinfo)
-            ll = gdll(gdid)
-          # Timeseries data already has lat/lon info, nothing to decode?
-          # (see _Series mixin).
-          # ezgdef_fmem doesn't seem to handle this grid type (get garbage)
-          # so get it directly here (assuming ^^ and >> are already lat/lon).
-          elif gridinfo.get('grref') == 'T':
-            ll = dict(lat=gridinfo['ay'],lon=gridinfo['ax'])
-          #TODO: add 'X' grid support to rpnpy.librmn.interp.ezgdef_fmem?
-          elif gridinfo.get('grtyp') == 'X' and gridinfo.get('grref') == 'L':
-            ll = dict(lat=gridinfo['ay'],lon=gridinfo['ax'])
-          # Fall back to more general grid routine?
+          # Get basic information about this grid.
+          # If we have an 'X' grid, need to read the coordinates directly.
+          if grtyp == 'X':
+            lat = self._find_coord(var,'^^')['d'][...].squeeze(axis=2)
+            lon = self._find_coord(var,'>>')['d'][...].squeeze(axis=2)
+            ll = {'lat':lat, 'lon':lon}
+          #TODO: put back support for 'T' grids?
+          elif grtyp in ('T','+','Y'):
+            raise TypeError
+          # Everything else should be handled by ezqkdef.
           else:
-            gdid = ezgdef_fmem (**gridinfo)
+            gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._funit)
             ll = gdll(gdid)
-        except (TypeError,EzscintError):
+        except (TypeError,EzscintError,KeyError):
           warn(_("Unable to get grid info for '%s'")%var.name)
           yield var
           continue
+
+
+        # Find X/Y coordinates (if applicable).
+        try:
+          # Can't do this for 'X' grids (don't have a gdid defined).
+          if grtyp == 'X': raise TypeError
+          xycoords = gdgaxes(gdid)
+          ax = xycoords['ax'].transpose()
+          ay = xycoords['ay'].transpose()
+          # Convert from degenrate 2D arrays to 1D arrays.
+          ax = ax[0,:]
+          ay = ay[:,0]
+          xaxis = type(var)('x',{'axis':'X'},{'x':tuple(ax)},ax)
+          yaxis = type(var)('y',{'axis':'Y'},{'y':tuple(ay)},ay)
+        except (TypeError,EzscintError):
+          # Can't get X/Y coords for this grid?
+          xaxis = yaxis = None
+
+        # Construct lat/lon fields.
         latarray = ll['lat'].transpose() # Switch from Fortran to C order.
         latatts = OrderedDict()
         latatts['long_name'] = 'latitude'
@@ -1137,84 +1137,64 @@ class _XYCoords (_Buffer_Base):
         lonatts['long_name'] = 'longitude'
         lonatts['standard_name'] = 'longitude'
         lonatts['units'] = 'degrees_east'
-        # Start with generic (i,j) axes for lat/lon data.
-        lataxes = lonaxes = OrderedDict([('j',var.axes['j']),('i',var.axes['i'])])
-        # Do we have a non-trivial structured 2D field?
-        # If so, use the appropriate (x,y) coordinate system.
-        if 'ax' in gridinfo and 'ay' in gridinfo and latarray.shape[0] > 1 and lonarray.shape[0] > 1:
-          # Only do this for 1D ax and ay parameters!
-          if gridinfo['ax'].shape[0] == 1 and gridinfo['ay'].shape[0] == 1:
-            lataxes = lonaxes = OrderedDict([('y',tuple(gridinfo['ay'].flatten())),('x',tuple(gridinfo['ax'].flatten()))])
-        # Try to resolve lat/lon to 1D Cartesian coordinates, if possible.
+
+        # Case 1: lat/lon can be resolved into 1D Cartesian coordinates.
         # Calculate the mean lat/lon arrays in double precision.
-        if latarray.shape[1] > 1 and lonarray.shape[1] > 1:
-          meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
-          meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
-          if np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
-            # Reduce back to single precision for writing out.
-            meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
-            meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
-            # Ensure monotonicity of longitude field.
-            # (gdll may sometimes wrap last longitude to zero).
-            # Taken from old fstd_core.c code.
-            if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
-              meanlon[-1] += 360.
-            lataxes = OrderedDict([('lat',tuple(meanlat))])
-            lonaxes = OrderedDict([('lon',tuple(meanlon))])
-            latarray = meanlat
-            lonarray = meanlon
-        # Detect 1D unstructured lat/lon, and remove degenerate dimension.
-        if latarray.shape[0] == 1 and lonarray.shape[0] == 1:
-          lataxes = OrderedDict(list(lataxes.items())[1:])
-          lonaxes = OrderedDict(list(lonaxes.items())[1:])
-          latarray = latarray.flatten()
-          lonarray = lonarray.flatten()
-        # For non-cartesian (but structured) 2D grids, add x and y coordinates.
-        if 'x' in lonaxes and 'y' in lataxes:
-          yield type(var)('x',xatts,{'x':lonaxes['x']},np.array(lonaxes['x']))
-          yield type(var)('y',yatts,{'y':lataxes['y']},np.array(lataxes['y']))
-        # Otherwise, assume '^^' / '>>' correspond to lat/lon, so any metadata
-        # can go into the lat and lon fields.
+        meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
+        meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
+        if latarray.shape[1] > 1 and lonarray.shape[1] > 1 and np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
+          # Reduce back to single precision for writing out.
+          meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
+          meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
+          # Ensure monotonicity of longitude field.
+          # (gdll may sometimes wrap last longitude to zero).
+          # Taken from old fstd_core.c code.
+          if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
+            meanlon[-1] += 360.
+          latarray = meanlat
+          lonarray = meanlon
+          lat = type(var)('lat',latatts,{'lat':tuple(latarray)},latarray)
+          lon = type(var)('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
+          gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
+
+        # Case 2: General 2D lat/lon fields on X/Y coordinate system.
+        elif xaxis is not None and yaxis is not None:
+          yield yaxis
+          yield xaxis
+          gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
+          lat = type(var)('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = type(var)('lon',lonatts,OrderedDict(gridaxes),lonarray)
+
+        # Case 3: General 2D lat/lon fields with no coordinate system.
         else:
-          latatts.update(yatts)
-          lonatts.update(xatts)
-        # Define lat/lon variables.
-        lat = type(var)('lat',latatts,lataxes,latarray)
-        lon = type(var)('lon',lonatts,lonaxes,lonarray)
-        # Put the lat/lon variables in the data stream, before any dependent
-        # data variables.
+          gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
+          lat = type(var)('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = type(var)('lon',lonatts,OrderedDict(gridaxes),lonarray)
+
         yield lat
         yield lon
-        latlon[key] = (lat,lon)
-      lat,lon = latlon[key]
+        grids[key] = gridaxes
+
+      gridaxes = grids[key]
+
       # Update the var's horizontal coordinates.
       axes = OrderedDict()
-      array = var.array
       for dim,(axisname,axisvalues) in enumerate(var.axes.items()):
         # Use appropriate x-dimension.
         if axisname == 'i':
-          if 'lon' in lon.axes:
-            axisname, axisvalues = 'lon', lon.axes['lon']
-          elif 'x' in lon.axes:
-            axisname, axisvalues = 'x', lon.axes['x']
+          axisname, axisvalues = gridaxes[1]
         # Use appropriate y-dimension.
         elif axisname == 'j':
-          if 'lat' in lat.axes:
-            axisname, axisvalues = 'lat', lat.axes['lat']
-          elif 'y' in lat.axes:
-            axisname, axisvalues = 'y', lat.axes['y']
-          # Do we have 1D unstructured lat/lon?
-          elif len(axisvalues) == 1 and len(lat.axes) == 1:
-            # Remove 2nd (degenerate) dimension from the variable.
-            array = array.squeeze(axis=dim)
-            continue
+          axisname, axisvalues = gridaxes[0]
         axes[axisname] = axisvalues
 
-      # For 2D lat/lon, add these to the metadata.
+      # For 2D lat/lon, need to reference them as coordinates in order for
+      # netCDF viewers to display the field properly.
       if 'lat' not in axes or 'lon' not in axes:
         var.atts['coordinates'] = 'lon lat'
 
-      yield type(var)(var.name,var.atts,axes,array)
+      yield type(var)(var.name,var.atts,axes,var.array)
+
 
 
 #################################################
