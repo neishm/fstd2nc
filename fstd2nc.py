@@ -614,10 +614,14 @@ class _Masks (_Buffer_Base):
     # Typvar may be different between mask / data, so store both versions.
     # Blank out 'typvar' for mask records, and blank out 'mask_typvar'
     # for mask records.  Obviously.
-    fields['mask_typvar'] = np.ma.array(fields['typvar'])
+    fields['mask_typvar'] = np.ma.array(np.array(fields['typvar']))
     fields['mask_typvar'].mask = ~fields['is_mask']
-    fields['typvar'] = np.ma.asarray(fields['typvar'])
-    fields['typvar'].mask = fields['is_mask']
+    # Special case: for fields that have typvar 'P@' with mask typvar '@@',
+    # blank out the typvar so we keep mask/data together.
+    special = np.array(['@' in t for t in fields['typvar']])
+    fields['data_typvar'] = np.ma.array(np.array(fields['typvar']))
+    fields['data_typvar'].mask = fields['is_mask'] | (~special)
+    fields['typvar'][special] = ''
     return fields
   # Apply the mask to the data.
   def __iter__ (self):
