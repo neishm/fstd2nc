@@ -734,7 +734,7 @@ class _Dates (_Buffer_Base):
 class _Series (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH', 'STNS', 'SH', 'SV')
+    self._meta_records = self._meta_records + ('SH', 'SV')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
@@ -743,37 +743,35 @@ class _Series (_Buffer_Base):
     fields = super(_Series,self)._vectorize_params()
     nrecs = len(fields['nomvar'])
     # Identify timeseries records for further processing.
-    is_t_plus = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y'))
+    is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y'))
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(fields['ip3'])
     # For non-timeseries data, ignore this info.
-    station_id.mask = ~is_t_plus
+    station_id.mask = ~is_series
     fields['station_id'] = station_id
     # For timeseries data, the usual 'forecast' axis (from deet*npas) is not
     # used.  Instead, we will get forecast info from nj coordinate.
     if 'forecast' in fields:
       fields['forecast'] = np.ma.asarray(fields['forecast'])
-      fields['forecast'].mask = is_t_plus
+      fields['forecast'].mask = is_series
     # True grid identifier is in ip1/ip2?
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
     # station?)
-    fields['ig1'][is_t_plus] = fields['ip1'][is_t_plus]
-    fields['ig2'][is_t_plus] = fields['ip2'][is_t_plus]
-    fields['ig3'][is_t_plus] = 0
-    fields['ig4'][is_t_plus] = 0
+    fields['ig1'][is_series] = fields['ip1'][is_series]
+    fields['ig2'][is_series] = fields['ip2'][is_series]
+    fields['ig3'][is_series] = 0
+    fields['ig4'][is_series] = 0
     return fields
   def __iter__ (self):
     from collections import OrderedDict
     import numpy as np
-    # Get station and forecast info.
-    # Need to read from original records, because this into isn't in the
-    # data stream.
     station = forecast = None
-    for header in self._params:
-      if header['nomvar'] == 'STNS':
+    for var in super(_Series,self).__iter__():
+      # Create station axis.
+      if var.name == 'STNS':
         atts = OrderedDict()
-        array = np.asarray(header['d']).squeeze(axis=2).transpose()
+        array = np.asarray(var.array).squeeze()
         # Re-cast array as string.
         # I don't know why I have to subtract 128 - maybe something to do with
         # how the characters are encoded in the file?
@@ -790,14 +788,23 @@ class _Series (_Buffer_Base):
         # Encode it as 2D character array for netCDF file output.
         axes = OrderedDict([('i',tuple(range(nstations))),('station_strlen',tuple(range(strlen)))])
         station = _var_type('station',atts,axes,array)
-      if header['nomvar'] == 'HH  ':
+        yield station
+        continue
+      # Create forecast axis.
+      if var.name == 'HH':
         atts = OrderedDict(units='hours')
-        array = np.asarray(header['d']).flatten()
+        array = np.asarray(var.array).flatten()
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
-    station_outputted = False
-    forecast_outputted = False
-    for var in super(_Series,self).__iter__():
+        yield forecast
+        continue
+      # Remove the degenerate 'forecast' axis that came from the _Dates mixin.
+      # For station / timeseries data, the forecast data comes from a
+      # different source.
+      array = var.array
+      if 'station_id' in var.axes and 'forecast' in var.axes and len(var.axes['forecast']) == 1:
+        array = array.squeeze(axis=list(var.axes).index('forecast'))
+        var.axes.pop('forecast')
       # Modify timeseries axes so XYCoords recognizes it.
       if var.atts.get('grtyp') == '+':
         axes = []
@@ -807,11 +814,7 @@ class _Series (_Buffer_Base):
           # station_id (from ip3) should become new i axis.
           elif n == 'station_id':
             if station is not None:
-              # Output station names as a separate variable.
-              if not station_outputted:
-                yield station
-                station_outputted = True
-              axes.append(('i',station.axes['i']))
+              axes.append(('i',tuple(range(nstations))))
             else:
               # Deal with case where station (STNS) record isn't available.
               axes.append(('i',v))
@@ -822,17 +825,13 @@ class _Series (_Buffer_Base):
           # Original nj is actually forecast time.
           elif n == 'j':
             if forecast is not None:
-              # Output forecast hours as a separate variable.
-              if not forecast_outputted:
-                yield forecast
-                forecast_outputted = True
               axes.append(('forecast',forecast.axes['forecast']))
             else:
               # Deal with case where forecast (HH) record isn't available
               axes.append(('t',v))
           else: axes.append((n,v))
         axes = OrderedDict(axes)
-        var = type(var)(var.name,var.atts,axes,var.array)
+        var = type(var)(var.name,var.atts,axes,array)
       yield var
 
 #################################################
