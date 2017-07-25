@@ -743,7 +743,7 @@ class _Series (_Buffer_Base):
     fields = super(_Series,self)._vectorize_params()
     nrecs = len(fields['nomvar'])
     # Identify timeseries records for further processing.
-    is_t_plus = (fields['typvar'] == 'T ') & (fields['grtyp'] == '+')
+    is_t_plus = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y'))
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(fields['ip3'])
     # For non-timeseries data, ignore this info.
@@ -1039,7 +1039,13 @@ class _VCoords (_Buffer_Base):
 # Logic for handling lat/lon coordinates.
 
 class _XYCoords (_Buffer_Base):
+  # Special records that contain coordinate info.
+  # We don't want to output these directly as variables, need to decode first.
   _xycoord_nomvars = ('^^','>>','^>')
+  # Grids that can be read directly from '^^','>>' records, instead of going
+  # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
+  _direct_grids = ('X','Y','T','+')
+
   def __init__ (self, *args, **kwargs):
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
@@ -1086,20 +1092,26 @@ class _XYCoords (_Buffer_Base):
       ig2 = int(var.atts['ig2'])
       ig3 = int(var.atts['ig3'])
       ig4 = int(var.atts['ig4'])
+      # Uniquely identify the grid for this variable.
+      #
+      # Use a looser identifier for timeseries data (ni/nj have different
+      # meanings here (not grid-related), and could have multiple grtyp
+      # values ('+','Y') that should share the same lat/lon info.
+      if var.atts['typvar'].strip() == 'T':
+        key = ('T',ig1,ig2)
+      else:
+        key = (grtyp,ni,nj,ig1,ig2,ig3,ig4)
+      if grtyp in ('Y','+'): key = key[1:]
       # Check if we already defined this grid.
-      key = (grtyp,ni,nj,ig1,ig2,ig3,ig4)
       if key not in grids:
 
         try:
           # Get basic information about this grid.
-          # If we have an 'X' grid, need to read the coordinates directly.
-          if grtyp == 'X':
+          # First, handle non-ezqkdef grids.
+          if grtyp in self._direct_grids:
             lat = self._find_coord(var,'^^')['d'][...].squeeze(axis=2)
             lon = self._find_coord(var,'>>')['d'][...].squeeze(axis=2)
             ll = {'lat':lat, 'lon':lon}
-          #TODO: put back support for 'T' grids?
-          elif grtyp in ('T','+','Y'):
-            raise TypeError
           # Everything else should be handled by ezqkdef.
           else:
             gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._funit)
@@ -1112,8 +1124,8 @@ class _XYCoords (_Buffer_Base):
 
         # Find X/Y coordinates (if applicable).
         try:
-          # Can't do this for 'X' grids (don't have a gdid defined).
-          if grtyp == 'X': raise TypeError
+          # Can't do this for direct grids (don't have a gdid defined).
+          if grtyp in self._direct_grids: raise TypeError
           xycoords = gdgaxes(gdid)
           ax = xycoords['ax'].transpose()
           ay = xycoords['ay'].transpose()
