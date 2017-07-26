@@ -1256,6 +1256,9 @@ class _NoNK (_Buffer_Base):
       if 'k' in axes and len(axes['k']) == 1:
         array = array.squeeze(axis=list(axes.keys()).index('k'))
         del axes['k']
+      if 'j' in axes and len(axes['j']) == 1:
+        array = array.squeeze(axis=list(axes.keys()).index('j'))
+        del axes['j']
       yield type(var)(var.name,var.atts,axes,array)
 
 
