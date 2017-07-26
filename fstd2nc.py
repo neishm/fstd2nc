@@ -283,6 +283,21 @@ from collections import namedtuple
 _var_type = namedtuple('var', ('name','atts','axes','array'))
 del namedtuple
 
+# Helper method - modify the axes of an array.
+def _modify_axes (axes, **kwargs):
+  from collections import OrderedDict
+  new_axes = OrderedDict()
+  for name,values in axes.items():
+    # Check if modifications requested.
+    if name in kwargs:
+      # Can either modify just the axis name, or the name and values too.
+      if isinstance(kwargs[name],str):
+        name = kwargs[name]
+      else:
+        name,values = kwargs[name]
+    new_axes[name] = values
+  return new_axes
+
 
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
@@ -743,7 +758,7 @@ class _Series (_Buffer_Base):
     fields = super(_Series,self)._vectorize_params()
     nrecs = len(fields['nomvar'])
     # Identify timeseries records for further processing.
-    is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y'))
+    is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y') | (fields['grtyp'] == 'T'))
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(fields['ip3'])
     # For non-timeseries data, ignore this info.
@@ -766,7 +781,7 @@ class _Series (_Buffer_Base):
   def __iter__ (self):
     from collections import OrderedDict
     import numpy as np
-    station = forecast = None
+    forecast_hours = None
     for var in super(_Series,self).__iter__():
       # Create station axis.
       if var.name == 'STNS':
@@ -786,7 +801,7 @@ class _Series (_Buffer_Base):
         array[:] = map(str.rstrip,array)
         array = array.view('|S1').reshape(nstations,strlen)
         # Encode it as 2D character array for netCDF file output.
-        axes = OrderedDict([('i',tuple(range(nstations))),('station_strlen',tuple(range(strlen)))])
+        axes = OrderedDict([('i',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
         station = _var_type('station',atts,axes,array)
         yield station
         continue
@@ -796,42 +811,20 @@ class _Series (_Buffer_Base):
         array = np.asarray(var.array).flatten()
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
+        forecast_hours = list(array)
         yield forecast
         continue
-      # Remove the degenerate 'forecast' axis that came from the _Dates mixin.
-      # For station / timeseries data, the forecast data comes from a
-      # different source.
-      array = var.array
-      if 'station_id' in var.axes and 'forecast' in var.axes and len(var.axes['forecast']) == 1:
-        array = array.squeeze(axis=list(var.axes).index('forecast'))
-        var.axes.pop('forecast')
       # Modify timeseries axes so XYCoords recognizes it.
-      if var.atts.get('grtyp') == '+':
-        axes = []
-        for n,v in var.axes.items():
-          # ni is actually vertical level.
-          if n == 'i': axes.append(('station_level',v))
-          # station_id (from ip3) should become new i axis.
-          elif n == 'station_id':
-            if station is not None:
-              axes.append(('i',tuple(range(nstations))))
-            else:
-              # Deal with case where station (STNS) record isn't available.
-              axes.append(('i',v))
-          # "borrow" k dimension to be new "j" dimension.
-          # XYCoords expects both i and j dimensions, even though only 'i'
-          # is really needed for unstructured lat/lon data.
-          elif n == 'k' and len(v) == 1: axes.append(('j',v))
-          # Original nj is actually forecast time.
-          elif n == 'j':
-            if forecast is not None:
-              axes.append(('forecast',forecast.axes['forecast']))
-            else:
-              # Deal with case where forecast (HH) record isn't available
-              axes.append(('t',v))
-          else: axes.append((n,v))
-        axes = OrderedDict(axes)
-        var = type(var)(var.name,var.atts,axes,array)
+      if var.atts.get('grtyp') == '+' and forecast_hours is not None:
+        axes = var.axes
+        # ni is actually vertical level.
+        # nj is actually forecast time.
+        # station_id should become ni, and turn degenerate nk into nj.
+        # This is only done so that _XYCoords can attach the lat/lon info.
+        axes = _modify_axes(var.axes, **{'i':'station_level',
+                 'j':('forecast',forecast_hours), 'station_id':'i', 'k':'j'})
+
+        var = type(var)(var.name,var.atts,axes,var.array)
       yield var
 
 #################################################
@@ -1029,7 +1022,8 @@ class _VCoords (_Buffer_Base):
       # Get the vertical axis.
       vaxis = vaxes[(levels,kind)]
       # Modify the variable's dimension name to match the axis name.
-      axes = OrderedDict(((vaxis.name if n == 'level' else n),v) for n,v in var.axes.items())
+      axes = _modify_axes(var.axes, level=vaxis.name)
+
       var = type(var)(var.name,var.atts,axes,var.array)
       yield var
 
@@ -1189,15 +1183,7 @@ class _XYCoords (_Buffer_Base):
       gridaxes = grids[key]
 
       # Update the var's horizontal coordinates.
-      axes = OrderedDict()
-      for dim,(axisname,axisvalues) in enumerate(var.axes.items()):
-        # Use appropriate x-dimension.
-        if axisname == 'i':
-          axisname, axisvalues = gridaxes[1]
-        # Use appropriate y-dimension.
-        elif axisname == 'j':
-          axisname, axisvalues = gridaxes[0]
-        axes[axisname] = axisvalues
+      axes = _modify_axes(var.axes, i=gridaxes[1], j=gridaxes[0])
 
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
