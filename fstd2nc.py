@@ -748,8 +748,6 @@ class _Dates (_Buffer_Base):
 
 class _Series (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
-    # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('SH', 'SV')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
@@ -759,10 +757,13 @@ class _Series (_Buffer_Base):
     nrecs = len(fields['nomvar'])
     # Identify timeseries records for further processing.
     is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y') | (fields['grtyp'] == 'T'))
+    # More particular, data that has one station per record.
+    is_split_series = (fields['typvar'] == 'T ') & (fields['grtyp'] == '+')
+
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(fields['ip3'])
     # For non-timeseries data, ignore this info.
-    station_id.mask = ~is_series
+    station_id.mask = ~is_split_series
     fields['station_id'] = station_id
     # For timeseries data, the usual 'forecast' axis (from deet*npas) is not
     # used.  Instead, we will get forecast info from nj coordinate.
@@ -773,16 +774,25 @@ class _Series (_Buffer_Base):
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
     # station?)
-    fields['ig1'][is_series] = fields['ip1'][is_series]
-    fields['ig2'][is_series] = fields['ip2'][is_series]
-    fields['ig3'][is_series] = 0
-    fields['ig4'][is_series] = 0
+    fields['ig1'][is_split_series] = fields['ip1'][is_split_series]
+    fields['ig2'][is_split_series] = fields['ip2'][is_split_series]
+    fields['ig3'][is_split_series] = 0
+    fields['ig4'][is_split_series] = 0
+    # Do not treat the ip1 value any further - it's not really vertical level.
+    # Set it to 0 to indicate a degenerate vertical axis.
+    fields['ip1'][is_series] = 0
     return fields
   def __iter__ (self):
     from collections import OrderedDict
     import numpy as np
     forecast_hours = None
+    sh = sv = None
     for var in super(_Series,self).__iter__():
+
+      if var.atts.get('typvar') != 'T':
+        yield var
+        continue
+
       # Create station axis.
       if var.name == 'STNS':
         atts = OrderedDict()
@@ -814,17 +824,52 @@ class _Series (_Buffer_Base):
         forecast_hours = list(array)
         yield forecast
         continue
-      # Modify timeseries axes so XYCoords recognizes it.
+      # Vertical coordinates for series data.
+      if var.name in ('SH','SV'):
+        array = var.array.squeeze()
+        if array.ndim == 1:
+          levels = tuple(np.asarray(array))
+          # For the sample data I have on momentum levels, the first value is
+          # not in the !! record momentum levels, so strip it out.
+          #TODO: more robust check here.
+          if var.name == 'SV':
+            sv = levels[1:]
+          else:
+            sh = levels
+          var.atts['kind'] = 5 # Set this so _VCoords can decode the !! info.
+          continue
+
+      # '+' data has different meanings for the axes.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
         axes = var.axes
+        array = var.array
+        # Remove degenerate vertical axis.
+        if 'level' in axes:
+          array = var.array.squeeze(axis=list(var.axes.keys()).index('level'))
+          axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
         # station_id should become ni, and turn degenerate nk into nj.
         # This is only done so that _XYCoords can attach the lat/lon info.
-        axes = _modify_axes(var.axes, **{'i':'station_level',
+        axes = _modify_axes(var.axes, **{'i':'level',
                  'j':('forecast',forecast_hours), 'station_id':'i', 'k':'j'})
-
-        var = type(var)(var.name,var.atts,axes,var.array)
+        nlevels = len(axes['level'])
+        # Set the 'kind' for the vertical coordinate, so _VCoords knows what
+        # to do.
+        if nlevels == 1:
+          # Mark vertical axis as degenerate?
+          var.atts['kind'] = 0
+        else:
+          # Mark vertical axis as model coordinates?
+          var.atts['kind'] = 5
+        # Set vertical levels, if they match the thermo / momentum levels.
+        #TODO: more robust - this only works when these have distinct
+        # numbers (e.g. in GEM4?).
+        if sv is not None and nlevels == len(sv):
+          axes['level'] = sv
+        elif sh is not None and nlevels == len(sh):
+          axes['level'] = sh
+        var = type(var)(var.name,var.atts,axes,array)
       yield var
 
 #################################################
@@ -880,7 +925,7 @@ class _VCoords (_Buffer_Base):
     for var in super(_VCoords,self).__iter__():
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
-        if 'level' in var.axes:
+        if 'level' in var.axes and len(var.axes['level']) == 1:
           i = list(var.axes).index('level')
           del var.axes['level']
           array = var.array.squeeze(axis=i)
