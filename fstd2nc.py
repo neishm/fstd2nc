@@ -1479,10 +1479,12 @@ class _netCDF_IO (_netCDF_Atts):
               val[val.index(varname)] = newname
             var.atts[key] = ' '.join(val)
 
-    #TODO: Make sure names don't start with a digit?
-    # However, this seems to work okay through this interface.
-
     for varname, atts, axes, array in varlist:
+      # Names must start with a letter or underscore.
+      if not varname[0].isalpha():
+        warn(_("Renaming '%s' to '_%s'.")%(varname,varname))
+        varname = '_'+varname
+
       for axisname, axisvalues in axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
