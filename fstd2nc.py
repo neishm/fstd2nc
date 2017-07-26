@@ -54,8 +54,10 @@ except ImportError:
 
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
-def warn (msg):
-  print (_("Warning: %s")%msg)
+def warn (msg, _printed=set()):
+  if msg not in _printed:
+    print (_("Warning: %s")%msg)
+    _printed.add(msg)
 
 # Override default dtype for "binary" data.
 # The one example I've seen has "float32" data encoded in it.
