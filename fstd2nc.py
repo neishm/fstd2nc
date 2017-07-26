@@ -751,6 +751,12 @@ class _Series (_Buffer_Base):
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
+    # Add these extra fields to any user selection of variables.
+    # We need them for decoding coordinates.
+    selected_vars = getattr(self,'_selected_vars',None)
+    if selected_vars is not None:
+      selected_vars.extend(['STNS','HH','SH','SV'])
+
   def _vectorize_params (self):
     import numpy as np
     fields = super(_Series,self)._vectorize_params()
