@@ -790,7 +790,7 @@ class _Dates (_Buffer_Base):
 class _Series (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH','STNS','SH', 'SV')
+    self._meta_records = self._meta_records + ('HH','STNS')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
@@ -830,7 +830,6 @@ class _Series (_Buffer_Base):
     from collections import OrderedDict
     import numpy as np
     forecast_hours = None
-    sh = sv = None
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
@@ -867,24 +866,19 @@ class _Series (_Buffer_Base):
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
         yield forecast
-      # Vertical coordinates for series data.
-      if nomvar in ('SH','SV'):
-        array = np.asarray(header['d']).flatten()
-        if array.ndim == 1:
-          levels = tuple(array)
-          # For the sample data I have on momentum levels, the first value is
-          # not in the !! record momentum levels, so strip it out.
-          #TODO: more robust check here.
-          if nomvar == 'SV':
-            sv = levels[1:]
-          else:
-            # Also do the same thing for thermodynamic levels?
-            sh = levels[1:]
 
     for var in super(_Series,self).__iter__():
 
       if var.atts.get('typvar') != 'T':
         yield var
+        continue
+
+      # Vertical coordinates for series data.
+      if var.name in ('SH','SV'):
+        array = np.asarray(var.array).squeeze()
+        if array.ndim != 1: continue
+        var.atts['kind'] = 5
+        yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
         continue
 
       # '+' data has different meanings for the axes.
@@ -902,22 +896,10 @@ class _Series (_Buffer_Base):
         axes = _modify_axes(var.axes, **{'i':'level',
                  'j':('forecast',forecast_hours), 'station_id':'i', 'k':'j'})
         nlevels = len(axes['level'])
-        # Set the 'kind' for the vertical coordinate, so _VCoords knows what
-        # to do.
-        if nlevels == 1:
-          # Mark vertical axis as degenerate?
-          var.atts['kind'] = 0
-        else:
-          # Mark vertical axis as model coordinates?
-          var.atts['kind'] = 5
-        # Set vertical levels, if they match the thermo / momentum levels.
-        #TODO: more robust - this only works when these have distinct
-        # numbers (e.g. in GEM4?).
-        if sv is not None and nlevels == len(sv):
-          axes['level'] = sv
-        elif sh is not None and nlevels == len(sh):
-          axes['level'] = sh
         var = type(var)(var.name,var.atts,axes,array)
+      # Remove 'kind' information for now - still need to figure out vertical
+      # coordinates (i.e. how to map SV/SH here).
+      var.atts.pop('kind',None)
       yield var
 
 #################################################
@@ -1027,10 +1009,6 @@ class _VCoords (_Buffer_Base):
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
           if header['nomvar'].strip() == 'HY': key = 'HY'
-          # Special case for timeseries data - ip1/ip2 of !! record is 0,0.
-          # Match this by default.
-          if key not in vrecs and (0,0) in vrecs:
-            key = (0,0)
           # Check if we have a vertical coordinate record to use.
           if key in vrecs:
             header = vrecs[key]
