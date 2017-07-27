@@ -789,14 +789,11 @@ class _Dates (_Buffer_Base):
 
 class _Series (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
+    # Don't process series time/station/height records as variables.
+    self._meta_records = self._meta_records + ('HH','STNS','SH', 'SV')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
-    # Add these extra fields to any user selection of variables.
-    # We need them for decoding coordinates.
-    selected_vars = getattr(self,'_selected_vars',None)
-    if selected_vars is not None:
-      selected_vars.extend(['STNS','HH','SH','SV'])
 
   def _vectorize_params (self):
     import numpy as np
@@ -834,16 +831,17 @@ class _Series (_Buffer_Base):
     import numpy as np
     forecast_hours = None
     sh = sv = None
-    for var in super(_Series,self).__iter__():
 
-      if var.atts.get('typvar') != 'T':
-        yield var
-        continue
-
+    # Get station and forecast info.
+    # Need to read from original records, because this into isn't in the
+    # data stream.
+    for header in self._params:
+      if header['typvar'].strip() != 'T': continue
+      nomvar = header['nomvar'].strip()
       # Create station axis.
-      if var.name == 'STNS':
+      if nomvar == 'STNS':
         atts = OrderedDict()
-        array = np.asarray(var.array).squeeze()
+        array = np.asarray(header['d']).squeeze(axis=2).transpose()
         # Re-cast array as string.
         # I don't know why I have to subtract 128 - maybe something to do with
         # how the characters are encoded in the file?
@@ -861,30 +859,33 @@ class _Series (_Buffer_Base):
         axes = OrderedDict([('i',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
         station = _var_type('station',atts,axes,array)
         yield station
-        continue
       # Create forecast axis.
-      if var.name == 'HH':
+      if nomvar == 'HH':
         atts = OrderedDict(units='hours')
-        array = np.asarray(var.array).flatten()
+        array = np.asarray(header['d']).flatten()
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
         yield forecast
-        continue
       # Vertical coordinates for series data.
-      if var.name in ('SH','SV'):
-        array = var.array.squeeze()
+      if nomvar in ('SH','SV'):
+        array = np.asarray(header['d']).flatten()
         if array.ndim == 1:
-          levels = tuple(np.asarray(array))
+          levels = tuple(array)
           # For the sample data I have on momentum levels, the first value is
           # not in the !! record momentum levels, so strip it out.
           #TODO: more robust check here.
-          if var.name == 'SV':
+          if nomvar == 'SV':
             sv = levels[1:]
           else:
-            sh = levels
-          var.atts['kind'] = 5 # Set this so _VCoords can decode the !! info.
-          continue
+            # Also do the same thing for thermodynamic levels?
+            sh = levels[1:]
+
+    for var in super(_Series,self).__iter__():
+
+      if var.atts.get('typvar') != 'T':
+        yield var
+        continue
 
       # '+' data has different meanings for the axes.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
@@ -1026,6 +1027,11 @@ class _VCoords (_Buffer_Base):
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
           if header['nomvar'].strip() == 'HY': key = 'HY'
+          # Special case for timeseries data - ip1/ip2 of !! record is 0,0.
+          # Match this by default.
+          if key not in vrecs and (0,0) in vrecs:
+            key = (0,0)
+          # Check if we have a vertical coordinate record to use.
           if key in vrecs:
             header = vrecs[key]
             # Add in metadata from the coordinate.
