@@ -1105,7 +1105,7 @@ class _XYCoords (_Buffer_Base):
       self._human_var_id = self._human_var_id + ('grid_%(ig1)s_%(ig2)s_%(ig3)s_%(ig4)s',)
 
   # Helper method - look up a coordinate record for the given variable.
-  # Need this for manual lookup of 'X' grids, since ezgdef doesn't support
+  # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
     for header in self._params:
@@ -1120,7 +1120,7 @@ class _XYCoords (_Buffer_Base):
   # Add horizontal coordinate info to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
-    from rpnpy.librmn.interp import ezqkdef, gdgaxes, gdll, EzscintError
+    from rpnpy.librmn.interp import ezqkdef, gdgaxes, gdll, ezget_subgridids, EzscintError
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
@@ -1161,7 +1161,20 @@ class _XYCoords (_Buffer_Base):
           # Everything else should be handled by ezqkdef.
           else:
             gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._funit)
-            ll = gdll(gdid)
+            # For supergrids, need to loop over each subgrid to get the lat/lon
+            if grtyp == 'U':
+              lat = []
+              lon = []
+              for subgrid in ezget_subgridids(gdid):
+                subll = gdll(subgrid)
+                lat.append(subll['lat'])
+                lon.append(subll['lon'])
+              # Stack them together again, to match the shape of the variable.
+              lat = np.concatenate(lat, axis=1)
+              lon = np.concatenate(lon, axis=1)
+              ll = {'lat':lat, 'lon':lon}
+            else:
+              ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
           warn(_("Unable to get grid info for '%s'")%var.name)
           yield var
