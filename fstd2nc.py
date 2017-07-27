@@ -69,6 +69,45 @@ def dtype_fst2numpy (datyp, nbits=None):
     datyp = 5
   return dtype_fst2numpy(datyp,nbits)
 
+# Modify gdll to handle supergrids.
+# Simply loops over each subgrid, then re-stacks them together.
+def gdll (gdid):
+  from rpnpy.librmn.interp import ezgprm, ezget_subgridids, gdll
+  import numpy as np
+  grtyp = ezgprm(gdid)['grtyp']
+  if grtyp != 'U':
+    return gdll(gdid)
+  lat = []
+  lon = []
+  for subgrid in ezget_subgridids(gdid):
+    subll = gdll(subgrid)
+    lat.append(subll['lat'])
+    lon.append(subll['lon'])
+  # Stack them together again, to match the shape of the variable.
+  lat = np.concatenate(lat, axis=1)
+  lon = np.concatenate(lon, axis=1)
+  return {'lat':lat, 'lon':lon}
+
+# Modify gdgaxes to handle supergrids.
+# Simply loops over each subgrid, then re-stacks them together.
+def gdgaxes (gdid):
+  from rpnpy.librmn.interp import ezgprm, ezget_subgridids, gdgaxes
+  import numpy as np
+  grtyp = ezgprm(gdid)['grtyp']
+  if grtyp != 'U':
+    return gdgaxes(gdid)
+  ax = []
+  ay = []
+  for subgrid in ezget_subgridids(gdid):
+    subll = gdgaxes(subgrid)
+    ax.append(subll['ax'])
+    ay.append(subll['ay'])
+  # Stack them together again, to match the shape of the variable.
+  ax = np.concatenate(ax, axis=1)
+  ay = np.concatenate(ay, axis=1)
+  return {'ax':ax, 'ay':ay}
+
+
 
 # Helper classes for lazy-array evaluation.
 
@@ -1120,7 +1159,7 @@ class _XYCoords (_Buffer_Base):
   # Add horizontal coordinate info to the data stream.
   def __iter__ (self):
     from collections import OrderedDict
-    from rpnpy.librmn.interp import ezqkdef, gdgaxes, gdll, ezget_subgridids, EzscintError
+    from rpnpy.librmn.interp import ezqkdef, EzscintError
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
@@ -1162,19 +1201,7 @@ class _XYCoords (_Buffer_Base):
           else:
             gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._funit)
             # For supergrids, need to loop over each subgrid to get the lat/lon
-            if grtyp == 'U':
-              lat = []
-              lon = []
-              for subgrid in ezget_subgridids(gdid):
-                subll = gdll(subgrid)
-                lat.append(subll['lat'])
-                lon.append(subll['lon'])
-              # Stack them together again, to match the shape of the variable.
-              lat = np.concatenate(lat, axis=1)
-              lon = np.concatenate(lon, axis=1)
-              ll = {'lat':lat, 'lon':lon}
-            else:
-              ll = gdll(gdid)
+            ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
           warn(_("Unable to get grid info for '%s'")%var.name)
           yield var
