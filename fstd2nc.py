@@ -727,8 +727,14 @@ class _Dates (_Buffer_Base):
       dates = map(int,fields['datev'])
     else:
       dates = map(int,fields['dateo'])
-    dates = [RPNDate(d).toDateTime().replace(tzinfo=None) if d > 0 else None for d in dates]
+    # Convert date stamps to datetime objects, filtering out dummy values.
+    dummy_stamps = (0, 10101011)
+    dates = [RPNDate(d).toDateTime().replace(tzinfo=None) if d not in dummy_stamps else None for d in dates]
     dates = np.ma.masked_equal(dates,None)
+    # Where there are dummy dates, ignore the forecast information too.
+    forecast = np.ma.asarray(fields['forecast'])
+    forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dates) & (fields['deet'] == 0))
+    fields['forecast'] = forecast
     fields['time'] = dates
     return fields
 
@@ -813,7 +819,7 @@ class _Series (_Buffer_Base):
     # used.  Instead, we will get forecast info from nj coordinate.
     if 'forecast' in fields:
       fields['forecast'] = np.ma.asarray(fields['forecast'])
-      fields['forecast'].mask = is_series
+      fields['forecast'].mask = np.ma.getmaskarray(fields['forecast']) | is_series
     # True grid identifier is in ip1/ip2?
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
