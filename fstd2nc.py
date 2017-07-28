@@ -1111,6 +1111,8 @@ class _XYCoords (_Buffer_Base):
   # Special records that contain coordinate info.
   # We don't want to output these directly as variables, need to decode first.
   _xycoord_nomvars = ('^^','>>','^>')
+  # These are extra copies of the lat/lon information.
+  _xycoord_nomvars = _xycoord_nomvars + ('LA','LO')
   # Grids that can be read directly from '^^','>>' records, instead of going
   # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
   _direct_grids = ('X','Y','T','+')
