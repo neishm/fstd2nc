@@ -126,14 +126,10 @@ class _Array_Base (object):
 # Has a 'shape' like a numpy array, but values aren't loaded from file until
 # the array is sliced, or passed through np.asarray().
 class _Record_Array (_Array_Base):
-  def __init__ (self, fstdfile, params):
+  def __init__ (self, params):
     shape = (params['ni'],params['nj'],params['nk'])
     dtype = dtype_fst2numpy(params['datyp'], params['nbits'])
     _Array_Base.__init__(self, shape, dtype)
-    # Keep a reference to the file so it doesn't get closed until after this
-    # object is destroyed.
-    # Otherwise, the key will become invalid.
-    self._fstdfile = fstdfile
     self._key = params['key']
   def __getitem__ (self, key):
     return self.__array__().__getitem__(key)
@@ -305,20 +301,6 @@ class _Array (_Array_Base):
       data[ind] = np.asarray(self._data.flatten()[i][self._inner_slices]).transpose(*trans)
     return data
 
-# Helper class - keep an FSTD file open until all references are destroyed.
-class _FSTD_File (object):
-  def __init__ (self, filename, mode):
-    from rpnpy.librmn.fstd98 import fstopenall
-    if isinstance(filename,str):
-      filelist = [filename]
-    else:
-      filelist = list(filename)
-    self.filelist = filelist
-    self.funit = fstopenall(filelist, mode)
-  def __del__ (self):
-    from rpnpy.librmn.fstd98 import fstcloseall
-    istat = fstcloseall(self.funit)
-
 # The type of data returned by the Buffer iterator.
 from collections import namedtuple
 _var_type = namedtuple('var', ('name','atts','axes','array'))
@@ -392,6 +374,12 @@ class _Buffer_Base (object):
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
       self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
 
+  # Clean up a buffer (close any attached files, etc.)
+  def __del__ (self):
+    from rpnpy.librmn.fstd98 import fstcloseall
+    if hasattr(self,'_funit'):
+      istat = fstcloseall(self._funit)
+
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
     for n,v in header.items():
@@ -410,18 +398,24 @@ class _Buffer_Base (object):
     Multiple files can be read simultaneously.
     """
     import numpy as np
-    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
+    from rpnpy.librmn.fstd98 import fstopenall, fstcloseall, fstinl, fstprm
     from rpnpy.librmn.const import FST_RO
     # Remove existing data from the buffer.
     self._params = []
+    if hasattr(self, '_funit'):
+      fstcloseall(self._funit)
     # Read the new data.
-    f = _FSTD_File(filename,FST_RO)
-    keys = fstinl(f.funit)
+    if isinstance(filename,str):
+      filelist = [filename]
+    else:
+      filelist = list(filename)
+    funit = fstopenall(filelist, FST_RO)
+    keys = fstinl(funit)
     for i,key in enumerate(keys):
       prm = fstprm(key)
-      prm['d'] = _Record_Array(f,prm)
+      prm['d'] = _Record_Array(prm)
       self._params.append(prm)
-    self._funit = f.funit
+    self._funit = funit
 
   # Collect the list of params from all the FSTD records, and concatenate them
   # into arrays.  Result is a single dictionary containing the vectorized
