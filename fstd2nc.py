@@ -689,9 +689,12 @@ class _Masks (_Buffer_Base):
       if len(axes['is_mask']) > 1:
         data = var.array[(slice(None),)*mask_dim+(0,)]
         mask = var.array[(slice(None),)*mask_dim+(1,)]
+        # Use original dtype of the data.
+        # (May have been up-scaled to accomodate the uint32 mask).
+        data.dtype = np.result_type(data._data.flatten()[0])
         # Apply the mask
         data = _MaskedArray(data,mask,fill=self._fill_value)
-        var.atts['_FillValue'] = self._fill_value
+        var.atts['_FillValue'] = data.dtype.type(self._fill_value)
       else:
         data = var.array.squeeze(axis=mask_dim)
       del axes['is_mask']
