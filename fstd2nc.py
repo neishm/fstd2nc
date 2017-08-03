@@ -395,9 +395,9 @@ class _Buffer_Base (object):
   # Determine the dtype for an array.
   # Input: array of record indices.
   # Output: dtype that covers all datyps from the records.
-  def _get_dtype (self, array):
+  def _get_dtype (self, record_indices):
     import numpy as np
-    dtype_list = [dtype_fst2numpy(self._params[i]['datyp'],self._params[i]['nbits']) for i in array.flatten()]
+    dtype_list = [dtype_fst2numpy(self._params[i]['datyp'],self._params[i]['nbits']) for i in record_indices.flatten()]
     return np.result_type(*dtype_list)
 
 
@@ -465,9 +465,7 @@ class _Buffer_Base (object):
     Note that array may not be a true numpy array (values are not yet loaded
     in memory).  To load the array, pass it to numpy.asarray().
     """
-    for var in self._iter():
-      if isinstance(var,_var_type):
-        yield var
+    raise NotImplementedError
 
   def _iter (self):
     from collections import OrderedDict, namedtuple
@@ -1270,20 +1268,17 @@ class _XYCoords (_Buffer_Base):
 # Remove extraneous dimensions from the output.
 
 class _NoNK (_Buffer_Base):
-  pass
-  """
   def _iter (self):
     for var in super(_NoNK,self)._iter():
-      axes = var.axes
-      array = var.array
-      if 'k' in axes and len(axes['k']) == 1:
-        array = array.squeeze(axis=list(axes.keys()).index('k'))
-        del axes['k']
-      if 'j' in axes and len(axes['j']) == 1:
-        array = array.squeeze(axis=list(axes.keys()).index('j'))
-        del axes['j']
-      yield type(var)(var.name,var.atts,axes,array)
-  """
+      if not isinstance(var,_iter_type):
+        yield var
+        continue
+      if 'k' in var.axes and len(var.axes['k']) == 1:
+        del var.axes['k']
+      if 'j' in var.axes and len(var.axes['j']) == 1:
+        del var.axes['j']
+      yield var
+
 
 #################################################
 # Add netCDF metadata to the variables
@@ -1405,14 +1400,12 @@ class _netCDF_IO (_netCDF_Atts):
       f.setncatts(global_metadata)
 
     # Need to pre-scan all the variables to generate unique names.
-    # Make sure they're structured properly, in case a user-created mixin
-    # passes raw tuples.
-    varlist = [_var_type(*var) for var in iter(self)]
+    varlist = list(self._iter())
 
     # Generate unique axis names.
     axis_table = dict()
-    for varname, atts, axes, array in varlist:
-      for axisname, axisvalues in axes.items():
+    for var in varlist:
+      for axisname, axisvalues in var.axes.items():
         axisvalues = tuple(axisvalues)
         if axisname not in axis_table:
           axis_table[axisname] = []
@@ -1431,14 +1424,12 @@ class _netCDF_IO (_netCDF_Atts):
       if key in axis_renames:
         return (axis_renames[key],axisvalues)
       return (axisname,axisvalues)
-    for i, var in enumerate(varlist):
-      varname = var.name
+    for var in varlist:
       # If this is a coordinate variable, use same renaming rules as the
       # dimension name.
-      if varname in var.axes:
-        varname, axisvalues = rename_axis((varname,var.axes[varname]))
-      axes = OrderedDict(map(rename_axis,var.axes.items()))
-      varlist[i] = _var_type(varname, var.atts, axes, var.array)
+      if isinstance(var,_var_type) and var.name in var.axes:
+        var.name, axisvalues = rename_axis((var.name,var.axes[var.name]))
+      var.axes = OrderedDict(map(rename_axis,var.axes.items()))
 
     # Generate a string-based variable id.
     # Only works for true variables from the FSTD source
@@ -1499,13 +1490,13 @@ class _netCDF_IO (_netCDF_Atts):
               val[val.index(varname)] = newname
             var.atts[key] = ' '.join(val)
 
-    for varname, atts, axes, array in varlist:
+    for var in varlist:
       # Names must start with a letter or underscore.
-      if not varname[0].isalpha():
-        warn(_("Renaming '%s' to '_%s'.")%(varname,varname))
-        varname = '_'+varname
+      if not var.name[0].isalpha():
+        warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
+        var.name = '_'+var.name
 
-      for axisname, axisvalues in axes.items():
+      for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
         if axisname not in f.dimensions:
@@ -1517,38 +1508,37 @@ class _netCDF_IO (_netCDF_Atts):
       # Strip out FSTD-specific metadata?
       if self._minimal_metadata:
         for n in internal_meta:
-          atts.pop(n,None)
+          var.atts.pop(n,None)
 
       # Write the variable.
       # Easy case: already have the data.
-      print "TODO: fix this"
-      if array.dtype.name.startswith('float'):
-        v = f.createVariable(varname, datatype=array.dtype, dimensions=list(axes.keys()))
+      if isinstance(var,_var_type):
+        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=list(var.axes.keys()))
         # Write the metadata.
-        v.setncatts(atts)
-        v[()] = array
+        v.setncatts(var.atts)
+        v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
-      dtype = self._get_dtype(array)
-      shape = tuple(map(len,axes.values()))
+      dtype = self._get_dtype(var.record_indices)
+      shape = tuple(map(len,var.axes.values()))
       size = reduce(int.__mul__,shape,1)
-      v = f.createVariable(varname, datatype=dtype, dimensions=list(axes.keys()))
+      v = f.createVariable(var.name, datatype=dtype, dimensions=list(var.axes.keys()))
       # Write the metadata.
-      v.setncatts(atts)
+      v.setncatts(var.atts)
       # Determine how much we can write at a time.
       # Try to keep it under the buffer size, but make sure the last 2
       # dimensions don't get split (represent a single FSTD record?)
       a = 0
       check = size * dtype.itemsize
-      while check > self._buffer_size*1E6 and a < array.ndim:
-        check /= array.shape[a]
+      while check > self._buffer_size*1E6 and a < len(shape) - var.record_indices.ndim:
+        check /= shape[a]
         a = a + 1
-      for ind in product(*map(range,array.shape[:a])):
+      for ind in product(*map(range,shape[:a])):
         try:
           #v[ind] = np.asarray(array[ind])
           v[ind] = 123
         except (IndexError,ValueError):
-          warn(_("Internal problem with the script - unable to get data for '%s'")%varname)
+          warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
