@@ -397,7 +397,7 @@ class _Buffer_Base (object):
   # Output: dtype that covers all datyps from the records.
   def _get_dtype (self, record_indices):
     import numpy as np
-    dtype_list = [dtype_fst2numpy(self._params[i]['datyp'],self._params[i]['nbits']) for i in record_indices.flatten()]
+    dtype_list = [dtype_fst2numpy(self._params[i]['datyp'],self._params[i]['nbits']) for i in record_indices.flatten() if i >= 0]
     return np.result_type(*dtype_list)
 
 
@@ -679,7 +679,7 @@ class _Masks (_Buffer_Base):
       if not isinstance(var,_iter_type):
         yield var
         continue
-      if any('mask_key' in self._params[i] for i in var.record_indices.flatten()):
+      if any('mask_key' in self._params[i] for i in var.record_indices.flatten() if i >= 0):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
       yield var
 
@@ -1386,7 +1386,6 @@ class _netCDF_IO (_netCDF_Atts):
     """
     from netCDF4 import Dataset
     import numpy as np
-    from itertools import product
     from collections import OrderedDict
     from rpnpy.librmn.fstd98 import fstluk
     f = Dataset(filename, "w", format=self._nc_format)
@@ -1527,8 +1526,10 @@ class _netCDF_IO (_netCDF_Atts):
       v.setncatts(var.atts)
       # Write the data.
       for ind in np.ndindex(var.record_indices.shape):
+        i = var.record_indices[ind]
+        if i < 0: continue
         try:
-          v[ind] = fstluk(self._params[var.record_indices[ind]])['d'].transpose()
+          v[ind] = fstluk(self._params[i])['d'].transpose()
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
