@@ -1388,6 +1388,7 @@ class _netCDF_IO (_netCDF_Atts):
     import numpy as np
     from itertools import product
     from collections import OrderedDict
+    from rpnpy.librmn.fstd98 import fstluk
     f = Dataset(filename, "w", format=self._nc_format)
 
     # List of metadata keys that are internal to the FSTD file.
@@ -1510,33 +1511,24 @@ class _netCDF_IO (_netCDF_Atts):
         for n in internal_meta:
           var.atts.pop(n,None)
 
+      dimensions = list(var.axes.keys())
+
       # Write the variable.
       # Easy case: already have the data.
       if isinstance(var,_var_type):
-        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=list(var.axes.keys()))
+        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions)
         # Write the metadata.
         v.setncatts(var.atts)
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
-      dtype = self._get_dtype(var.record_indices)
-      shape = tuple(map(len,var.axes.values()))
-      size = reduce(int.__mul__,shape,1)
-      v = f.createVariable(var.name, datatype=dtype, dimensions=list(var.axes.keys()))
+      v = f.createVariable(var.name, datatype=self._get_dtype(var.record_indices), dimensions=dimensions)
       # Write the metadata.
       v.setncatts(var.atts)
-      # Determine how much we can write at a time.
-      # Try to keep it under the buffer size, but make sure the last 2
-      # dimensions don't get split (represent a single FSTD record?)
-      a = 0
-      check = size * dtype.itemsize
-      while check > self._buffer_size*1E6 and a < len(shape) - var.record_indices.ndim:
-        check /= shape[a]
-        a = a + 1
-      for ind in product(*map(range,shape[:a])):
+      # Write the data.
+      for ind in np.ndindex(var.record_indices.shape):
         try:
-          #v[ind] = np.asarray(array[ind])
-          v[ind] = 123
+          v[ind] = fstluk(self._params[var.record_indices[ind]])['d'].transpose()
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
