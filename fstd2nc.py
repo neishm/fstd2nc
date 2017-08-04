@@ -300,13 +300,13 @@ class _var_type (object):
 
 # An internal type used in _iter methods.
 class _iter_type (object):
-  __slots__ = ('name','atts','axes','dtype','record_indices')
-  def __init__ (self, name, atts, axes, dtype, record_indices):
+  __slots__ = ('name','atts','axes','dtype','record_keys')
+  def __init__ (self, name, atts, axes, dtype, record_keys):
     self.name = name
     self.atts = atts
     self.axes = axes
     self.dtype = dtype
-    self.record_indices = record_indices
+    self.record_keys = record_keys
   def __iter__ (self):
     return (getattr(self,n) for n in self.__slots__)
 
@@ -380,9 +380,9 @@ class _Buffer_Base (object):
   # Determine the dtype for an array.
   # Input: array of record indices.
   # Output: dtype that covers all datyps from the records.
-  def _get_dtype (self, record_indices):
+  def _get_dtype (self, record_keys):
     import numpy as np
-    dtype_list = [dtype_fst2numpy(self._params[i]['datyp'],self._params[i]['nbits']) for i in record_indices.flatten() if i >= 0]
+    dtype_list = [dtype_fst2numpy(self._params[k]['datyp'],self._params[k]['nbits']) for k in record_keys.flatten() if k >= 0]
     return np.result_type(*dtype_list)
 
 
@@ -396,6 +396,7 @@ class _Buffer_Base (object):
     """
     from rpnpy.librmn.fstd98 import fstopenall, fstinl, fstprm
     from rpnpy.librmn.const import FST_RO
+    from collections import OrderedDict
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
@@ -413,11 +414,11 @@ class _Buffer_Base (object):
       filelist = list(filename)
     funit = fstopenall(filelist, FST_RO)
     keys = fstinl(funit)
-    self._params = []
+    self._params = OrderedDict()
     for i,key in enumerate(keys):
       prm = fstprm(key)
       prm['d'] = _Record_Array(prm)
-      self._params.append(prm)
+      self._params[int(key)] = prm
     self._funit = funit
 
   # Collect the list of params from all the FSTD records, and concatenate them
@@ -432,10 +433,10 @@ class _Buffer_Base (object):
     from collections import OrderedDict
     import numpy as np
     # Make sure the parameter names are consistent for all records.
-    if len(set(map(frozenset,self._params))) != 1:
+    if len(set(map(frozenset,self._params.values()))) != 1:
       raise ValueError(("Inconsistent parameter names for the records."))
     fields = OrderedDict()
-    for prm in self._params:
+    for k,prm in self._params.items():
       for n,v in prm.items():
         fields.setdefault(n,[]).append(v)
     for n,v in list(fields.items()):
@@ -471,7 +472,7 @@ class _Buffer_Base (object):
     # Group the records by variable.
     var_records = OrderedDict()
     var_id_type = namedtuple('var_id', self._var_id)
-    for i in range(len(records['nomvar'])):
+    for i,k in enumerate(records['key']):
       # Get the unique variable identifiers.
       var_id = var_id_type(*[records[n][i] for n in self._var_id])
       # Ignore coordinate records.
@@ -507,19 +508,19 @@ class _Buffer_Base (object):
         values = tuple(sorted(set(values)))
         axes[n] = values
 
-      # Construct a multidimensional array to hold the record indices.
-      record_indices = np.empty(map(len,axes.values()), dtype='int32')
+      # Construct a multidimensional array to hold the record keys.
+      record_keys = np.empty(map(len,axes.values()), dtype='int32')
 
       # Assume missing data (nan) unless filled in later.
-      record_indices[()] = -1
+      record_keys[()] = -1
       
       # Arrange the record keys in the appropriate locations.
       for rec_id in rec_ids:
         index = tuple(axes[n].index(records[n][rec_id]) for n in axes.keys())
-        record_indices[index] = rec_id
+        record_keys[index] = records['key'][rec_id]
 
       # Check if we have full coverage along all axes.
-      have_data = [d >= 0 for d in record_indices.flatten()]
+      have_data = [k >= 0 for k in record_keys.flatten()]
       if not np.all(have_data):
         warn (_("Missing some records for %s.")%var_id.nomvar)
 
@@ -530,8 +531,8 @@ class _Buffer_Base (object):
 
       var = _iter_type( name = var_id.nomvar.strip(), atts = atts,
                         axes = axes,
-                        dtype = self._get_dtype(record_indices),
-                        record_indices = record_indices )
+                        dtype = self._get_dtype(record_keys),
+                        record_keys = record_keys )
       yield var
 
       #TODO: Find a minimum set of partial coverages for the data.
@@ -656,20 +657,18 @@ class _Masks (_Buffer_Base):
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(_Masks,self).__init__(*args,**kwargs)
     # Look for any mask records, and attach them to the associated field.
-    params = []
     masks = dict()
     # Look for masks, pull them out of the list of records.
-    for prm in self._params:
+    for key,prm in list(self._params.items()):
       if prm['typvar'] == '@@':
-        masks[(prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar'])] = prm['key']
-      else:
-        params.append(prm)
-    # Attach the mask records to the data records.
-    for prm in params:
-      mask_key = masks.get((prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar']),-1)
-      prm['mask_key'] = mask_key
-
-    self._params = params
+        masks[(prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar'])] = key
+        del self._params[key]
+    # Store the mask records.
+    self._masks = dict()
+    for key,prm in list(self._params.items()):
+      mask_key = masks.get((prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar']),None)
+      if mask_key is not None:
+        self._masks[key] = mask_key
 
   # Apply the fill value to the data.
   def _iter (self):
@@ -677,22 +676,20 @@ class _Masks (_Buffer_Base):
       if not isinstance(var,_iter_type):
         yield var
         continue
-      if any(self._params[i]['mask_key'] >= 0 for i in var.record_indices.flatten() if i >= 0):
+      if any(k in self._masks for k in var.record_keys.flatten() if k >= 0):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
       yield var
 
   # Apply the mask data
-  @staticmethod
-  def _fstluk (key, dtype=None, rank=None, dataArray=None):
+  def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
     from rpnpy.librmn.fstd98 import fstluk
     import numpy as np
-    prm = super(_Masks,_Masks)._fstluk(key, dtype, rank, dataArray)
-    if isinstance(key,dict):
-      mask_key = key.get('mask_key',-1)
-      if mask_key >= 0:
-        mask = fstluk(mask_key, rank=rank)['d']
-        prm['d'] = np.ma.asarray(prm['d'])
-        prm['d'].mask = (mask == 0)
+    prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
+    mask_key = self._masks.get(key,None)
+    if mask_key is not None:
+      mask = fstluk(mask_key, rank=rank)['d']
+      prm['d'] = np.ma.asarray(prm['d'])
+      prm['d'].mask = (mask == 0)
     return prm
 
 
@@ -842,7 +839,7 @@ class _Series (_Buffer_Base):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    for header in self._params:
+    for header in self._params.values():
       if header['typvar'].strip() != 'T': continue
       nomvar = header['nomvar'].strip()
       # Create station axis.
@@ -883,7 +880,7 @@ class _Series (_Buffer_Base):
 
       # Vertical coordinates for series data.
       if var.name in ('SH','SV'):
-        array = fstluk(var.record_indices.flatten()[0])['d'].squeeze()
+        array = fstluk(var.record_keys.flatten()[0])['d'].squeeze()
         if array.ndim != 1: continue
         var.atts['kind'] = 5
         yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
@@ -893,7 +890,7 @@ class _Series (_Buffer_Base):
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
         # Remove degenerate vertical axis.
         if 'level' in var.axes:
-          var.record_indices = var.record_indices.squeeze(axis=list(var.axes.keys()).index('level'))
+          var.record_keys = var.record_keys.squeeze(axis=list(var.axes.keys()).index('level'))
           var.axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
@@ -946,7 +943,7 @@ class _VCoords (_Buffer_Base):
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
-    for header in self._params:
+    for header in self._params.values():
       if header['nomvar'].strip() not in self._vcoord_nomvars: continue
       key = (header['ip1'],header['ip2'])
       # For old HY records, there's no matching ipX/igX codes.
@@ -962,7 +959,7 @@ class _VCoords (_Buffer_Base):
         if 'level' in var.axes and len(var.axes['level']) == 1:
           i = list(var.axes).index('level')
           del var.axes['level']
-          var.record_indices = var.record_indices.squeeze(axis=i)
+          var.record_keys = var.record_keys.squeeze(axis=i)
           yield var
           continue
       # No vertical axis?
@@ -1135,7 +1132,7 @@ class _XYCoords (_Buffer_Base):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    for header in self._params:
+    for header in self._params.values():
       if header['nomvar'].strip() != coordname: continue
       if header['ip1'] != var.atts['ig1']: continue
       if header['ip2'] != var.atts['ig2']: continue
@@ -1533,15 +1530,15 @@ class _netCDF_IO (_netCDF_Atts):
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
-      v = f.createVariable(var.name, datatype=self._get_dtype(var.record_indices), dimensions=dimensions)
+      v = f.createVariable(var.name, datatype=self._get_dtype(var.record_keys), dimensions=dimensions)
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
-      for ind in np.ndindex(var.record_indices.shape):
-        i = var.record_indices[ind]
-        if i < 0: continue
+      for ind in np.ndindex(var.record_keys.shape):
+        k = int(var.record_keys[ind])
+        if k < 0: continue
         try:
-          v[ind] = self._fstluk(self._params[i])['d'].transpose()
+          v[ind] = self._fstluk(k)['d'].transpose()
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
