@@ -363,21 +363,6 @@ class _Buffer_Base (object):
   def _check_args (cls, parser, args):
     return  # Nothing to check here.
 
-  def __init__ (self, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
-    """
-    Create a new, empty buffer.
-    """
-    self._params = []
-    self._minimal_metadata = minimal_metadata
-    if not ignore_typvar:
-      # Insert typvar value just after nomvar.
-      self._var_id = self._var_id[0:1] + ('typvar',) + self._var_id[1:]
-      self._human_var_id = self._human_var_id[0:1] + ('%(typvar)s',) + self._human_var_id[1:]
-    if not ignore_etiket:
-      # Insert etiket value just after nomvar.
-      self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
-      self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
-
   # Clean up a buffer (close any attached files, etc.)
   def __del__ (self):
     from rpnpy.librmn.fstd98 import fstcloseall
@@ -404,25 +389,31 @@ class _Buffer_Base (object):
   ###############################################
   # Basic flow for reading data
 
-  def read_fstd_file (self, filename):
+  def __init__ (self, filename, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    import numpy as np
-    from rpnpy.librmn.fstd98 import fstopenall, fstcloseall, fstinl, fstprm
+    from rpnpy.librmn.fstd98 import fstopenall, fstinl, fstprm
     from rpnpy.librmn.const import FST_RO
-    # Remove existing data from the buffer.
-    self._params = []
-    if hasattr(self, '_funit'):
-      fstcloseall(self._funit)
-    # Read the new data.
+    self._minimal_metadata = minimal_metadata
+    if not ignore_typvar:
+      # Insert typvar value just after nomvar.
+      self._var_id = self._var_id[0:1] + ('typvar',) + self._var_id[1:]
+      self._human_var_id = self._human_var_id[0:1] + ('%(typvar)s',) + self._human_var_id[1:]
+    if not ignore_etiket:
+      # Insert etiket value just after nomvar.
+      self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
+      self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
+
+    # Scan the record headers.
     if isinstance(filename,str):
       filelist = [filename]
     else:
       filelist = list(filename)
     funit = fstopenall(filelist, FST_RO)
     keys = fstinl(funit)
+    self._params = []
     for i,key in enumerate(keys):
       prm = fstprm(key)
       prm['d'] = _Record_Array(prm)
@@ -570,7 +561,8 @@ class _SelectVars (_Buffer_Base):
   def _cmdline_args (cls, parser):
     super(_SelectVars,cls)._cmdline_args(parser)
     parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables to convert.  By default, all variables are converted.'))
-  def __init__ (self, vars=None, *args, **kwargs):
+  def __init__ (self, *args, **kwargs):
+    vars = kwargs.pop('vars',None)
     if vars is not None:
       self._selected_vars = vars.split(',')
       print (_('Will look for variables: ') + ' '.join(self._selected_vars))
@@ -598,7 +590,8 @@ class _FilterRecords (_Buffer_Base):
   def _cmdline_args (cls, parser):
     super(_FilterRecords,cls)._cmdline_args(parser)
     parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
-  def __init__ (self, filter=None, *args, **kwargs):
+  def __init__ (self, *args, **kwargs):
+    filter = kwargs.pop('filter',None)
     if filter is None:
       filter = []
     self._filters = tuple(filter)
@@ -659,12 +652,10 @@ class _Masks (_Buffer_Base):
   def _cmdline_args (cls, parser):
     super(_Masks,cls)._cmdline_args(parser)
     parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the netCDF file.  Default is '%(default)s'."))
-  def __init__ (self, fill_value=1e30, *args, **kwargs):
-    self._fill_value = fill_value
+  def __init__ (self, *args, **kwargs):
+    self._fill_value = kwargs.pop('fill_value',1e30)
     super(_Masks,self).__init__(*args,**kwargs)
-  # Look for any mask records, and attach them to the associated field.
-  def read_fstd_file (self, filename):
-    super(_Masks,self).read_fstd_file(filename)
+    # Look for any mask records, and attach them to the associated field.
     params = []
     masks = dict()
     # Look for masks, pull them out of the list of records.
@@ -714,9 +705,9 @@ class _Dates (_Buffer_Base):
     super(_Dates,cls)._cmdline_args(parser)
     parser.add_argument('--squash-forecasts', action='store_true', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
 
-  def __init__ (self, squash_forecasts=False, *args, **kwargs):
-    self._squash_forecasts = squash_forecasts
-    if squash_forecasts:
+  def __init__ (self, *args, **kwargs):
+    self._squash_forecasts = kwargs.pop('squash_forecasts',False)
+    if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
     else:
       self._outer_axes = ('time','forecast') + self._outer_axes
@@ -1310,9 +1301,10 @@ class _netCDF_Atts (_Buffer_Base):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
-  def __init__ (self, metadata_file=None, *args, **kwargs):
+  def __init__ (self, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
+    metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:
       metafiles = []
     else:
@@ -1372,11 +1364,11 @@ class _netCDF_IO (_netCDF_Atts):
       except ValueError:
         parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
 
-  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, nc_format='NETCDF4', *args, **kwargs):
-    self._time_units = time_units
-    self._reference_date = reference_date
-    self._buffer_size = int(buffer_size)
-    self._nc_format = nc_format
+  def __init__ (self, *args, **kwargs):
+    self._time_units = kwargs.pop('time_units','hours')
+    self._reference_date = kwargs.pop('reference_date',None)
+    self._buffer_size = int(kwargs.pop('buffer_size',100))
+    self._nc_format = kwargs.pop('nc_format','NETCDF4')
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
   def _iter (self):
@@ -1587,7 +1579,6 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   outfile = args.pop('outfile')
   force = args.pop('force')
   no_history = args.pop('no_history')
-  buf = buffer_type(**args)
 
   # Make sure input file exists
   for infile in infiles:
@@ -1598,7 +1589,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
       print (_("Error: '%s' is not an RPN standard file!")%(infile))
       exit(1)
 
-  buf.read_fstd_file(infiles)
+  buf = buffer_type(infiles, **args)
 
   # Check if output file already exists
   if exists(outfile) and not force:
