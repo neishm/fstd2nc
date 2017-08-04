@@ -467,6 +467,7 @@ class _Buffer_Base (object):
     """
     raise NotImplementedError
 
+  # Internal iterator.
   def _iter (self):
     from collections import OrderedDict, namedtuple
     import numpy as np
@@ -545,6 +546,12 @@ class _Buffer_Base (object):
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
       # for other times).
+
+  # How to read the data.
+  @staticmethod
+  def _fstluk (key, dtype=None, rank=None, dataArray=None):
+    from rpnpy.librmn.fstd98 import fstluk
+    return fstluk (key, dtype, rank, dataArray)
 
   #
   ###############################################
@@ -679,9 +686,23 @@ class _Masks (_Buffer_Base):
       if not isinstance(var,_iter_type):
         yield var
         continue
-      if any('mask_key' in self._params[i] for i in var.record_indices.flatten() if i >= 0):
+      if any(self._params[i]['mask_key'] >= 0 for i in var.record_indices.flatten() if i >= 0):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
       yield var
+
+  # Apply the mask data
+  @staticmethod
+  def _fstluk (key, dtype=None, rank=None, dataArray=None):
+    from rpnpy.librmn.fstd98 import fstluk
+    import numpy as np
+    prm = super(_Masks,_Masks)._fstluk(key, dtype, rank, dataArray)
+    if isinstance(key,dict):
+      mask_key = key.get('mask_key',-1)
+      if mask_key >= 0:
+        mask = fstluk(mask_key, rank=rank)['d']
+        prm['d'] = np.ma.asarray(prm['d'])
+        prm['d'].mask = (mask == 0)
+    return prm
 
 
 #################################################
@@ -1387,7 +1408,6 @@ class _netCDF_IO (_netCDF_Atts):
     from netCDF4 import Dataset
     import numpy as np
     from collections import OrderedDict
-    from rpnpy.librmn.fstd98 import fstluk
     f = Dataset(filename, "w", format=self._nc_format)
 
     # List of metadata keys that are internal to the FSTD file.
@@ -1529,7 +1549,7 @@ class _netCDF_IO (_netCDF_Atts):
         i = var.record_indices[ind]
         if i < 0: continue
         try:
-          v[ind] = fstluk(self._params[i])['d'].transpose()
+          v[ind] = self._fstluk(self._params[i])['d'].transpose()
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
