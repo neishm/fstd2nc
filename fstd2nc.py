@@ -450,15 +450,6 @@ class _Buffer_Base (object):
     return fields
 
 
-  def __iter__ (self):
-    """
-    Processes the records into multidimensional variables.
-    Iterates over (name, atts, axes, array) tuples.
-    Note that array may not be a true numpy array (values are not yet loaded
-    in memory).  To load the array, pass it to numpy.asarray().
-    """
-    raise NotImplementedError
-
   # Internal iterator.
   def _iter (self):
     from collections import OrderedDict, namedtuple
@@ -1549,8 +1540,68 @@ class _netCDF_IO (_netCDF_Atts):
     f.close()
 
 
+#################################################
+# A user-friendly iterator for using the Buffer in other Python scripts.
+
+# Lightweight wrapper for the data.
+# Allows the user to load the data through np.asarray or by slicing it.
+class _Array (object):
+  # Set some common attributes for the object.
+  def __init__ (self, buffer, var):
+    from functools import reduce
+    self._buffer = buffer
+    self._record_keys = var.record_keys
+    # Expected shape and type of the array.
+    self.shape = tuple(map(len,var.axes.values()))
+    self.ndim = len(self.shape)
+    self.size = reduce(int.__mul__, self.shape, 1)
+    self.dtype = var.dtype
+  def __getitem__ (self, key):
+    import numpy as np
+    # Coerce key into a tuple of slice objects.
+    if not isinstance(key,tuple):
+      if hasattr(key,'__len__'): key = tuple(key)
+      else: key = (key,)
+    if len(key) == 1 and hasattr(key[0],'__len__'):
+      key = tuple(key[0])
+    if Ellipsis in key:
+      i = key.index(Ellipsis)
+      key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
+    key = key + (slice(None),)*(self.ndim-len(key))
+    if len(key) > self.ndim:
+      raise ValueError(("Too many dimensions for slicing."))
+    final_shape = tuple(len(np.arange(n)[k]) for n,k in zip(self.shape,key) if not isinstance(k,int))
+    data = np.ma.empty(final_shape, dtype=self.dtype)
+    outer_ndim = self._record_keys.ndim
+    record_keys = self._record_keys.__getitem__(key[:outer_ndim])
+    for ind in np.ndindex(record_keys.shape):
+      k = int(record_keys[ind])
+      if k >= 0:
+        data[ind] = self._buffer._fstluk(k)['d'].transpose()[(Ellipsis,)+key[outer_ndim:]]
+      else:
+        data.mask = np.ma.getmaskarray(data)
+        data.mask[ind] = True
+    return data
+  def __array__ (self):
+    return self.__getitem__(())
+
+class _Iter (_Buffer_Base):
+  def __iter__ (self):
+    """
+    Processes the records into multidimensional variables.
+    Iterates over (name, atts, axes, array) tuples.
+    Note that array may not be a true numpy array (values are not yet loaded
+    in memory).  To load the array, pass it to numpy.asarray().
+    """
+    for var in self._iter():
+      if isinstance(var, _iter_type):
+        array = _Array(self, var)
+        var = _var_type (var.name, var.atts, var.axes, array)
+      yield var
+
+
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
