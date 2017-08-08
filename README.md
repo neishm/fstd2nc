@@ -59,16 +59,14 @@ From Python
 Simple conversion to netCDF:
 ```python
 import fstd2nc
-data = fstd2nc.Buffer()
-data.read_fstd_file("myfile.fst")
+data = fstd2nc.Buffer("myfile.fst")
 data.write_nc_file("myfile.nc")
 ```
 To use the higher-level data structures in Python for other purposes:
 ```python
 import fstd2nc
 import numpy as np
-data = fstd2nc.Buffer()
-data.read_fstd_file("myfile.fst")
+data = fstd2nc.Buffer("myfile.fst")
 
 for name, atts, axes, array in data:
 

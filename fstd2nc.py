@@ -108,221 +108,28 @@ def gdgaxes (gdid):
   return {'ax':ax, 'ay':ay}
 
 
-
-# Helper classes for lazy-array evaluation.
-
-# Common base class for all the numpy-like arrays defined below.
-class _Array_Base (object):
-  # Set some common attributes for the object.
-  def __init__ (self, shape, dtype):
-    from functools import reduce
-    # Expected shape and type of the array.
-    self.shape = tuple(map(int,shape))
-    self.ndim = len(self.shape)
-    self.size = reduce(int.__mul__, self.shape, 1)
-    self.dtype = dtype
-
-# Data from a record.
-# Has a 'shape' like a numpy array, but values aren't loaded from file until
-# the array is sliced, or passed through np.asarray().
-class _Record_Array (_Array_Base):
-  def __init__ (self, fstdfile, params):
-    shape = (params['ni'],params['nj'],params['nk'])
-    dtype = dtype_fst2numpy(params['datyp'], params['nbits'])
-    _Array_Base.__init__(self, shape, dtype)
-    # Keep a reference to the file so it doesn't get closed until after this
-    # object is destroyed.
-    # Otherwise, the key will become invalid.
-    self._fstdfile = fstdfile
-    self._key = params['key']
-  def __getitem__ (self, key):
-    return self.__array__().__getitem__(key)
-  def __array__ (self):
-    # Adapted from rpnpy.librmn.fstd98.fstluk
-    import ctypes as _ct
-    import numpy as _np
-    from rpnpy.librmn import proto as _rp
-    from rpnpy.librmn.fstd98 import FSTDError
-    import numpy.ctypeslib as _npc
-    (cni, cnj, cnk) = (_ct.c_int(), _ct.c_int(), _ct.c_int())
-    data = _np.empty(self.shape, dtype=self.dtype, order='FORTRAN')
-    _rp.c_fstluk.argtypes = (_npc.ndpointer(dtype=self.dtype), _ct.c_int,
-                             _ct.POINTER(_ct.c_int), _ct.POINTER(_ct.c_int),
-                             _ct.POINTER(_ct.c_int))
-    istat = _rp.c_fstluk(data, self._key, _ct.byref(cni), _ct.byref(cnj),
-                             _ct.byref(cnk))
-    if istat < 0:
-      raise FSTDError()
-    return data
-
-# Missing data.
-class _NaN_Array (_Array_Base):
-  def __init__ (self,*shape):
-    _Array_Base.__init__(self,shape,'float32')
-  def __getitem__ (self,key):
-    return self.__array__().__getitem__(key)
-  def __array__ (self):
-    import numpy as np
-    data = np.empty(self.shape,dtype=self.dtype,order='FORTRAN')
-    data[()] = float('nan')
-    return data
-
-# Combine multiple array-like objects into a higher-dimensional array-like
-# object.
-# E.g., If you have a numpy array of dimensions (time,level), of type 'object',
-# and each element is a _Record_Array object of dimenions (ni,nj,nk), then
-# this will give you a new array-like object of dimenions (time,level,ni,nj,nk)
-# that can be manipulated like a numpy array (e.g. sliced, tranposed).
-# The values won't be loaded until the object is passed to numpy.asarray().
-class _Array (_Array_Base):
-  @classmethod
-  # Create the object from an array of array-like objects.
-  def create (cls, data):
-    import numpy as np
-    # Special case: have a single array (not an array of arrays).
-    if data.dtype.name != 'object':
-      outer_shape = ()
-      inner_shape = data.shape
-      dtype = data.dtype
-    # Usual case (array of array-like objects).
-    else:
-      outer_shape = data.shape
-      # Inner array objects must all have the same shape.
-      inner_shape = set(map(np.shape,data.flatten()))
-      if len(inner_shape) > 1:
-        raise ValueError (("Different shapes for inner array objects.  Found shapes: %s")%list(inner_shape))
-      inner_shape = inner_shape.pop()
-      dtype = np.result_type(*data.flatten())
-    shape = tuple(outer_shape) + tuple(inner_shape)
-    # Define a map from outer axes to inner axes.
-    inner_dimids = [None]*len(outer_shape) + list(range(len(inner_shape)))
-    inner_slices = [slice(None)]*len(inner_shape)
-    return cls(shape, dtype, inner_dimids, data, inner_slices)
-  def __init__ (self, shape, dtype, inner_dimids, data, inner_slices):
-    assert len(shape) == len(inner_dimids)
-    _Array_Base.__init__(self, shape, dtype)
-    # Check if we have a dengenerate outer array.
-    self._degenerate = not any(i is None for i in inner_dimids)
-    # Check outer dimensions
-    if not self._degenerate:
-      assert sum(i is None for i in inner_dimids) == data.ndim
-    # Map the full axes to the inner (record) axes.
-    # Set to 'None' for outer axes not part of the record.
-    self._inner_dimids = tuple(inner_dimids)
-    # Array of references to the data from the FSTD records.
-    self._data = data
-    # Extra slicing to be done to the record data after reading it in.
-    self._inner_slices = tuple(inner_slices)
-  def __getitem__ (self, key):
-    from itertools import product
-    # Coerce key into a tuple of slice objects.
-    if not isinstance(key,tuple):
-      if hasattr(key,'__len__'): key = tuple(key)
-      else: key = (key,)
-    if len(key) == 1 and hasattr(key[0],'__len__'):
-      key = tuple(key[0])
-    if Ellipsis in key:
-      i = key.index(Ellipsis)
-      key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
-    key = key + (slice(None),)*(self.ndim-len(key))
-    if len(key) > self.ndim:
-      raise ValueError(("Too many dimensions for slicing."))
-    shape = []
-    inner_dimids = []
-    outer_slices = []
-    inner_slices = list(self._inner_slices)
-    for sl,n,i in zip(key,self.shape,self._inner_dimids):
-      # Only retain dimenions that aren't reduced out.
-      if not isinstance(sl,int):
-        shape.append(len(range(n)[sl]))
-        inner_dimids.append(i)
-      # Outer slice?
-      if i is None:
-        outer_slices.append(sl)
-      # Inner slice?
-      else:
-        S = inner_slices[i]
-        start = S.start or 0
-        stop = S.stop
-        step = S.step or 1
-        if isinstance(sl,int):
-          inner_slices[i] = start + step*sl
-        else:
-          if sl.stop is not None:
-            stop = start + step*sl.stop
-          start = start + step*(sl.start or 0)
-          step = step * (sl.step or 1)
-          inner_slices[i] = slice(start,stop,step)
-
-    data = self._data.__getitem__(tuple(outer_slices))
-    return _Array(shape, self.dtype, inner_dimids, data, inner_slices)
-
-  # Remove degenerate dimensions from the array.
-  def squeeze (self, axis=None):
-    if isinstance(axis,int):
-      axis = (axis,)
-    if axis is None:
-      axis = [i for i,s in enumerate(self.shape) if s == 1]
-    key = [slice(None)]*self.ndim
-    for a in axis:
-      if self.shape[a] > 1:
-        raise ValueError(("Can only squeeze axes of length 1."))
-      key[a] = 0
-    return self.__getitem__(tuple(key))
-
-  # Change the order of the dimensions
-  def transpose (self, *axes):
-    if len(axes) == 0:
-      axes = tuple(range(self.ndim-1,-1,-1))
-    if len(axes) == 1 and hasattr(axes[0],'__len__'):
-      axes = tuple(axes[0])
-    if len(axes) != self.ndim:
-      raise ValueError(("Wrong number of dimenions for transpose."))
-    if sorted(axes) != list(range(self.ndim)):
-      raise ValueError(("Bad axis arguments."))
-    shape = [self.shape[a] for a in axes]
-    inner_dimids = [self._inner_dimids[a] for a in axes]
-    return _Array(shape, self.dtype, inner_dimids, self._data, self._inner_slices)
-
-  # Allow this object to be loaded into a numpy array.
-  def __array__ (self):
-    import numpy as np
-    from itertools import product
-    # Final order of inner axes
-    trans = [i for i in self._inner_dimids if i is not None]
-    # Adjust the axis numbers in transpose operation
-    # to account for any slicing that was done.
-    for i,s in list(enumerate(self._inner_slices))[::-1]:
-      if isinstance(s,int):
-        trans = [t if t<i else t-1 for t in trans if t != i]
-    # Outer array is degenerate?
-    if self._degenerate:
-      return np.asarray(self._data[self._inner_slices]).transpose(*trans)
-    # Get indices of all dimensions, in preparation for iterating.
-    indices = [range(s) if i is None else [slice(None)] for i,s in zip(self._inner_dimids, self.shape)]
-    data = np.empty(self.shape, dtype=self.dtype)
-    for i,ind in enumerate(product(*indices)):
-      data[ind] = np.asarray(self._data.flatten()[i][self._inner_slices]).transpose(*trans)
-    return data
-
-# Helper class - keep an FSTD file open until all references are destroyed.
-class _FSTD_File (object):
-  def __init__ (self, filename, mode):
-    from rpnpy.librmn.fstd98 import fstopenall
-    if isinstance(filename,str):
-      filelist = [filename]
-    else:
-      filelist = list(filename)
-    self.filelist = filelist
-    self.funit = fstopenall(filelist, mode)
-  def __del__ (self):
-    from rpnpy.librmn.fstd98 import fstcloseall
-    istat = fstcloseall(self.funit)
-
 # The type of data returned by the Buffer iterator.
-from collections import namedtuple
-_var_type = namedtuple('var', ('name','atts','axes','array'))
-del namedtuple
+class _var_type (object):
+  __slots__ = ('name','atts','axes','array')
+  def __init__ (self, name, atts, axes, array):
+    self.name = name
+    self.atts = atts
+    self.axes = axes
+    self.array = array
+  def __iter__ (self):
+    return (getattr(self,n) for n in self.__slots__)
+
+# An internal type used in _iter methods.
+class _iter_type (object):
+  __slots__ = ('name','atts','axes','dtype','record_keys')
+  def __init__ (self, name, atts, axes, dtype, record_keys):
+    self.name = name
+    self.atts = atts
+    self.axes = axes
+    self.dtype = dtype
+    self.record_keys = record_keys
+  def __iter__ (self):
+    return (getattr(self,n) for n in self.__slots__)
 
 # Helper method - modify the axes of an array.
 def _modify_axes (axes, **kwargs):
@@ -377,11 +184,40 @@ class _Buffer_Base (object):
   def _check_args (cls, parser, args):
     return  # Nothing to check here.
 
-  def __init__ (self, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
+  # Clean up a buffer (close any attached files, etc.)
+  def __del__ (self):
+    from rpnpy.librmn.fstd98 import fstcloseall
+    if hasattr(self,'_funit'):
+      istat = fstcloseall(self._funit)
+
+  # Extract metadata from a particular header.
+  def _get_header_atts (self, header):
+    for n,v in header.items():
+      if n in self._ignore_atts: continue
+      if isinstance(v,str):
+        v = v.strip()
+      yield (n,v)
+
+  # Determine the dtype for an array.
+  # Input: array of record indices.
+  # Output: dtype that covers all datyps from the records.
+  def _get_dtype (self, record_keys):
+    import numpy as np
+    dtype_list = [dtype_fst2numpy(self._params[k]['datyp'],self._params[k]['nbits']) for k in record_keys.flatten() if k >= 0]
+    return np.result_type(*dtype_list)
+
+
+  ###############################################
+  # Basic flow for reading data
+
+  def __init__ (self, filename, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
     """
-    Create a new, empty buffer.
+    Read raw records from FSTD files, into the buffer.
+    Multiple files can be read simultaneously.
     """
-    self._params = []
+    from rpnpy.librmn.fstd98 import fstopenall, fstinl, fstprm
+    from rpnpy.librmn.const import FST_RO
+    from collections import OrderedDict
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
@@ -392,36 +228,18 @@ class _Buffer_Base (object):
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
       self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
 
-  # Extract metadata from a particular header.
-  def _get_header_atts (self, header):
-    for n,v in header.items():
-      if n in self._ignore_atts: continue
-      if isinstance(v,str):
-        v = v.strip()
-      yield (n,v)
-
-
-  ###############################################
-  # Basic flow for reading data
-
-  def read_fstd_file (self, filename):
-    """
-    Read raw records from FSTD files, into the buffer.
-    Multiple files can be read simultaneously.
-    """
-    import numpy as np
-    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
-    from rpnpy.librmn.const import FST_RO
-    # Remove existing data from the buffer.
-    self._params = []
-    # Read the new data.
-    f = _FSTD_File(filename,FST_RO)
-    keys = fstinl(f.funit)
+    # Scan the record headers.
+    if isinstance(filename,str):
+      filelist = [filename]
+    else:
+      filelist = list(filename)
+    funit = fstopenall(filelist, FST_RO)
+    keys = fstinl(funit)
+    self._params = OrderedDict()
     for i,key in enumerate(keys):
       prm = fstprm(key)
-      prm['d'] = _Record_Array(f,prm)
-      self._params.append(prm)
-    self._funit = f.funit
+      self._params[int(key)] = prm
+    self._funit = funit
 
   # Collect the list of params from all the FSTD records, and concatenate them
   # into arrays.  Result is a single dictionary containing the vectorized
@@ -435,10 +253,10 @@ class _Buffer_Base (object):
     from collections import OrderedDict
     import numpy as np
     # Make sure the parameter names are consistent for all records.
-    if len(set(map(frozenset,self._params))) != 1:
+    if len(set(map(frozenset,self._params.values()))) != 1:
       raise ValueError(("Inconsistent parameter names for the records."))
     fields = OrderedDict()
-    for prm in self._params:
+    for k,prm in self._params.items():
       for n,v in prm.items():
         fields.setdefault(n,[]).append(v)
     for n,v in list(fields.items()):
@@ -452,13 +270,8 @@ class _Buffer_Base (object):
     return fields
 
 
-  def __iter__ (self):
-    """
-    Processes the records into multidimensional variables.
-    Iterates over (name, atts, axes, array) tuples.
-    Note that array may not be a true numpy array (values are not yet loaded
-    in memory).  To load the array, pass it to numpy.asarray().
-    """
+  # Internal iterator.
+  def _iter (self):
     from collections import OrderedDict, namedtuple
     import numpy as np
 
@@ -470,7 +283,7 @@ class _Buffer_Base (object):
     # Group the records by variable.
     var_records = OrderedDict()
     var_id_type = namedtuple('var_id', self._var_id)
-    for i in range(len(records['nomvar'])):
+    for i,k in enumerate(records['key']):
       # Get the unique variable identifiers.
       var_id = var_id_type(*[records[n][i] for n in self._var_id])
       # Ignore coordinate records.
@@ -495,7 +308,7 @@ class _Buffer_Base (object):
         atts[n] = v
 
       # Get the axis coordinates.
-      axes =  OrderedDict()
+      axes = OrderedDict()
       for n in self._outer_axes:
         values = records[n][rec_ids]
         # Remove missing values before continuing.
@@ -506,37 +319,45 @@ class _Buffer_Base (object):
         values = tuple(sorted(set(values)))
         axes[n] = values
 
-      # Construct a multidimensional array to hold the data functions.
-      data = np.empty(map(len,axes.values()), dtype='O')
+      # Construct a multidimensional array to hold the record keys.
+      record_keys = np.empty(map(len,axes.values()), dtype='int32')
 
       # Assume missing data (nan) unless filled in later.
-      missing = _NaN_Array(var_id.ni, var_id.nj, var_id.nk)
-      data.fill(missing)
+      record_keys[()] = -1
       
-      # Arrange the data funcs in the appropriate locations.
+      # Arrange the record keys in the appropriate locations.
       for rec_id in rec_ids:
         index = tuple(axes[n].index(records[n][rec_id]) for n in axes.keys())
-        data[index] = records['d'][rec_id]
+        record_keys[index] = records['key'][rec_id]
 
       # Check if we have full coverage along all axes.
-      have_data = [d is not missing for d in data.flatten()]
+      have_data = [k >= 0 for k in record_keys.flatten()]
       if not np.all(have_data):
         warn (_("Missing some records for %s.")%var_id.nomvar)
 
-      data = _Array.create (data)
-
-      # Put the i,j,k dimensions in C order.
-      data = data.transpose(list(range(data.ndim-3))+[data.ndim-1,data.ndim-2,data.ndim-3])
-
+      # Add dummy axes for the ni,nj,nk record dimensions.
       axes['k'] = tuple(range(var_id.nk))
       axes['j'] = tuple(range(var_id.nj))
       axes['i'] = tuple(range(var_id.ni))
 
-      yield _var_type(var_id.nomvar.strip(), atts, axes, data)
+      var = _iter_type( name = var_id.nomvar.strip(), atts = atts,
+                        axes = axes,
+                        dtype = self._get_dtype(record_keys),
+                        record_keys = record_keys )
+      yield var
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
       # for other times).
+
+  # How to read the data.
+  @staticmethod
+  def _fstluk (key, dtype=None, rank=None, dataArray=None):
+    from rpnpy.librmn.fstd98 import fstluk
+    # Use local overrides for dtype.
+    if dtype is None and isinstance(key,dict):
+      dtype = dtype_fst2numpy(key['datyp'],key['nbits'])
+    return fstluk (key, dtype, rank, dataArray)
 
   #
   ###############################################
@@ -555,16 +376,17 @@ class _SelectVars (_Buffer_Base):
   def _cmdline_args (cls, parser):
     super(_SelectVars,cls)._cmdline_args(parser)
     parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables to convert.  By default, all variables are converted.'))
-  def __init__ (self, vars=None, *args, **kwargs):
+  def __init__ (self, *args, **kwargs):
+    vars = kwargs.pop('vars',None)
     if vars is not None:
       self._selected_vars = vars.split(',')
       print (_('Will look for variables: ') + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
     super(_SelectVars,self).__init__(*args,**kwargs)
-  def __iter__ (self):
+  def _iter (self):
     found = set()
-    for var in super(_SelectVars,self).__iter__():
+    for var in super(_SelectVars,self)._iter():
       if self._selected_vars is not None:
         if var.name not in self._selected_vars:
           continue
@@ -583,7 +405,8 @@ class _FilterRecords (_Buffer_Base):
   def _cmdline_args (cls, parser):
     super(_FilterRecords,cls)._cmdline_args(parser)
     parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
-  def __init__ (self, filter=None, *args, **kwargs):
+  def __init__ (self, *args, **kwargs):
+    filter = kwargs.pop('filter',None)
     if filter is None:
       filter = []
     self._filters = tuple(filter)
@@ -621,84 +444,51 @@ class _FilterRecords (_Buffer_Base):
 #################################################
 # Logic for handling masks.
 
-class _MaskedArray (_Array_Base):
-  def __init__ (self, data, mask, fill):
-    _Array_Base.__init__(self,data.shape,data.dtype)
-    self._data = data
-    self._mask = mask
-    self._fill = fill
-  def __array__ (self):
-    import numpy as np
-    data = np.array(self._data)
-    mask = np.array(self._mask)
-    data[mask==0] = self._fill
-    return data
-  def __getitem__ (self, key):
-    return _MaskedArray(self._data.__getitem__(key), self._mask.__getitem__(key), self._fill)
-  def squeeze (self, axis=None):
-    return _MaskedArray(self._data.squeeze(axis), self._mask.squeeze(axis), self._fill)
-  def transpose (self, *axes):
-    return MaskedArray(self._data.transpos(*axes), self._mask.transpose(*axes), self._fill)
 class _Masks (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_Masks,cls)._cmdline_args(parser)
     parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the netCDF file.  Default is '%(default)s'."))
-  def __init__ (self, fill_value=1e30, *args, **kwargs):
-    # Assume we have a 1:1 correspondence between data records and mask
-    # records, and that mask records are identified by nbits=1.
-    # Under these assumptions, can attach the mask by defining an outer 'axis'
-    # of length 2, which selects between mask/data arrays.
-    #TODO: Make this more robust if necessary.
-    #      E.g., are there cases where we have a 2D mask (lat,lon)
-    #      applied to a 3D field (time,lat,lon) or (lat,lon,level)?
-    self._outer_axes = ('is_mask',) + self._outer_axes
-    self._fill_value = fill_value
+  def __init__ (self, *args, **kwargs):
+    self._fill_value = kwargs.pop('fill_value',1e30)
     super(_Masks,self).__init__(*args,**kwargs)
-  # Identify whether a record is a mask or data field.
-  # Allows the decoder to stick these fields together over an 'is_mask' axis.
-  def _vectorize_params (self):
-    import numpy as np
-    fields = super(_Masks,self)._vectorize_params()
-    nrecs = len(fields['nomvar'])
-    # Organize records based on whether they're mask or data.
-    fields['is_mask'] = fields['nbits'] == 1
-    # Typvar may be different between mask / data, so store both versions.
-    # Blank out 'typvar' for mask records, and blank out 'mask_typvar'
-    # for mask records.  Obviously.
-    fields['mask_typvar'] = np.ma.array(np.array(fields['typvar']))
-    fields['mask_typvar'].mask = ~fields['is_mask']
-    # Special case: for fields that have typvar 'P@' with mask typvar '@@',
-    # blank out the typvar so we keep mask/data together.
-    special = np.array(['@' in t for t in fields['typvar']])
-    fields['data_typvar'] = np.ma.array(np.array(fields['typvar']))
-    fields['data_typvar'].mask = fields['is_mask'] | (~special)
-    fields['typvar'][special] = ''
-    return fields
-  # Apply the mask to the data.
-  def __iter__ (self):
-    from collections import OrderedDict
-    import numpy as np
-    for var in super(_Masks,self).__iter__():
-      if 'is_mask' not in var.axes:
+    # Look for any mask records, and attach them to the associated field.
+    masks = dict()
+    # Look for masks, pull them out of the list of records.
+    for key,prm in list(self._params.items()):
+      if prm['typvar'] == '@@':
+        masks[(prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar'])] = key
+        del self._params[key]
+    # Store the mask records.
+    self._masks = dict()
+    for key,prm in list(self._params.items()):
+      mask_key = masks.get((prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar']),None)
+      if mask_key is not None:
+        self._masks[key] = mask_key
+
+  # Apply the fill value to the data.
+  def _iter (self):
+    for var in super(_Masks,self)._iter():
+      if not isinstance(var,_iter_type):
         yield var
         continue
-      axes = OrderedDict(var.axes)
-      mask_dim = list(axes.keys()).index('is_mask')
-      # Do we have a mask/data pair?
-      if len(axes['is_mask']) > 1:
-        data = var.array[(slice(None),)*mask_dim+(0,)]
-        mask = var.array[(slice(None),)*mask_dim+(1,)]
-        # Use original dtype of the data.
-        # (May have been up-scaled to accomodate the uint32 mask).
-        data.dtype = np.result_type(data._data.flatten()[0])
-        # Apply the mask
-        data = _MaskedArray(data,mask,fill=self._fill_value)
-        var.atts['_FillValue'] = data.dtype.type(self._fill_value)
-      else:
-        data = var.array.squeeze(axis=mask_dim)
-      del axes['is_mask']
-      yield type(var)(var.name, var.atts, axes, data)
+      if any(k in self._masks for k in var.record_keys.flatten() if k >= 0):
+        var.atts['_FillValue'] = var.dtype.type(self._fill_value)
+      yield var
+
+  # Apply the mask data
+  def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
+    from rpnpy.librmn.fstd98 import fstluk
+    import numpy as np
+    prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
+    if isinstance(key,dict):
+      key = int(key['key'])
+    mask_key = self._masks.get(key,None)
+    if mask_key is not None:
+      mask = fstluk(mask_key, rank=rank)['d']
+      prm['d'] = np.ma.asarray(prm['d'])
+      prm['d'].mask = (mask == 0)
+    return prm
 
 
 #################################################
@@ -710,9 +500,9 @@ class _Dates (_Buffer_Base):
     super(_Dates,cls)._cmdline_args(parser)
     parser.add_argument('--squash-forecasts', action='store_true', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
 
-  def __init__ (self, squash_forecasts=False, *args, **kwargs):
-    self._squash_forecasts = squash_forecasts
-    if squash_forecasts:
+  def __init__ (self, *args, **kwargs):
+    self._squash_forecasts = kwargs.pop('squash_forecasts',False)
+    if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
     else:
       self._outer_axes = ('time','forecast') + self._outer_axes
@@ -742,13 +532,16 @@ class _Dates (_Buffer_Base):
     return fields
 
   # Add time and forecast axes to the data stream.
-  def __iter__ (self):
+  def _iter (self):
     from collections import OrderedDict
     import numpy as np
     # Keep track of all time and forecast axes found in the data.
     time_axes = set()
     forecast_axes = set()
-    for var in super(_Dates,self).__iter__():
+    for var in super(_Dates,self)._iter():
+      if not isinstance(var,_iter_type):
+        yield var
+        continue
       if 'time' in var.axes:
         times = var.axes['time']
         if times not in time_axes:
@@ -756,7 +549,7 @@ class _Dates (_Buffer_Base):
           atts = OrderedDict([('axis','T')])
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
-          yield type(var)('time',atts,axes,np.asarray(times))
+          yield _var_type('time',atts,axes,np.asarray(times))
       if 'forecast' in var.axes:
         forecasts = var.axes['forecast']
         if forecasts not in forecast_axes:
@@ -764,7 +557,7 @@ class _Dates (_Buffer_Base):
           atts = OrderedDict(units='hours')
           axes = OrderedDict([('forecast',var.axes['forecast'])])
           # Add the forecast axis to the data stream.
-          yield type(var)('forecast',atts,axes,np.asarray(forecasts))
+          yield _var_type('forecast',atts,axes,np.asarray(forecasts))
       yield var
 
 
@@ -835,7 +628,8 @@ class _Series (_Buffer_Base):
     # Set it to 0 to indicate a degenerate vertical axis.
     fields['ip1'][is_series] = 0
     return fields
-  def __iter__ (self):
+  def _iter (self):
+    from rpnpy.librmn.fstd98 import fstluk
     from collections import OrderedDict
     import numpy as np
     forecast_hours = None
@@ -843,13 +637,13 @@ class _Series (_Buffer_Base):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    for header in self._params:
+    for header in self._params.values():
       if header['typvar'].strip() != 'T': continue
       nomvar = header['nomvar'].strip()
       # Create station axis.
       if nomvar == 'STNS':
         atts = OrderedDict()
-        array = np.asarray(header['d']).squeeze(axis=2).transpose()
+        array = fstluk(header)['d'].transpose()
         # Re-cast array as string.
         # I don't know why I have to subtract 128 - maybe something to do with
         # how the characters are encoded in the file?
@@ -870,21 +664,22 @@ class _Series (_Buffer_Base):
       # Create forecast axis.
       if nomvar == 'HH':
         atts = OrderedDict(units='hours')
-        array = np.asarray(header['d']).flatten()
+        array = fstluk(header)['d'].flatten()
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
         yield forecast
 
-    for var in super(_Series,self).__iter__():
+    for var in super(_Series,self)._iter():
 
-      if var.atts.get('typvar') != 'T':
+      if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
         yield var
         continue
 
       # Vertical coordinates for series data.
       if var.name in ('SH','SV'):
-        array = np.asarray(var.array).squeeze()
+        key = int(var.record_keys.flatten()[0])
+        array = fstluk(key)['d'].squeeze()
         if array.ndim != 1: continue
         var.atts['kind'] = 5
         yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
@@ -892,20 +687,16 @@ class _Series (_Buffer_Base):
 
       # '+' data has different meanings for the axes.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
-        axes = var.axes
-        array = var.array
         # Remove degenerate vertical axis.
-        if 'level' in axes:
-          array = var.array.squeeze(axis=list(var.axes.keys()).index('level'))
-          axes.pop('level')
+        if 'level' in var.axes:
+          var.record_keys = var.record_keys.squeeze(axis=list(var.axes.keys()).index('level'))
+          var.axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
         # station_id should become ni, and turn degenerate nk into nj.
         # This is only done so that _XYCoords can attach the lat/lon info.
-        axes = _modify_axes(var.axes, **{'i':'level',
+        var.axes = _modify_axes(var.axes, **{'i':'level',
                  'j':('forecast',forecast_hours), 'station_id':'i', 'k':'j'})
-        nlevels = len(axes['level'])
-        var = type(var)(var.name,var.atts,axes,array)
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
       var.atts.pop('kind',None)
@@ -940,18 +731,18 @@ class _VCoords (_Buffer_Base):
     fields['kind'] = kind
     return fields
   # Add vertical axis as another variable.
-  def __iter__ (self):
+  def _iter (self):
     from collections import OrderedDict
     import numpy as np
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS
     from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import DecodeIp
+    from rpnpy.librmn.fstd98 import DecodeIp, fstluk
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
-    for header in self._params:
+    for header in self._params.values():
       if header['nomvar'].strip() not in self._vcoord_nomvars: continue
       key = (header['ip1'],header['ip2'])
       # For old HY records, there's no matching ipX/igX codes.
@@ -961,14 +752,16 @@ class _VCoords (_Buffer_Base):
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
-    for var in super(_VCoords,self).__iter__():
+    for var in super(_VCoords,self)._iter():
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
         if 'level' in var.axes and len(var.axes['level']) == 1:
           i = list(var.axes).index('level')
           del var.axes['level']
-          array = var.array.squeeze(axis=i)
-          yield type(var)(var.name, var.atts, var.axes, array)
+          # Remove the axis if it's an "outer" axis (not along ni,nj,nk).
+          if i < var.record_keys.ndim:
+            var.record_keys = var.record_keys.squeeze(axis=i)
+          yield var
           continue
       # No vertical axis?
       if 'level' not in var.axes or 'kind' not in var.atts:
@@ -1026,7 +819,7 @@ class _VCoords (_Buffer_Base):
             # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
               # Get A and B info.
-              vgd_id = vgd_fromlist(header['d'][...])
+              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
               if vgd_get (vgd_id,'LOGP'):
                 name = 'zeta'
                 # Not really a "standard" name, but there's nothing in the
@@ -1062,8 +855,8 @@ class _VCoords (_Buffer_Base):
                   ind = all_z.index(z)
                   A.append(all_a[ind])
                   B.append(all_b[ind])
-                A = type(var)(name+'_A', {}, {name:levels}, np.asarray(A))
-                B = type(var)(name+'_B', {}, {name:levels}, np.asarray(B))
+                A = _var_type(name+'_A', {}, {name:levels}, np.asarray(A))
+                B = _var_type(name+'_B', {}, {name:levels}, np.asarray(B))
                 ancillary_variables.extend([A,B])
               except (KeyError,ValueError,VGDError):
                 warn (_("Unable to get A/B coefficients."))
@@ -1082,8 +875,8 @@ class _VCoords (_Buffer_Base):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
               A = pref * 100. * (eta - B)
-              B = type(var)(name+'_B', {}, {name:levels}, B)
-              A = type(var)(name+'_A', {}, {name:levels}, A)
+              B = _var_type(name+'_B', {}, {name:levels}, B)
+              A = _var_type(name+'_A', {}, {name:levels}, A)
               ancillary_variables.extend([A,B])
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
@@ -1099,7 +892,7 @@ class _VCoords (_Buffer_Base):
         if len(ancillary_variables) > 0:
           atts['ancillary_variables'] = ' '.join(v.name for v in ancillary_variables)
         array = np.asarray(levels)
-        vaxes[(levels,kind)] = type(var)(name,atts,axes,array)
+        vaxes[(levels,kind)] = _var_type(name,atts,axes,array)
         yield vaxes[(levels,kind)]
         # Add any ancillary data needed for the axis.
         for anc in ancillary_variables:
@@ -1107,9 +900,7 @@ class _VCoords (_Buffer_Base):
       # Get the vertical axis.
       vaxis = vaxes[(levels,kind)]
       # Modify the variable's dimension name to match the axis name.
-      axes = _modify_axes(var.axes, level=vaxis.name)
-
-      var = type(var)(var.name,var.atts,axes,var.array)
+      var.axes = _modify_axes(var.axes, level=vaxis.name)
       yield var
 
 
@@ -1142,7 +933,7 @@ class _XYCoords (_Buffer_Base):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    for header in self._params:
+    for header in self._params.values():
       if header['nomvar'].strip() != coordname: continue
       if header['ip1'] != var.atts['ig1']: continue
       if header['ip2'] != var.atts['ig2']: continue
@@ -1152,16 +943,17 @@ class _XYCoords (_Buffer_Base):
 
 
   # Add horizontal coordinate info to the data stream.
-  def __iter__ (self):
+  def _iter (self):
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError
+    from rpnpy.librmn.fstd98 import fstluk
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
-    for var in super(_XYCoords,self).__iter__():
-      # Don't touch variables that have no horizontal extent.
-      if 'i' not in var.axes or 'j' not in var.axes:
+    for var in super(_XYCoords,self)._iter():
+      # Don't touch derived variables.
+      if not isinstance(var,_iter_type):
         yield var
         continue
       # Get grid parameters.
@@ -1189,8 +981,8 @@ class _XYCoords (_Buffer_Base):
           # Get basic information about this grid.
           # First, handle non-ezqkdef grids.
           if grtyp in self._direct_grids:
-            lat = self._find_coord(var,'^^')['d'][...].squeeze(axis=2)
-            lon = self._find_coord(var,'>>')['d'][...].squeeze(axis=2)
+            lat = self._fstluk(self._find_coord(var,'^^'),rank=3)['d'].squeeze(axis=2)
+            lon = self._fstluk(self._find_coord(var,'>>'),rank=3)['d'].squeeze(axis=2)
             ll = {'lat':lat, 'lon':lon}
           # Everything else should be handled by ezqkdef.
           else:
@@ -1210,11 +1002,11 @@ class _XYCoords (_Buffer_Base):
           xycoords = gdgaxes(gdid)
           ax = xycoords['ax'].transpose()
           ay = xycoords['ay'].transpose()
-          # Convert from degenrate 2D arrays to 1D arrays.
+          # Convert from degenerate 2D arrays to 1D arrays.
           ax = ax[0,:]
           ay = ay[:,0]
-          xaxis = type(var)('x',{'axis':'X'},{'x':tuple(ax)},ax)
-          yaxis = type(var)('y',{'axis':'Y'},{'y':tuple(ay)},ay)
+          xaxis = _var_type('x',{'axis':'X'},{'x':tuple(ax)},ax)
+          yaxis = _var_type('y',{'axis':'Y'},{'y':tuple(ay)},ay)
         except (TypeError,EzscintError):
           # Can't get X/Y coords for this grid?
           xaxis = yaxis = None
@@ -1246,8 +1038,8 @@ class _XYCoords (_Buffer_Base):
             meanlon[-1] += 360.
           latarray = meanlat
           lonarray = meanlon
-          lat = type(var)('lat',latatts,{'lat':tuple(latarray)},latarray)
-          lon = type(var)('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
+          lat = _var_type('lat',latatts,{'lat':tuple(latarray)},latarray)
+          lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
           gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
 
         # Case 2: General 2D lat/lon fields on X/Y coordinate system.
@@ -1255,14 +1047,14 @@ class _XYCoords (_Buffer_Base):
           yield yaxis
           yield xaxis
           gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
-          lat = type(var)('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = type(var)('lon',lonatts,OrderedDict(gridaxes),lonarray)
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
         # Case 3: General 2D lat/lon fields with no coordinate system.
         else:
           gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
-          lat = type(var)('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = type(var)('lon',lonatts,OrderedDict(gridaxes),lonarray)
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
         yield lat
         yield lon
@@ -1271,14 +1063,14 @@ class _XYCoords (_Buffer_Base):
       gridaxes = grids[key]
 
       # Update the var's horizontal coordinates.
-      axes = _modify_axes(var.axes, i=gridaxes[1], j=gridaxes[0])
+      var.axes = _modify_axes(var.axes, i=gridaxes[1], j=gridaxes[0])
 
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
-      if 'lat' not in axes or 'lon' not in axes:
+      if 'lat' not in var.axes or 'lon' not in var.axes:
         var.atts['coordinates'] = 'lon lat'
 
-      yield type(var)(var.name,var.atts,axes,var.array)
+      yield var
 
 
 
@@ -1286,17 +1078,13 @@ class _XYCoords (_Buffer_Base):
 # Remove extraneous dimensions from the output.
 
 class _NoNK (_Buffer_Base):
-  def __iter__ (self):
-    for var in super(_NoNK,self).__iter__():
-      axes = var.axes
-      array = var.array
-      if 'k' in axes and len(axes['k']) == 1:
-        array = array.squeeze(axis=list(axes.keys()).index('k'))
-        del axes['k']
-      if 'j' in axes and len(axes['j']) == 1:
-        array = array.squeeze(axis=list(axes.keys()).index('j'))
-        del axes['j']
-      yield type(var)(var.name,var.atts,axes,array)
+  def _iter (self):
+    for var in super(_NoNK,self)._iter():
+      if 'k' in var.axes and len(var.axes['k']) == 1:
+        del var.axes['k']
+      if 'j' in var.axes and len(var.axes['j']) == 1:
+        del var.axes['j']
+      yield var
 
 
 #################################################
@@ -1308,9 +1096,10 @@ class _netCDF_Atts (_Buffer_Base):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
-  def __init__ (self, metadata_file=None, *args, **kwargs):
+  def __init__ (self, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
+    metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:
       metafiles = []
     else:
@@ -1323,29 +1112,28 @@ class _netCDF_Atts (_Buffer_Base):
       metadata[varname] = OrderedDict(configparser.items(varname))
     self._metadata = metadata
     super(_netCDF_Atts,self).__init__(*args,**kwargs)
-  def __iter__ (self):
+  def _iter (self):
     from collections import OrderedDict
 
     axis_renames = {}
 
-    for var in super(_netCDF_Atts,self).__iter__():
-      name = var.name
-      atts = OrderedDict(var.atts)
+    for var in super(_netCDF_Atts,self)._iter():
+      orig_name = var.name
       # Add extra metadata provided by the user?
       if var.name in self._metadata:
-        atts.update(self._metadata[var.name])
+        var.atts.update(self._metadata[var.name])
         # Rename the field? (Using special 'rename' key in the metadata file).
-        if 'rename' in atts:
-          name = atts.pop('rename')
+        if 'rename' in var.atts:
+          var.name = var.atts.pop('rename')
           # Also rename any axis with this name.
-          axis_renames[var.name] = name
+          axis_renames[orig_name] = var.name
 
       # Check if any of the axes in this variable need to be renamed.
       axis_names, axis_values = zip(*var.axes.items())
       axis_names = [axis_renames.get(n,n) for n in axis_names]
-      axes = OrderedDict(zip(axis_names,axis_values))
+      var.axes = OrderedDict(zip(axis_names,axis_values))
 
-      yield type(var)(name,atts,axes,var.array)
+      yield var
 
 
 #################################################
@@ -1371,14 +1159,14 @@ class _netCDF_IO (_netCDF_Atts):
       except ValueError:
         parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
 
-  def __init__ (self, time_units='hours', reference_date=None, buffer_size=100, nc_format='NETCDF4', *args, **kwargs):
-    self._time_units = time_units
-    self._reference_date = reference_date
-    self._buffer_size = int(buffer_size)
-    self._nc_format = nc_format
+  def __init__ (self, *args, **kwargs):
+    self._time_units = kwargs.pop('time_units','hours')
+    self._reference_date = kwargs.pop('reference_date',None)
+    self._buffer_size = int(kwargs.pop('buffer_size',100))
+    self._nc_format = kwargs.pop('nc_format','NETCDF4')
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
-  def __iter__ (self):
+  def _iter (self):
     from datetime import datetime
     import numpy as np
     from netCDF4 import date2num
@@ -1388,14 +1176,13 @@ class _netCDF_IO (_netCDF_Atts):
     else:
       reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
-    for var in super(_netCDF_IO,self).__iter__():
+    for var in super(_netCDF_IO,self)._iter():
 
       # Modify time axes to be relative units instead of datetime objects.
-      if var.name in var.axes and isinstance(var.array[0],datetime):
+      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],datetime):
         units = '%s since %s'%(self._time_units, reference_date or var.array[0])
         var.atts.update(units=units)
-        array = np.asarray(date2num(var.array,units=units))
-        var = type(var)(var.name,var.atts,var.axes,array)
+        var.array = np.asarray(date2num(var.array,units=units))
 
       yield var
 
@@ -1407,7 +1194,6 @@ class _netCDF_IO (_netCDF_Atts):
     """
     from netCDF4 import Dataset
     import numpy as np
-    from itertools import product
     from collections import OrderedDict
     f = Dataset(filename, "w", format=self._nc_format)
 
@@ -1421,13 +1207,12 @@ class _netCDF_IO (_netCDF_Atts):
       f.setncatts(global_metadata)
 
     # Need to pre-scan all the variables to generate unique names.
-    # Make sure they're structured as namedtuples.
-    varlist = [_var_type(*var) for var in iter(self)]
+    varlist = list(self._iter())
 
     # Generate unique axis names.
     axis_table = dict()
-    for varname, atts, axes, array in varlist:
-      for axisname, axisvalues in axes.items():
+    for var in varlist:
+      for axisname, axisvalues in var.axes.items():
         axisvalues = tuple(axisvalues)
         if axisname not in axis_table:
           axis_table[axisname] = []
@@ -1446,14 +1231,12 @@ class _netCDF_IO (_netCDF_Atts):
       if key in axis_renames:
         return (axis_renames[key],axisvalues)
       return (axisname,axisvalues)
-    for i, var in enumerate(varlist):
-      varname = var.name
+    for var in varlist:
       # If this is a coordinate variable, use same renaming rules as the
       # dimension name.
-      if varname in var.axes:
-        varname, axisvalues = rename_axis((varname,var.axes[varname]))
-      axes = OrderedDict(map(rename_axis,var.axes.items()))
-      varlist[i] = _var_type(varname, var.atts, axes, var.array)
+      if isinstance(var,_var_type) and var.name in var.axes:
+        var.name, axisvalues = rename_axis((var.name,var.axes[var.name]))
+      var.axes = OrderedDict(map(rename_axis,var.axes.items()))
 
     # Generate a string-based variable id.
     # Only works for true variables from the FSTD source
@@ -1500,27 +1283,27 @@ class _netCDF_IO (_netCDF_Atts):
 
       # Apply the name changes.
       for i, var_id in zip(var_indices, var_ids):
-        varname, atts, axes, array = varlist[i]
-        newname = varname + '_' + var_id
-        varlist[i] = _var_type(newname,atts,axes,array)
+        var = varlist[i]
+        orig_varname = var.name
+        var.name = var.name + '_' + var_id
         # Apply the name changes to any metadata that references this variable.
-        for var in varlist:
+        for othervar in varlist:
           # Must match axes.
-          if not set(axes.keys()) <= set(var.axes.keys()): continue
-          for key,val in list(var.atts.items()):
+          if not set(var.axes.keys()) <= set(othervar.axes.keys()): continue
+          for key,val in list(othervar.atts.items()):
             if not isinstance(val,str): continue
             val = val.split()
-            if varname in val:
-              val[val.index(varname)] = newname
-            var.atts[key] = ' '.join(val)
+            if orig_varname in val:
+              val[val.index(orig_varname)] = var.name
+            othervar.atts[key] = ' '.join(val)
 
-    for varname, atts, axes, array in varlist:
+    for var in varlist:
       # Names must start with a letter or underscore.
-      if not varname[0].isalpha():
-        warn(_("Renaming '%s' to '_%s'.")%(varname,varname))
-        varname = '_'+varname
+      if not var.name[0].isalpha():
+        warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
+        var.name = '_'+var.name
 
-      for axisname, axisvalues in axes.items():
+      for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
         if axisname not in f.dimensions:
@@ -1529,27 +1312,33 @@ class _netCDF_IO (_netCDF_Atts):
             f.createDimension(axisname, None)
           else:
             f.createDimension(axisname, len(axisvalues))
-      # Write the variable.
-      v = f.createVariable(varname, datatype=array.dtype, dimensions=list(axes.keys()))
-      # Write the metadata.
       # Strip out FSTD-specific metadata?
       if self._minimal_metadata:
         for n in internal_meta:
-          atts.pop(n,None)
-      v.setncatts(atts)
-      # Determine how much we can write at a time.
-      # Try to keep it under the buffer size, but make sure the last 2
-      # dimensions don't get split (represent a single FSTD record?)
-      a = 0
-      check = array.size * array.dtype.itemsize
-      while check > self._buffer_size*1E6 and a < array.ndim-2:
-        check /= array.shape[a]
-        a = a + 1
-      for ind in product(*map(range,array.shape[:a])):
+          var.atts.pop(n,None)
+
+      dimensions = list(var.axes.keys())
+
+      # Write the variable.
+      # Easy case: already have the data.
+      if isinstance(var,_var_type):
+        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions)
+        # Write the metadata.
+        v.setncatts(var.atts)
+        v[()] = var.array
+        continue
+      # Hard case: only have the record indices, need to loop over the records.
+      v = f.createVariable(var.name, datatype=self._get_dtype(var.record_keys), dimensions=dimensions)
+      # Write the metadata.
+      v.setncatts(var.atts)
+      # Write the data.
+      for ind in np.ndindex(var.record_keys.shape):
+        k = int(var.record_keys[ind])
+        if k < 0: continue
         try:
-          v[ind] = np.asarray(array[ind])
+          v[ind] = self._fstluk(k)['d'].transpose()
         except (IndexError,ValueError):
-          warn(_("Internal problem with the script - unable to get data for '%s'")%varname)
+          warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
@@ -1558,8 +1347,68 @@ class _netCDF_IO (_netCDF_Atts):
     f.close()
 
 
+#################################################
+# A user-friendly iterator for using the Buffer in other Python scripts.
+
+# Lightweight wrapper for the data.
+# Allows the user to load the data through np.asarray or by slicing it.
+class _Array (object):
+  # Set some common attributes for the object.
+  def __init__ (self, buffer, var):
+    from functools import reduce
+    self._buffer = buffer
+    self._record_keys = var.record_keys
+    # Expected shape and type of the array.
+    self.shape = tuple(map(len,var.axes.values()))
+    self.ndim = len(self.shape)
+    self.size = reduce(int.__mul__, self.shape, 1)
+    self.dtype = var.dtype
+  def __getitem__ (self, key):
+    import numpy as np
+    # Coerce key into a tuple of slice objects.
+    if not isinstance(key,tuple):
+      if hasattr(key,'__len__'): key = tuple(key)
+      else: key = (key,)
+    if len(key) == 1 and hasattr(key[0],'__len__'):
+      key = tuple(key[0])
+    if Ellipsis in key:
+      i = key.index(Ellipsis)
+      key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
+    key = key + (slice(None),)*(self.ndim-len(key))
+    if len(key) > self.ndim:
+      raise ValueError(("Too many dimensions for slicing."))
+    final_shape = tuple(len(np.arange(n)[k]) for n,k in zip(self.shape,key) if not isinstance(k,int))
+    data = np.ma.empty(final_shape, dtype=self.dtype)
+    outer_ndim = self._record_keys.ndim
+    record_keys = self._record_keys.__getitem__(key[:outer_ndim])
+    for ind in np.ndindex(record_keys.shape):
+      k = int(record_keys[ind])
+      if k >= 0:
+        data[ind] = self._buffer._fstluk(k)['d'].transpose()[(Ellipsis,)+key[outer_ndim:]]
+      else:
+        data.mask = np.ma.getmaskarray(data)
+        data.mask[ind] = True
+    return data
+  def __array__ (self):
+    return self.__getitem__(())
+
+class _Iter (_Buffer_Base):
+  def __iter__ (self):
+    """
+    Processes the records into multidimensional variables.
+    Iterates over (name, atts, axes, array) tuples.
+    Note that array may not be a true numpy array (values are not yet loaded
+    in memory).  To load the array, pass it to numpy.asarray().
+    """
+    for var in self._iter():
+      if isinstance(var, _iter_type):
+        array = _Array(self, var)
+        var = _var_type (var.name, var.atts, var.axes, array)
+      yield var
+
+
 # Default interface for I/O.
-class Buffer (_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
@@ -1585,7 +1434,6 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   outfile = args.pop('outfile')
   force = args.pop('force')
   no_history = args.pop('no_history')
-  buf = buffer_type(**args)
 
   # Make sure input file exists
   for infile in infiles:
@@ -1596,7 +1444,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
       print (_("Error: '%s' is not an RPN standard file!")%(infile))
       exit(1)
 
-  buf.read_fstd_file(infiles)
+  buf = buffer_type(infiles, **args)
 
   # Check if output file already exists
   if exists(outfile) and not force:
