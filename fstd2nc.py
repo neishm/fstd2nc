@@ -354,6 +354,9 @@ class _Buffer_Base (object):
   @staticmethod
   def _fstluk (key, dtype=None, rank=None, dataArray=None):
     from rpnpy.librmn.fstd98 import fstluk
+    # Use local overrides for dtype.
+    if dtype is None and isinstance(key,dict):
+      dtype = dtype_fst2numpy(key['datyp'],key['nbits'])
     return fstluk (key, dtype, rank, dataArray)
 
   #
@@ -478,6 +481,8 @@ class _Masks (_Buffer_Base):
     from rpnpy.librmn.fstd98 import fstluk
     import numpy as np
     prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
+    if isinstance(key,dict):
+      key = int(key['key'])
     mask_key = self._masks.get(key,None)
     if mask_key is not None:
       mask = fstluk(mask_key, rank=rank)['d']
@@ -654,14 +659,14 @@ class _Series (_Buffer_Base):
         array = array.view('|S1').reshape(nstations,strlen)
         # Encode it as 2D character array for netCDF file output.
         axes = OrderedDict([('i',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
-        station = _iter_type('station',atts,axes,{},None,array)
+        station = _var_type('station',atts,axes,array)
         yield station
       # Create forecast axis.
       if nomvar == 'HH':
         atts = OrderedDict(units='hours')
         array = fstluk(header)['d'].flatten()
         axes = OrderedDict(forecast=tuple(array))
-        forecast = _iter_type('forecast',atts,axes,{},None,array)
+        forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
         yield forecast
 
@@ -673,7 +678,8 @@ class _Series (_Buffer_Base):
 
       # Vertical coordinates for series data.
       if var.name in ('SH','SV'):
-        array = fstluk(var.record_keys.flatten()[0])['d'].squeeze()
+        key = int(var.record_keys.flatten()[0])
+        array = fstluk(key)['d'].squeeze()
         if array.ndim != 1: continue
         var.atts['kind'] = 5
         yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
@@ -752,7 +758,9 @@ class _VCoords (_Buffer_Base):
         if 'level' in var.axes and len(var.axes['level']) == 1:
           i = list(var.axes).index('level')
           del var.axes['level']
-          var.record_keys = var.record_keys.squeeze(axis=i)
+          # Remove the axis if it's an "outer" axis (not along ni,nj,nk).
+          if i < var.record_keys.ndim:
+            var.record_keys = var.record_keys.squeeze(axis=i)
           yield var
           continue
       # No vertical axis?
@@ -811,7 +819,7 @@ class _VCoords (_Buffer_Base):
             # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
               # Get A and B info.
-              vgd_id = vgd_fromlist(fstluk(header)['d'])
+              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
               if vgd_get (vgd_id,'LOGP'):
                 name = 'zeta'
                 # Not really a "standard" name, but there's nothing in the
@@ -973,8 +981,8 @@ class _XYCoords (_Buffer_Base):
           # Get basic information about this grid.
           # First, handle non-ezqkdef grids.
           if grtyp in self._direct_grids:
-            lat = fstluk(self._find_coord(var,'^^'))['d'].squeeze(axis=2)
-            lon = fstluk(self._find_coord(var,'>>'))['d'].squeeze(axis=2)
+            lat = self._fstluk(self._find_coord(var,'^^'),rank=3)['d'].squeeze(axis=2)
+            lon = self._fstluk(self._find_coord(var,'>>'),rank=3)['d'].squeeze(axis=2)
             ll = {'lat':lat, 'lon':lon}
           # Everything else should be handled by ezqkdef.
           else:
@@ -1072,9 +1080,6 @@ class _XYCoords (_Buffer_Base):
 class _NoNK (_Buffer_Base):
   def _iter (self):
     for var in super(_NoNK,self)._iter():
-      if not isinstance(var,_iter_type):
-        yield var
-        continue
       if 'k' in var.axes and len(var.axes['k']) == 1:
         del var.axes['k']
       if 'j' in var.axes and len(var.axes['j']) == 1:
@@ -1278,19 +1283,19 @@ class _netCDF_IO (_netCDF_Atts):
 
       # Apply the name changes.
       for i, var_id in zip(var_indices, var_ids):
-        varname, atts, axes, array = varlist[i]
-        newname = varname + '_' + var_id
-        varlist[i] = _var_type(newname,atts,axes,array)
+        var = varlist[i]
+        orig_varname = var.name
+        var.name = var.name + '_' + var_id
         # Apply the name changes to any metadata that references this variable.
-        for var in varlist:
+        for othervar in varlist:
           # Must match axes.
-          if not set(axes.keys()) <= set(var.axes.keys()): continue
-          for key,val in list(var.atts.items()):
+          if not set(var.axes.keys()) <= set(othervar.axes.keys()): continue
+          for key,val in list(othervar.atts.items()):
             if not isinstance(val,str): continue
             val = val.split()
-            if varname in val:
-              val[val.index(varname)] = newname
-            var.atts[key] = ' '.join(val)
+            if orig_varname in val:
+              val[val.index(orig_varname)] = var.name
+            othervar.atts[key] = ' '.join(val)
 
     for var in varlist:
       # Names must start with a letter or underscore.
