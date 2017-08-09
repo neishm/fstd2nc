@@ -44,9 +44,6 @@ optional arguments:
   --reference-date YYYY-MM-DD
                         The reference date for the netCDF time axis. The
                         default is the starting date in the RPN file.
-  --buffer-size BUFFER_SIZE
-                        How much data to write at a time (in MBytes). Default
-                        is 100.
   --nc-format {NETCDF4,NETCDF4_CLASSIC,NETCDF3_CLASSIC,NETCDF3_64BIT_OFFSET,NETCDF3_64BIT_DATA}
                         Which variant of netCDF to write. Default is NETCDF4.
   -f, --force           Overwrite the output file if it already exists.

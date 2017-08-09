@@ -1145,7 +1145,6 @@ class _netCDF_IO (_netCDF_Atts):
     super(_netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
     parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the RPN file.'))
-    parser.add_argument('--buffer-size', type=int, default=100, help=_('How much data to write at a time (in MBytes).  Default is %(default)s.'))
     parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
 
   @classmethod
@@ -1162,7 +1161,6 @@ class _netCDF_IO (_netCDF_Atts):
   def __init__ (self, *args, **kwargs):
     self._time_units = kwargs.pop('time_units','hours')
     self._reference_date = kwargs.pop('reference_date',None)
-    self._buffer_size = int(kwargs.pop('buffer_size',100))
     self._nc_format = kwargs.pop('nc_format','NETCDF4')
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
