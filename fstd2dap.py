@@ -23,6 +23,9 @@
 Serve RPN standard files through a pydap server.
 """
 
+from fstd2nc import Buffer
+_buffer_args = {}  # To be filled in by __main__.
+
 # Handler for the FST data.
 from pydap.handlers.lib import BaseHandler
 class FST_Handler(BaseHandler):
@@ -35,13 +38,12 @@ class FST_Handler(BaseHandler):
     if name != 'dataset': raise AttributeError
     filepath = self.filepath
     from pydap.model import DatasetType, GridType, BaseType
-    from fstd2nc import Buffer
     from os.path import basename
     import numpy as np
     from collections import OrderedDict
     BaseHandler.__init__(self)
     self.filepath = filepath
-    buf = Buffer(filepath)
+    buf = Buffer(filepath, **_buffer_args)
     dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
 
     # First, scan into a dictionary
@@ -65,6 +67,7 @@ class FST_Handler(BaseHandler):
           array = np.array(var.axes[dim])
         dataset[var.name][dim] = BaseType(dim, array, None, atts)
 
+    #TODO: set unlimited dimension
     for dim in dims.values():
       dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
     self.dataset = dataset
@@ -84,9 +87,30 @@ from pydap.handlers import lib as pydap_lib
 pydap_lib.get_handler = get_handler
 
 
-# After hacking in this handler, invoke the pydap server.
+def _(s): return s
+
 def __main__():
   from pydap.wsgi.app import main
+  from argparse import ArgumentParser
+  import sys
+  # Hook some of the Pydap options into the argparse interface.
+  parser = ArgumentParser(description=_("Serves RPN standard files in an OPeNDAP interface."))
+  parser.add_argument('-b', '--bind', metavar='ADDRESS', default='127.0.0.1', help=_('The ip to listen to [default: %(default)s]'))
+  parser.add_argument('-p', '--port', metavar='PORT', type=int, default=8001, help=_('The port to connect [default: %(default)s]'))
+  parser.add_argument('-d', '--data', metavar='DIR', default='.', help=_('The directory with files [default: %(default)s]'))
+
+  # Parse the combined arguments.
+  Buffer._cmdline_args(parser)
+  args = parser.parse_args()
+  Buffer._check_args(parser, args)
+  args = vars(args)
+
+  # Put the Pydap stuff back onto the argv.
+  sys.argv = [sys.argv[0], '--bind', args.pop('bind'), '--port', args.pop('port'), '--data', args.pop('data')]
+  # Store the fstd2nc arguments for later use.
+  _buffer_args.update(args)
+
+  # Invoke the command-line Pydap interface.
   main()
 
 if __name__ == '__main__':
