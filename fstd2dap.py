@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ###############################################################################
 # Copyright 2017 - Climate Research Division
 #                  Environment and Climate Change Canada
@@ -87,6 +85,10 @@ pydap_lib.get_handler = get_handler
 
 
 # After hacking in this handler, invoke the pydap server.
-if __name__ == '__main__':
+def __main__():
   from pydap.wsgi.app import main
   main()
+
+if __name__ == '__main__':
+  __main__()
+
