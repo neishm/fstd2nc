@@ -42,7 +42,9 @@ class FST_Handler(BaseHandler):
     self.dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
 
     # First, scan into a dictionary
-    vars = OrderedDict((var.name,var) for var in buf)
+    buf = list(buf)
+    vars = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
+    dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
 
     # Based loosely on pydap's builtin netcdf handler.
     for var in vars.values():
@@ -52,13 +54,17 @@ class FST_Handler(BaseHandler):
       self.dataset[var.name][var.name] = BaseType(var.name, var.array, tuple(var.axes.keys()), var.atts)
       # Add maps.
       for dim in var.axes.keys():
-        if dim in vars:
-          atts = vars[dim].atts
-          array = vars[dim].array
+        if dim in dims:
+          atts = dims[dim].atts
+          array = dims[dim].array
         else:
           atts = {}
           array = np.array(var.axes[dim])
         self.dataset[var.name][dim] = BaseType(dim, array, None, atts)
+
+    for dim in dims.values():
+      self.dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
+
 
 # Hack this handler into the pydap interface.
 # Can't register this in the normal way, because we can't provide specific
