@@ -658,7 +658,7 @@ class _Series (_Buffer_Base):
         array[:] = map(str.rstrip,array)
         array = array.view('|S1').reshape(nstations,strlen)
         # Encode it as 2D character array for netCDF file output.
-        axes = OrderedDict([('i',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
+        axes = OrderedDict([('station_id',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
         station = _var_type('station',atts,axes,array)
         yield station
       # Create forecast axis.
@@ -685,6 +685,11 @@ class _Series (_Buffer_Base):
         yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
         continue
 
+      # 'Y' data should be handled fine by _XYCoords - just give a more
+      # specific name to the ni axis for clarity.
+      if var.atts.get('grtyp') == 'Y':
+        var.axes = _modify_axes(var.axes, i='station_id')
+
       # '+' data has different meanings for the axes.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
         # Remove degenerate vertical axis.
@@ -693,10 +698,8 @@ class _Series (_Buffer_Base):
           var.axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
-        # station_id should become ni, and turn degenerate nk into nj.
-        # This is only done so that _XYCoords can attach the lat/lon info.
         var.axes = _modify_axes(var.axes, **{'i':'level',
-                 'j':('forecast',forecast_hours), 'station_id':'i', 'k':'j'})
+                 'j':('forecast',forecast_hours)})
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
       var.atts.pop('kind',None)
@@ -1042,19 +1045,36 @@ class _XYCoords (_Buffer_Base):
           lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
           gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
 
-        # Case 2: General 2D lat/lon fields on X/Y coordinate system.
+        # Case 2: lat/lon are series of points.
+        elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.axes or 'station_id' in var.axes):
+          latarray = latarray[0,:]
+          lonarray = lonarray[0,:]
+          # Special case for station data
+          if 'station_id' in var.axes:
+            gridaxes = OrderedDict(station_id=('station_id',var.axes['station_id']))
+          else:
+            gridaxes = OrderedDict(i=('i',var.axes['i']))
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes.values()),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes.values()),lonarray)
+
+        # Case 3: General 2D lat/lon fields on X/Y coordinate system.
         elif xaxis is not None and yaxis is not None:
           yield yaxis
           yield xaxis
-          gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+          gridaxes = OrderedDict(j=('y',tuple(yaxis.array)),i=('x',tuple(xaxis.array)))
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes.values()),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes.values()),lonarray)
 
-        # Case 3: General 2D lat/lon fields with no coordinate system.
+        # Case 4: General 2D lat/lon fields with no coordinate system.
+        elif 'i' in var.axes and 'j' in var.axes:
+          gridaxes = OrderedDict(j=('j',var.axes['j']),i=('i',var.axes['i']))
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes.values()),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes.values()),lonarray)
+
         else:
-          gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+          warn(_("Unhandled lat/lon coords for '%s'")%var.name)
+          yield var
+          continue
 
         yield lat
         yield lon
@@ -1063,7 +1083,7 @@ class _XYCoords (_Buffer_Base):
       gridaxes = grids[key]
 
       # Update the var's horizontal coordinates.
-      var.axes = _modify_axes(var.axes, i=gridaxes[1], j=gridaxes[0])
+      var.axes = _modify_axes(var.axes, **gridaxes)
 
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
