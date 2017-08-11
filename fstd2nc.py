@@ -1043,7 +1043,7 @@ class _XYCoords (_Buffer_Base):
           lonarray = meanlon
           lat = _var_type('lat',latatts,{'lat':tuple(latarray)},latarray)
           lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
-          gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
+          gridaxes = OrderedDict(j=('lat',tuple(latarray)),i=('lon',tuple(lonarray)))
 
         # Case 2: lat/lon are series of points.
         elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.axes or 'station_id' in var.axes):
