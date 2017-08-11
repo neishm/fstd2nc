@@ -632,6 +632,8 @@ class _Series (_Buffer_Base):
     from rpnpy.librmn.fstd98 import fstluk
     from collections import OrderedDict
     import numpy as np
+    from datetime import timedelta
+
     forecast_hours = None
 
     # Get station and forecast info.
@@ -668,7 +670,8 @@ class _Series (_Buffer_Base):
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
-        yield forecast
+        if getattr(self,'_squash_forecasts',False) is False:
+          yield forecast
 
     for var in super(_Series,self)._iter():
 
@@ -698,8 +701,19 @@ class _Series (_Buffer_Base):
           var.axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
-        var.axes = _modify_axes(var.axes, **{'i':'level',
-                 'j':('forecast',forecast_hours)})
+        var.axes = _modify_axes(var.axes, i='level', j=('forecast',forecast_hours))
+
+        # Some support for squashing forecasts.
+        if getattr(self,'_squash_forecasts',False) is True:
+          # Can only do this for a single date of origin, because the time
+          # axis and forecast axis are not adjacent for this type of data.
+          if len(var.axes['time']) == 1:
+            var.record_keys = var.record_keys.squeeze(axis=list(var.axes.keys()).index('time'))
+            time = var.axes.pop('time')[0]
+            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+timedelta(hours=float(h)) for h in var.axes['forecast'])))
+            yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
+          else:
+            warn(_("Can't squash forecast axis for timeseries data with multiple dates of origin."))
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
       var.atts.pop('kind',None)
@@ -1354,7 +1368,12 @@ class _netCDF_IO (_netCDF_Atts):
         k = int(var.record_keys[ind])
         if k < 0: continue
         try:
-          v[ind] = self._fstluk(k)['d'].transpose()
+          data = self._fstluk(k)['d'].transpose()
+          # Work around bug with netCDF4 interface - in some cases it doesn't
+          # know how to broadcast to data with extra (degenerate) dimensions?
+          while data.shape[-1] == 1:
+            data = data.squeeze(axis=-1)
+          v[ind] = data
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
           continue
