@@ -934,7 +934,13 @@ class _XYCoords (_Buffer_Base):
   # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
   _direct_grids = ('X','Y','T','+')
 
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(_XYCoords,cls)._cmdline_args(parser)
+    parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
+
   def __init__ (self, *args, **kwargs):
+    self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
     super(_XYCoords,self).__init__(*args,**kwargs)
@@ -962,7 +968,7 @@ class _XYCoords (_Buffer_Base):
   # Add horizontal coordinate info to the data stream.
   def _iter (self):
     from collections import OrderedDict
-    from rpnpy.librmn.interp import ezqkdef, EzscintError
+    from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
     from rpnpy.librmn.fstd98 import fstluk
     import numpy as np
 
@@ -1057,7 +1063,7 @@ class _XYCoords (_Buffer_Base):
           lonarray = meanlon
           lat = _var_type('lat',latatts,{'lat':tuple(latarray)},latarray)
           lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
-          gridaxes = OrderedDict(j=('lat',tuple(latarray)),i=('lon',tuple(lonarray)))
+          gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
 
         # Case 2: lat/lon are series of points.
         elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.axes or 'station_id' in var.axes):
@@ -1065,25 +1071,34 @@ class _XYCoords (_Buffer_Base):
           lonarray = lonarray[0,:]
           # Special case for station data
           if 'station_id' in var.axes:
-            gridaxes = OrderedDict(station_id=('station_id',var.axes['station_id']))
+            gridaxes = [('station_id',var.axes['station_id'])]
           else:
-            gridaxes = OrderedDict(i=('i',var.axes['i']))
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes.values()),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes.values()),lonarray)
+            gridaxes = [('i',var.axes['i'])]
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
         # Case 3: General 2D lat/lon fields on X/Y coordinate system.
         elif xaxis is not None and yaxis is not None:
+          gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
+          # Special case: have supergrid data, and the user wants to split it?
+          if grtyp == 'U' and self._subgrid_axis:
+            ngrids = ezget_nsubgrids(gdid)
+            ny = len(yaxis.array)//ngrids
+            yaxis.array = yaxis.array[:ny]
+            yaxis.axes['y'] = tuple(yaxis.array)
+            gridaxes = [('subgrid',tuple(range(ngrids))), ('y',tuple(yaxis.array)), ('x',tuple(xaxis.array))]
+            latarray = latarray.reshape(ngrids,ny,-1)
+            lonarray = lonarray.reshape(ngrids,ny,-1)
           yield yaxis
           yield xaxis
-          gridaxes = OrderedDict(j=('y',tuple(yaxis.array)),i=('x',tuple(xaxis.array)))
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes.values()),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes.values()),lonarray)
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
         # Case 4: General 2D lat/lon fields with no coordinate system.
         elif 'i' in var.axes and 'j' in var.axes:
-          gridaxes = OrderedDict(j=('j',var.axes['j']),i=('i',var.axes['i']))
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes.values()),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes.values()),lonarray)
+          gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
+          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
         else:
           warn(_("Unhandled lat/lon coords for '%s'")%var.name)
@@ -1097,7 +1112,14 @@ class _XYCoords (_Buffer_Base):
       gridaxes = grids[key]
 
       # Update the var's horizontal coordinates.
-      var.axes = _modify_axes(var.axes, **gridaxes)
+      if len(gridaxes) == 1:
+        var.axes = _modify_axes(var.axes, i=gridaxes[0])
+      elif len(gridaxes) == 2:
+        var.axes = _modify_axes(var.axes, j=gridaxes[0], i=gridaxes[1])
+      elif len(gridaxes) == 3:
+        var.axes = _modify_axes(var.axes, k=gridaxes[0], j=gridaxes[1], i=gridaxes[2])
+      else:
+        warn(_("Unusual grid axes for '%s' - ignoring.")%var.name)
 
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
@@ -1364,15 +1386,12 @@ class _netCDF_IO (_netCDF_Atts):
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
+      data_shape = tuple(map(len,var.axes.values()))[var.record_keys.ndim:]
       for ind in np.ndindex(var.record_keys.shape):
         k = int(var.record_keys[ind])
         if k < 0: continue
         try:
-          data = self._fstluk(k)['d'].transpose()
-          # Work around bug with netCDF4 interface - in some cases it doesn't
-          # know how to broadcast to data with extra (degenerate) dimensions?
-          while data.shape[-1] == 1:
-            data = data.squeeze(axis=-1)
+          data = self._fstluk(k)['d'].transpose().reshape(data_shape)
           v[ind] = data
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
@@ -1418,10 +1437,14 @@ class _Array (object):
     data = np.ma.empty(final_shape, dtype=self.dtype)
     outer_ndim = self._record_keys.ndim
     record_keys = self._record_keys.__getitem__(key[:outer_ndim])
+    # Final shape of each record (in case we did any reshaping along ni,nj,nk
+    # dimensions).
+    record_shape = self.shape[self._record_keys.ndim:]
+    # Iterate of each record.
     for ind in np.ndindex(record_keys.shape):
       k = int(record_keys[ind])
       if k >= 0:
-        data[ind] = self._buffer._fstluk(k)['d'].transpose()[(Ellipsis,)+key[outer_ndim:]]
+        data[ind] = self._buffer._fstluk(k)['d'].transpose().reshape(record_shape)[(Ellipsis,)+key[outer_ndim:]]
       else:
         data.mask = np.ma.getmaskarray(data)
         data.mask[ind] = True

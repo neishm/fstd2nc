@@ -31,6 +31,9 @@ optional arguments:
                         Otherwise, the default is to use the date of original
                         analysis, and the forecast length goes in a "forecast"
                         axis.
+  --subgrid-axis        For data on supergrids, split the subgrids along a
+                        "subgrid" axis. The default is to leave the subgrids
+                        stacked together as they are in the RPN file.
   --filter CONDITION    Subset RPN file records using the given criteria. For
                         example, to convert only 24-hour forecasts you could
                         use --filter ip2==24
