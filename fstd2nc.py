@@ -635,6 +635,8 @@ class _Series (_Buffer_Base):
     from datetime import timedelta
 
     forecast_hours = None
+    created_time_axis = False  # To only create squashed time axis once.
+                               # (for --squashed-forecasts option).
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
@@ -711,7 +713,9 @@ class _Series (_Buffer_Base):
             var.record_keys = var.record_keys.squeeze(axis=list(var.axes.keys()).index('time'))
             time = var.axes.pop('time')[0]
             var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+timedelta(hours=float(h)) for h in var.axes['forecast'])))
-            yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
+            if not created_time_axis:
+              yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
+              created_time_axis = True
           else:
             warn(_("Can't squash forecast axis for timeseries data with multiple dates of origin."))
       # Remove 'kind' information for now - still need to figure out vertical
