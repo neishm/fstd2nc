@@ -31,6 +31,11 @@ class FST_Handler(BaseHandler):
   from fstd2nc import __version__
   extensions = r"^.*$"
   def __init__ (self, filepath):
+    self.filepath = filepath
+  # Only create the dataset object if needed.
+  def __getattr__ (self, name):
+    if name != 'dataset': raise AttributeError
+    filepath = self.filepath
     from pydap.model import DatasetType, GridType, BaseType
     from fstd2nc import Buffer
     from os.path import basename
@@ -39,7 +44,7 @@ class FST_Handler(BaseHandler):
     BaseHandler.__init__(self)
     self.filepath = filepath
     buf = Buffer(filepath)
-    self.dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
+    dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
 
     # First, scan into a dictionary
     buf = list(buf)
@@ -49,9 +54,9 @@ class FST_Handler(BaseHandler):
     # Based loosely on pydap's builtin netcdf handler.
     for var in vars.values():
       # Add grids.
-      self.dataset[var.name] = GridType(var.name, var.atts)
+      dataset[var.name] = GridType(var.name, var.atts)
       # Add array.
-      self.dataset[var.name][var.name] = BaseType(var.name, var.array, tuple(var.axes.keys()), var.atts)
+      dataset[var.name][var.name] = BaseType(var.name, var.array, tuple(var.axes.keys()), var.atts)
       # Add maps.
       for dim in var.axes.keys():
         if dim in dims:
@@ -60,10 +65,12 @@ class FST_Handler(BaseHandler):
         else:
           atts = {}
           array = np.array(var.axes[dim])
-        self.dataset[var.name][dim] = BaseType(dim, array, None, atts)
+        dataset[var.name][dim] = BaseType(dim, array, None, atts)
 
     for dim in dims.values():
-      self.dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
+      dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
+    self.dataset = dataset
+    return dataset
 
 
 # Hack this handler into the pydap interface.
