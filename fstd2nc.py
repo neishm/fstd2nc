@@ -693,7 +693,7 @@ class _Series (_Buffer_Base):
       # 'Y' data should be handled fine by _XYCoords - just give a more
       # specific name to the ni axis for clarity.
       if var.atts.get('grtyp') == 'Y':
-        var.axes = _modify_axes(var.axes, i='station_id')
+        var.axes = _modify_axes(var.axes, i=('station_id',tuple(range(1,len(var.axes['i'])+1))))
 
       # '+' data has different meanings for the axes.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
