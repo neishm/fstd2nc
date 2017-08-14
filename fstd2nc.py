@@ -1222,6 +1222,7 @@ class _netCDF_IO (_netCDF_Atts):
     self._time_units = kwargs.pop('time_units','hours')
     self._reference_date = kwargs.pop('reference_date',None)
     self._nc_format = kwargs.pop('nc_format','NETCDF4')
+    self._unique_names = kwargs.pop('unique_names',True)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
   def _iter (self):
@@ -1234,7 +1235,12 @@ class _netCDF_IO (_netCDF_Atts):
     else:
       reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
-    for var in super(_netCDF_IO,self)._iter():
+    varlist = super(_netCDF_IO,self)._iter()
+    if self._unique_names:
+      varlist = list(varlist)
+      self._fix_names(varlist)
+
+    for var in varlist:
 
       # Modify time axes to be relative units instead of datetime objects.
       if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],datetime):
@@ -1245,27 +1251,11 @@ class _netCDF_IO (_netCDF_Atts):
       yield var
 
 
-  def write_nc_file (self, filename, global_metadata=None):
-    """
-    Write the records to a netCDF file.
-    Requires the netCDF4 package.
-    """
-    from netCDF4 import Dataset
-    import numpy as np
+  def _fix_names (self, varlist):
     from collections import OrderedDict
-    f = Dataset(filename, "w", format=self._nc_format)
 
     # List of metadata keys that are internal to the FSTD file.
     internal_meta = list(self._vectorize_params().keys())
-
-    # Apply global metadata (from config files and global_metadata argument).
-    if 'global' in self._metadata:
-      f.setncatts(self._metadata['global'])
-    if global_metadata is not None:
-      f.setncatts(global_metadata)
-
-    # Need to pre-scan all the variables to generate unique names.
-    varlist = list(self._iter())
 
     # Generate unique axis names.
     axis_table = dict()
@@ -1361,6 +1351,29 @@ class _netCDF_IO (_netCDF_Atts):
         warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
         var.name = '_'+var.name
 
+      # Strip out FSTD-specific metadata?
+      if self._minimal_metadata:
+        for n in internal_meta:
+          var.atts.pop(n,None)
+
+
+  def write_nc_file (self, filename, global_metadata=None):
+    """
+    Write the records to a netCDF file.
+    Requires the netCDF4 package.
+    """
+    from netCDF4 import Dataset
+    import numpy as np
+    f = Dataset(filename, "w", format=self._nc_format)
+
+    # Apply global metadata (from config files and global_metadata argument).
+    if 'global' in self._metadata:
+      f.setncatts(self._metadata['global'])
+    if global_metadata is not None:
+      f.setncatts(global_metadata)
+
+    for var in self._iter():
+
       for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
@@ -1370,10 +1383,6 @@ class _netCDF_IO (_netCDF_Atts):
             f.createDimension(axisname, None)
           else:
             f.createDimension(axisname, len(axisvalues))
-      # Strip out FSTD-specific metadata?
-      if self._minimal_metadata:
-        for n in internal_meta:
-          var.atts.pop(n,None)
 
       dimensions = list(var.axes.keys())
 
