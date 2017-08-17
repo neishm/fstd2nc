@@ -67,9 +67,14 @@ class FST_Handler(BaseHandler):
           array = np.array(var.axes[dim])
         dataset[var.name][dim] = BaseType(dim, array, None, atts)
 
-    #TODO: set unlimited dimension
     for dim in dims.values():
       dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
+      # Handle unlimited dimension.
+      if dim.name == 'time':
+        dataset.attributes['DODS_EXTRA'] = {
+          'Unlimited_Dimension': dim,
+        }
+
     self.dataset = dataset
     return dataset
 
