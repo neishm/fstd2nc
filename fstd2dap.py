@@ -114,6 +114,9 @@ def __main__():
   # Store the fstd2nc arguments for later use.
   _buffer_args.update(args)
 
+  # Force the fill value to be 1e20, because that's what pydap is using.
+  _buffer_args['fill_value'] = 1e20
+
   # Invoke the command-line Pydap interface.
   main()
 
