@@ -26,6 +26,58 @@ Serve RPN standard files through a pydap server.
 from fstd2nc import Buffer
 _buffer_args = {}  # To be filled in by __main__.
 
+# Helper method - construct a Dataset object from the file path.
+def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
+  from pydap.model import DatasetType, GridType, BaseType
+  from os.path import basename
+  import numpy as np
+  from collections import OrderedDict
+
+  if filepath in dataset_cache:
+    return dataset_cache[filepath]
+
+  # Construct an fstd2nc Buffer object with the decoded FST data.
+  buf = Buffer(filepath, **_buffer_args)
+  # Save a reference to the Buffer so the file reference(s) remain valid.
+  buffer_cache[filepath] = buf
+
+  # Construct a pydap Dataset object.
+  dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
+  # Save this so it can be immediately returned next time it's requested.
+  dataset_cache[filepath] = dataset
+
+  # Split into vars / dims.
+  buf = list(buf)
+  vars = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
+  dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
+
+  # Based loosely on pydap's builtin netcdf handler.
+  for var in vars.values():
+    # Add grids.
+    dataset[var.name] = GridType(var.name, var.atts)
+    # Add array.
+    dataset[var.name][var.name] = BaseType(var.name, var.array, tuple(var.axes.keys()), var.atts)
+    # Add maps.
+    for dim in var.axes.keys():
+      if dim in dims:
+        atts = dims[dim].atts
+        array = dims[dim].array
+      else:
+        atts = {}
+        array = np.array(var.axes[dim])
+      dataset[var.name][dim] = BaseType(dim, array, None, atts)
+
+  for dim in dims.values():
+    dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
+    # Handle unlimited dimension.
+    if dim.name == 'time':
+      dataset.attributes['DODS_EXTRA'] = {
+        'Unlimited_Dimension': dim,
+      }
+
+  return dataset
+
+
 # Handler for the FST data.
 from pydap.handlers.lib import BaseHandler
 class FST_Handler(BaseHandler):
@@ -36,48 +88,9 @@ class FST_Handler(BaseHandler):
   # Only create the dataset object if needed.
   def __getattr__ (self, name):
     if name != 'dataset': raise AttributeError
-    filepath = self.filepath
-    from pydap.model import DatasetType, GridType, BaseType
-    from os.path import basename
-    import numpy as np
-    from collections import OrderedDict
     BaseHandler.__init__(self)
-    self.filepath = filepath
-    buf = Buffer(filepath, **_buffer_args)
-    dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
-
-    # First, scan into a dictionary
-    buf = list(buf)
-    vars = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
-    dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
-
-    # Based loosely on pydap's builtin netcdf handler.
-    for var in vars.values():
-      # Add grids.
-      dataset[var.name] = GridType(var.name, var.atts)
-      # Add array.
-      dataset[var.name][var.name] = BaseType(var.name, var.array, tuple(var.axes.keys()), var.atts)
-      # Add maps.
-      for dim in var.axes.keys():
-        if dim in dims:
-          atts = dims[dim].atts
-          array = dims[dim].array
-        else:
-          atts = {}
-          array = np.array(var.axes[dim])
-        dataset[var.name][dim] = BaseType(dim, array, None, atts)
-
-    for dim in dims.values():
-      dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
-      # Handle unlimited dimension.
-      if dim.name == 'time':
-        dataset.attributes['DODS_EXTRA'] = {
-          'Unlimited_Dimension': dim,
-        }
-
-    self.dataset = dataset
-    return dataset
-
+    self.dataset = make_dataset(self.filepath)
+    return self.dataset
 
 # Hack this handler into the pydap interface.
 # Can't register this in the normal way, because we can't provide specific
