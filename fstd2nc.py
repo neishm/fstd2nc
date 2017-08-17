@@ -175,7 +175,7 @@ class _Buffer_Base (object):
   @classmethod
   def _cmdline_args (cls, parser):
     parser.add_argument('--version', action='version', version=__version__)
-    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output file."))
+    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
@@ -448,7 +448,7 @@ class _Masks (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_Masks,cls)._cmdline_args(parser)
-    parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the netCDF file.  Default is '%(default)s'."))
+    parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the metadata.  Default is '%(default)s'."))
   def __init__ (self, *args, **kwargs):
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(_Masks,self).__init__(*args,**kwargs)
@@ -1155,7 +1155,7 @@ class _netCDF_Atts (_Buffer_Base):
   def _cmdline_args (cls, parser):
     import argparse
     super(_netCDF_Atts,cls)._cmdline_args(parser)
-    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Apply netCDF metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
+    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
   def __init__ (self, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
@@ -1203,9 +1203,8 @@ class _netCDF_IO (_netCDF_Atts):
   @classmethod
   def _cmdline_args (cls, parser):
     super(_netCDF_IO,cls)._cmdline_args(parser)
-    parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units of time for the netCDF file.  Default is %(default)s.'))
-    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the netCDF time axis.  The default is the starting date in the RPN file.'))
-    parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
+    parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units for the output time axis.  Default is %(default)s.'))
+    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the RPN file.'))
 
   @classmethod
   def _check_args (cls, parser, args):
@@ -1221,7 +1220,6 @@ class _netCDF_IO (_netCDF_Atts):
   def __init__ (self, *args, **kwargs):
     self._time_units = kwargs.pop('time_units','hours')
     self._reference_date = kwargs.pop('reference_date',None)
-    self._nc_format = kwargs.pop('nc_format','NETCDF4')
     self._unique_names = kwargs.pop('unique_names',True)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
@@ -1357,14 +1355,14 @@ class _netCDF_IO (_netCDF_Atts):
           var.atts.pop(n,None)
 
 
-  def write_nc_file (self, filename, global_metadata=None):
+  def write_nc_file (self, filename, nc_format='NETCDF4', global_metadata=None):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
     """
     from netCDF4 import Dataset
     import numpy as np
-    f = Dataset(filename, "w", format=self._nc_format)
+    f = Dataset(filename, "w", format=nc_format)
 
     # Apply global metadata (from config files and global_metadata argument).
     if 'global' in self._metadata:
@@ -1498,6 +1496,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
+  parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   args = parser.parse_args()
@@ -1505,6 +1504,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   args = vars(args)
   infiles = args.pop('infile')
   outfile = args.pop('outfile')
+  nc_format = args.pop('nc_format')
   force = args.pop('force')
   no_history = args.pop('no_history')
 
@@ -1553,7 +1553,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.write_nc_file(outfile, global_metadata)
+  buf.write_nc_file(outfile, nc_format, global_metadata)
 
 # Command-line invocation with error trapping.
 # Hides the Python stack trace when the user aborts the command.
