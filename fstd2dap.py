@@ -92,9 +92,8 @@ from pydap.handlers import lib as pydap_lib
 pydap_lib.get_handler = get_handler
 
 
-def _(s): return s
-
 def __main__():
+  from fstd2nc import _
   from pydap.wsgi.app import main
   from argparse import ArgumentParser
   import sys
