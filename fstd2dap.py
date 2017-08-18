@@ -27,7 +27,7 @@ _buffer_args = {}  # To be filled in by __main__.
 
 # Helper method - construct a Dataset object from the file path.
 def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
-  from fstd2nc import Buffer
+  from fstd2nc import Buffer, _var_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename
   import numpy as np
@@ -42,7 +42,9 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
   buffer_cache[filepath] = buf
 
   # Construct a pydap Dataset object.
-  dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=buf._metadata.get('global',{})))
+  global_metadata = buf._metadata.get('global',{})
+  global_metadata['Conventions'] = "CF-1.6"
+  dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=global_metadata))
   # Save this so it can be immediately returned next time it's requested.
   dataset_cache[filepath] = dataset
 
@@ -50,6 +52,13 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
   buf = list(buf)
   vars = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
   dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
+
+  # Add "dummy" dimensions (or they're not interpreted properly by some
+  # clients like Panoply).
+  for var in vars.values():
+    for axisname, axisvalues in var.axes.items():
+      if axisname not in dims:
+        dims[axisname] = _var_type(axisname,{},axisvalues,np.array(axisvalues))
 
   # Based loosely on pydap's builtin netcdf handler.
   for var in vars.values():
