@@ -1490,8 +1490,9 @@ class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_
 def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
   from sys import stdout, exit, argv
-  from os.path import exists
-  from rpnpy.librmn.fstd98 import isFST
+  from os.path import exists, isdir
+  from glob import glob
+  from rpnpy.librmn.fstd98 import isFST, FSTDError
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
@@ -1508,16 +1509,23 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   force = args.pop('force')
   no_history = args.pop('no_history')
 
+  # Apply wildcard expansion to filenames.
+  infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
+
   # Make sure input file exists
   for infile in infiles:
     if not exists(infile):
       print (_("Error: '%s' does not exist!")%(infile))
       exit(1)
-    if not isFST(infile):
+    if not isFST(infile) and not isdir(infile):
       print (_("Error: '%s' is not an RPN standard file!")%(infile))
       exit(1)
 
-  buf = buffer_type(infiles, **args)
+  try:
+    buf = buffer_type(infiles, **args)
+  except FSTDError:
+    print (_("Error: problem opening one or more input directories."))
+    exit(1)
 
   # Check if output file already exists
   if exists(outfile) and not force:
