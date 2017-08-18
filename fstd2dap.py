@@ -23,11 +23,11 @@
 Serve RPN standard files through a pydap server.
 """
 
-from fstd2nc import Buffer
 _buffer_args = {}  # To be filled in by __main__.
 
 # Helper method - construct a Dataset object from the file path.
 def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
+  from fstd2nc import Buffer
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename
   import numpy as np
@@ -103,7 +103,7 @@ pydap_lib.get_handler = get_handler
 
 
 def __main__():
-  from fstd2nc import _
+  from fstd2nc import Buffer, _
   from pydap.wsgi.app import main
   from argparse import ArgumentParser
   import sys
