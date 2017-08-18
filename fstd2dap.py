@@ -30,14 +30,31 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
   from fstd2nc import Buffer, _var_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename
+  from glob import glob
   import numpy as np
   from collections import OrderedDict
 
   if filepath in dataset_cache:
     return dataset_cache[filepath]
 
+  infiles = filepath
+  buffer_args = _buffer_args
+
+  if filepath.endswith('.fstall'):
+    # Read the extra arguments and parse.
+    from argparse import ArgumentParser, Namespace
+    parser = ArgumentParser()
+    parser.add_argument('infile', nargs='+')
+    Buffer._cmdline_args(parser)
+    args = parser.parse_args(open(filepath).readline().split())
+    args = vars(args)
+    infiles = args.pop('infile')
+    # Apply wildcard expansion to filenames.
+    infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
+    buffer_args = args
+
   # Construct an fstd2nc Buffer object with the decoded FST data.
-  buf = Buffer(filepath, **_buffer_args)
+  buf = Buffer(infiles, **buffer_args)
   # Save a reference to the Buffer so the file reference(s) remain valid.
   buffer_cache[filepath] = buf
 
@@ -50,18 +67,18 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
 
   # Split into vars / dims.
   buf = list(buf)
-  vars = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
+  variables = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
   dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
 
   # Add "dummy" dimensions (or they're not interpreted properly by some
   # clients like Panoply).
-  for var in vars.values():
+  for var in variables.values():
     for axisname, axisvalues in var.axes.items():
       if axisname not in dims:
         dims[axisname] = _var_type(axisname,{},axisvalues,np.array(axisvalues))
 
   # Based loosely on pydap's builtin netcdf handler.
-  for var in vars.values():
+  for var in variables.values():
     # Add grids.
     dataset[var.name] = GridType(var.name, var.atts)
     # Add array.
@@ -87,8 +104,6 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
 # Handler for the FST data.
 from pydap.handlers.lib import BaseHandler
 class FST_Handler(BaseHandler):
-  from fstd2nc import __version__
-  extensions = r"^.*$"
   def __init__ (self, filepath):
     self.filepath = filepath
   # Only create the dataset object if needed.
@@ -104,7 +119,7 @@ class FST_Handler(BaseHandler):
 from pydap.handlers.lib import get_handler as pydap_get_handler
 def get_handler(filepath, handlers=None):
   from rpnpy.librmn.fstd98 import isFST
-  if isFST(str(filepath)):
+  if isFST(str(filepath)) or filepath.endswith('.fstall'):
     return FST_Handler(str(filepath))
   return pydap_get_handler(filepath, handlers)
 from pydap.handlers import lib as pydap_lib
