@@ -62,10 +62,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
       if dim in dims:
         atts = dims[dim].atts
         array = dims[dim].array
-      else:
-        atts = {}
-        array = np.array(var.axes[dim])
-      dataset[var.name][dim] = BaseType(dim, array, None, atts)
+        dataset[var.name][dim] = BaseType(dim, array, None, atts)
 
   for dim in dims.values():
     dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
