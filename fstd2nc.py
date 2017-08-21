@@ -119,6 +119,14 @@ def stamp2datetime (date, cache={}):
       cache[date] = None
   return cache[date]
 
+# Cached version of DecodeIp, to minimize the number of calls to librmn.
+def DecodeIp (ip1, ip2, ip3, cache={}):
+  from rpnpy.librmn.fstd98 import DecodeIp
+  key = (ip1,ip2,ip3)
+  if key not in cache:
+    cache[key] = DecodeIp(ip1,ip2,ip3)
+  return cache[key]
+
 
 
 # The type of data returned by the Buffer iterator.
@@ -753,7 +761,6 @@ class _VCoords (_Buffer_Base):
     self._var_id = self._var_id + ('kind',)
     self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
   def _vectorize_params (self):
-    from rpnpy.librmn.fstd98 import DecodeIp
     import numpy as np
     fields = super(_VCoords,self)._vectorize_params()
     # Provide 'level' and 'kind' information to the decoder.
@@ -772,7 +779,7 @@ class _VCoords (_Buffer_Base):
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS
     from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import DecodeIp, fstluk
+    from rpnpy.librmn.fstd98 import fstluk
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
