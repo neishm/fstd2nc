@@ -114,7 +114,7 @@ def stamp2datetime (date, cache={}):
   dummy_stamps = (0, 10101011)
   if date not in cache:
     if date not in dummy_stamps:
-      cache[date] = RPNDate(d).toDateTime().replace(tzinfo=None)
+      cache[date] = RPNDate(date).toDateTime().replace(tzinfo=None)
     else:
       cache[date] = None
   return cache[date]
@@ -265,6 +265,8 @@ class _Buffer_Base (object):
   def _vectorize_params (self):
     from collections import OrderedDict
     import numpy as np
+    if hasattr(self,'_vectorized_params'):
+      return self._vectorized_params
     # Make sure the parameter names are consistent for all records.
     if len(set(map(frozenset,self._params.values()))) != 1:
       raise ValueError(("Inconsistent parameter names for the records."))
@@ -280,6 +282,7 @@ class _Buffer_Base (object):
         v = np.empty(len(self._params),dtype='O')
         v[:] = v2
       fields[n] = np.asarray(v)
+    self._vectorized_params = fields
     return fields
 
 
