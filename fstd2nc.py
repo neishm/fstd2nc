@@ -107,6 +107,19 @@ def gdgaxes (gdid):
   ay = np.concatenate(ay, axis=1)
   return {'ax':ax, 'ay':ay}
 
+# Convert an RPN date stamp to datetime object.
+# Returns None for invalid stamps.
+def stamp2datetime (date, cache={}):
+  from rpnpy.rpndate import RPNDate
+  dummy_stamps = (0, 10101011)
+  if date not in cache:
+    if date not in dummy_stamps:
+      cache[date] = RPNDate(d).toDateTime().replace(tzinfo=None)
+    else:
+      cache[date] = None
+  return cache[date]
+
+
 
 # The type of data returned by the Buffer iterator.
 class _var_type (object):
@@ -510,7 +523,6 @@ class _Dates (_Buffer_Base):
 
   # Get any extra (derived) fields needed for doing the decoding.
   def _vectorize_params (self):
-    from rpnpy.rpndate import  RPNDate
     import numpy as np
     fields = super(_Dates,self)._vectorize_params()
     # Calculate the forecast (in hours).
@@ -521,8 +533,7 @@ class _Dates (_Buffer_Base):
     else:
       dates = map(int,fields['dateo'])
     # Convert date stamps to datetime objects, filtering out dummy values.
-    dummy_stamps = (0, 10101011)
-    dates = [RPNDate(d).toDateTime().replace(tzinfo=None) if d not in dummy_stamps else None for d in dates]
+    dates = map(stamp2datetime,dates)
     dates = np.ma.masked_equal(dates,None)
     # Where there are dummy dates, ignore the forecast information too.
     forecast = np.ma.asarray(fields['forecast'])
