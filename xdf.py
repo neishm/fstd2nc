@@ -1,9 +1,11 @@
-from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int
+import numpy as np
+from ctypes import Structure, POINTER, addressof, c_void_p, c_uint32, c_int32, c_int, c_uint64
 
 # From rpnmacros.h
 word = c_uint32
 
 # From qstdir.h
+MAX_XDF_FILES = 1024
 MAX_DIR_PAGES = 1024
 MAX_PRIMARY_LNG = 16
 MAX_SECONDARY_LNG = 8
@@ -32,13 +34,59 @@ class xdf_dir_page(Structure):
 class full_dir_page(Structure):
   pass
 page_ptr = POINTER(full_dir_page)
-full_dir_page._fields__ = [
+full_dir_page._fields_ = [
         ('next_page',page_ptr),
         ('prev_page',page_ptr),
         ('modified',c_int),
         ('true_file_index',c_int),
         ('dir',xdf_dir_page),
 ]
+
+class file_record(Structure):
+  _fields_ = [
+        ('idtyp',word,8), ('lng',word,24), ('addr',word,32),        #XDF record header
+        ('data',word*2),                        # primary keys, info keys, data
+  ]
+
+class key_descriptor(Structure):
+  _fields_ = [
+        ('ncle',word,32), ('bit1',word,13), ('lcle',word,5), ('tcle',word,6), ('reserved',word,8),
+  ]
+
+
+class file_header(Structure):
+  _fields_ = [
+        ('idtyp',word,8), ('lng',word,24), ('addr',word,32),  # standard XDF record header
+        ('vrsn',word),     ('sign',word),               #char[4]
+        ('fsiz',word,32), ('nrwr',word,32),
+        ('nxtn',word,32), ('nbd',word,32),
+        ('plst',word,32), ('nbig',word,32),
+        ('nprm',word,16), ('lprm',word,16), ('naux',word,16), ('laux',word,16),
+        ('neff',word,32), ('nrec',word,32),
+        ('rwflg',word,32), ('reserved',word,32),
+        ('keys',key_descriptor*1024),
+  ]
+# idtyp:     id type (usualy 0)
+# lng:       header length (in 64 bit units)
+# addr:      address (exception: 0 for a file header)
+# vrsn:      XDF version
+# sign:      application signature
+# fsiz:      file size (in 64 bit units)
+# nrwr:      number of rewrites
+# nxtn:      number of extensions
+# nbd:       number of directory pages
+# plst:      address of last directory page (origin 1, 64 bit units)
+# nbig:      size of biggest record
+# nprm:      number of primary keys
+# lprm:      length of primary keys (in 64 bit units)
+# naux:      number of auxiliary keys
+# laux:      length of auxiliary keys
+# neff:      number of erasures
+# nrec:      number of valid records
+# rwflg:     read/write flag
+# reserved:  reserved
+# keys:      key descriptor table
+
 
 class file_table_entry(Structure):
   _fields_ = [
@@ -48,8 +96,8 @@ class file_table_entry(Structure):
         ('build_info',c_void_p),           # pointer to info building function
         ('scan_file',c_void_p),            # pointer to file scan function
         ('file_filter',c_void_p),          # pointer to record filter function
-        ('cur_entry',word),              # pointer to current directory entry
-        ('header',c_void_p),          # pointer to file header
+        ('cur_entry',POINTER(word)),              # pointer to current directory entry
+        ('header',POINTER(file_header)),          # pointer to file header
         ('nxtadr',c_int32),                # next write address (in word units)
         ('primary_len',c_int),
         # length in 64 bit units of primary keys (including 64 bit header)
@@ -79,6 +127,7 @@ class file_table_entry(Structure):
         ('srch_mask',max_dir_keys),       # permanent search mask for this file
         ('cur_mask',max_dir_keys),        # current search mask for this file
   ]
+file_table_entry_ptr = POINTER(file_table_entry)
 
 import fstd2nc_deps
 from rpnpy.librmn.fstd98 import fstopenall, fstcloseall
@@ -86,12 +135,51 @@ from rpnpy.librmn.const import FST_RO
 from rpnpy.librmn import librmn
 from glob import glob
 
-iun = fstopenall(glob("/wrk6/neish/mn129/model/2010010?00_024"),FST_RO)
+librmn.file_index.argtypes = (c_int,)
+librmn.file_index.restype = c_int
 
-p = POINTER(file_table_entry).in_dll(librmn,'file_table')
-print p
-print dir(p)
-print bool(p)
-print p[1].file_version
+file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
 
-fstcloseall(iun)
+#iun = fstopenall(glob("/wrk6/neish/mn129/model/2010010?00_024"),FST_RO)
+from rpnpy.librmn.base import fnom, fclos
+from rpnpy.librmn.fstd98 import fstouv, fstfrm
+iun = fnom("/wrk6/neish/mn129/model/2010010100_024",FST_RO)
+istat = fstouv(iun,FST_RO)
+print '??', iun
+
+from rpnpy.librmn.fstd98 import fstinl
+#keys = fstinl(iun)
+
+index = librmn.file_index(iun)
+
+def print_structure(s):
+  for f in s._fields_:
+    n = f[0]
+    print '%s = %s'%(n,getattr(s,n))
+
+f = file_table[index].contents
+print_structure(f)
+p = f.dir_page[0].contents
+print '---'
+print_structure(p)
+print '---'
+print_structure(p.dir)
+for r in range(1):
+  # Address of file_record
+  x = addressof(p.dir.entry) + r * (f.primary_len << 1) * 4
+  # Offset into data
+  data = x + 8
+  buf = POINTER(word)(c_uint64(data))
+  print r
+  #print buf[:f.header.contents.lprm]
+
+#  print x, type(x)
+  y = POINTER(file_record)(c_uint64(x))
+  print y
+  print '...'
+  print_structure(y.contents)
+
+
+#fstcloseall(iun)
+fstfrm(iun)
+fclos(iun)
