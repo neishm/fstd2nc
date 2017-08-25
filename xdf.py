@@ -1,5 +1,5 @@
 import numpy as np
-from ctypes import Structure, POINTER, addressof, c_void_p, c_uint32, c_int32, c_int, c_uint64
+from ctypes import Structure, POINTER, addressof, cast, c_void_p, c_uint32, c_int32, c_int, c_uint64
 
 # From rpnmacros.h
 word = c_uint32
@@ -14,7 +14,7 @@ max_info_keys = word*MAX_SECONDARY_LNG
 
 class xdf_dir_page(Structure):
   _fields_ = [
-        ('idtyp',word,8), ('lng',word,24), ('addr',word,32), # XDF record header
+        ('lng',word,24), ('idtyp',word,8), ('addr',word,32), # XDF record header
         ('reserved1',word,32), ('reserved2',word,32),
         ('nxt_addr',word,32), ('nent',word,32),
         ('chksum',word,32), ('reserved3',word,32),
@@ -44,24 +44,24 @@ full_dir_page._fields_ = [
 
 class file_record(Structure):
   _fields_ = [
-        ('idtyp',word,8), ('lng',word,24), ('addr',word,32),        #XDF record header
+        ('lng',word,24), ('idtyp',word,8), ('addr',word,32),        #XDF record header
         ('data',word*2),                        # primary keys, info keys, data
   ]
 
 class key_descriptor(Structure):
   _fields_ = [
-        ('ncle',word,32), ('bit1',word,13), ('lcle',word,5), ('tcle',word,6), ('reserved',word,8),
+        ('ncle',word,32), ('reserved',word,8), ('tcle',word,6), ('lcle',word,5), ('bit1',word,13),
   ]
 
 
 class file_header(Structure):
   _fields_ = [
-        ('idtyp',word,8), ('lng',word,24), ('addr',word,32),  # standard XDF record header
+        ('lng',word,24), ('idtyp',word,8), ('addr',word,32),  # standard XDF record header
         ('vrsn',word),     ('sign',word),               #char[4]
         ('fsiz',word,32), ('nrwr',word,32),
         ('nxtn',word,32), ('nbd',word,32),
         ('plst',word,32), ('nbig',word,32),
-        ('nprm',word,16), ('lprm',word,16), ('naux',word,16), ('laux',word,16),
+        ('lprm',word,16), ('nprm',word,16), ('laux',word,16), ('naux',word,16),
         ('neff',word,32), ('nrec',word,32),
         ('rwflg',word,32), ('reserved',word,32),
         ('keys',key_descriptor*1024),
@@ -164,21 +164,20 @@ print '---'
 print_structure(p)
 print '---'
 print_structure(p.dir)
-for r in range(1):
+for r in range(10):
   # Address of file_record
   x = addressof(p.dir.entry) + r * (f.primary_len << 1) * 4
   # Offset into data
   data = x + 8
   buf = POINTER(word)(c_uint64(data))
-  print r
   #print buf[:f.header.contents.lprm]
 
-#  print x, type(x)
-  y = POINTER(file_record)(c_uint64(x))
-  print y
+#  y = POINTER(file_record)(c_uint64(x))
+  entry = cast(p.dir.entry,POINTER(file_record)).contents
   print '...'
-  print_structure(y.contents)
-
+  print r
+  print_structure(entry)
+  print list(entry.data)
 
 #fstcloseall(iun)
 fstfrm(iun)
