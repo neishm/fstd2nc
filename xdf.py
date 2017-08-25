@@ -1,5 +1,5 @@
 import numpy as np
-from ctypes import Structure, POINTER, addressof, cast, c_void_p, c_uint32, c_int32, c_int, c_uint64
+from ctypes import Structure, POINTER, addressof, cast, sizeof, c_void_p, c_uint32, c_int32, c_int, c_uint64
 
 # From rpnmacros.h
 word = c_uint32
@@ -47,6 +47,20 @@ class file_record(Structure):
         ('lng',word,24), ('idtyp',word,8), ('addr',word,32),        #XDF record header
         ('data',word*2),                        # primary keys, info keys, data
   ]
+
+class stdf_dir_keys(Structure):
+  _fields_ = [
+        ('lng',word,24), ('select',word,7), ('deleted',word,1), ('addr',word,32),
+        ('nbits',word,8), ('deet',word,24), ('gtyp',word,8), ('ni',word,24),
+        ('datyp',word,8), ('nj',word,24), ('ubc',word,12), ('nk',word,20),
+        ('pad7',word,6), ('npas',word,26), ('ig2a',word,8), ('ig4',word,24),
+        ('ig2b',word,8), ('ig1',word,24), ('ig2c',word,8), ('ig3',word,24),
+        ('pad1',word,2), ('etik15',word,30), ('pad2',word,2), ('etik6a',word,30),
+        ('pad3',word,8), ('typvar',word,12), ('etikbc',word,12), ('pad4',word,8), ('nomvar',word,24),
+        ('levtyp',word,4), ('ip1',word,28), ('pad5',word,4), ('ip2',word,28),
+        ('pad6',word,4), ('ip3',word,28), ('date_stamp',word,32),
+  ]
+
 
 class key_descriptor(Structure):
   _fields_ = [
@@ -159,6 +173,8 @@ def print_structure(s):
 
 f = file_table[index].contents
 print_structure(f)
+print '---'
+print_structure(f.header.contents)
 p = f.dir_page[0].contents
 print '---'
 print_structure(p)
@@ -166,18 +182,14 @@ print '---'
 print_structure(p.dir)
 for r in range(10):
   # Address of file_record
-  x = addressof(p.dir.entry) + r * (f.primary_len << 1) * 4
-  # Offset into data
-  data = x + 8
-  buf = POINTER(word)(c_uint64(data))
-  #print buf[:f.header.contents.lprm]
+  x = addressof(p.dir.entry) + r * f.primary_len * sizeof(word) * 2
 
-#  y = POINTER(file_record)(c_uint64(x))
-  entry = cast(p.dir.entry,POINTER(file_record)).contents
+#  entry = cast(p.dir.entry,POINTER(file_record)).contents
+#  entry = cast(x,POINTER(file_record)).contents
+  entry = cast(p.dir.entry,POINTER(stdf_dir_keys))[r]
   print '...'
   print r
   print_structure(entry)
-  print list(entry.data)
 
 #fstcloseall(iun)
 fstfrm(iun)
