@@ -1,16 +1,19 @@
 import numpy as np
-from ctypes import Structure, POINTER, addressof, cast, sizeof, c_void_p, c_uint32, c_int32, c_int, c_uint64
+from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int
 
 # From rpnmacros.h
 word = c_uint32
 
 # From qstdir.h
 MAX_XDF_FILES = 1024
+ENTRIES_PER_PAGE = 256
 MAX_DIR_PAGES = 1024
 MAX_PRIMARY_LNG = 16
 MAX_SECONDARY_LNG = 8
 max_dir_keys = word*MAX_PRIMARY_LNG
 max_info_keys = word*MAX_SECONDARY_LNG
+
+class stdf_dir_keys(Structure): pass  #defined further below
 
 class xdf_dir_page(Structure):
   _fields_ = [
@@ -18,7 +21,7 @@ class xdf_dir_page(Structure):
         ('reserved1',word,32), ('reserved2',word,32),
         ('nxt_addr',word,32), ('nent',word,32),
         ('chksum',word,32), ('reserved3',word,32),
-        ('entry',word*2),
+        ('entry',stdf_dir_keys*ENTRIES_PER_PAGE),
   ]
 # idtyp:     id type (usualy 0)
 # lng:       header length (in 64 bit units)
@@ -48,8 +51,8 @@ class file_record(Structure):
         ('data',word*2),                        # primary keys, info keys, data
   ]
 
-class stdf_dir_keys(Structure):
-  _fields_ = [
+
+stdf_dir_keys._fields_ = [
         ('lng',word,24), ('select',word,7), ('deleted',word,1), ('addr',word,32),
         ('nbits',word,8), ('deet',word,24), ('gtyp',word,8), ('ni',word,24),
         ('datyp',word,8), ('nj',word,24), ('ubc',word,12), ('nk',word,20),
@@ -180,16 +183,8 @@ print '---'
 print_structure(p)
 print '---'
 print_structure(p.dir)
-for r in range(10):
-  # Address of file_record
-  x = addressof(p.dir.entry) + r * f.primary_len * sizeof(word) * 2
-
-#  entry = cast(p.dir.entry,POINTER(file_record)).contents
-#  entry = cast(x,POINTER(file_record)).contents
-  entry = cast(p.dir.entry,POINTER(stdf_dir_keys))[r]
-  print '...'
-  print r
-  print_structure(entry)
+print '---'
+print_structure(p.dir.entry[0])
 
 #fstcloseall(iun)
 fstfrm(iun)
