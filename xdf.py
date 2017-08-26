@@ -1,5 +1,4 @@
-import numpy as np
-from ctypes import Structure, POINTER, addressof, cast, sizeof, c_void_p, c_uint32, c_int32, c_int, c_byte
+from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int, c_byte
 
 # From rpnmacros.h
 word = c_uint32
@@ -157,11 +156,11 @@ librmn.file_index.restype = c_int
 
 file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
 
-#iun = fstopenall(glob("/wrk6/neish/mn129/model/2010010?00_024"),FST_RO)
+iun = fstopenall(glob("/wrk6/neish/mn129/model/2010????00_024"),FST_RO)
 from rpnpy.librmn.base import fnom, fclos
 from rpnpy.librmn.fstd98 import fstouv, fstfrm
-iun = fnom("/wrk6/neish/mn129/model/2010010100_024",FST_RO)
-istat = fstouv(iun,FST_RO)
+#iun = fnom("/wrk6/neish/mn129/model/2010010100_024",FST_RO)
+#istat = fstouv(iun,FST_RO)
 print '??', iun
 
 from rpnpy.librmn.fstd98 import fstinl
@@ -174,6 +173,37 @@ def print_structure(s):
     n = f[0]
     print '%s = %s'%(n,getattr(s,n))
 
+# Convert an array of entries to parameters.
+# Reference structure:
+# 0      word deleted:1, select:7, lng:24, addr:32;
+# 1      word deet:24, nbits: 8, ni:   24, gtyp:  8;
+# 2      word nj:24,  datyp: 8, nk:   20, ubc:  12;
+# 3      word npas: 26, pad7: 6, ig4: 24, ig2a:  8;
+# 4      word ig1:  24, ig2b:  8, ig3:  24, ig2c:  8;
+# 5      word etik15:30, pad1:2, etik6a:30, pad2:2;
+# 6      word etikbc:12, typvar:12, pad3:8, nomvar:24, pad4:8;
+# 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
+# 8      word ip3:28, pad6:4, date_stamp:32;
+def raw_page_params (page):
+  from ctypes import cast
+  import numpy as np
+  params = cast(page.dir.entry,POINTER(c_uint32))
+  params = np.ctypeslib.as_array(params,shape=(ENTRIES_PER_PAGE,9,2))
+  params = params[:page.dir.nent,...]
+  return params
+
+def raw_file_params (funit):
+  import numpy as np
+  index = librmn.file_index(funit)
+  params = []
+  while index >= 0:
+    f = file_table[index].contents
+    for i in range(f.npages):
+      page = f.dir_page[i].contents
+      params.append(raw_page_params(page))
+    index = f.link
+  return np.concatenate(params)
+
 f = file_table[index].contents
 print_structure(f)
 print '---'
@@ -184,28 +214,8 @@ print_structure(p)
 print '---'
 print_structure(p.dir)
 print '---'
-print_structure(p.dir.entry[0])
-print p.dir.entry
+print raw_file_params(iun).shape
 
-#np.ctypeslib.as_array(p.dir.entry)
-#data = (c_byte*(sizeof(stdf_dir_keys)*ENTRIES_PER_PAGE)).from_address(addressof(p.dir.entry[0]))
-
-# Convert an array of entries to parameters.
-# Reference for structure:
-# 0      word deleted:1, select:7, lng:24, addr:32;
-# 1      word deet:24, nbits: 8, ni:   24, gtyp:  8;
-# 2      word nj:24,  datyp: 8, nk:   20, ubc:  12;
-# 3      word npas: 26, pad7: 6, ig4: 24, ig2a:  8;
-# 4      word ig1:  24, ig2b:  8, ig3:  24, ig2c:  8;
-# 5      word etik15:30, pad1:2, etik6a:30, pad2:2;
-# 6      word etikbc:12, typvar:12, pad3:8, nomvar:24, pad4:8;
-# 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
-# 8      word ip3:28, pad6:4, date_stamp:32;
-#TODO
-data = cast(p.dir.entry,POINTER(c_uint32))
-data = np.ctypeslib.as_array(data,shape=(ENTRIES_PER_PAGE,9,2))[:p.dir.nent]
-
-
-#fstcloseall(iun)
-fstfrm(iun)
-fclos(iun)
+fstcloseall(iun)
+#fstfrm(iun)
+#fclos(iun)
