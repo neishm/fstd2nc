@@ -204,6 +204,32 @@ def raw_file_params (funit):
     index = f.link
   return np.concatenate(params)
 
+def all_params (funit):
+  # Get the raw (packed) parameters.
+  raw = raw_file_params(funit)
+  # Start unpacking the pieces.
+  ds, lng = divmod(raw[:,0,0],2**24)
+  deleted, select = divmod(ds,128)
+  addr = raw[:,0,1]
+  deet, nbits = divmod(raw[:,1,0],256)
+  ni, gtyp = divmod(raw[:,1,1],256)
+  nj, datyp = divmod(raw[:,2,0],256)
+  nk, ubc = divmod(raw[:,2,1],4096)
+  npas = raw[:,3,0]//128
+  ig4, ig2a = divmod(raw[:,3,1],256)
+  ig1, ig2b = divmod(raw[:,4,0],256)
+  ig3, ig2c = divmod(raw[:,4,1],256)
+  etik15 = raw[:,5,0]//4
+  etik6a = raw[:,5,1]//4
+  et = raw[:,6,0]//256
+  etikbc, typvar = divmod(et, 4096)
+  nomvar = raw[:,6,1]//256
+  ip1, levtyp = divmod(raw[:,7,0],16)
+  ip2 = raw[:,7,1]//16
+  ip3 = raw[:,8,0]//16
+  date_stamp = raw[:,8,1]
+  # Reassemble and decode.
+
 f = file_table[index].contents
 print_structure(f)
 print '---'
@@ -215,6 +241,7 @@ print '---'
 print_structure(p.dir)
 print '---'
 print raw_file_params(iun).shape
+all_params(iun)
 
 fstcloseall(iun)
 #fstfrm(iun)
