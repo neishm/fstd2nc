@@ -156,7 +156,7 @@ librmn.file_index.restype = c_int
 
 file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
 
-iun = fstopenall(glob("/wrk6/neish/mn129/model/2010????00_024"),FST_RO)
+iun = fstopenall(sorted(glob("/wrk6/neish/mn129/model/2010????00_024")),FST_RO)
 from rpnpy.librmn.base import fnom, fclos
 from rpnpy.librmn.fstd98 import fstouv, fstfrm
 #iun = fnom("/wrk6/neish/mn129/model/2010010100_024",FST_RO)
@@ -205,6 +205,7 @@ def raw_file_params (funit):
   return np.concatenate(params)
 
 def all_params (funit):
+  import numpy as np
   # Get the raw (packed) parameters.
   raw = raw_file_params(funit)
   # Start unpacking the pieces.
@@ -229,6 +230,40 @@ def all_params (funit):
   ip3 = raw[:,8,0]//16
   date_stamp = raw[:,8,1]
   # Reassemble and decode.
+  # (Based on fstd98.c)
+  n = raw.shape[0]
+  etiket = np.empty((n,12),dtype='ubyte')
+  for i in range(5):
+    etiket[:,i] = ((etik15 >> ((4-i)*6)) & 0x3f) + 32
+  for i in range(5,10):
+    etiket[:,i] = ((etik6a >> ((9-i)*6)) & 0x3f) + 32
+  etiket[:,10] = ((etikbc >> 6) & 0x3f) + 32
+  etiket[:,11] = (etikbc & 0x3f) + 32
+  etiket = etiket.view('|S12')[:,0]
+  _nomvar = nomvar
+  nomvar = np.empty((n,4),dtype='ubyte')
+  for i in range(4):
+    nomvar[:,i] = ((_nomvar >> ((3-i)*6)) & 0x3f) + 32
+  nomvar = nomvar.view('|S4')[:,0]
+  _typvar = typvar
+  typvar = np.empty((n,2),dtype='ubyte')
+  typvar[:,0] = ((_typvar >> 6) & 0x3f) + 32
+  typvar[:,1] = ((_typvar & 0x3f)) + 32
+  typvar = typvar.view('|S2')[:,0]
+  gtyp = np.asarray(gtyp, dtype='ubyte').view('|S1')
+  ig2 = (ig2a << 16) | (ig2b << 8) | ig2c
+  run = date_stamp & 0x7
+  date_valid = (date_stamp >> 3) * 10 + run
+  xtra1 = date_valid
+  xtra2 = np.zeros(n)
+  xtra3 = np.zeros(n)
+  return dict(
+    datev = date_valid, deet = deet, npas = npas, ni = ni, nj = nj, nk = nk,
+    nbits = nbits, datyp = datyp, ip1 = ip1, ip2 = ip2, ip3 = ip3,
+    typvar = typvar, nomvar = nomvar, etiket = etiket, grtyp = gtyp,
+    ig1 = ig1, ig2 = ig2, ig3 = ig3, ig4 = ig4, swa = addr, lng = lng,
+    dltf = deleted, ubc = ubc, xtra1 = xtra1, xtra2 = xtra2, xtra3 = xtra3,
+  )
 
 f = file_table[index].contents
 print_structure(f)
