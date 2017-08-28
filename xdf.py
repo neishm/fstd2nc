@@ -145,45 +145,13 @@ class file_table_entry(Structure):
   ]
 file_table_entry_ptr = POINTER(file_table_entry)
 
-import fstd2nc_deps
-from rpnpy.librmn.fstd98 import fstopenall, fstcloseall
-from rpnpy.librmn.const import FST_RO
 from rpnpy.librmn import librmn
-from glob import glob
 
 librmn.file_index.argtypes = (c_int,)
 librmn.file_index.restype = c_int
-
 file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
 
-iun = fstopenall(sorted(glob("/wrk6/neish/mn129/model/2010????00_024")),FST_RO)
-from rpnpy.librmn.base import fnom, fclos
-from rpnpy.librmn.fstd98 import fstouv, fstfrm
-#iun = fnom("/wrk6/neish/mn129/model/2010010100_024",FST_RO)
-#istat = fstouv(iun,FST_RO)
-print '??', iun
-
-from rpnpy.librmn.fstd98 import fstinl
-#keys = fstinl(iun)
-
-index = librmn.file_index(iun)
-
-def print_structure(s):
-  for f in s._fields_:
-    n = f[0]
-    print '%s = %s'%(n,getattr(s,n))
-
 # Convert an array of entries to parameters.
-# Reference structure:
-# 0      word deleted:1, select:7, lng:24, addr:32;
-# 1      word deet:24, nbits: 8, ni:   24, gtyp:  8;
-# 2      word nj:24,  datyp: 8, nk:   20, ubc:  12;
-# 3      word npas: 26, pad7: 6, ig4: 24, ig2a:  8;
-# 4      word ig1:  24, ig2b:  8, ig3:  24, ig2c:  8;
-# 5      word etik15:30, pad1:2, etik6a:30, pad2:2;
-# 6      word etikbc:12, typvar:12, pad3:8, nomvar:24, pad4:8;
-# 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
-# 8      word ip3:28, pad6:4, date_stamp:32;
 def raw_page_params (page):
   from ctypes import cast
   import numpy as np
@@ -205,10 +173,25 @@ def raw_file_params (funit):
   return np.concatenate(params)
 
 def all_params (funit):
+  '''
+  Extract parameters for *all* records.
+  Returns a dictionary similary to fstprm, only the entries are
+  vectorized.
+  '''
   import numpy as np
   # Get the raw (packed) parameters.
   raw = raw_file_params(funit)
   # Start unpacking the pieces.
+  # Reference structure (from qstdir.h):
+  # 0      word deleted:1, select:7, lng:24, addr:32;
+  # 1      word deet:24, nbits: 8, ni:   24, gtyp:  8;
+  # 2      word nj:24,  datyp: 8, nk:   20, ubc:  12;
+  # 3      word npas: 26, pad7: 6, ig4: 24, ig2a:  8;
+  # 4      word ig1:  24, ig2b:  8, ig3:  24, ig2c:  8;
+  # 5      word etik15:30, pad1:2, etik6a:30, pad2:2;
+  # 6      word etikbc:12, typvar:12, pad3:8, nomvar:24, pad4:8;
+  # 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
+  # 8      word ip3:28, pad6:4, date_stamp:32;
   ds, lng = divmod(raw[:,0,0],2**24)
   deleted, select = divmod(ds,128)
   addr = raw[:,0,1]
@@ -254,30 +237,18 @@ def all_params (funit):
   ig2 = (ig2a << 16) | (ig2b << 8) | ig2c
   run = date_stamp & 0x7
   date_valid = (date_stamp >> 3) * 10 + run
+  # Note: this dateo calculation is based on my assumption that
+  # the stamps increase in 4-second intervals.
+  # Doing it this way to avoid a gazillion calls to incdat.
+  dateo = date_valid - (deet*npas)/4
   xtra1 = date_valid
   xtra2 = np.zeros(n)
   xtra3 = np.zeros(n)
   return dict(
-    datev = date_valid, deet = deet, npas = npas, ni = ni, nj = nj, nk = nk,
+    dateo = dateo, deet = deet, npas = npas, ni = ni, nj = nj, nk = nk,
     nbits = nbits, datyp = datyp, ip1 = ip1, ip2 = ip2, ip3 = ip3,
     typvar = typvar, nomvar = nomvar, etiket = etiket, grtyp = gtyp,
     ig1 = ig1, ig2 = ig2, ig3 = ig3, ig4 = ig4, swa = addr, lng = lng,
     dltf = deleted, ubc = ubc, xtra1 = xtra1, xtra2 = xtra2, xtra3 = xtra3,
   )
 
-f = file_table[index].contents
-print_structure(f)
-print '---'
-print_structure(f.header.contents)
-p = f.dir_page[0].contents
-print '---'
-print_structure(p)
-print '---'
-print_structure(p.dir)
-print '---'
-print raw_file_params(iun).shape
-all_params(iun)
-
-fstcloseall(iun)
-#fstfrm(iun)
-#fclos(iun)
