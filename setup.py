@@ -18,7 +18,7 @@ setup (
   ],
   packages = find_packages(),
   py_modules = ['fstd2nc','fstd2dap'],
-  install_requires = ['numpy','netcdf4','fstd2nc-deps'],
+  install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps'],
   extras_require = {
     'dap': ['Pydap','Pydap[server]'],
   },
