@@ -220,11 +220,16 @@ class _Buffer_Base (object):
       yield (n,v)
 
   # Determine the dtype for an array.
-  # Input: array of record indices.
+  # Input: array of record keys.
   # Output: dtype that covers all datyps from the records.
   def _get_dtype (self, record_keys):
     import numpy as np
-    dtype_list = [dtype_fst2numpy(self._params[k]['datyp'],self._params[k]['nbits']) for k in record_keys.flatten() if k >= 0]
+    record_keys = record_keys.flatten()
+    record_keys = record_keys[record_keys >= 0]
+    ind = np.searchsorted(self._vectorized_params['key'], record_keys)
+    datyp = map(int,self._vectorized_params['datyp'])
+    nbits = map(int,self._vectorized_params['nbits'])
+    dtype_list = map(dtype_fst2numpy, datyp, nbits)
     return np.result_type(*dtype_list)
 
 
@@ -236,7 +241,7 @@ class _Buffer_Base (object):
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    from rpnpy.librmn.fstd98 import fstopenall, fstinl, fstprm
+    from rpnpy.librmn.fstd98 import fstopenall, fstinl
     from rpnpy.librmn.const import FST_RO
     from collections import OrderedDict
     self._minimal_metadata = minimal_metadata
@@ -249,18 +254,11 @@ class _Buffer_Base (object):
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
       self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
 
-    # Scan the record headers.
     if isinstance(filename,str):
       filelist = [filename]
     else:
       filelist = list(filename)
-    funit = fstopenall(filelist, FST_RO)
-    keys = fstinl(funit)
-    self._params = OrderedDict()
-    for i,key in enumerate(keys):
-      prm = fstprm(key)
-      self._params[int(key)] = prm
-    self._funit = funit
+    self._funit = fstopenall(filelist, FST_RO)
 
   # Collect the list of params from all the FSTD records, and concatenate them
   # into arrays.  Result is a single dictionary containing the vectorized
@@ -272,22 +270,24 @@ class _Buffer_Base (object):
   # needed for doing the variable decoding.
   def _vectorize_params (self):
     from collections import OrderedDict
+    from rpnpy.librmn.fstd98 import fstinl, fstprm
     import numpy as np
     if hasattr(self,'_vectorized_params'):
       return self._vectorized_params
-    # Make sure the parameter names are consistent for all records.
-    if len(set(map(frozenset,self._params.values()))) != 1:
-      raise ValueError(("Inconsistent parameter names for the records."))
+    keys = fstinl(self._funit)
+    params = map(fstprm, keys)
     fields = OrderedDict()
-    for k,prm in self._params.items():
+    for n, v in params[0].items():
+      fields[n] = []
+    for prm in params:
       for n,v in prm.items():
-        fields.setdefault(n,[]).append(v)
+        fields[n].append(v)
     for n,v in list(fields.items()):
       # Treat array-like objects specially (don't want numpy to try to
       # read the data).
       if hasattr(v[0],'__array__'):
         v2 = v
-        v = np.empty(len(self._params),dtype='O')
+        v = np.empty(len(params),dtype='O')
         v[:] = v2
       fields[n] = np.asarray(v)
     self._vectorized_params = fields
@@ -299,15 +299,17 @@ class _Buffer_Base (object):
     from collections import OrderedDict, namedtuple
     import numpy as np
 
-    # Degenerate case: no data in buffer
-    if len(self._params) == 0: return
-
     records = self._vectorize_params()
+
+    # Degenerate case: no data in buffer
+    if len(records['nomvar']) == 0: return
 
     # Group the records by variable.
     var_records = OrderedDict()
     var_id_type = namedtuple('var_id', self._var_id)
     for i,k in enumerate(records['key']):
+      # Ignore deleted / invalidated records
+      if records['dltf'][i] == 1: continue
       # Get the unique variable identifiers.
       var_id = var_id_type(*[records[n][i] for n in self._var_id])
       # Ignore coordinate records.
@@ -476,19 +478,6 @@ class _Masks (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(_Masks,self).__init__(*args,**kwargs)
-    # Look for any mask records, and attach them to the associated field.
-    masks = dict()
-    # Look for masks, pull them out of the list of records.
-    for key,prm in list(self._params.items()):
-      if prm['typvar'] == '@@':
-        masks[(prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar'])] = key
-        del self._params[key]
-    # Store the mask records.
-    self._masks = dict()
-    for key,prm in list(self._params.items()):
-      mask_key = masks.get((prm['datev'],prm['etiket'],prm['ip1'],prm['ip2'],prm['nomvar']),None)
-      if mask_key is not None:
-        self._masks[key] = mask_key
 
   # Apply the fill value to the data.
   def _iter (self):
@@ -496,18 +485,28 @@ class _Masks (_Buffer_Base):
       if not isinstance(var,_iter_type):
         yield var
         continue
-      if any(k in self._masks for k in var.record_keys.flatten() if k >= 0):
+      # Look for typvars such as 'P@'.
+      if var.atts.get('typvar','').endswith('@'):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
       yield var
 
+  # Remove all mask records from the table, they should not become variables
+  # themselves.
+  def _vectorize_params (self):
+    records = super(_Masks,self)._vectorize_params()
+    is_mask = (records['typvar'] == '@@')
+    records['dltf'][is_mask] = 1
+    return records
+
   # Apply the mask data
   def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
-    from rpnpy.librmn.fstd98 import fstluk
+    from rpnpy.librmn.fstd98 import fstluk, fstinf
     import numpy as np
     prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
-    if isinstance(key,dict):
-      key = int(key['key'])
-    mask_key = self._masks.get(key,None)
+    if not prm['typvar'].endswith('@'): return prm
+    mask_key = fstinf(self._funit, nomvar=prm['nomvar'], typvar = '@@',
+                      datev=prm['datev'], etiket=prm['etiket'],
+                      ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
       mask = fstluk(mask_key, rank=rank)['d']
       prm['d'] = np.ma.asarray(prm['d'])
@@ -651,7 +650,7 @@ class _Series (_Buffer_Base):
     fields['ip1'][is_series] = 0
     return fields
   def _iter (self):
-    from rpnpy.librmn.fstd98 import fstluk
+    from rpnpy.librmn.fstd98 import fstlir, fstluk
     from collections import OrderedDict
     import numpy as np
     from datetime import timedelta
@@ -663,13 +662,10 @@ class _Series (_Buffer_Base):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    for header in self._params.values():
-      if header['typvar'].strip() != 'T': continue
-      nomvar = header['nomvar'].strip()
-      # Create station axis.
-      if nomvar == 'STNS':
+    header = fstlir (self._funit, nomvar='STNS')
+    if header is not None:
         atts = OrderedDict()
-        array = fstluk(header)['d'].transpose()
+        array = header['d'].transpose()
         # Re-cast array as string.
         # I don't know why I have to subtract 128 - maybe something to do with
         # how the characters are encoded in the file?
@@ -687,10 +683,11 @@ class _Series (_Buffer_Base):
         axes = OrderedDict([('station_id',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
         station = _var_type('station',atts,axes,array)
         yield station
-      # Create forecast axis.
-      if nomvar == 'HH':
+    # Create forecast axis.
+    header = fstlir (self._funit, nomvar='HH')
+    if header is not None:
         atts = OrderedDict(units='hours')
-        array = fstluk(header)['d'].flatten()
+        array = header['d'].flatten()
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
@@ -779,18 +776,19 @@ class _VCoords (_Buffer_Base):
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS
     from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import fstluk
+    from rpnpy.librmn.fstd98 import fstluk, fstinl, fstprm
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
-    for header in self._params.values():
-      if header['nomvar'].strip() not in self._vcoord_nomvars: continue
-      key = (header['ip1'],header['ip2'])
-      # For old HY records, there's no matching ipX/igX codes.
-      if header['nomvar'].strip() == 'HY': key = 'HY'
-      if key in vrecs: continue
-      vrecs[key] = header
+    for vcoord_nomvar in self._vcoord_nomvars:
+      for handle in fstinl(self._funit, nomvar=vcoord_nomvar):
+        header = fstprm(handle)
+        key = (header['ip1'],header['ip2'])
+        # For old HY records, there's no matching ipX/igX codes.
+        if header['nomvar'].strip() == 'HY': key = 'HY'
+        if key in vrecs: continue
+        vrecs[key] = header
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
@@ -981,11 +979,10 @@ class _XYCoords (_Buffer_Base):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    for header in self._params.values():
-      if header['nomvar'].strip() != coordname: continue
-      if header['ip1'] != var.atts['ig1']: continue
-      if header['ip2'] != var.atts['ig2']: continue
-      if header['ip3'] != var.atts['ig3']: continue
+    from rpnpy.librmn.fstd98 import fstlir
+    header = fstlir (self._funit, nomvar=coordname, ip1=var.atts['ig1'],
+                               ip2=var.atts['ig2'], ip3=var.atts['ig3'])
+    if header is not None:
       return header
     raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
 
