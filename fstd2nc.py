@@ -410,7 +410,7 @@ class _QuickScan (_Buffer_Base):
       return self._vectorized_params
     if not self._quick_scan:
       return super(_QuickScan,self)._vectorize_params()
-    from xdf import all_params
+    from fstd2nc_extra import all_params
     self._vectorized_params = all_params(self._funit)
     return self._vectorized_params
 

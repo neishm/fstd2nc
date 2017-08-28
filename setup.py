@@ -17,7 +17,7 @@ setup (
     'Topic :: Scientific/Engineering :: Atmospheric Science',
   ],
   packages = find_packages(),
-  py_modules = ['fstd2nc','fstd2dap'],
+  py_modules = ['fstd2nc','fstd2dap','fstd2nc_extra'],
   install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps'],
   extras_require = {
     'dap': ['Pydap','Pydap[server]'],
