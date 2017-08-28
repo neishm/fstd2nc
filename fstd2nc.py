@@ -396,6 +396,26 @@ class _Buffer_Base (object):
 
 
 #################################################
+# Quick scan of parameters using low-level interface.
+class _QuickScan (_Buffer_Base):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(_QuickScan,cls)._cmdline_args(parser)
+    parser.add_argument('--quick-scan', action='store_true', help=_('Read record headers from the raw librmn structures, instead of calling fstprm.  This can speed up the initial scan when using a large number of input files, but may crash if the internal structures of librmn change in the future.'))
+  def __init__ (self, *args, **kwargs):
+    self._quick_scan = kwargs.pop('quick_scan',False)
+    super(_QuickScan,self).__init__(*args,**kwargs)
+  def _vectorize_params (self):
+    if hasattr(self,'_vectorized_params'):
+      return self._vectorized_params
+    if not self._quick_scan:
+      return super(_QuickScan,self)._vectorize_params()
+    from xdf import all_params
+    self._vectorized_params = all_params(self._funit)
+    return self._vectorized_params
+
+
+#################################################
 # Selecting for particular fields.
 class _SelectVars (_Buffer_Base):
   @classmethod
@@ -1497,7 +1517,7 @@ class _Iter (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars,_QuickScan):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
