@@ -151,36 +151,33 @@ librmn.file_index.argtypes = (c_int,)
 librmn.file_index.restype = c_int
 file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
 
-# Convert an array of entries to parameters.
-def raw_page_params (page):
-  from ctypes import cast
-  import numpy as np
-  params = cast(page.dir.entry,POINTER(c_uint32))
-  params = np.ctypeslib.as_array(params,shape=(ENTRIES_PER_PAGE,9,2))
-  params = params[:page.dir.nent,...]
-  return params
-
-def raw_file_params (funit):
-  import numpy as np
-  index = librmn.file_index(funit)
-  params = []
-  while index >= 0:
-    f = file_table[index].contents
-    for i in range(f.npages):
-      page = f.dir_page[i].contents
-      params.append(raw_page_params(page))
-    index = f.link
-  return np.concatenate(params)
-
 def all_params (funit):
   '''
   Extract parameters for *all* records.
-  Returns a dictionary similary to fstprm, only the entries are
-  vectorized.
+  Returns a dictionary similar to fstprm, only the entries are
+  vectorized over all records instead of 1 record at a time.
   '''
+  from ctypes import cast
   import numpy as np
   # Get the raw (packed) parameters.
-  raw = raw_file_params(funit)
+  index = librmn.file_index(funit)
+  raw = []
+  file_index_list = []
+  pageno_list = []
+  recno_list = []
+  while index >= 0:
+    f = file_table[index].contents
+    for pageno in range(f.npages):
+      page = f.dir_page[pageno].contents
+      params = cast(page.dir.entry,POINTER(c_uint32))
+      params = np.ctypeslib.as_array(params,shape=(ENTRIES_PER_PAGE,9,2))
+      nent = page.dir.nent
+      raw.append(params[:nent])
+      recno_list.extend(list(range(nent)))
+      pageno_list.extend([pageno]*nent)
+      file_index_list.extend([index]*nent)
+    index = f.link
+  raw = np.concatenate(raw)
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
   # 0      word deleted:1, select:7, lng:24, addr:32;
@@ -244,11 +241,16 @@ def all_params (funit):
   xtra1 = date_valid
   xtra2 = np.zeros(n)
   xtra3 = np.zeros(n)
+  # Calculate the handles (keys)
+  # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
+  key = np.array(file_index_list) | (np.array(recno_list)<<7) | (np.array(pageno_list)<<19)
+
   return dict(
-    dateo = dateo, deet = deet, npas = npas, ni = ni, nj = nj, nk = nk,
-    nbits = nbits, datyp = datyp, ip1 = ip1, ip2 = ip2, ip3 = ip3,
-    typvar = typvar, nomvar = nomvar, etiket = etiket, grtyp = gtyp,
-    ig1 = ig1, ig2 = ig2, ig3 = ig3, ig4 = ig4, swa = addr, lng = lng,
-    dltf = deleted, ubc = ubc, xtra1 = xtra1, xtra2 = xtra2, xtra3 = xtra3,
+    key = key, dateo = dateo, datev = date_valid, deet = deet, npas = npas,
+    ni = ni, nj = nj, nk = nk, nbits = nbits, datyp = datyp, ip1 = ip1,
+    ip2 = ip2, ip3 = ip3, typvar = typvar, nomvar = nomvar, etiket = etiket,
+    grtyp = gtyp, ig1 = ig1, ig2 = ig2, ig3 = ig3, ig4 = ig4, swa = addr,
+    lng = lng, dltf = deleted, ubc = ubc, xtra1 = xtra1, xtra2 = xtra2,
+    xtra3 = xtra3,
   )
 
