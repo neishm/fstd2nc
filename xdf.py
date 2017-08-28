@@ -243,7 +243,7 @@ def all_params (funit):
   xtra3 = np.zeros(n)
   # Calculate the handles (keys)
   # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
-  key = np.array(file_index_list) | (np.array(recno_list)<<7) | (np.array(pageno_list)<<19)
+  key = (np.array(file_index_list)&0x3FF) | ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
 
   return dict(
     key = key, dateo = dateo, datev = date_valid, deet = deet, npas = npas,
