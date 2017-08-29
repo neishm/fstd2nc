@@ -226,10 +226,10 @@ class _Buffer_Base (object):
     import numpy as np
     record_keys = record_keys.flatten()
     record_keys = record_keys[record_keys >= 0]
-    ind = np.searchsorted(self._vectorized_params['key'], record_keys)
+    ind = np.searchsorted(self._params['key'], record_keys)
     # Find unique combos of datyp, nbits
     # (want to minimize calls to dtype_fst2numpy).
-    datyp, nbits = zip(*set(zip(self._vectorized_params['datyp'],self._vectorized_params['nbits'])))
+    datyp, nbits = zip(*set(zip(self._params['datyp'],self._params['nbits'])))
     datyp = map(int,datyp)
     nbits = map(int,nbits)
     dtype_list = map(dtype_fst2numpy, datyp, nbits)
@@ -271,12 +271,12 @@ class _Buffer_Base (object):
   # of manipulating each record param dictionary one at a time.
   # Subclasses may also insert extra (non-FSTD) parameters in here which are
   # needed for doing the variable decoding.
-  def _vectorize_params (self):
+  def _get_params (self):
     from collections import OrderedDict
     from rpnpy.librmn.fstd98 import fstinl, fstprm
     import numpy as np
-    if hasattr(self,'_vectorized_params'):
-      return self._vectorized_params
+    if hasattr(self,'_params'):
+      return self._params
     keys = fstinl(self._funit)
     params = map(fstprm, keys)
     fields = OrderedDict()
@@ -293,7 +293,7 @@ class _Buffer_Base (object):
         v = np.empty(len(params),dtype='O')
         v[:] = v2
       fields[n] = np.asarray(v)
-    self._vectorized_params = fields
+    self._params = fields
     return fields
 
 
@@ -302,7 +302,7 @@ class _Buffer_Base (object):
     from collections import OrderedDict, namedtuple
     import numpy as np
 
-    records = self._vectorize_params()
+    records = self._get_params()
 
     # Degenerate case: no data in buffer
     if len(records['nomvar']) == 0: return
@@ -408,14 +408,14 @@ class _QuickScan (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
     self._quick_scan = kwargs.pop('quick_scan',False)
     super(_QuickScan,self).__init__(*args,**kwargs)
-  def _vectorize_params (self):
-    if hasattr(self,'_vectorized_params'):
-      return self._vectorized_params
+  def _get_params (self):
+    if hasattr(self,'_params'):
+      return self._params
     if not self._quick_scan:
-      return super(_QuickScan,self)._vectorize_params()
+      return super(_QuickScan,self)._get_params()
     from fstd2nc_extra import all_params
-    self._vectorized_params = all_params(self._funit)
-    return self._vectorized_params
+    self._params = all_params(self._funit)
+    return self._params
 
 
 #################################################
@@ -470,9 +470,9 @@ class _FilterRecords (_Buffer_Base):
     except NameError as e:
       print (_("Error: %s")%e.message)
       exit(1)
-  def _vectorize_params (self):
+  def _get_params (self):
     import numpy as np
-    records = super(_FilterRecords,self)._vectorize_params()
+    records = super(_FilterRecords,self)._get_params()
     if len(self._filters) == 0: return records
     for cmd in self._filters:
       flags = []
@@ -515,8 +515,8 @@ class _Masks (_Buffer_Base):
 
   # Remove all mask records from the table, they should not become variables
   # themselves.
-  def _vectorize_params (self):
-    records = super(_Masks,self)._vectorize_params()
+  def _get_params (self):
+    records = super(_Masks,self)._get_params()
     is_mask = (records['typvar'] == '@@')
     records['dltf'][is_mask] = 1
     return records
@@ -555,9 +555,9 @@ class _Dates (_Buffer_Base):
     super(_Dates,self).__init__(*args,**kwargs)
 
   # Get any extra (derived) fields needed for doing the decoding.
-  def _vectorize_params (self):
+  def _get_params (self):
     import numpy as np
-    fields = super(_Dates,self)._vectorize_params()
+    fields = super(_Dates,self)._get_params()
     # Calculate the forecast (in hours).
     fields['forecast']=fields['deet']*fields['npas']/3600.
     # Time axis
@@ -641,9 +641,9 @@ class _Series (_Buffer_Base):
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
 
-  def _vectorize_params (self):
+  def _get_params (self):
     import numpy as np
-    fields = super(_Series,self)._vectorize_params()
+    fields = super(_Series,self)._get_params()
     nrecs = len(fields['nomvar'])
     # Identify timeseries records for further processing.
     is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y') | (fields['grtyp'] == 'T'))
@@ -780,9 +780,9 @@ class _VCoords (_Buffer_Base):
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
     self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
-  def _vectorize_params (self):
+  def _get_params (self):
     import numpy as np
-    fields = super(_VCoords,self)._vectorize_params()
+    fields = super(_VCoords,self)._get_params()
     # Provide 'level' and 'kind' information to the decoder.
     decoded = map(DecodeIp,fields['ip1'],fields['ip2'],fields['ip3'])
     rp1 = zip(*decoded)[0]
@@ -1294,7 +1294,7 @@ class _netCDF_IO (_netCDF_Atts):
     from collections import OrderedDict
 
     # List of metadata keys that are internal to the FSTD file.
-    internal_meta = list(self._vectorize_params().keys())
+    internal_meta = list(self._get_params().keys())
 
     # Generate unique axis names.
     axis_table = dict()
