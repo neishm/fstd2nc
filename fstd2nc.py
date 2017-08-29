@@ -227,8 +227,11 @@ class _Buffer_Base (object):
     record_keys = record_keys.flatten()
     record_keys = record_keys[record_keys >= 0]
     ind = np.searchsorted(self._vectorized_params['key'], record_keys)
-    datyp = map(int,self._vectorized_params['datyp'])
-    nbits = map(int,self._vectorized_params['nbits'])
+    # Find unique combos of datyp, nbits
+    # (want to minimize calls to dtype_fst2numpy).
+    datyp, nbits = zip(*set(zip(self._vectorized_params['datyp'],self._vectorized_params['nbits'])))
+    datyp = map(int,datyp)
+    nbits = map(int,nbits)
     dtype_list = map(dtype_fst2numpy, datyp, nbits)
     return np.result_type(*dtype_list)
 
