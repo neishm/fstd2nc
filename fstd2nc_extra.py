@@ -196,7 +196,7 @@ def all_params (funit):
   ni, gtyp = divmod(raw[:,1,1],256)
   nj, datyp = divmod(raw[:,2,0],256)
   nk, ubc = divmod(raw[:,2,1],4096)
-  npas = raw[:,3,0]//128
+  npas = raw[:,3,0]//64
   ig4, ig2a = divmod(raw[:,3,1],256)
   ig1, ig2b = divmod(raw[:,4,0],256)
   ig3, ig2c = divmod(raw[:,4,1],256)
