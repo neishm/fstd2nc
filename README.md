@@ -21,6 +21,11 @@ optional arguments:
   --ignore-etiket       Tells the converter to ignore the etiket when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different etikets.
+  --quick-scan          Read record headers from the raw librmn structures,
+                        instead of calling fstprm. This can speed up the
+                        initial scan when using a large number of input files,
+                        but may crash if the internal structures of librmn
+                        change in the future.
   --vars VAR1,VAR2,...  Comma-separated list of variables to convert. By
                         default, all variables are converted.
   --fill-value FILL_VALUE
