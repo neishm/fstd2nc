@@ -275,8 +275,6 @@ class _Buffer_Base (object):
     from collections import OrderedDict
     from rpnpy.librmn.fstd98 import fstinl, fstprm
     import numpy as np
-    if hasattr(self,'_params'):
-      return self._params
     keys = fstinl(self._funit)
     params = map(fstprm, keys)
     fields = OrderedDict()
@@ -293,7 +291,6 @@ class _Buffer_Base (object):
         v = np.empty(len(params),dtype='O')
         v[:] = v2
       fields[n] = np.asarray(v)
-    self._params = fields
     return fields
 
 
@@ -439,13 +436,10 @@ class _QuickScan (_Buffer_Base):
     self._quick_scan = kwargs.pop('quick_scan',False)
     super(_QuickScan,self).__init__(*args,**kwargs)
   def _get_params (self):
-    if hasattr(self,'_params'):
-      return self._params
+    from fstd2nc_extra import all_params
     if not self._quick_scan:
       return super(_QuickScan,self)._get_params()
-    from fstd2nc_extra import all_params
-    self._params = all_params(self._funit)
-    return self._params
+    return all_params(self._funit)
 
 
 #################################################
@@ -1293,6 +1287,14 @@ class _netCDF_IO (_netCDF_Atts):
     self._reference_date = kwargs.pop('reference_date',None)
     self._unique_names = kwargs.pop('unique_names',True)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
+
+  # Cache the result of _get_params so it only needs to be done once.
+  # Need to do the caching in this subclass (the last mixin of Buffer) so we
+  # capture all the work done in the intermediate mixins.
+  def _get_params (self):
+    if not hasattr(self,'_params'):
+      self._params = super(_netCDF_IO,self)._get_params()
+    return self._params
 
   def _iter (self):
     from datetime import datetime
