@@ -299,33 +299,61 @@ class _Buffer_Base (object):
 
   # Internal iterator.
   def _iter (self):
-    from collections import OrderedDict, namedtuple
+    from collections import OrderedDict
     import numpy as np
 
-    records = self._get_params()
+    params = self._get_params()
+    nrecs = len(params['nomvar'])
 
     # Degenerate case: no data in buffer
-    if len(records['nomvar']) == 0: return
+    if nrecs == 0: return
 
-    # Group the records by variable.
-    var_records = OrderedDict()
-    var_id_type = namedtuple('var_id', self._var_id)
-    for i,k in enumerate(records['key']):
-      # Ignore deleted / invalidated records
-      if records['dltf'][i] == 1: continue
-      # Get the unique variable identifiers.
-      var_id = var_id_type(*[records[n][i] for n in self._var_id])
-      # Ignore coordinate records.
-      if var_id.nomvar.strip() in self._meta_records: continue
-      var_records.setdefault(var_id,[]).append(i)
+    # Construct a single structured array to hold the record metadata
+    # (more efficient to work with).
+    # Ignore 'shape' parameter - don't need it and it's too complicated to put
+    # into a structured array.
+    fieldnames = [n for n in params.keys() if n != 'shape']
+
+    record_dtype = [(n,params[n].dtype) for n in fieldnames]
+    records = np.empty(nrecs, dtype=record_dtype)
+    for n in fieldnames:
+      records[n] = params[n]
+
+    # Ignore deleted / invalidated records.
+    deleted = (records['dltf'] == 1)
+    if np.any(deleted):
+      records = records[~deleted]
+
+    # Determine the variable identifiers.
+    # First, extract the uniquely identifying information from the metadata.
+    all_var_ids = records[list(self._var_id)]
+
+    # Do a pre-processing step to remove ids that are identical to the one
+    # immediately before it.
+    # This is purely an optimization thing - the np.unique call later on is
+    # O(n log n) so want to prune this array as much as possible beforehand.
+    # TODO: Update this once numpy has an unsorted "unique"-like function that
+    # can run more efficiently when there are relatively few unique elements.
+    # (could get ~O(n) with a hash table).
+    var_ids = all_var_ids
+    flag = np.concatenate(([True], var_ids[1:] != var_ids[:-1]))
+    var_ids = var_ids[flag]
+
+    # Now, find the unique var_ids from this pruned list.
+    var_ids = np.unique(var_ids)
 
     # Loop over each variable and construct the data & metadata.
-    for var_id, rec_ids in var_records.items():
+    for var_id in var_ids:
+      var_records = records[(all_var_ids == var_id)]
+      nomvar = var_id['nomvar'].strip()
+      # Ignore coordinate records.
+      if nomvar in self._meta_records: continue
+
       # Get the metadata for each record.
       atts = OrderedDict()
-      for n in records.keys():
+      for n in fieldnames:
         if n in self._outer_axes or n in self._ignore_atts: continue
-        v = records[n][rec_ids]
+        v = var_records[n]
         # Remove missing values before continuing.
         v = np.ma.compressed(v)
         if len(v) == 0: continue
@@ -339,7 +367,7 @@ class _Buffer_Base (object):
       # Get the axis coordinates.
       axes = OrderedDict()
       for n in self._outer_axes:
-        values = records[n][rec_ids]
+        values = var_records[n]
         # Remove missing values before continuing.
         values = np.ma.compressed(values)
         # Ignore axes that have no actual coordinate values.
@@ -355,21 +383,23 @@ class _Buffer_Base (object):
       record_keys[()] = -1
       
       # Arrange the record keys in the appropriate locations.
-      for rec_id in rec_ids:
-        index = tuple(axes[n].index(records[n][rec_id]) for n in axes.keys())
-        record_keys[index] = records['key'][rec_id]
+      indices = []
+      for n in self._outer_axes:
+        u, ind = np.unique(var_records[n], return_inverse=True)
+        indices.append(ind)
+      record_keys[indices] = var_records['key']
 
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_keys.flatten()]
       if not np.all(have_data):
-        warn (_("Missing some records for %s.")%var_id.nomvar)
+        warn (_("Missing some records for %s.")%nomvar)
 
       # Add dummy axes for the ni,nj,nk record dimensions.
-      axes['k'] = tuple(range(var_id.nk))
-      axes['j'] = tuple(range(var_id.nj))
-      axes['i'] = tuple(range(var_id.ni))
+      axes['k'] = tuple(range(var_id['nk']))
+      axes['j'] = tuple(range(var_id['nj']))
+      axes['i'] = tuple(range(var_id['ni']))
 
-      var = _iter_type( name = var_id.nomvar.strip(), atts = atts,
+      var = _iter_type( name = nomvar, atts = atts,
                         axes = axes,
                         dtype = self._get_dtype(record_keys),
                         record_keys = record_keys )
