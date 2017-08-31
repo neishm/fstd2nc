@@ -173,6 +173,9 @@ def _modify_axes (axes, **kwargs):
 # new behaviour if more exotic FSTD files are encountered in the future.
 class _Buffer_Base (object):
 
+  # Keep a reference to fstd98 so it's available during cleanup.
+  from rpnpy.librmn import fstd98 as _fstd98
+
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
   _meta_records = ()
@@ -207,9 +210,8 @@ class _Buffer_Base (object):
 
   # Clean up a buffer (close any attached files, etc.)
   def __del__ (self):
-    from rpnpy.librmn.fstd98 import fstcloseall
     if hasattr(self,'_funit'):
-      istat = fstcloseall(self._funit)
+      istat = _Buffer_Base._fstd98.fstcloseall(self._funit)
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):

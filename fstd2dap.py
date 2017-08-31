@@ -18,6 +18,11 @@
 # along with "fstd2nc".  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
+# Grab necessary dependencies for running this stuff.
+# (e.g., may need to hook in our own copy of rpnpy).
+import fstd2nc
+# Hook in translation support
+from fstd2nc import _
 
 """
 Serve RPN standard files through a pydap server.
@@ -104,6 +109,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
 # Handler for the FST data.
 from pydap.handlers.lib import BaseHandler
 class FST_Handler(BaseHandler):
+  extensions=r'^.*\.fst$'
   def __init__ (self, filepath):
     self.filepath = filepath
   # Only create the dataset object if needed.
@@ -123,11 +129,15 @@ def get_handler(filepath, handlers=None):
     return FST_Handler(str(filepath))
   return pydap_get_handler(filepath, handlers)
 from pydap.handlers import lib as pydap_lib
+from pydap.wsgi import app as pydap_app
+# Override the handler in the library (for running as fstd2dap).
 pydap_lib.get_handler = get_handler
+# Override the handler in the wsgi app (for running as pydap).
+pydap_app.get_handler = get_handler
 
 
 def __main__():
-  from fstd2nc import Buffer, _
+  from fstd2nc import Buffer
   from pydap.wsgi.app import main
   from argparse import ArgumentParser
   import sys
