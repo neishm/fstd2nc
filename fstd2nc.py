@@ -219,22 +219,6 @@ class _Buffer_Base (object):
         v = v.strip()
       yield (n,v)
 
-  # Determine the dtype for an array.
-  # Input: array of record keys.
-  # Output: dtype that covers all datyps from the records.
-  def _get_dtype (self, record_keys):
-    import numpy as np
-    record_keys = record_keys.flatten()
-    record_keys = record_keys[record_keys >= 0]
-    ind = np.searchsorted(self._params['key'], record_keys)
-    # Find unique combos of datyp, nbits
-    # (want to minimize calls to dtype_fst2numpy).
-    datyp, nbits = zip(*set(zip(self._params['datyp'],self._params['nbits'])))
-    datyp = map(int,datyp)
-    nbits = map(int,nbits)
-    dtype_list = map(dtype_fst2numpy, datyp, nbits)
-    return np.result_type(*dtype_list)
-
 
   ###############################################
   # Basic flow for reading data
@@ -396,9 +380,18 @@ class _Buffer_Base (object):
       axes['j'] = tuple(range(var_id['nj']))
       axes['i'] = tuple(range(var_id['ni']))
 
+      # Determine the optimal data type to use.
+      # First, find unique combos of datyp, nbits
+      # (want to minimize calls to dtype_fst2numpy).
+      datyp, nbits = zip(*set(zip(var_records['datyp'],var_records['nbits'])))
+      datyp = map(int,datyp)
+      nbits = map(int,nbits)
+      dtype_list = map(dtype_fst2numpy, datyp, nbits)
+      dtype = np.result_type(*dtype_list)
+
       var = _iter_type( name = nomvar, atts = atts,
                         axes = axes,
-                        dtype = self._get_dtype(record_keys),
+                        dtype = dtype,
                         record_keys = record_keys )
       yield var
 
@@ -1466,7 +1459,7 @@ class _netCDF_IO (_netCDF_Atts):
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
-      v = f.createVariable(var.name, datatype=self._get_dtype(var.record_keys), dimensions=dimensions)
+      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions)
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
