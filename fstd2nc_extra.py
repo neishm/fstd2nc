@@ -190,45 +190,45 @@ def all_params (funit):
   # 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
   # 8      word ip3:28, pad6:4, date_stamp:32;
   nrecs = raw.shape[0]
-  lng = np.empty(nrecs, dtype='uint32')
-  ds = np.empty(nrecs, dtype='uint32')
+  lng = np.empty(nrecs, dtype='int32')
+  ds = np.empty(nrecs, dtype='ubyte')
   np.divmod(raw[:,0,0],2**24, ds, lng)
   deleted = np.empty(nrecs, dtype='ubyte')
   select = np.empty(nrecs, dtype='ubyte')
   np.divmod(ds,128, deleted, select)
   addr = raw[:,0,1]
-  deet = np.empty(nrecs, dtype='uint32')
+  deet = np.empty(nrecs, dtype='int32')
   nbits = np.empty(nrecs, dtype='byte')
   np.divmod(raw[:,1,0],256, deet, nbits)
-  ni = np.empty(nrecs, dtype='uint32')
+  ni = np.empty(nrecs, dtype='int32')
   gtyp = np.empty(nrecs, dtype='ubyte')
   np.divmod(raw[:,1,1],256, ni, gtyp)
-  nj = np.empty(nrecs, dtype='uint32')
+  nj = np.empty(nrecs, dtype='int32')
   datyp = np.empty(nrecs, dtype='ubyte')
   np.divmod(raw[:,2,0],256, nj, datyp)
-  nk = np.empty(nrecs, dtype='uint32')
+  nk = np.empty(nrecs, dtype='int32')
   ubc = np.empty(nrecs, dtype='uint16')
   np.divmod(raw[:,2,1],4096, nk, ubc)
-  npas = raw[:,3,0]//64
-  ig4 = np.empty(nrecs, dtype='uint32')
-  ig2a = np.empty(nrecs, dtype='uint32')
+  npas = np.asarray(raw[:,3,0]//64, dtype='int32')
+  ig4 = np.empty(nrecs, dtype='int32')
+  ig2a = np.empty(nrecs, dtype='int32')
   np.divmod(raw[:,3,1],256, ig4, ig2a)
-  ig1 = np.empty(nrecs, dtype='uint32')
-  ig2b = np.empty(nrecs, dtype='uint32')
+  ig1 = np.empty(nrecs, dtype='int32')
+  ig2b = np.empty(nrecs, dtype='int32')
   np.divmod(raw[:,4,0],256, ig1, ig2b)
-  ig3 = np.empty(nrecs, dtype='uint32')
-  ig2c = np.empty(nrecs, dtype='uint32')
+  ig3 = np.empty(nrecs, dtype='int32')
+  ig2c = np.empty(nrecs, dtype='int32')
   np.divmod(raw[:,4,1],256, ig3, ig2c)
   etik15 = raw[:,5,0]//4
   etik6a = raw[:,5,1]//4
   et = raw[:,6,0]//256
   etikbc, typvar = divmod(et, 4096)
   nomvar = raw[:,6,1]//256
-  ip1 = np.empty(nrecs, dtype='uint32')
+  ip1 = np.empty(nrecs, dtype='int32')
   levtyp = np.empty(nrecs, dtype='ubyte')
   np.divmod(raw[:,7,0],16, ip1, levtyp)
-  ip2 = raw[:,7,1]//16
-  ip3 = raw[:,8,0]//16
+  ip2 = np.asarray(raw[:,7,1]//16,dtype='int32')
+  ip3 = np.asarray(raw[:,8,0]//16,dtype='int32')
   date_stamp = raw[:,8,1]
   # Reassemble and decode.
   # (Based on fstd98.c)
@@ -257,7 +257,8 @@ def all_params (funit):
   # Note: this dateo calculation is based on my assumption that
   # the stamps increase in 4-second intervals.
   # Doing it this way to avoid a gazillion calls to incdat.
-  dateo = date_valid - (deet*npas)/4
+  dateo = np.asarray(date_valid - (deet*npas)/4, dtype='int32')
+  datev = np.asarray(date_valid, dtype='int32')
   xtra1 = date_valid
   xtra2 = np.zeros(nrecs, dtype='uint32')
   xtra3 = np.zeros(nrecs, dtype='uint32')
@@ -266,7 +267,7 @@ def all_params (funit):
   key = (np.array(file_index_list)&0x3FF) | ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
 
   return dict(
-    key = key, dateo = dateo, datev = date_valid, deet = deet, npas = npas,
+    key = key, dateo = dateo, datev = datev, deet = deet, npas = npas,
     ni = ni, nj = nj, nk = nk, nbits = nbits, datyp = datyp, ip1 = ip1,
     ip2 = ip2, ip3 = ip3, typvar = typvar, nomvar = nomvar, etiket = etiket,
     grtyp = gtyp, ig1 = ig1, ig2 = ig2, ig3 = ig3, ig4 = ig4, swa = addr,

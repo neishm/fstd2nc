@@ -341,6 +341,9 @@ class _Buffer_Base (object):
         # Only use attributes that are consistent across all variable records.
         if len(set(v)) > 1: continue
         v = v[0]
+        # Use regular integers for numeric types.
+        if np.can_cast(v.dtype,int):
+          v = int(v)
         # Trim string attributes (remove whitespace padding).
         if isinstance(v,str): v = v.strip()
         atts[n] = v
@@ -804,7 +807,7 @@ class _VCoords (_Buffer_Base):
     decoded = map(DecodeIp,fields['ip1'],fields['ip2'],fields['ip3'])
     rp1 = zip(*decoded)[0]
     levels = np.array([r.v1 for r in rp1])
-    kind = np.array([r.kind for r in rp1])
+    kind = np.array([r.kind for r in rp1], dtype='int32')
     # Only use first set of levels (can't handle ranges yet).
     fields['level'] = levels
     fields['kind'] = kind
