@@ -494,19 +494,15 @@ class _FilterRecords (_Buffer_Base):
     import numpy as np
     records = super(_FilterRecords,self)._get_params()
     if len(self._filters) == 0: return records
+    flags = np.ones(len(records['nomvar']),dtype='bool')
     for cmd in self._filters:
-      flags = []
-      # Loop over each record, and apply the filter.
-      for i in range(len(records['nomvar'])):
-        p = dict((k,v[i]) for k,v in records.items())
-        flags.append(self._do_filter(p, cmd))
-      flags = np.array(flags)
-      for k,v in list(records.items()):
-        try:
-          records[k] = v[flags]
-        except IndexError:
-          print (_("Error: unable to apply the filter: %s")%cmd)
-          exit(1)
+      try:
+        flags &= self._do_filter(records, cmd)
+      except TypeError:
+        print (_("Error: unable to apply the filter: %s")%cmd)
+        exit(1)
+    for k,v in list(records.items()):
+        records[k] = v[flags]
     return records
 
 
