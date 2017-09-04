@@ -446,6 +446,12 @@ class _ManyFiles (_Buffer_Base):
       return super(_ManyFiles,self)._get_params()
     from fstd2nc_extra import all_params
     return all_params(self._funit)
+  def __del__ (self):
+    # Switch to the private table before cleaning up file references.
+    if self._private_table:
+      from fstd2nc_extra import set_table
+      set_table(self._table_id)
+    super(_ManyFiles,self).__del__()
 
 
 #################################################

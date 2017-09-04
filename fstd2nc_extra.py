@@ -325,17 +325,24 @@ _current_table = create_table()
 # Swap out the contents of the current table.
 def set_table (table_id):
   from ctypes import sizeof, memmove
-  from rpnpy.librmn import fstd98
+  # Allow this function to partially work during cleanup.
+  try:
+    from rpnpy.librmn import fstd98
+  except ImportError:
+    fstd98 = None
   global _current_table
   if table_id == _current_table: return
   # Save the current file table.
   memmove(extended_file_table[_current_table], file_table, sizeof(file_table))
   memmove(extended_FGFDT[_current_table], Fnom_General_File_Desc_Table, sizeof(Fnom_General_File_Desc_Table))
-  extended_linkedUnits[_current_table] = fstd98._linkedUnits
+  if fstd98 is not None:
+    extended_linkedUnits[_current_table] = fstd98._linkedUnits
   # Load the other file table.
   memmove(file_table, extended_file_table[table_id], sizeof(file_table))
   memmove(Fnom_General_File_Desc_Table, extended_FGFDT[table_id], sizeof(Fnom_General_File_Desc_Table))
-  fstd98._linkedUnits = extended_linkedUnits[table_id]
+  if fstd98 is not None:
+    fstd98._linkedUnits = extended_linkedUnits[table_id]
+
   _current_table = table_id
 
 
