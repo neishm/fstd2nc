@@ -230,7 +230,7 @@ class _Buffer_Base (object):
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    from rpnpy.librmn.fstd98 import fstopenall, fstinl
+    from rpnpy.librmn.fstd98 import fstopenall
     from rpnpy.librmn.const import FST_RO
     from collections import OrderedDict
     self._minimal_metadata = minimal_metadata
@@ -259,10 +259,9 @@ class _Buffer_Base (object):
   # needed for doing the variable decoding.
   def _get_params (self):
     from collections import OrderedDict
-    from rpnpy.librmn.fstd98 import fstinl, fstprm
     import numpy as np
-    keys = fstinl(self._funit)
-    params = map(fstprm, keys)
+    keys = self._fstinl(self._funit)
+    params = map(self._fstprm, keys)
     fields = OrderedDict()
     for n, v in params[0].items():
       fields[n] = []
@@ -413,6 +412,15 @@ class _Buffer_Base (object):
       dtype = dtype_fst2numpy(key['datyp'],key['nbits'])
     return fstluk (key, dtype, rank, dataArray)
 
+  # Other rpnpy methods which may need to be overridden by mixins.
+  from rpnpy.librmn.fstd98 import fstinl, fstprm, fstinf, fstlir
+  _fstinl = staticmethod(fstinl)
+  _fstprm = staticmethod(fstprm)
+  _fstinf = staticmethod(fstinf)
+  _fstlir = staticmethod(fstlir)
+  del fstinl, fstprm, fstinf, fstlir
+    
+
   #
   ###############################################
 
@@ -425,6 +433,14 @@ class _Buffer_Base (object):
 
 #################################################
 # Enhancements for dealing with many, many FSTD files.
+def _settable (fname):
+  def f_new (self, *args, **kwargs):
+    if self._private_table:
+      from fstd2nc_extra import set_table
+      set_table(self._table_id)
+    x = getattr(super(_ManyFiles,self),fname) (*args, **kwargs)
+    return x
+  return f_new
 class _ManyFiles (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
@@ -454,13 +470,14 @@ class _ManyFiles (_Buffer_Base):
       set_table(self._table_id)
     for var in super(_ManyFiles,self)._iter():
       yield var
-  def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
-    if self._private_table:
-      from fstd2nc_extra import set_table
-      set_table(self._table_id)
-    return super(_ManyFiles,self)._fstluk(key, dtype=type, rank=rank, dataArray=dataArray)
+  # Modify FST calls to always use the appropriate table.
+  _fstluk = _settable('_fstluk')
+  _fstinl = _settable('_fstinl')
+  _fstprm = _settable('_fstprm')
+  _fstinf = _settable('_fstinf')
+  _fstlir = _settable('_fstlir')
+  # Switch to the private table before cleaning up file references.
   def __del__ (self):
-    # Switch to the private table before cleaning up file references.
     if self._private_table:
       from fstd2nc_extra import set_table
       set_table(self._table_id)
@@ -568,15 +585,14 @@ class _Masks (_Buffer_Base):
 
   # Apply the mask data
   def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
-    from rpnpy.librmn.fstd98 import fstluk, fstinf
     import numpy as np
     prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
     if not prm['typvar'].endswith('@'): return prm
-    mask_key = fstinf(self._funit, nomvar=prm['nomvar'], typvar = '@@',
+    mask_key = self._fstinf(self._funit, nomvar=prm['nomvar'], typvar = '@@',
                       datev=prm['datev'], etiket=prm['etiket'],
                       ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
-      mask = fstluk(mask_key, rank=rank)['d']
+      mask = self._fstluk(mask_key, rank=rank)['d']
       prm['d'] = np.ma.asarray(prm['d'])
       prm['d'].mask = (mask == 0)
     return prm
@@ -718,7 +734,6 @@ class _Series (_Buffer_Base):
     fields['ip1'][is_series] = 0
     return fields
   def _iter (self):
-    from rpnpy.librmn.fstd98 import fstlir, fstluk
     from collections import OrderedDict
     import numpy as np
     from datetime import timedelta
@@ -730,7 +745,7 @@ class _Series (_Buffer_Base):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    header = fstlir (self._funit, nomvar='STNS')
+    header = self._fstlir (self._funit, nomvar='STNS')
     if header is not None:
         atts = OrderedDict()
         array = header['d'].transpose()
@@ -752,7 +767,7 @@ class _Series (_Buffer_Base):
         station = _var_type('station',atts,axes,array)
         yield station
     # Create forecast axis.
-    header = fstlir (self._funit, nomvar='HH')
+    header = self._fstlir (self._funit, nomvar='HH')
     if header is not None:
         atts = OrderedDict(units='hours')
         array = header['d'].flatten()
@@ -771,7 +786,7 @@ class _Series (_Buffer_Base):
       # Vertical coordinates for series data.
       if var.name in ('SH','SV'):
         key = int(var.record_keys.flatten()[0])
-        array = fstluk(key)['d'].squeeze()
+        array = self._fstluk(key)['d'].squeeze()
         if array.ndim != 1: continue
         var.atts['kind'] = 5
         yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
@@ -844,14 +859,13 @@ class _VCoords (_Buffer_Base):
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS
     from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import fstluk, fstinl, fstprm
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
     for vcoord_nomvar in self._vcoord_nomvars:
-      for handle in fstinl(self._funit, nomvar=vcoord_nomvar):
-        header = fstprm(handle)
+      for handle in self._fstinl(self._funit, nomvar=vcoord_nomvar):
+        header = self._fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.
         if header['nomvar'].strip() == 'HY': key = 'HY'
@@ -927,7 +941,7 @@ class _VCoords (_Buffer_Base):
             # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
               # Get A and B info.
-              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              vgd_id = vgd_fromlist(self._fstluk(header,rank=3)['d'])
               if vgd_get (vgd_id,'LOGP'):
                 name = 'zeta'
                 # Not really a "standard" name, but there's nothing in the
@@ -1047,8 +1061,7 @@ class _XYCoords (_Buffer_Base):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    from rpnpy.librmn.fstd98 import fstlir
-    header = fstlir (self._funit, nomvar=coordname, ip1=var.atts['ig1'],
+    header = self._fstlir (self._funit, nomvar=coordname, ip1=var.atts['ig1'],
                                ip2=var.atts['ig2'], ip3=var.atts['ig3'])
     if header is not None:
       return header
@@ -1059,7 +1072,6 @@ class _XYCoords (_Buffer_Base):
   def _iter (self):
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
-    from rpnpy.librmn.fstd98 import fstluk
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
