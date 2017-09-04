@@ -428,8 +428,10 @@ class _Buffer_Base (object):
 class _ManyFiles (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
+    from argparse import SUPPRESS
     super(_ManyFiles,cls)._cmdline_args(parser)
-    parser.add_argument('--quick-scan', action='store_true', help=_('Read record headers from the raw librmn structures, instead of calling fstprm.  This can speed up the initial scan when using a large number of input files, but may crash if the internal structures of librmn change in the future.'))
+    parser.add_argument('--quick-scan', action='store_true', help=SUPPRESS)
+    #help=_('Read record headers from the raw librmn structures, instead of calling fstprm.  This can speed up the initial scan when using a large number of input files, but may crash if the internal structures of librmn change in the future.')
   def __init__ (self, *args, **kwargs):
     self._quick_scan = kwargs.pop('quick_scan',False)
     self._private_table = kwargs.pop('private_table',False)
