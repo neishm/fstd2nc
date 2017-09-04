@@ -31,16 +31,13 @@ Serve RPN standard files through a pydap server.
 _buffer_args = {}  # To be filled in by __main__.
 
 # Helper method - construct a Dataset object from the file path.
-def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
+def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}):
   from fstd2nc import Buffer, _var_type
   from pydap.model import DatasetType, GridType, BaseType
-  from os.path import basename
+  from os.path import basename, getmtime
   from glob import glob
   import numpy as np
   from collections import OrderedDict
-
-  if filepath in dataset_cache:
-    return dataset_cache[filepath]
 
   infiles = filepath
   buffer_args = _buffer_args
@@ -57,6 +54,16 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
     # Apply wildcard expansion to filenames.
     infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
     buffer_args = args
+
+  if isinstance(infiles,str):
+    mtime = getmtime(infiles)
+  else:
+    mtime = max(map(getmtime,infiles))
+
+  if filepath in dataset_cache and mtime <= mtimes[filepath]:
+    return dataset_cache[filepath]
+
+  mtimes[filepath] = mtime
 
   # Use the quick scan feature, and a private table for the Buffer.
   buffer_args = dict(buffer_args)
