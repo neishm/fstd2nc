@@ -424,19 +424,27 @@ class _Buffer_Base (object):
 
 
 #################################################
-# Quick scan of parameters using low-level interface.
-class _QuickScan (_Buffer_Base):
+# Enhancements for dealing with many, many FSTD files.
+class _ManyFiles (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_QuickScan,cls)._cmdline_args(parser)
+    super(_ManyFiles,cls)._cmdline_args(parser)
     parser.add_argument('--quick-scan', action='store_true', help=_('Read record headers from the raw librmn structures, instead of calling fstprm.  This can speed up the initial scan when using a large number of input files, but may crash if the internal structures of librmn change in the future.'))
   def __init__ (self, *args, **kwargs):
     self._quick_scan = kwargs.pop('quick_scan',False)
-    super(_QuickScan,self).__init__(*args,**kwargs)
+    self._private_table = kwargs.pop('private_table',False)
+    if self._private_table:
+      from fstd2nc_extra import create_table, set_table
+      self._table_id = create_table()
+      set_table(self._table_id)
+    super(_ManyFiles,self).__init__(*args,**kwargs)
   def _get_params (self):
-    from fstd2nc_extra import all_params
+    if self._private_table:
+      from fstd2nc_extra import set_table
+      set_table(self._table_id)
     if not self._quick_scan:
-      return super(_QuickScan,self)._get_params()
+      return super(_ManyFiles,self)._get_params()
+    from fstd2nc_extra import all_params
     return all_params(self._funit)
 
 
@@ -1546,7 +1554,7 @@ class _Iter (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars,_QuickScan):
+class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars,_ManyFiles):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
