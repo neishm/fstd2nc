@@ -1,4 +1,32 @@
-from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int, c_byte
+from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int, c_uint, c_byte, c_char_p
+from rpnpy.librmn import librmn
+
+
+# From fnom.h
+MAXFILES = 1024
+class attributs(Structure):
+  _fields_ = [
+     ('stream',c_uint,1), ('std',c_uint,1), ('burp',c_uint,1), ('rnd',c_uint,1), ('wa',c_uint,1), ('ftn',c_uint,1),
+     ('unf',c_uint,1), ('read_only',c_uint,1), ('old',c_uint,1), ('scratch',c_uint,1), ('notpaged',c_uint,1),
+     ('pipe',c_uint,1), ('write_mode',c_uint,1), ('remote',c_uint,1), ('padding',c_uint,18),
+  ]
+
+class general_file_info(Structure):
+  _fields_ = [
+    ('file_name',c_char_p),            # complete file name
+    ('subname',c_char_p),              # sub file name for cmcarc files
+    ('file_type',c_char_p),            # file type and options
+    ('iun',c_int),                    # fnom unit number
+    ('fd',c_int),                     # file descriptor
+    ('file_size',c_int),              # file size in words
+    ('eff_file_size',c_int),          # effective file size in words
+    ('lrec',c_int),                   # record length when appliable
+    ('open_flag',c_int),              # open/close flag
+    ('attr',attributs),
+  ]
+
+
+Fnom_General_File_Desc_Table = (general_file_info*MAXFILES).in_dll(librmn,'Fnom_General_File_Desc_Table')
 
 # From rpnmacros.h
 word = c_uint32
@@ -119,7 +147,7 @@ class file_table_entry(Structure):
         # length in 64 bit units of primary keys (including 64 bit header)
         ('info_len',c_int),                 #length in 64 bit units of info keys
         ('link',c_int),                     # file index to next linked file,-1 if none
-        ('cur_info',c_void_p),
+        ('cur_info',POINTER(general_file_info)),
                                       # pointer to current general file desc entry
         ('iun',c_int),                      # FORTRAN unit number, -1 if not open, 0 if C file
         ('file_index',c_int),               # index into file table, -1 if not open
@@ -145,17 +173,18 @@ class file_table_entry(Structure):
   ]
 file_table_entry_ptr = POINTER(file_table_entry)
 
-from rpnpy.librmn import librmn
-
 librmn.file_index.argtypes = (c_int,)
 librmn.file_index.restype = c_int
 file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
+
 
 def all_params (funit):
   '''
   Extract parameters for *all* records.
   Returns a dictionary similar to fstprm, only the entries are
   vectorized over all records instead of 1 record at a time.
+  NOTE: This includes deleted records as well.  You can filter them out using
+        the 'dltf' flag.
   '''
   from ctypes import cast
   import numpy as np
