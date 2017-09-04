@@ -58,6 +58,11 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}):
     infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
     buffer_args = args
 
+  # Use the quick scan feature, and a private table for the Buffer.
+  buffer_args = dict(buffer_args)
+  buffer_args['quick_scan'] = True
+  buffer_args['private_table'] = True
+
   # Construct an fstd2nc Buffer object with the decoded FST data.
   buf = Buffer(infiles, **buffer_args)
   # Save a reference to the Buffer so the file reference(s) remain valid.
