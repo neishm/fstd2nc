@@ -123,7 +123,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
 # Handler for the FST data.
 from pydap.handlers.lib import BaseHandler
 class FST_Handler(BaseHandler):
-  extensions=r'^.*\.fst$'
+  extensions=r'^.*\.fstall$'
   def __init__ (self, filepath):
     self.filepath = filepath
   # Only create the dataset object if needed.
@@ -139,7 +139,7 @@ class FST_Handler(BaseHandler):
 from pydap.handlers.lib import get_handler as pydap_get_handler
 def get_handler(filepath, handlers=None):
   from rpnpy.librmn.fstd98 import isFST
-  if isFST(str(filepath)) or filepath.endswith('.fstall'):
+  if isFST(str(filepath)):
     return FST_Handler(str(filepath))
   return pydap_get_handler(filepath, handlers)
 from pydap.wsgi import app as pydap_app
