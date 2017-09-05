@@ -31,7 +31,7 @@ Serve RPN standard files through a pydap server.
 _buffer_args = {}  # To be filled in by __main__.
 
 # Helper method - construct a Dataset object from the file path.
-def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}):
+def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
   from fstd2nc import Buffer, _var_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename, getmtime
@@ -53,17 +53,21 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}):
     infiles = args.pop('infile')
     # Apply wildcard expansion to filenames.
     infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
+    infiles = sorted(infiles)
     buffer_args = args
 
   if isinstance(infiles,str):
     mtime = getmtime(infiles)
   else:
     mtime = max(map(getmtime,infiles))
+    # Look at modification time of control file.
+    mtime = max(mtime,getmtime(filepath))
 
-  if filepath in dataset_cache and mtime <= mtimes[filepath]:
+  if filepath in dataset_cache and mtime <= mtimes[filepath] and known_infiles[filepath] == infiles:
     return dataset_cache[filepath]
 
   mtimes[filepath] = mtime
+  known_infiles[filepath] = infiles
 
   # Use the quick scan feature, and a private table for the Buffer.
   buffer_args = dict(buffer_args)
