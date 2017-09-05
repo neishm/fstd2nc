@@ -28,8 +28,6 @@ from fstd2nc import _
 Serve RPN standard files through a pydap server.
 """
 
-_buffer_args = {}  # To be filled in by __main__.
-
 # Helper method - construct a Dataset object from the file path.
 def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
   from fstd2nc import Buffer, _var_type
@@ -40,7 +38,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
   from collections import OrderedDict
 
   infiles = filepath
-  buffer_args = _buffer_args
+  buffer_args = dict()
 
   if filepath.endswith('.fstall'):
     # Read the extra arguments and parse.
@@ -48,13 +46,12 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
     parser = ArgumentParser()
     parser.add_argument('infile', nargs='+')
     Buffer._cmdline_args(parser)
-    args = parser.parse_args(open(filepath).readline().split())
-    args = vars(args)
-    infiles = args.pop('infile')
+    buffer_args = parser.parse_args(open(filepath).readline().split())
+    buffer_args = vars(buffer_args)
+    infiles = buffer_args.pop('infile')
     # Apply wildcard expansion to filenames.
     infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
     infiles = sorted(infiles)
-    buffer_args = args
 
   if isinstance(infiles,str):
     mtime = getmtime(infiles)
@@ -63,6 +60,8 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
     # Look at modification time of control file.
     mtime = max(mtime,getmtime(filepath))
 
+  # Return a cached version of the dataset if nothing about the file(s) have
+  # changed since last time.
   if filepath in dataset_cache and mtime <= mtimes[filepath] and known_infiles[filepath] == infiles:
     return dataset_cache[filepath]
 
@@ -70,7 +69,6 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
   known_infiles[filepath] = infiles
 
   # Use the quick scan feature, and a private table for the Buffer.
-  buffer_args = dict(buffer_args)
   buffer_args['quick_scan'] = True
   buffer_args['private_table'] = True
 
@@ -144,42 +142,8 @@ def get_handler(filepath, handlers=None):
   if isFST(str(filepath)) or filepath.endswith('.fstall'):
     return FST_Handler(str(filepath))
   return pydap_get_handler(filepath, handlers)
-from pydap.handlers import lib as pydap_lib
 from pydap.wsgi import app as pydap_app
-# Override the handler in the library (for running as fstd2dap).
-pydap_lib.get_handler = get_handler
 # Override the handler in the wsgi app (for running as pydap).
 pydap_app.get_handler = get_handler
 
-
-def __main__():
-  from fstd2nc import Buffer
-  from pydap.wsgi.app import main
-  from argparse import ArgumentParser
-  import sys
-  # Hook some of the Pydap options into the argparse interface.
-  parser = ArgumentParser(description=_("Serves RPN standard files in an OPeNDAP interface."))
-  parser.add_argument('-b', '--bind', metavar='ADDRESS', default='127.0.0.1', help=_('The ip to listen to [default: %(default)s]'))
-  parser.add_argument('-p', '--port', metavar='PORT', type=int, default=8001, help=_('The port to connect [default: %(default)s]'))
-  parser.add_argument('-d', '--data', metavar='DIR', default='.', help=_('The directory with files [default: %(default)s]'))
-
-  # Parse the combined arguments.
-  Buffer._cmdline_args(parser)
-  args = parser.parse_args()
-  Buffer._check_args(parser, args)
-  args = vars(args)
-
-  # Put the Pydap stuff back onto the argv.
-  sys.argv = [sys.argv[0], '--bind', args.pop('bind'), '--port', args.pop('port'), '--data', args.pop('data')]
-  # Store the fstd2nc arguments for later use.
-  _buffer_args.update(args)
-
-  # Force the fill value to be 1e20, because that's what pydap is using.
-  _buffer_args['fill_value'] = 1e20
-
-  # Invoke the command-line Pydap interface.
-  main()
-
-if __name__ == '__main__':
-  __main__()
 
