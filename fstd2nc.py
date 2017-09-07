@@ -174,7 +174,9 @@ def _modify_axes (axes, **kwargs):
 class _Buffer_Base (object):
 
   # Keep a reference to fstd98 so it's available during cleanup.
-  from rpnpy.librmn import fstd98 as _fstd98
+  try:
+    from rpnpy.librmn import fstd98 as _fstd98
+  except ImportError: pass
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
@@ -413,12 +415,14 @@ class _Buffer_Base (object):
     return fstluk (key, dtype, rank, dataArray)
 
   # Other rpnpy methods which may need to be overridden by mixins.
-  from rpnpy.librmn.fstd98 import fstinl, fstprm, fstinf, fstlir
-  _fstinl = staticmethod(fstinl)
-  _fstprm = staticmethod(fstprm)
-  _fstinf = staticmethod(fstinf)
-  _fstlir = staticmethod(fstlir)
-  del fstinl, fstprm, fstinf, fstlir
+  try:
+    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstinf, fstlir
+    _fstinl = staticmethod(fstinl)
+    _fstprm = staticmethod(fstprm)
+    _fstinf = staticmethod(fstinf)
+    _fstlir = staticmethod(fstlir)
+    del fstinl, fstprm, fstinf, fstlir
+  except ImportError: pass
     
 
   #
