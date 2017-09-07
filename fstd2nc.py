@@ -299,7 +299,7 @@ class _Buffer_Base (object):
     fieldnames = [n for n in params.keys() if n != 'shape']
 
     record_dtype = [(n,params[n].dtype) for n in fieldnames]
-    records = np.empty(nrecs, dtype=record_dtype)
+    records = np.ma.empty(nrecs, dtype=record_dtype)
     for n in fieldnames:
       records[n] = params[n]
 
@@ -371,7 +371,7 @@ class _Buffer_Base (object):
       
       # Arrange the record keys in the appropriate locations.
       indices = []
-      for n in self._outer_axes:
+      for n in axes.keys():
         u, ind = np.unique(var_records[n], return_inverse=True)
         indices.append(ind)
       record_keys[indices] = var_records['key']
