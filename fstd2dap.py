@@ -44,15 +44,16 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
     # Read the extra arguments and parse.
     from argparse import ArgumentParser, Namespace
     from os import chdir, path
+    # Change the working directory to where this file is, so that relative
+    # paths work properly.
+    chdir(path.dirname(filepath))
+    # Parse the arguments from the file.
     parser = ArgumentParser()
     parser.add_argument('infile', nargs='+')
     Buffer._cmdline_args(parser)
     buffer_args = parser.parse_args(open(filepath).readline().split())
     buffer_args = vars(buffer_args)
     infiles = buffer_args.pop('infile')
-    # Change the working directory to where this file is, so that relative
-    # paths work properly.
-    chdir(path.dirname(filepath))
     # Apply wildcard expansion to filenames.
     infiles = [f for filepattern in infiles for f in sorted(glob(filepattern)) or [filepattern]]
     # Make sure the filenames are strings (not unicode).
