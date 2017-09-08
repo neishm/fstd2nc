@@ -1642,6 +1642,9 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   if msglvl > 4:
     global warn
     warn = lambda msg: None
+    # Also turn off general warning messages (e.g. from numpy)
+    import warnings
+    warnings.simplefilter('ignore')
 
   # Apply wildcard expansion to filenames.
   infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
