@@ -46,6 +46,9 @@ optional arguments:
   --reference-date YYYY-MM-DD
                         The reference date for the output time axis. The
                         default is the starting date in the RPN file.
+  --msglvl {0,DEBUG,2,INFORM,4,WARNIN,6,ERRORS,8,FATALE,10,SYSTEM,CATAST}
+                        How much information to print to stdout during the
+                        conversion. Default is WARNIN.
   --nc-format {NETCDF4,NETCDF4_CLASSIC,NETCDF3_CLASSIC,NETCDF3_64BIT_OFFSET,NETCDF3_64BIT_DATA}
                         Which variant of netCDF to write. Default is NETCDF4.
   -f, --force           Overwrite the output file if it already exists.

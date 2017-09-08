@@ -162,4 +162,13 @@ from pydap.wsgi import app as pydap_app
 # Override the handler in the wsgi app (for running as pydap).
 pydap_app.get_handler = get_handler
 
+# Turn off warning / information messages (can clog up the logs).
+fstd2nc.warn = lambda msg: None
+fstd2nc.info = lambda msg: None
+from rpnpy.librmn.fstd98 import fstopt
+fstopt('MSGLVL','ERRORS')
+del fstopt
+import warnings
+warnings.simplefilter("ignore")
+del warnings
 

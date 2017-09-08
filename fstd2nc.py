@@ -52,12 +52,22 @@ try:
 except ImportError:
   pass
 
+# Information messages
+def info (msg):
+  print (msg)
+
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
 def warn (msg, _printed=set()):
   if msg not in _printed:
     print (_("Warning: %s")%msg)
     _printed.add(msg)
+
+# Error messages
+def error (msg):
+  from sys import exit
+  print (_("Error: %s")%msg)
+  exit(1)
 
 # Override default dtype for "binary" data.
 # The one example I've seen has "float32" data encoded in it.
@@ -499,7 +509,7 @@ class _SelectVars (_Buffer_Base):
     vars = kwargs.pop('vars',None)
     if vars is not None:
       self._selected_vars = vars.split(',')
-      print (_('Will look for variables: ') + ' '.join(self._selected_vars))
+      info (_('Will look for variables: ') + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
     super(_SelectVars,self).__init__(*args,**kwargs)
@@ -535,11 +545,9 @@ class _FilterRecords (_Buffer_Base):
     try:
       return eval(cmd, None, p)
     except SyntaxError:
-      print (_("Error: unable to parse the filter: %s")%cmd)
-      exit(1)
+      error (_("unable to parse the filter: %s")%cmd)
     except NameError as e:
-      print (_("Error: %s")%e.message)
-      exit(1)
+      error (e.message)
   def _get_params (self):
     import numpy as np
     records = super(_FilterRecords,self)._get_params()
@@ -549,8 +557,7 @@ class _FilterRecords (_Buffer_Base):
       try:
         flags &= self._do_filter(records, cmd)
       except TypeError:
-        print (_("Error: unable to apply the filter: %s")%cmd)
-        exit(1)
+        error (_("unable to apply the filter: %s")%cmd)
     for k,v in list(records.items()):
         records[k] = v[flags]
     return records
@@ -1599,14 +1606,15 @@ class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_
 # Command-line invocation:
 def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
-  from sys import stdout, exit, argv
+  from sys import stdout, argv
   from os.path import exists, isdir
   from glob import glob
-  from rpnpy.librmn.fstd98 import isFST, FSTDError
+  from rpnpy.librmn.fstd98 import isFST, FSTDError, fstopt
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
+  parser.add_argument('--msglvl', choices=['0','DEBUG','2','INFORM','4','WARNIN','6','ERRORS','8','FATALE','10','SYSTEM','CATAST'], default='WARNIN', help=_('How much information to print to stdout during the conversion.  Default is %(default)s.'))
   parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
@@ -1615,9 +1623,21 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   args = vars(args)
   infiles = args.pop('infile')
   outfile = args.pop('outfile')
+  msglvl = args.pop('msglvl')
   nc_format = args.pop('nc_format')
   force = args.pop('force')
   no_history = args.pop('no_history')
+
+  # Apply message level criteria.
+  try:
+    msglvl = int(msglvl)
+  except ValueError:
+    msglvl = {'DEBUG':0,'INFORM':2,'WARNIN':6,'ERRORS':8,'SYSTEM':10,'CATAST':10}[msglvl]
+  fstopt ('MSGLVL',msglvl)
+  # Turn off fst2nc warning messages for higher message levels.
+  if msglvl > 6:
+    global warn
+    warn = lambda msg: None
 
   # Apply wildcard expansion to filenames.
   infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
@@ -1625,17 +1645,14 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   # Make sure input file exists
   for infile in infiles:
     if not exists(infile):
-      print (_("Error: '%s' does not exist!")%(infile))
-      exit(1)
+      error (_("'%s' does not exist!")%(infile))
     if not isFST(infile) and not isdir(infile):
-      print (_("Error: '%s' is not an RPN standard file!")%(infile))
-      exit(1)
+      error (_("'%s' is not an RPN standard file!")%(infile))
 
   try:
     buf = buffer_type(infiles, **args)
   except FSTDError:
-    print (_("Error: problem opening one or more input directories."))
-    exit(1)
+    error (_("problem opening one or more input directories."))
 
   # Check if output file already exists
   if exists(outfile) and not force:
@@ -1653,8 +1670,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
           break
         print (_("Sorry, invalid response."))
     if overwrite is False:
-      print (_("Refusing to overwrite existing file '%s'.")%(outfile))
-      exit(1)
+      error (_("Refusing to overwrite existing file '%s'.")%(outfile))
 
   # Append the command invocation to the netCDF metadata?
   if no_history:
@@ -1679,8 +1695,7 @@ def _fstd2nc_cmdline_trapped (*args, **kwargs):
   try:
     _fstd2nc_cmdline (*args, **kwargs)
   except KeyboardInterrupt:
-    print (_("Aborted by user."))
-    exit(1)
+    error (_("Aborted by user."))
 
 
 if __name__ == '__main__':
