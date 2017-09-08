@@ -425,7 +425,8 @@ class _Buffer_Base (object):
     from rpnpy.librmn.fstd98 import fstluk
     # Use local overrides for dtype.
     if dtype is None and isinstance(key,dict):
-      dtype = dtype_fst2numpy(key['datyp'],key['nbits'])
+      if 'datyp' in key and 'nbits' in key:
+        dtype = dtype_fst2numpy(key['datyp'],key['nbits'])
     return fstluk (key, dtype, rank, dataArray)
 
   # Other rpnpy methods which may need to be overridden by mixins.
@@ -602,7 +603,10 @@ class _Masks (_Buffer_Base):
   def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
     import numpy as np
     prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
+    # If this data is not masked, or if this data *is* as mask, then just
+    # return it.
     if not prm['typvar'].endswith('@'): return prm
+    if prm['typvar'] == '@@' : return prm
     mask_key = self._fstinf(self._funit, nomvar=prm['nomvar'], typvar = '@@',
                       datev=prm['datev'], etiket=prm['etiket'],
                       ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
