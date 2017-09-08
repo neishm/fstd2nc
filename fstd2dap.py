@@ -40,7 +40,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
   infiles = filepath
   buffer_args = dict()
 
-  if filepath.endswith('.fstall'):
+  if filepath.endswith('.combo'):
     # Read the extra arguments and parse.
     from argparse import ArgumentParser, Namespace
     from os import chdir, path
@@ -131,7 +131,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
 # Handler for the FST data.
 from pydap.handlers.lib import BaseHandler
 class FST_Handler(BaseHandler):
-  extensions=r'^.*\.fstall$'
+  extensions=r'^.*\.combo$'
   def __init__ (self, filepath):
     self.filepath = filepath
   # Only create the dataset object if needed.
