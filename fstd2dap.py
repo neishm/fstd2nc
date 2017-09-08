@@ -44,6 +44,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
     # Read the extra arguments and parse.
     from argparse import ArgumentParser, Namespace
     from os import chdir, path
+    import shlex
     # Change the working directory to where this file is, so that relative
     # paths work properly.
     chdir(path.dirname(filepath))
@@ -51,7 +52,8 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
     parser = ArgumentParser()
     parser.add_argument('infile', nargs='+')
     Buffer._cmdline_args(parser)
-    buffer_args = parser.parse_args(open(filepath).readline().split())
+    buffer_args = shlex.split(open(filepath).readline())
+    buffer_args = parser.parse_args(buffer_args)
     buffer_args = vars(buffer_args)
     infiles = buffer_args.pop('infile')
     # Apply wildcard expansion to filenames.
