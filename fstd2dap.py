@@ -33,9 +33,9 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
   from fstd2nc import Buffer, _var_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename, getmtime
-  from glob import glob
   import numpy as np
   from collections import OrderedDict
+  from datetime import datetime
 
   infiles = filepath
   buffer_args = dict()
@@ -45,6 +45,7 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
     from argparse import ArgumentParser, Namespace
     from os import chdir, path
     import shlex
+    from glob import glob
     # Change the working directory to where this file is, so that relative
     # paths work properly.
     chdir(path.dirname(filepath))
@@ -85,9 +86,15 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
   # Save a reference to the Buffer so the file reference(s) remain valid.
   buffer_cache[filepath] = buf
 
-  # Construct a pydap Dataset object.
+  # Get global metadata.
   global_metadata = buf._metadata.get('global',{})
   global_metadata['Conventions'] = "CF-1.6"
+  # Add history to global metadata.
+  timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  history = timestamp + ": %s via Pydap+fstd2dap"%filepath
+  global_metadata = {"history":history}
+
+  # Construct a pydap Dataset object.
   dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=global_metadata))
   # Save this so it can be immediately returned next time it's requested.
   dataset_cache[filepath] = dataset
@@ -134,6 +141,7 @@ class FST_Handler(BaseHandler):
   extensions=r'^.*\.combo$'
   def __init__ (self, filepath):
     self.filepath = filepath
+    self.additional_headers = []
   # Only create the dataset object if needed.
   def __getattr__ (self, name):
     if name != 'dataset': raise AttributeError
