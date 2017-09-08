@@ -295,6 +295,7 @@ class _Buffer_Base (object):
   def _iter (self):
     from collections import OrderedDict
     import numpy as np
+    import warnings
 
     params = self._get_params()
     nrecs = len(params['nomvar'])
@@ -320,7 +321,10 @@ class _Buffer_Base (object):
 
     # Determine the variable identifiers.
     # First, extract the uniquely identifying information from the metadata.
-    all_var_ids = records[list(self._var_id)]
+    # Suppress FutureWarning from numpy about doing this.  Probably benign...
+    with warnings.catch_warnings():
+      warnings.simplefilter("ignore")
+      all_var_ids = records[list(self._var_id)]
 
     # Do a pre-processing step to remove ids that are identical to the one
     # immediately before it.
