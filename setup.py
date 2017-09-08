@@ -17,14 +17,20 @@ setup (
     'Topic :: Scientific/Engineering :: Atmospheric Science',
   ],
   packages = find_packages(),
-  py_modules = ['fstd2nc'],
-  install_requires = ['numpy','netcdf4','fstd2nc-deps'],
+  py_modules = ['fstd2nc','fstd2dap','fstd2nc_extra'],
+  install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps'],
+  extras_require = {
+    'dap': ['Pydap','Pydap[server]'],
+  },
   package_data = {
     'fstd2nc_locale': ['*/LC_MESSAGES/fstd2nc.mo'],
   },
   entry_points={
     'console_scripts': [
       'fstd2nc = fstd2nc:_fstd2nc_cmdline_trapped',
+    ],
+    'pydap.handler': [
+      'fstd = fstd2dap:FST_Handler',
     ],
   },
 

@@ -14,7 +14,7 @@ optional arguments:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   --minimal-metadata    Don't include RPN record attributes and other internal
-                        information in the output file.
+                        information in the output metadata.
   --ignore-typvar       Tells the converter to ignore the typvar when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different typvars.
@@ -25,7 +25,7 @@ optional arguments:
                         default, all variables are converted.
   --fill-value FILL_VALUE
                         The fill value to use for masked (missing) data. Gets
-                        stored as '_FillValue' attribute in the netCDF file.
+                        stored as '_FillValue' attribute in the metadata.
                         Default is '1e+30'.
   --squash-forecasts    Use the date of validity for the "time" axis.
                         Otherwise, the default is to use the date of original
@@ -38,15 +38,17 @@ optional arguments:
                         example, to convert only 24-hour forecasts you could
                         use --filter ip2==24
   --metadata-file METADATA_FILE
-                        Apply netCDF metadata from the specified file. You can
-                        repeat this option multiple times to build metadata
-                        from different sources.
+                        Use metadata from the specified file. You can repeat
+                        this option multiple times to build metadata from
+                        different sources.
   --time-units {seconds,minutes,hours,days}
-                        The units of time for the netCDF file. Default is
-                        hours.
+                        The units for the output time axis. Default is hours.
   --reference-date YYYY-MM-DD
-                        The reference date for the netCDF time axis. The
+                        The reference date for the output time axis. The
                         default is the starting date in the RPN file.
+  --msglvl {0,DEBUG,2,INFORM,4,WARNIN,6,ERRORS,8,FATALE,10,SYSTEM,CATAST}
+                        How much information to print to stdout during the
+                        conversion. Default is WARNIN.
   --nc-format {NETCDF4,NETCDF4_CLASSIC,NETCDF3_CLASSIC,NETCDF3_64BIT_OFFSET,NETCDF3_64BIT_DATA}
                         Which variant of netCDF to write. Default is NETCDF4.
   -f, --force           Overwrite the output file if it already exists.
