@@ -20,7 +20,7 @@ setup (
   py_modules = ['fstd2nc','fstd2dap','fstd2nc_extra'],
   install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps'],
   extras_require = {
-    'dap': ['Pydap','Pydap[server]'],
+    'dap': ['Pydap[server,functions]'],
   },
   package_data = {
     'fstd2nc_locale': ['*/LC_MESSAGES/fstd2nc.mo'],
