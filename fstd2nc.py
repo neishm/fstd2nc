@@ -69,8 +69,11 @@ def error (msg):
   print (_("Error: %s")%msg)
   exit(1)
 
-# Override default dtype for "binary" data.
-# The one example I've seen has "float32" data encoded in it.
+# Override default dtype for "binary" (datyp 0) data.
+# This is probably float32 data, not integer.
+# See (internal) mailing list discussion at http://internallists.cmc.ec.gc.ca/pipermail/python-rpn/2015-February/000010.html where this problem is discussed.
+# Also see examples on (internal) wiki dealing with this type of data:
+# https://wiki.cmc.ec.gc.ca/wiki/Python-RPN/2.0/examples#Example_4:_Plot_RPN_STD_field_on_an_X-grid
 # https://wiki.cmc.ec.gc.ca/wiki/Talk:Python-RPN/2.0/examples#Plot_GIOPS_Forecast_Data_with_Basemap
 def dtype_fst2numpy (datyp, nbits=None):
   from rpnpy.librmn.fstd98 import dtype_fst2numpy
