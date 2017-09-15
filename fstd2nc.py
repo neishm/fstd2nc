@@ -1290,6 +1290,12 @@ class _netCDF_Atts (_Buffer_Base):
       configparser.readfp(metafile)
     for varname in configparser.sections():
       metadata[varname] = OrderedDict(configparser.items(varname))
+      # Detect numerical values
+      for k,v in list(metadata[varname].items()):
+        try:
+          metadata[varname][k] = float(v) # First, try converting to float.
+          metadata[varname][k] = int(v) # Try further conversion to int.
+        except ValueError: pass
     self._metadata = metadata
     super(_netCDF_Atts,self).__init__(*args,**kwargs)
   def _iter (self):
@@ -1522,6 +1528,10 @@ class _netCDF_IO (_netCDF_Atts):
         continue
       # Hard case: only have the record indices, need to loop over the records.
       v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions)
+      # Turn off auto scaling of variables - want to encode the values as-is.
+      # 'scale_factor' and 'add_offset' will only be applied when *reading* the
+      # the file after it's created.
+      v.set_auto_scale(False)
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
