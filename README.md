@@ -51,6 +51,8 @@ optional arguments:
                         conversion. Default is WARNIN.
   --nc-format {NETCDF4,NETCDF4_CLASSIC,NETCDF3_CLASSIC,NETCDF3_64BIT_OFFSET,NETCDF3_64BIT_DATA}
                         Which variant of netCDF to write. Default is NETCDF4.
+  --zlib                Turn on compression for the netCDF file. Only works
+                        for NETCDF4 and NETCDF4_CLASSIC formats.
   -f, --force           Overwrite the output file if it already exists.
   --no-history          Don't put the command-line invocation in the netCDF
                         metadata.

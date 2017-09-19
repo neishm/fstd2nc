@@ -1489,7 +1489,7 @@ class _netCDF_IO (_netCDF_Atts):
           var.atts.pop(n,None)
 
 
-  def write_nc_file (self, filename, nc_format='NETCDF4', global_metadata=None):
+  def write_nc_file (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
@@ -1521,13 +1521,13 @@ class _netCDF_IO (_netCDF_Atts):
       # Write the variable.
       # Easy case: already have the data.
       if isinstance(var,_var_type):
-        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions)
+        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions, zlib=zlib)
         # Write the metadata.
         v.setncatts(var.atts)
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
-      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions)
+      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib)
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.
@@ -1637,6 +1637,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   buffer_type._cmdline_args(parser)
   parser.add_argument('--msglvl', choices=['0','DEBUG','2','INFORM','4','WARNIN','6','ERRORS','8','FATALE','10','SYSTEM','CATAST'], default='WARNIN', help=_('How much information to print to stdout during the conversion.  Default is %(default)s.'))
   parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
+  parser.add_argument('--zlib', action='store_true', help=_("Turn on compression for the netCDF file.  Only works for NETCDF4 and NETCDF4_CLASSIC formats."))
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   args = parser.parse_args()
@@ -1646,6 +1647,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   outfile = args.pop('outfile')
   msglvl = args.pop('msglvl')
   nc_format = args.pop('nc_format')
+  zlib = args.pop('zlib')
   force = args.pop('force')
   no_history = args.pop('no_history')
 
@@ -1715,7 +1717,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.write_nc_file(outfile, nc_format, global_metadata)
+  buf.write_nc_file(outfile, nc_format, global_metadata, zlib=zlib)
 
 # Command-line invocation with error trapping.
 # Hides the Python stack trace when the user aborts the command.
