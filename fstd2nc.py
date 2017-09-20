@@ -954,7 +954,10 @@ class _VCoords (_Buffer_Base):
           # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
-          if header['nomvar'].strip() == 'HY': key = 'HY'
+          # If we're dealing with the old 'HY' records, then we don't match on
+          # ig1/ig2.
+          if key not in vrecs and 'HY' in vrecs:
+            key = 'HY'
           # Check if we have a vertical coordinate record to use.
           if key in vrecs:
             header = vrecs[key]
