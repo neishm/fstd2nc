@@ -1539,8 +1539,11 @@ class _netCDF_IO (_netCDF_Atts):
       v.setncatts(var.atts)
       # Write the data.
       data_shape = tuple(map(len,var.axes.values()))[var.record_keys.ndim:]
-      for ind in np.ndindex(var.record_keys.shape):
-        k = int(var.record_keys[ind])
+      indices = list(np.ndindex(var.record_keys.shape))
+      # Sort the indices by FSTD key, so we're reading the records in the same
+      # order as they're found on disk.
+      keys = map(int,var.record_keys.flatten())
+      for k, ind in sorted(zip(keys,indices)):
         if k < 0: continue
         try:
           data = self._fstluk(k)['d'].transpose().reshape(data_shape)
