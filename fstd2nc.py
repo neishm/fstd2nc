@@ -1530,7 +1530,12 @@ class _netCDF_IO (_netCDF_Atts):
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
-      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib)
+      # Get the shape of a single record for the variable.
+      record_shape = tuple(map(len,var.axes.values()))[var.record_keys.ndim:]
+      # Use this as the "chunk size" for the netCDF file, to improve I/O
+      # performance.
+      chunksizes = (1,)*var.record_keys.ndim + record_shape
+      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib, chunksizes=chunksizes)
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.
@@ -1538,7 +1543,6 @@ class _netCDF_IO (_netCDF_Atts):
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
-      data_shape = tuple(map(len,var.axes.values()))[var.record_keys.ndim:]
       indices = list(np.ndindex(var.record_keys.shape))
       # Sort the indices by FSTD key, so we're reading the records in the same
       # order as they're found on disk.
@@ -1546,7 +1550,7 @@ class _netCDF_IO (_netCDF_Atts):
       for k, ind in sorted(zip(keys,indices)):
         if k < 0: continue
         try:
-          data = self._fstluk(k)['d'].transpose().reshape(data_shape)
+          data = self._fstluk(k)['d'].transpose().reshape(record_shape)
           v[ind] = data
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
