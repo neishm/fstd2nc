@@ -1507,6 +1507,12 @@ class _netCDF_IO (_netCDF_Atts):
     if global_metadata is not None:
       f.setncatts(global_metadata)
 
+    # Collect all the records that will be read/written.
+    # List of (key,recshape,ncvar,ncind).
+    # Note: derived variables (with values stored in memory) will be written
+    # immediately, bypassing this list.
+    io = []
+
     for var in self._iter():
 
       for axisname, axisvalues in var.axes.items():
@@ -1547,14 +1553,20 @@ class _netCDF_IO (_netCDF_Atts):
       # Sort the indices by FSTD key, so we're reading the records in the same
       # order as they're found on disk.
       keys = map(int,var.record_keys.flatten())
-      for k, ind in sorted(zip(keys,indices)):
-        if k < 0: continue
-        try:
-          data = self._fstluk(k)['d'].transpose().reshape(record_shape)
-          v[ind] = data
-        except (IndexError,ValueError):
-          warn(_("Internal problem with the script - unable to get data for '%s'")%var.name)
-          continue
+      for k, ind in zip(keys,indices):
+        if k >= 0:
+          io.append((k,record_shape,v,ind))
+
+    # Now, do the actual transcribing of the data.
+    # Read/write the data in the same order of records in the RPN file(s) to
+    # improve performance.
+    for k,shape,v,ind in sorted(io):
+      try:
+        data = self._fstluk(k)['d'].transpose().reshape(shape)
+        v[ind] = data
+      except (IndexError,ValueError):
+        warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
+        continue
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
     f.Conventions = "CF-1.6"
