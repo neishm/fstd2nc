@@ -615,8 +615,7 @@ class _Masks (_Buffer_Base):
                       ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
       mask = self._fstluk(mask_key, rank=rank)['d']
-      prm['d'] = np.ma.asarray(prm['d'])
-      prm['d'].mask = (mask == 0)
+      prm['d'] = prm['d'] * mask + self._fill_value * (1-mask)
     return prm
 
 
