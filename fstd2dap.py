@@ -28,54 +28,44 @@ from fstd2nc import _
 Serve RPN standard files through a pydap server.
 """
 
-# Helper method - construct a Dataset object from the file path.
-def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
+# Helper method - construct a Dataset object from a buffer argument string.
+def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
   from fstd2nc import Buffer, _var_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename, getmtime
   import numpy as np
   from collections import OrderedDict
   from datetime import datetime
+  from argparse import ArgumentParser
+  from os import chdir, path
+  import shlex
+  from glob import glob
 
-  infiles = filepath
-  buffer_args = dict()
+  # Set the directory (to properly evaluate relative paths).
+  chdir(directory)
+  # Parse the arguments from the file.
+  parser = ArgumentParser()
+  parser.add_argument('infile', nargs='+')
+  Buffer._cmdline_args(parser)
+  buffer_args = shlex.split(buffer_str)
+  buffer_args = parser.parse_args(buffer_args)
+  buffer_args = vars(buffer_args)
+  infiles = buffer_args.pop('infile')
+  # Apply wildcard expansion to filenames.
+  infiles = [f for filepattern in infiles for f in sorted(glob(filepattern)) or [filepattern]]
+  # Make sure the filenames are strings (not unicode).
+  infiles = map(str,infiles)
 
-  if filepath.endswith('.combo'):
-    # Read the extra arguments and parse.
-    from argparse import ArgumentParser, Namespace
-    from os import chdir, path
-    import shlex
-    from glob import glob
-    # Change the working directory to where this file is, so that relative
-    # paths work properly.
-    chdir(path.dirname(filepath))
-    # Parse the arguments from the file.
-    parser = ArgumentParser()
-    parser.add_argument('infile', nargs='+')
-    Buffer._cmdline_args(parser)
-    buffer_args = shlex.split(open(filepath).readline())
-    buffer_args = parser.parse_args(buffer_args)
-    buffer_args = vars(buffer_args)
-    infiles = buffer_args.pop('infile')
-    # Apply wildcard expansion to filenames.
-    infiles = [f for filepattern in infiles for f in sorted(glob(filepattern)) or [filepattern]]
-    # Make sure the filenames are strings (not unicode).
-    infiles = map(str,infiles)
-
-  if isinstance(infiles,str):
-    mtime = getmtime(infiles)
-  else:
-    mtime = max(map(getmtime,infiles))
-    # Look at modification time of control file.
-    mtime = max(mtime,getmtime(filepath))
+  # Look at modification times of individual files.
+  mtime = max(map(getmtime,infiles))
 
   # Return a cached version of the dataset if nothing about the file(s) have
   # changed since last time.
-  if filepath in dataset_cache and mtime <= mtimes[filepath] and known_infiles[filepath] == infiles:
-    return dataset_cache[filepath]
+  if name in dataset_cache and mtime <= mtimes[name] and known_infiles[name] == infiles:
+    return dataset_cache[name]
 
-  mtimes[filepath] = mtime
-  known_infiles[filepath] = infiles
+  mtimes[name] = mtime
+  known_infiles[name] = infiles
 
   # Use the quick scan feature, and a private table for the Buffer.
   buffer_args['quick_scan'] = True
@@ -84,20 +74,20 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
   # Construct an fstd2nc Buffer object with the decoded FST data.
   buf = Buffer(infiles, **buffer_args)
   # Save a reference to the Buffer so the file reference(s) remain valid.
-  buffer_cache[filepath] = buf
+  buffer_cache[name] = buf
 
   # Get global metadata.
   global_metadata = buf._metadata.get('global',{})
   global_metadata['Conventions'] = "CF-1.6"
   # Add history to global metadata.
   timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  history = timestamp + ": %s via Pydap+fstd2dap"%filepath
+  history = timestamp + ": %s via Pydap+fstd2dap"%path.basename(name)
   global_metadata = {"history":history}
 
   # Construct a pydap Dataset object.
-  dataset = DatasetType(name=basename(filepath), attributes=dict(NC_GLOBAL=global_metadata))
+  dataset = DatasetType(name=path.basename(name), attributes=dict(NC_GLOBAL=global_metadata))
   # Save this so it can be immediately returned next time it's requested.
-  dataset_cache[filepath] = dataset
+  dataset_cache[name] = dataset
 
   # Split into vars / dims.
   buf = list(buf)
@@ -133,6 +123,22 @@ def make_dataset (filepath, buffer_cache={}, dataset_cache={}, mtimes={}, known_
       }
 
   return dataset
+
+# Helper method - construct a Dataset object from the file path.
+def make_dataset (filepath):
+  from os.path import getmtime, dirname
+
+  # Input filenames and arguments stored in a '.combo' file?
+  if filepath.endswith('.combo'):
+    buffer_str = open(filepath).readline()
+  # Otherwise, assume the filepath is for a single FSTD file.
+  # The only argument is the filename itself.
+  else:
+    buffer_str = filepath
+
+  name = filepath
+  mtime = getmtime(filepath)
+  return dataset_from_str(name, buffer_str, mtime, directory=dirname(filepath))
 
 
 # Handler for the FST data.
