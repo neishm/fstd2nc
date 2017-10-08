@@ -206,6 +206,17 @@ class _Buffer_Base (object):
   # Uses string formatting operations on the variable metadata.
   _human_var_id = ('%(nomvar)s', '%(ni)sx%(nj)s', '%(nk)sL')
 
+  # Field names and types for storing record headers in a structured array.
+  _params_dtypes = [
+     ('dateo','int32'),('datev','int32'),('deet','int32'),('npas','int32'),
+     ('ni','int32'),('nj','int32'),('nk','int32'),('nbits','int32'),
+     ('datyp','int32'),('ip1','int32'),('ip2','int32'),('ip3','int32'),
+     ('typvar','|S2'),('nomvar','|S4'),('etiket','|S12'),('grtyp','|S1'),
+     ('ig1','int32'),('ig2','int32'),('ig3','int32'),('ig4','int32'),
+     ('swa','int32'),('lng','int32'),('dltf','int32'),('ubc','int32'),
+     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),
+  ]
+
   # Record parameters which should not be used as nc variable attributes.
   # (They're either internal to the file, or part of the data, not metadata).
   _ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d')
@@ -628,6 +639,12 @@ class _Dates (_Buffer_Base):
     super(_Dates,cls)._cmdline_args(parser)
     parser.add_argument('--squash-forecasts', action='store_true', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
 
+  # Need to extend _params_dtypes before __init__.
+  def __new__ (cls, *args, **kwargs):
+    obj = super(_Dates,cls).__new__(cls, *args, **kwargs)
+    obj._params_dtypes = obj._params_dtypes + [('time','O'),('forecast','int32')]
+    return obj
+
   def __init__ (self, *args, **kwargs):
     self._squash_forecasts = kwargs.pop('squash_forecasts',False)
     if self._squash_forecasts:
@@ -716,6 +733,12 @@ class _Dates (_Buffer_Base):
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
 class _Series (_Buffer_Base):
+  # Need to extend _params_dtypes before __init__.
+  def __new__ (cls, *args, **kwargs):
+    obj = super(_Series,cls).__new__(cls, *args, **kwargs)
+    obj._params_dtypes = obj._params_dtypes + [('station_id','int32')]
+    return obj
+
   def __init__ (self, *args, **kwargs):
     # Don't process series time/station/height records as variables.
     self._meta_records = self._meta_records + ('HH','STNS')
@@ -851,6 +874,13 @@ class _Series (_Buffer_Base):
 
 class _VCoords (_Buffer_Base):
   _vcoord_nomvars = ('HY','!!')
+
+  # Need to extend _params_dtypes before __init__.
+  def __new__ (cls, *args, **kwargs):
+    obj = super(_VCoords,cls).__new__(cls, *args, **kwargs)
+    obj._params_dtypes = obj._params_dtypes + [('level','float32'),('kind','int32')]
+    return obj
+
   def __init__ (self, *args, **kwargs):
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
