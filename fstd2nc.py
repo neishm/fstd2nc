@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ###############################################################################
 # Copyright 2017 - Climate Research Division
 #                  Environment and Climate Change Canada
