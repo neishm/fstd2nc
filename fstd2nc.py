@@ -1117,7 +1117,7 @@ class _XYCoords (_Buffer_Base):
       #
       # Use a looser identifier for timeseries data (ni/nj have different
       # meanings here (not grid-related), and could have multiple grtyp
-      # values ('+','Y') that should share the same lat/lon info.
+      # values ('+','Y') that should share the same lat/lon info).
       if var.atts['typvar'].strip() == 'T':
         key = ('T',ig1,ig2)
       else:
@@ -1136,7 +1136,6 @@ class _XYCoords (_Buffer_Base):
           # Everything else should be handled by ezqkdef.
           else:
             gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._funit)
-            # For supergrids, need to loop over each subgrid to get the lat/lon
             ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
           warn(_("Unable to get grid info for '%s'")%var.name)

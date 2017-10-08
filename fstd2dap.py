@@ -43,7 +43,7 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
 
   # Set the directory (to properly evaluate relative paths).
   chdir(directory)
-  # Parse the arguments from the file.
+  # Parse the arguments from the string.
   parser = ArgumentParser()
   parser.add_argument('infile', nargs='+')
   Buffer._cmdline_args(parser)
