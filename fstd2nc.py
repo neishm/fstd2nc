@@ -207,7 +207,7 @@ class _Buffer_Base (object):
   _human_var_id = ('%(nomvar)s', '%(ni)sx%(nj)s', '%(nk)sL')
 
   # Field names and types for storing record headers in a structured array.
-  _params_dtypes = [
+  _headers_dtype = [
      ('dateo','int32'),('datev','int32'),('deet','int32'),('npas','int32'),
      ('ni','int32'),('nj','int32'),('nk','int32'),('nbits','int32'),
      ('datyp','int32'),('ip1','int32'),('ip2','int32'),('ip3','int32'),
@@ -639,10 +639,10 @@ class _Dates (_Buffer_Base):
     super(_Dates,cls)._cmdline_args(parser)
     parser.add_argument('--squash-forecasts', action='store_true', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
 
-  # Need to extend _params_dtypes before __init__.
+  # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(_Dates,cls).__new__(cls, *args, **kwargs)
-    obj._params_dtypes = obj._params_dtypes + [('time','O'),('forecast','int32')]
+    obj._headers_dtype = obj._headers_dtype + [('time','O'),('forecast','int32')]
     return obj
 
   def __init__ (self, *args, **kwargs):
@@ -733,10 +733,10 @@ class _Dates (_Buffer_Base):
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
 class _Series (_Buffer_Base):
-  # Need to extend _params_dtypes before __init__.
+  # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(_Series,cls).__new__(cls, *args, **kwargs)
-    obj._params_dtypes = obj._params_dtypes + [('station_id','int32')]
+    obj._headers_dtype = obj._headers_dtype + [('station_id','int32')]
     return obj
 
   def __init__ (self, *args, **kwargs):
@@ -875,10 +875,10 @@ class _Series (_Buffer_Base):
 class _VCoords (_Buffer_Base):
   _vcoord_nomvars = ('HY','!!')
 
-  # Need to extend _params_dtypes before __init__.
+  # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(_VCoords,cls).__new__(cls, *args, **kwargs)
-    obj._params_dtypes = obj._params_dtypes + [('level','float32'),('kind','int32')]
+    obj._headers_dtype = obj._headers_dtype + [('level','float32'),('kind','int32')]
     return obj
 
   def __init__ (self, *args, **kwargs):
