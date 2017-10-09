@@ -224,10 +224,13 @@ class _Buffer_Base (object):
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
+    from argparse import SUPPRESS
     parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
+    parser.add_argument('--no-quick-scan', action='store_true', help=SUPPRESS)
+    #help=_('Don't read record headers from the raw librmn structures, instead call fstprm.  This can be much slower, but safer.')
 
   # Do some checks on the command-line arguments after parsing them.
   @classmethod
@@ -251,7 +254,7 @@ class _Buffer_Base (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False):
+  def __init__ (self, filename, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -279,12 +282,19 @@ class _Buffer_Base (object):
     self._headers = np.ma.empty(nrecs, dtype=self._headers_dtype)
 
     # Read the headers from the file(s) and store the info in the table.
-    keys = self._fstinl(self._funit)
-    params = map(self._fstprm, keys)
-    for i,prm in enumerate(params):
-      for n,v in prm.items():
+    if no_quick_scan:
+      keys = self._fstinl(self._funit)
+      params = map(self._fstprm, keys)
+      for i,prm in enumerate(params):
+        for n,v in prm.items():
+          if n in self._headers.dtype.names:
+            self._headers[n][i] = v
+    else:
+      from fstd2nc_extra import all_params
+      params = all_params(self._funit)
+      for n,v in params.items():
         if n in self._headers.dtype.names:
-          self._headers[n][i] = v
+          self._headers[n] = v
 
   # Internal iterator.
   def _iter (self):
@@ -433,25 +443,6 @@ class _Buffer_Base (object):
 
 #####################################################################
 # Mixins for different features / behaviour for the conversions.
-
-
-#################################################
-# Enhancements for dealing with many, many FSTD files.
-class _ManyFiles (_Buffer_Base):
-  @classmethod
-  def _cmdline_args (cls, parser):
-    from argparse import SUPPRESS
-    super(_ManyFiles,cls)._cmdline_args(parser)
-    parser.add_argument('--quick-scan', action='store_true', help=SUPPRESS)
-    #help=_('Read record headers from the raw librmn structures, instead of calling fstprm.  This can speed up the initial scan when using a large number of input files, but may crash if the internal structures of librmn change in the future.')
-  def __init__ (self, *args, **kwargs):
-    self._quick_scan = kwargs.pop('quick_scan',False)
-    super(_ManyFiles,self).__init__(*args,**kwargs)
-  def _get_params (self):
-    if not self._quick_scan:
-      return super(_ManyFiles,self)._get_params()
-    from fstd2nc_extra import all_params
-    return all_params(self._funit)
 
 
 #################################################
@@ -1588,7 +1579,7 @@ class _Iter (_Buffer_Base):
 
 
 # Default interface for I/O.
-class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars,_ManyFiles):
+class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.

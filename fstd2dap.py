@@ -67,9 +67,6 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
   mtimes[name] = mtime
   known_infiles[name] = infiles
 
-  # Use the quick scan feature, and a private table for the Buffer.
-  buffer_args['quick_scan'] = True
-
   # Construct an fstd2nc Buffer object with the decoded FST data.
   buf = Buffer(infiles, **buffer_args)
   # Save a reference to the Buffer so the file reference(s) remain valid.
