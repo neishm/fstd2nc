@@ -214,7 +214,7 @@ class _Buffer_Base (object):
      ('typvar','|S2'),('nomvar','|S4'),('etiket','|S12'),('grtyp','|S1'),
      ('ig1','int32'),('ig2','int32'),('ig3','int32'),('ig4','int32'),
      ('swa','int32'),('lng','int32'),('dltf','int32'),('ubc','int32'),
-     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),
+     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),('key','int32'),
   ]
 
   # Record parameters which should not be used as nc variable attributes.
@@ -256,9 +256,9 @@ class _Buffer_Base (object):
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    from rpnpy.librmn.fstd98 import fstopenall
+    from rpnpy.librmn.fstd98 import fstopenall, fstnbr
     from rpnpy.librmn.const import FST_RO
-    from collections import OrderedDict
+    import numpy as np
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
@@ -275,35 +275,16 @@ class _Buffer_Base (object):
       filelist = list(filename)
     self._funit = fstopenall(filelist, FST_RO)
 
-  # Collect the list of params from all the FSTD records, and concatenate them
-  # into arrays.  Result is a single dictionary containing the vectorized
-  # parameters of all records.
-  # The sole purpose of this routine is to put the metadata in a structure
-  # that's more efficient for doing bulk (vectorized) manipulations, instead
-  # of manipulating each record param dictionary one at a time.
-  # Subclasses may also insert extra (non-FSTD) parameters in here which are
-  # needed for doing the variable decoding.
-  def _get_params (self):
-    from collections import OrderedDict
-    import numpy as np
+    nrecs = fstnbr(self._funit)
+    self._headers = np.ma.empty(nrecs, dtype=self._headers_dtype)
+
+    # Read the headers from the file(s) and store the info in the table.
     keys = self._fstinl(self._funit)
     params = map(self._fstprm, keys)
-    fields = OrderedDict()
-    for n, v in params[0].items():
-      fields[n] = []
-    for prm in params:
+    for i,prm in enumerate(params):
       for n,v in prm.items():
-        fields[n].append(v)
-    for n,v in list(fields.items()):
-      # Treat array-like objects specially (don't want numpy to try to
-      # read the data).
-      if hasattr(v[0],'__array__'):
-        v2 = v
-        v = np.empty(len(params),dtype='O')
-        v[:] = v2
-      fields[n] = np.asarray(v)
-    return fields
-
+        if n in self._headers.dtype.names:
+          self._headers[n][i] = v
 
   # Internal iterator.
   def _iter (self):
@@ -311,22 +292,12 @@ class _Buffer_Base (object):
     import numpy as np
     import warnings
 
-    params = self._get_params()
-    nrecs = len(params['nomvar'])
+    nrecs = len(self._headers)
 
     # Degenerate case: no data in buffer
     if nrecs == 0: return
 
-    # Construct a single structured array to hold the record metadata
-    # (more efficient to work with).
-    # Ignore 'shape' parameter - don't need it and it's too complicated to put
-    # into a structured array.
-    fieldnames = [n for n in params.keys() if n != 'shape']
-
-    record_dtype = [(n,params[n].dtype) for n in fieldnames]
-    records = np.ma.empty(nrecs, dtype=record_dtype)
-    for n in fieldnames:
-      records[n] = params[n]
+    records = self._headers
 
     # Ignore deleted / invalidated records.
     deleted = (records['dltf'] == 1)
@@ -363,7 +334,7 @@ class _Buffer_Base (object):
 
       # Get the metadata for each record.
       atts = OrderedDict()
-      for n in fieldnames:
+      for n in records.dtype.names:
         if n in self._outer_axes or n in self._ignore_atts: continue
         v = var_records[n]
         # Remove missing values before continuing.
@@ -520,11 +491,24 @@ class _FilterRecords (_Buffer_Base):
     super(_FilterRecords,cls)._cmdline_args(parser)
     parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
   def __init__ (self, *args, **kwargs):
+    import numpy as np
     filter = kwargs.pop('filter',None)
     if filter is None:
       filter = []
     self._filters = tuple(filter)
     super(_FilterRecords,self).__init__(*args,**kwargs)
+    if len(self._filters) == 0: return
+    flags = np.ones(len(self._headers),dtype='bool')
+    records = dict([(n,self._headers[n]) for n in self._headers.dtype.names])
+    for cmd in self._filters:
+      try:
+        flags &= self._do_filter(records, cmd)
+      except TypeError:
+        error (_("unable to apply the filter: %s")%cmd)
+    nrecs = sum(flags)
+    self._headers = np.ma.empty(nrecs, dtype=self._headers_dtype)
+    for k,v in list(records.items()):
+        self._headers[k] = v[flags]
   @staticmethod
   def _do_filter (p, cmd):
     try:
@@ -533,19 +517,6 @@ class _FilterRecords (_Buffer_Base):
       error (_("unable to parse the filter: %s")%cmd)
     except NameError as e:
       error (e.message)
-  def _get_params (self):
-    import numpy as np
-    records = super(_FilterRecords,self)._get_params()
-    if len(self._filters) == 0: return records
-    flags = np.ones(len(records['nomvar']),dtype='bool')
-    for cmd in self._filters:
-      try:
-        flags &= self._do_filter(records, cmd)
-      except TypeError:
-        error (_("unable to apply the filter: %s")%cmd)
-    for k,v in list(records.items()):
-        records[k] = v[flags]
-    return records
 
 
 #################################################
@@ -559,6 +530,10 @@ class _Masks (_Buffer_Base):
   def __init__ (self, *args, **kwargs):
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(_Masks,self).__init__(*args,**kwargs)
+    # Remove all mask records from the table, they should not become variables
+    # themselves.
+    is_mask = (self._headers['typvar'] == '@@')
+    self._headers['dltf'][is_mask] = 1
 
   # Apply the fill value to the data.
   def _iter (self):
@@ -570,14 +545,6 @@ class _Masks (_Buffer_Base):
       if var.atts.get('typvar','').endswith('@'):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
       yield var
-
-  # Remove all mask records from the table, they should not become variables
-  # themselves.
-  def _get_params (self):
-    records = super(_Masks,self)._get_params()
-    is_mask = (records['typvar'] == '@@')
-    records['dltf'][is_mask] = 1
-    return records
 
   # Apply the mask data
   def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
@@ -612,6 +579,7 @@ class _Dates (_Buffer_Base):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    import numpy as np
     self._squash_forecasts = kwargs.pop('squash_forecasts',False)
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
@@ -619,11 +587,9 @@ class _Dates (_Buffer_Base):
       self._outer_axes = ('time','forecast') + self._outer_axes
     super(_Dates,self).__init__(*args,**kwargs)
 
-  # Get any extra (derived) fields needed for doing the decoding.
-  def _get_params (self):
-    import numpy as np
-    fields = super(_Dates,self)._get_params()
+    # Get any extra (derived) fields needed for doing the decoding.
     # Calculate the forecast (in hours).
+    fields = self._headers
     fields['forecast']=fields['deet']*fields['npas']/3600.
     # Time axis
     if self._squash_forecasts:
@@ -638,7 +604,6 @@ class _Dates (_Buffer_Base):
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dates) & (fields['deet'] == 0))
     fields['forecast'] = forecast
     fields['time'] = dates
-    return fields
 
   # Add time and forecast axes to the data stream.
   def _iter (self):
@@ -706,29 +671,28 @@ class _Series (_Buffer_Base):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    import numpy as np
     # Don't process series time/station/height records as variables.
     self._meta_records = self._meta_records + ('HH','STNS')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(_Series,self).__init__(*args,**kwargs)
 
-  def _get_params (self):
-    import numpy as np
-    fields = super(_Series,self)._get_params()
-    nrecs = len(fields['nomvar'])
+    fields = self._headers
+    nrecs = len(fields)
     # Identify timeseries records for further processing.
     is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y') | (fields['grtyp'] == 'T'))
     # More particular, data that has one station per record.
     is_split_series = (fields['typvar'] == 'T ') & (fields['grtyp'] == '+')
 
     # For timeseries data, station # is provided by 'ip3'.
-    station_id = np.ma.array(fields['ip3'])
+    station_id = np.ma.array(np.array(fields['ip3']))
     # For non-timeseries data, ignore this info.
     station_id.mask = ~is_split_series
     fields['station_id'] = station_id
     # For timeseries data, the usual 'forecast' axis (from deet*npas) is not
     # used.  Instead, we will get forecast info from nj coordinate.
-    if 'forecast' in fields:
+    if 'forecast' in fields.dtype.names:
       fields['forecast'] = np.ma.asarray(fields['forecast'])
       fields['forecast'].mask = np.ma.getmaskarray(fields['forecast']) | is_series
     # True grid identifier is in ip1/ip2?
@@ -742,7 +706,7 @@ class _Series (_Buffer_Base):
     # Do not treat the ip1 value any further - it's not really vertical level.
     # Set it to 0 to indicate a degenerate vertical axis.
     fields['ip1'][is_series] = 0
-    return fields
+
   def _iter (self):
     from collections import OrderedDict
     import numpy as np
@@ -848,6 +812,7 @@ class _VCoords (_Buffer_Base):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    import numpy as np
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
@@ -857,9 +822,7 @@ class _VCoords (_Buffer_Base):
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
     self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
-  def _get_params (self):
-    import numpy as np
-    fields = super(_VCoords,self)._get_params()
+    fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
     decoded = map(DecodeIp,fields['ip1'],fields['ip2'],fields['ip3'])
     rp1 = zip(*decoded)[0]
@@ -868,7 +831,6 @@ class _VCoords (_Buffer_Base):
     # Only use first set of levels (can't handle ranges yet).
     fields['level'] = levels
     fields['kind'] = kind
-    return fields
   # Add vertical axis as another variable.
   def _iter (self):
     from collections import OrderedDict
@@ -1347,14 +1309,6 @@ class _netCDF_IO (_netCDF_Atts):
     self._unique_names = kwargs.pop('unique_names',True)
     super(_netCDF_IO,self).__init__(*args,**kwargs)
 
-  # Cache the result of _get_params so it only needs to be done once.
-  # Need to do the caching in this subclass (the last mixin of Buffer) so we
-  # capture all the work done in the intermediate mixins.
-  def _get_params (self):
-    if not hasattr(self,'_params'):
-      self._params = super(_netCDF_IO,self)._get_params()
-    return self._params
-
   def _iter (self):
     from datetime import datetime
     import numpy as np
@@ -1385,7 +1339,7 @@ class _netCDF_IO (_netCDF_Atts):
     from collections import OrderedDict
 
     # List of metadata keys that are internal to the FSTD file.
-    internal_meta = list(self._get_params().keys())
+    internal_meta = self._headers.dtype.names
 
     # Generate unique axis names.
     axis_table = dict()
