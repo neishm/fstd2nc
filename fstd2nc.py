@@ -466,14 +466,6 @@ class _Buffer_Base (object):
 
 #################################################
 # Enhancements for dealing with many, many FSTD files.
-def _settable (fname):
-  def f_new (self, *args, **kwargs):
-    if self._private_table:
-      from fstd2nc_extra import set_table
-      set_table(self._table_id)
-    x = getattr(super(_ManyFiles,self),fname) (*args, **kwargs)
-    return x
-  return f_new
 class _ManyFiles (_Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
@@ -483,38 +475,12 @@ class _ManyFiles (_Buffer_Base):
     #help=_('Read record headers from the raw librmn structures, instead of calling fstprm.  This can speed up the initial scan when using a large number of input files, but may crash if the internal structures of librmn change in the future.')
   def __init__ (self, *args, **kwargs):
     self._quick_scan = kwargs.pop('quick_scan',False)
-    self._private_table = kwargs.pop('private_table',False)
-    if self._private_table:
-      from fstd2nc_extra import create_table, set_table
-      self._table_id = create_table()
-      set_table(self._table_id)
     super(_ManyFiles,self).__init__(*args,**kwargs)
   def _get_params (self):
-    if self._private_table:
-      from fstd2nc_extra import set_table
-      set_table(self._table_id)
     if not self._quick_scan:
       return super(_ManyFiles,self)._get_params()
     from fstd2nc_extra import all_params
     return all_params(self._funit)
-  def _iter (self):
-    if self._private_table:
-      from fstd2nc_extra import set_table
-      set_table(self._table_id)
-    for var in super(_ManyFiles,self)._iter():
-      yield var
-  # Modify FST calls to always use the appropriate table.
-  _fstluk = _settable('_fstluk')
-  _fstinl = _settable('_fstinl')
-  _fstprm = _settable('_fstprm')
-  _fstinf = _settable('_fstinf')
-  _fstlir = _settable('_fstlir')
-  # Switch to the private table before cleaning up file references.
-  def __del__ (self):
-    if self._private_table:
-      from fstd2nc_extra import set_table
-      set_table(self._table_id)
-    super(_ManyFiles,self).__del__()
 
 
 #################################################

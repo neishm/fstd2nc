@@ -69,7 +69,6 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
 
   # Use the quick scan feature, and a private table for the Buffer.
   buffer_args['quick_scan'] = True
-  buffer_args['private_table'] = True
 
   # Construct an fstd2nc Buffer object with the decoded FST data.
   buf = Buffer(infiles, **buffer_args)
