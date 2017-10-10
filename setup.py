@@ -38,6 +38,7 @@ setup (
   ],
   packages = find_packages(),
   py_modules = ['fstd2nc','fstd2dap','fstd2nc_extra'],
+  setup_requires = ['pip >= 8.1'],
   install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps'],
   extras_require = {
     'dap': ['Pydap[server,functions]'],
