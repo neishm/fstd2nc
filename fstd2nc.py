@@ -155,13 +155,13 @@ class _var_type (object):
 
 # An internal type used in _iter methods.
 class _iter_type (object):
-  __slots__ = ('name','atts','axes','dtype','record_keys')
-  def __init__ (self, name, atts, axes, dtype, record_keys):
+  __slots__ = ('name','atts','axes','dtype','record_id')
+  def __init__ (self, name, atts, axes, dtype, record_id):
     self.name = name
     self.atts = atts
     self.axes = axes
     self.dtype = dtype
-    self.record_keys = record_keys
+    self.record_id = record_id
   def __iter__ (self):
     return (getattr(self,n) for n in self.__slots__)
 
@@ -208,18 +208,19 @@ class _Buffer_Base (object):
 
   # Field names and types for storing record headers in a structured array.
   _headers_dtype = [
+     ('file_id','int32'),('key','int32'),
      ('dateo','int32'),('datev','int32'),('deet','int32'),('npas','int32'),
      ('ni','int32'),('nj','int32'),('nk','int32'),('nbits','int32'),
      ('datyp','int32'),('ip1','int32'),('ip2','int32'),('ip3','int32'),
      ('typvar','|S2'),('nomvar','|S4'),('etiket','|S12'),('grtyp','|S1'),
      ('ig1','int32'),('ig2','int32'),('ig3','int32'),('ig4','int32'),
      ('swa','int32'),('lng','int32'),('dltf','int32'),('ubc','int32'),
-     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),('key','int32'),
+     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),
   ]
 
   # Record parameters which should not be used as nc variable attributes.
   # (They're either internal to the file, or part of the data, not metadata).
-  _ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d')
+  _ignore_atts = ('file_id','swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d')
 
   # Define any command-line arguments for reading FSTD files.
   @classmethod
@@ -239,8 +240,7 @@ class _Buffer_Base (object):
 
   # Clean up a buffer (close any attached files, etc.)
   def __del__ (self):
-    if hasattr(self,'_funit'):
-      istat = _Buffer_Base._fstd98.fstcloseall(self._funit)
+    self._close()
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
@@ -250,6 +250,41 @@ class _Buffer_Base (object):
         v = v.strip()
       yield (n,v)
 
+  # Open the specified file (by index)
+  def _open (self, file_id):
+    from rpnpy.librmn.base import fnom
+    from rpnpy.librmn.fstd98 import fstouv
+    from rpnpy.librmn.const import FST_RO
+    from fstd2nc_extra import librmn
+    opened_file_id = getattr(self,'_opened_file_id',-1)
+    # Check if this file already opened.
+    if opened_file_id == file_id:
+      return self._opened_funit
+    # Close any open files before continuing.
+    self._close()
+    filename = self._files[file_id]
+    # Open the file.
+    self._opened_file_id = file_id
+    self._opened_funit = fnom(filename,FST_RO)
+    fstouv(self._opened_funit,FST_RO)
+    self._opened_librmn_index = librmn.file_index(self._opened_funit)
+    return self._opened_funit
+
+  # Close any currently opened file.
+  def _close (self):
+    try:
+      from rpnpy.librmn.base import fclos
+      from rpnpy.librmn.fstd98 import fstfrm
+      opened_funit = getattr(self,'_opened_funit',-1)
+      if opened_funit >= 0:
+        fstfrm(opened_funit)
+        fclos(opened_funit)
+      self._opened_file_id = -1
+      self._opened_funit = -1
+      self._opened_librmn_index = -1
+    except ImportError:
+      pass  # May fail if Python is doing a final cleanup of everything.
+        
 
   ###############################################
   # Basic flow for reading data
@@ -259,9 +294,10 @@ class _Buffer_Base (object):
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    from rpnpy.librmn.fstd98 import fstopenall, fstnbr
-    from rpnpy.librmn.const import FST_RO
+    from rpnpy.librmn.fstd98 import isFST, fstnbr, fstinl, fstprm
     import numpy as np
+    from glob import glob
+    import os
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
@@ -273,28 +309,75 @@ class _Buffer_Base (object):
       self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
 
     if isinstance(filename,str):
-      filelist = [filename]
+      infiles = [filename]
     else:
-      filelist = list(filename)
-    self._funit = fstopenall(filelist, FST_RO)
+      infiles = list(filename)
 
-    nrecs = fstnbr(self._funit)
-    self._headers = np.ma.empty(nrecs, dtype=self._headers_dtype)
+    # Apply wildcard and directory expansion to filenames.
+    expanded_infiles = dict()
+    for infile in infiles:
+      files = []
+      for f in glob(infile):
+        if os.path.isdir(f):
+          for dirpath, dirnames, filenames in os.walk(f,followlinks=True):
+            for filename in filenames:
+              files.append(os.path.join(dirpath,filename))
+        else:
+          files.append(f)
+      # Filter out non-FST files.
+      files = filter(isFST,files)
+      # Check if this input entry actually matched anything.
+      if len(files) == 0:
+        if os.path.isfile(infile):
+          error(_("'%s' is not an RPN standard file.")%infile)
+        elif os.path.isdir(infile):
+          error(_("directory '%s' does not contain any RPN standard files.")%infile)
+        elif '?' in infile or '*' in infile:
+          error(_("no RPN standard files match '%s'.")%infile)
+        else:
+          error(_("'%s' does not exist.")%infile)
+        continue
+      expanded_infiles[infile] = files
+    if len(expanded_infiles) == 0:
+      error(_("no input files found!"))
 
-    # Read the headers from the file(s) and store the info in the table.
-    if no_quick_scan:
-      keys = self._fstinl(self._funit)
-      params = map(self._fstprm, keys)
-      for i,prm in enumerate(params):
-        for n,v in prm.items():
-          if n in self._headers.dtype.names:
-            self._headers[n][i] = v
-    else:
-      from fstd2nc_extra import all_params
-      params = all_params(self._funit)
-      for n,v in params.items():
-        if n in self._headers.dtype.names:
-          self._headers[n] = v
+    infiles = sum((sorted(expanded_infiles[f]) for f in infiles),[])
+
+    # Scan all the files.
+
+    headers = []
+    self._files = []
+    for filenum, infile in enumerate(infiles):
+      self._files.append(infile)
+      funit = self._open(filenum)
+      nrecs = fstnbr(funit)
+      h = np.ma.empty(nrecs, dtype=self._headers_dtype)
+
+      # Read the headers from the file(s) and store the info in the table.
+      if no_quick_scan:
+        keys = fstinl(funit)
+        params = map(fstprm, keys)
+        for i,prm in enumerate(params):
+          for n,v in prm.items():
+            if n in h.dtype.names:
+              h[n][i] = v
+      else:
+        from fstd2nc_extra import all_params
+        params = all_params(funit)
+        for n,v in params.items():
+          if n in h.dtype.names:
+            h[n] = v
+        keys = params['key']
+
+      # Encode the keys without the file index info.
+      h['key'] = keys
+      h['key'] >>= 10
+      # The file info will be an index into a separate file list.
+      h['file_id'] = filenum
+
+      headers.append(h)
+
+    self._headers = np.concatenate(headers)
 
   # Internal iterator.
   def _iter (self):
@@ -338,6 +421,7 @@ class _Buffer_Base (object):
     # Loop over each variable and construct the data & metadata.
     for var_id in var_ids:
       var_records = records[(all_var_ids == var_id)]
+      var_record_indices = np.where(all_var_ids == var_id)[0]
       nomvar = var_id['nomvar'].strip()
       # Ignore coordinate records.
       if nomvar in self._meta_records: continue
@@ -373,20 +457,20 @@ class _Buffer_Base (object):
         axes[n] = values
 
       # Construct a multidimensional array to hold the record keys.
-      record_keys = np.empty(map(len,axes.values()), dtype='int32')
+      record_id = np.empty(map(len,axes.values()), dtype='int32')
 
       # Assume missing data (nan) unless filled in later.
-      record_keys[()] = -1
+      record_id[()] = -1
       
       # Arrange the record keys in the appropriate locations.
       indices = []
       for n in axes.keys():
         u, ind = np.unique(var_records[n], return_inverse=True)
         indices.append(ind)
-      record_keys[indices] = var_records['key']
+      record_id[indices] = var_record_indices
 
       # Check if we have full coverage along all axes.
-      have_data = [k >= 0 for k in record_keys.flatten()]
+      have_data = [k >= 0 for k in record_id.flatten()]
       if not np.all(have_data):
         warn (_("Missing some records for %s.")%nomvar)
 
@@ -407,7 +491,7 @@ class _Buffer_Base (object):
       var = _iter_type( name = nomvar, atts = atts,
                         axes = axes,
                         dtype = dtype,
-                        record_keys = record_keys )
+                        record_id = record_id )
       yield var
 
       #TODO: Find a minimum set of partial coverages for the data.
@@ -415,25 +499,58 @@ class _Buffer_Base (object):
       # for other times).
 
   # How to read the data.
-  @staticmethod
-  def _fstluk (key, dtype=None, rank=None, dataArray=None):
+  # Override fstluk so it takes a record index instead of a key/handle.
+  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     from rpnpy.librmn.fstd98 import fstluk
     # Use local overrides for dtype.
-    if dtype is None and isinstance(key,dict):
-      if 'datyp' in key and 'nbits' in key:
-        dtype = dtype_fst2numpy(key['datyp'],key['nbits'])
+    if dtype is None and isinstance(rec_id,dict):
+      if 'datyp' in rec_id and 'nbits' in rec_id:
+        dtype = dtype_fst2numpy(rec_id['datyp'],rec_id['nbits'])
+
+    if isinstance(rec_id,dict):
+      # If we were given a dict, assume it's for a valid open file.
+      key = rec_id['key']
+    else:
+      # Otherwise, need to open the file and get the proper key.
+      file_id = self._headers['file_id'][rec_id]
+      self._open(file_id)
+      key = int(self._headers['key'][rec_id]<<10) + self._opened_librmn_index
+
     return fstluk (key, dtype, rank, dataArray)
 
-  # Other rpnpy methods which may need to be overridden by mixins.
-  try:
-    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstinf, fstlir
-    _fstinl = staticmethod(fstinl)
-    _fstprm = staticmethod(fstprm)
-    _fstinf = staticmethod(fstinf)
-    _fstlir = staticmethod(fstlir)
-    del fstinl, fstprm, fstinf, fstlir
-  except ImportError: pass
-    
+  # Helper method - iterate over all files that have headers that match some
+  # criteria.
+  def _open_matching_files (self, **kwargs):
+    import numpy as np
+    mask = np.ones(len(self._headers),dtype='bool')
+    for name, value in kwargs.items():
+      mask &= (self._headers[name]==value)
+    for file_id in np.unique(self._headers['file_id'][mask]):
+      yield self._open(file_id)
+
+  # Override fstinl so it scans over all files in the table.
+  def _fstinl (self, **kwargs):
+    from rpnpy.librmn.fstd98 import fstinl
+    for funit in self._open_matching_files(**kwargs):
+      for handle in self._fstinl(funit, **kwargs):
+        yield handle
+
+  # Override fstinf so it checks all files in the table.
+  def _fstinf (self, **kwargs):
+    from rpnpy.librmn.fstd98 import fstinf
+    for funit in self._open_matching_files(**kwargs):
+      return fstinf(funit, **kwargs)
+
+  # Override fstlir so it checks all files in the table.
+  def _fstlir (self, **kwargs):
+    from rpnpy.librmn.fstd98 import fstlir
+    for funit in self._open_matching_files(**kwargs):
+      return fstlir(funit, **kwargs)
+
+  # Make fstprm available as a method here for convenience.
+  def _fstprm (self, key):
+    from rpnpy.librmn.fstd98 import fstprm
+    return fstprm(key)
 
   #
   ###############################################
@@ -538,14 +655,14 @@ class _Masks (_Buffer_Base):
       yield var
 
   # Apply the mask data
-  def _fstluk (self, key, dtype=None, rank=None, dataArray=None):
+  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     import numpy as np
-    prm = super(_Masks,self)._fstluk(key, dtype, rank, dataArray)
+    prm = super(_Masks,self)._fstluk(rec_id, dtype, rank, dataArray)
     # If this data is not masked, or if this data *is* as mask, then just
     # return it.
     if not prm['typvar'].endswith('@'): return prm
     if prm['typvar'] == '@@' : return prm
-    mask_key = self._fstinf(self._funit, nomvar=prm['nomvar'], typvar = '@@',
+    mask_key = self._fstinf(nomvar=prm['nomvar'], typvar = '@@',
                       datev=prm['datev'], etiket=prm['etiket'],
                       ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
@@ -710,7 +827,7 @@ class _Series (_Buffer_Base):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    header = self._fstlir (self._funit, nomvar='STNS')
+    header = self._fstlir (nomvar='STNS')
     if header is not None:
         atts = OrderedDict()
         array = header['d'].transpose()
@@ -732,7 +849,7 @@ class _Series (_Buffer_Base):
         station = _var_type('station',atts,axes,array)
         yield station
     # Create forecast axis.
-    header = self._fstlir (self._funit, nomvar='HH')
+    header = self._fstlir (nomvar='HH')
     if header is not None:
         atts = OrderedDict(units='hours')
         array = header['d'].flatten()
@@ -750,8 +867,8 @@ class _Series (_Buffer_Base):
 
       # Vertical coordinates for series data.
       if var.name in ('SH','SV'):
-        key = int(var.record_keys.flatten()[0])
-        array = self._fstluk(key)['d'].squeeze()
+        ind = int(var.record_id.flatten()[0])
+        array = self._fstluk(ind)['d'].squeeze()
         if array.ndim != 1: continue
         var.atts['kind'] = 5
         yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
@@ -766,7 +883,7 @@ class _Series (_Buffer_Base):
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
         # Remove degenerate vertical axis.
         if 'level' in var.axes:
-          var.record_keys = var.record_keys.squeeze(axis=list(var.axes.keys()).index('level'))
+          var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('level'))
           var.axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
@@ -777,7 +894,7 @@ class _Series (_Buffer_Base):
           # Can only do this for a single date of origin, because the time
           # axis and forecast axis are not adjacent for this type of data.
           if len(var.axes['time']) == 1:
-            var.record_keys = var.record_keys.squeeze(axis=list(var.axes.keys()).index('time'))
+            var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('time'))
             time = var.axes.pop('time')[0]
             var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+timedelta(hours=float(h)) for h in var.axes['forecast'])))
             if not created_time_axis:
@@ -834,7 +951,7 @@ class _VCoords (_Buffer_Base):
     # to ignore them).
     vrecs = OrderedDict()
     for vcoord_nomvar in self._vcoord_nomvars:
-      for handle in self._fstinl(self._funit, nomvar=vcoord_nomvar):
+      for handle in self._fstinl(nomvar=vcoord_nomvar):
         header = self._fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.
@@ -851,8 +968,8 @@ class _VCoords (_Buffer_Base):
           i = list(var.axes).index('level')
           del var.axes['level']
           # Remove the axis if it's an "outer" axis (not along ni,nj,nk).
-          if i < var.record_keys.ndim:
-            var.record_keys = var.record_keys.squeeze(axis=i)
+          if i < var.record_id.ndim:
+            var.record_id = var.record_id.squeeze(axis=i)
           yield var
           continue
       # No vertical axis?
@@ -1034,8 +1151,8 @@ class _XYCoords (_Buffer_Base):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    header = self._fstlir (self._funit, nomvar=coordname, ip1=var.atts['ig1'],
-                               ip2=var.atts['ig2'], ip3=var.atts['ig3'])
+    header = self._fstlir (nomvar=coordname, ip1=var.atts['ig1'],
+                           ip2=var.atts['ig2'], ip3=var.atts['ig3'])
     if header is not None:
       return header
     raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
@@ -1084,7 +1201,9 @@ class _XYCoords (_Buffer_Base):
             ll = {'lat':lat, 'lon':lon}
           # Everything else should be handled by ezqkdef.
           else:
-            gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._funit)
+            #TODO: Check all files in the table for these matching parameters.
+            # Right now, this assumes the last opened file will have some coordinate info.
+            gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._opened_funit)
             # For supergrids, need to loop over each subgrid to get the lat/lon
             ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
@@ -1477,10 +1596,10 @@ class _netCDF_IO (_netCDF_Atts):
         continue
       # Hard case: only have the record indices, need to loop over the records.
       # Get the shape of a single record for the variable.
-      record_shape = tuple(map(len,var.axes.values()))[var.record_keys.ndim:]
+      record_shape = tuple(map(len,var.axes.values()))[var.record_id.ndim:]
       # Use this as the "chunk size" for the netCDF file, to improve I/O
       # performance.
-      chunksizes = (1,)*var.record_keys.ndim + record_shape
+      chunksizes = (1,)*var.record_id.ndim + record_shape
       v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib, chunksizes=chunksizes)
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
@@ -1489,20 +1608,20 @@ class _netCDF_IO (_netCDF_Atts):
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
-      indices = list(np.ndindex(var.record_keys.shape))
+      indices = list(np.ndindex(var.record_id.shape))
       # Sort the indices by FSTD key, so we're reading the records in the same
       # order as they're found on disk.
-      keys = map(int,var.record_keys.flatten())
-      for k, ind in zip(keys,indices):
-        if k >= 0:
-          io.append((k,record_shape,v,ind))
+      keys = map(int,var.record_id.flatten())
+      for r, ind in zip(keys,indices):
+        if r >= 0:
+          io.append((r,record_shape,v,ind))
 
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    for k,shape,v,ind in sorted(io):
+    for r,shape,v,ind in sorted(io):
       try:
-        data = self._fstluk(k)['d'].transpose().reshape(shape)
+        data = self._fstluk(r)['d'].transpose().reshape(shape)
         v[ind] = data
       except (IndexError,ValueError):
         warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
@@ -1524,7 +1643,7 @@ class _Array (object):
   def __init__ (self, buffer, var):
     from functools import reduce
     self._buffer = buffer
-    self._record_keys = var.record_keys
+    self._record_id = var.record_id
     # Expected shape and type of the array.
     self.shape = tuple(map(len,var.axes.values()))
     self.ndim = len(self.shape)
@@ -1546,16 +1665,16 @@ class _Array (object):
       raise ValueError(("Too many dimensions for slicing."))
     final_shape = tuple(len(np.arange(n)[k]) for n,k in zip(self.shape,key) if not isinstance(k,int))
     data = np.ma.empty(final_shape, dtype=self.dtype)
-    outer_ndim = self._record_keys.ndim
-    record_keys = self._record_keys.__getitem__(key[:outer_ndim])
+    outer_ndim = self._record_id.ndim
+    record_id = self._record_id.__getitem__(key[:outer_ndim])
     # Final shape of each record (in case we did any reshaping along ni,nj,nk
     # dimensions).
-    record_shape = self.shape[self._record_keys.ndim:]
+    record_shape = self.shape[self._record_id.ndim:]
     # Iterate of each record.
-    for ind in np.ndindex(record_keys.shape):
-      k = int(record_keys[ind])
-      if k >= 0:
-        data[ind] = self._buffer._fstluk(k)['d'].transpose().reshape(record_shape)[(Ellipsis,)+key[outer_ndim:]]
+    for ind in np.ndindex(record_id.shape):
+      r = int(record_id[ind])
+      if r >= 0:
+        data[ind] = self._buffer._fstluk(r)['d'].transpose().reshape(record_shape)[(Ellipsis,)+key[outer_ndim:]]
       else:
         data.mask = np.ma.getmaskarray(data)
         data.mask[ind] = True
@@ -1631,20 +1750,10 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     import warnings
     warnings.simplefilter('ignore')
 
-  # Apply wildcard expansion to filenames.
-  infiles = [f for filepattern in infiles for f in (glob(filepattern) or filepattern)]
-
-  # Make sure input file exists
-  for infile in infiles:
-    if not exists(infile):
-      error (_("'%s' does not exist!")%(infile))
-    if not isFST(infile) and not isdir(infile):
-      error (_("'%s' is not an RPN standard file!")%(infile))
-
   try:
     buf = buffer_type(infiles, **args)
   except FSTDError:
-    error (_("problem opening one or more input directories."))
+    error (_("problem opening one or more input files."))
 
   # Check if output file already exists
   if exists(outfile) and not force:
