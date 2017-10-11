@@ -538,6 +538,11 @@ class _Buffer_Base (object):
   # Override fstinf so it checks all files in the table.
   def _fstinf (self, **kwargs):
     from rpnpy.librmn.fstd98 import fstinf
+    # Check currently opened file first.
+    if self._opened_funit >= 0:
+      key = fstinf(self._opened_funit, **kwargs)
+      if key is not None:
+        return key
     for funit in self._open_matching_files(**kwargs):
       return fstinf(funit, **kwargs)
 
