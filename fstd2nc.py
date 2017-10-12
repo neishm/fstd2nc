@@ -547,27 +547,6 @@ class _Buffer_Base (object):
 
     return fstluk (key, dtype, rank, dataArray)
 
-  # Helper method - iterate over all files that have headers that match some
-  # criteria.
-  def _open_matching_files (self, **kwargs):
-    import numpy as np
-    mask = np.ones(len(self._headers),dtype='bool')
-    for name, value in kwargs.items():
-      mask &= (self._headers[name]==value)
-    for file_id in np.unique(self._headers['file_id'][mask]):
-      yield self._open(file_id)
-
-  # Override fstinf so it checks all files in the table.
-  def _fstinf (self, **kwargs):
-    from rpnpy.librmn.fstd98 import fstinf
-    # Check currently opened file first.
-    if self._opened_funit >= 0:
-      key = fstinf(self._opened_funit, **kwargs)
-      if key is not None:
-        return key
-    for funit in self._open_matching_files(**kwargs):
-      return fstinf(funit, **kwargs)
-
   #
   ###############################################
 
@@ -673,12 +652,13 @@ class _Masks (_Buffer_Base):
   # Apply the mask data
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     import numpy as np
+    from rpnpy.librmn.fstd98 import fstinf
     prm = super(_Masks,self)._fstluk(rec_id, dtype, rank, dataArray)
     # If this data is not masked, or if this data *is* as mask, then just
     # return it.
     if not prm['typvar'].endswith('@'): return prm
     if prm['typvar'] == '@@' : return prm
-    mask_key = self._fstinf(nomvar=prm['nomvar'], typvar = '@@',
+    mask_key = fstinf(self._opened_funit, nomvar=prm['nomvar'], typvar = '@@',
                       datev=prm['datev'], etiket=prm['etiket'],
                       ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
