@@ -557,13 +557,6 @@ class _Buffer_Base (object):
     for file_id in np.unique(self._headers['file_id'][mask]):
       yield self._open(file_id)
 
-  # Override fstinl so it scans over all files in the table.
-  def _fstinl (self, **kwargs):
-    from rpnpy.librmn.fstd98 import fstinl
-    for funit in self._open_matching_files(**kwargs):
-      for handle in self._fstinl(funit, **kwargs):
-        yield handle
-
   # Override fstinf so it checks all files in the table.
   def _fstinf (self, **kwargs):
     from rpnpy.librmn.fstd98 import fstinf
@@ -574,17 +567,6 @@ class _Buffer_Base (object):
         return key
     for funit in self._open_matching_files(**kwargs):
       return fstinf(funit, **kwargs)
-
-  # Override fstlir so it checks all files in the table.
-  def _fstlir (self, **kwargs):
-    from rpnpy.librmn.fstd98 import fstlir
-    for funit in self._open_matching_files(**kwargs):
-      return fstlir(funit, **kwargs)
-
-  # Make fstprm available as a method here for convenience.
-  def _fstprm (self, key):
-    from rpnpy.librmn.fstd98 import fstprm
-    return fstprm(key)
 
   #
   ###############################################
@@ -853,6 +835,7 @@ class _Series (_Buffer_Base):
     from collections import OrderedDict
     import numpy as np
     from datetime import timedelta
+    from rpnpy.librmn.fstd98 import fstlir
 
     forecast_hours = None
     created_time_axis = False  # To only create squashed time axis once.
@@ -861,7 +844,7 @@ class _Series (_Buffer_Base):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    header = self._fstlir (nomvar='STNS')
+    header = fstlir(self._meta_funit, nomvar='STNS')
     if header is not None:
         atts = OrderedDict()
         array = header['d'].transpose()
@@ -883,7 +866,7 @@ class _Series (_Buffer_Base):
         station = _var_type('station',atts,axes,array)
         yield station
     # Create forecast axis.
-    header = self._fstlir (nomvar='HH')
+    header = fstlir (self._meta_funit, nomvar='HH')
     if header is not None:
         atts = OrderedDict(units='hours')
         array = header['d'].flatten()
@@ -980,13 +963,14 @@ class _VCoords (_Buffer_Base):
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS
     from rpnpy.vgd import VGDError
+    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
     for vcoord_nomvar in self._vcoord_nomvars:
-      for handle in self._fstinl(nomvar=vcoord_nomvar):
-        header = self._fstprm(handle)
+      for handle in fstinl(self._meta_funit, nomvar=vcoord_nomvar):
+        header = fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.
         if header['nomvar'].strip() == 'HY': key = 'HY'
@@ -1065,7 +1049,7 @@ class _VCoords (_Buffer_Base):
             # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
               # Get A and B info.
-              vgd_id = vgd_fromlist(self._fstluk(header,rank=3)['d'])
+              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
               if vgd_get (vgd_id,'LOGP'):
                 name = 'zeta'
                 # Not really a "standard" name, but there's nothing in the
@@ -1185,7 +1169,8 @@ class _XYCoords (_Buffer_Base):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    header = self._fstlir (nomvar=coordname, ip1=var.atts['ig1'],
+    from rpnpy.librmn.fstd98 import fstlir
+    header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
                            ip2=var.atts['ig2'], ip3=var.atts['ig3'])
     if header is not None:
       return header
@@ -1237,7 +1222,7 @@ class _XYCoords (_Buffer_Base):
           else:
             #TODO: Check all files in the table for these matching parameters.
             # Right now, this assumes the last opened file will have some coordinate info.
-            gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._opened_funit)
+            gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
             # For supergrids, need to loop over each subgrid to get the lat/lon
             ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
