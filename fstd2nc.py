@@ -240,7 +240,12 @@ class _Buffer_Base (object):
 
   # Clean up a buffer (close any attached files, etc.)
   def __del__ (self):
-    self._close()
+    try:
+      self._close()
+      from rpnpy.librmn.fstd98 import fstcloseall
+      fstcloseall(self._meta_funit)
+    except ImportError:
+      pass  # May fail if Python is doing a final cleanup of everything.
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
@@ -272,18 +277,15 @@ class _Buffer_Base (object):
 
   # Close any currently opened file.
   def _close (self):
-    try:
-      from rpnpy.librmn.base import fclos
-      from rpnpy.librmn.fstd98 import fstfrm
-      opened_funit = getattr(self,'_opened_funit',-1)
-      if opened_funit >= 0:
-        fstfrm(opened_funit)
-        fclos(opened_funit)
-      self._opened_file_id = -1
-      self._opened_funit = -1
-      self._opened_librmn_index = -1
-    except ImportError:
-      pass  # May fail if Python is doing a final cleanup of everything.
+    from rpnpy.librmn.base import fclos
+    from rpnpy.librmn.fstd98 import fstfrm
+    opened_funit = getattr(self,'_opened_funit',-1)
+    if opened_funit >= 0:
+      fstfrm(opened_funit)
+      fclos(opened_funit)
+    self._opened_file_id = -1
+    self._opened_funit = -1
+    self._opened_librmn_index = -1
         
 
   ###############################################
@@ -294,10 +296,12 @@ class _Buffer_Base (object):
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    from rpnpy.librmn.fstd98 import isFST, fstnbr, fstinl, fstprm
+    from rpnpy.librmn.fstd98 import isFST, fstnbr, fstinl, fstprm, fstopenall
+    from rpnpy.librmn.const import FST_RO
     import numpy as np
     from glob import glob
     import os
+    import warnings
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
@@ -317,7 +321,7 @@ class _Buffer_Base (object):
     expanded_infiles = dict()
     for infile in infiles:
       files = []
-      for f in glob(infile):
+      for f in sorted(glob(infile)):
         if os.path.isdir(f):
           for dirpath, dirnames, filenames in os.walk(f,followlinks=True):
             for filename in filenames:
@@ -344,7 +348,7 @@ class _Buffer_Base (object):
     infiles = sum((sorted(expanded_infiles[f]) for f in infiles),[])
 
     # Scan all the files.
-
+    # Create a table of record headers for reference.
     headers = []
     self._files = []
     for filenum, infile in enumerate(infiles):
@@ -378,6 +382,31 @@ class _Buffer_Base (object):
       headers.append(h)
 
     self._headers = np.concatenate(headers)
+
+    # Find all unique meta (coordinate) records, and link a subset of files
+    # that provide all unique metadata records.
+    # This will make it easier to look up the meta records later.
+    meta_mask = np.zeros(len(self._headers),dtype='bool')
+    for meta_name in self._meta_records:
+      meta_name = (meta_name+'   ')[:4]
+      meta_mask |= (self._headers['nomvar'] == meta_name)
+    meta_recids = np.where(meta_mask)[0]
+    # Use the same unique parameters as regular variables.
+    # Plus, ig1,ig2,ig3,ig4.
+    # Suppress FutureWarning from numpy about doing this.  Probably benign...
+    with warnings.catch_warnings():
+      warnings.simplefilter("ignore")
+      meta_keys = self._headers[meta_mask][list(self._var_id)+['ig1','ig2','ig3','ig4']]
+    meta_keys, ind = np.unique(meta_keys, return_index=True)
+    meta_recids = meta_recids[ind]
+    # Find the files that give these unique coord records.
+    file_ids = sorted(set(self._headers['file_id'][meta_recids]))
+    filenames = [self._files[f] for f in file_ids]
+    if len(filenames) > 500:
+      error(_("Holy crap, how many coordinates do you have???"))
+    # Open these files and link them together
+    self._meta_funit = fstopenall(filenames, FST_RO)
+
 
   # Internal iterator.
   def _iter (self):
@@ -1714,9 +1743,8 @@ class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_
 def _fstd2nc_cmdline (buffer_type=Buffer):
   from argparse import ArgumentParser
   from sys import stdout, argv
-  from os.path import exists, isdir
-  from glob import glob
-  from rpnpy.librmn.fstd98 import isFST, FSTDError, fstopt
+  from os.path import exists
+  from rpnpy.librmn.fstd98 import FSTDError, fstopt
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
