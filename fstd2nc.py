@@ -1157,7 +1157,7 @@ class _XYCoords (_Buffer_Base):
   def _find_coord (self, var, coordname):
     from rpnpy.librmn.fstd98 import fstlir
     header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
-                           ip2=var.atts['ig2'], ip3=var.atts['ig3'])
+                           ip2=var.atts['ig2'], ip3=var.atts['ig3'], rank=3)
     if header is not None:
       return header
     raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
@@ -1201,8 +1201,8 @@ class _XYCoords (_Buffer_Base):
           # Get basic information about this grid.
           # First, handle non-ezqkdef grids.
           if grtyp in self._direct_grids:
-            lat = self._fstluk(self._find_coord(var,'^^'),rank=3)['d'].squeeze(axis=2)
-            lon = self._fstluk(self._find_coord(var,'>>'),rank=3)['d'].squeeze(axis=2)
+            lat = self._find_coord(var,'^^')['d'].squeeze(axis=2)
+            lon = self._find_coord(var,'>>')['d'].squeeze(axis=2)
             ll = {'lat':lat, 'lon':lon}
           # Everything else should be handled by ezqkdef.
           else:
