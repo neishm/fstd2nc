@@ -430,6 +430,7 @@ class _Buffer_Base (object):
     deleted = (records['dltf'] == 1)
     if np.any(deleted):
       records = records[~deleted]
+    header_indices = np.where(~deleted)[0]
 
     # Determine the variable identifiers.
     # First, extract the uniquely identifying information from the metadata.
@@ -501,7 +502,7 @@ class _Buffer_Base (object):
       for n in axes.keys():
         u, ind = np.unique(var_records[n], return_inverse=True)
         indices.append(ind)
-      record_id[indices] = var_record_indices
+      record_id[indices] = header_indices[var_record_indices]
 
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_id.flatten()]
