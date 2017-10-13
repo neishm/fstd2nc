@@ -1748,17 +1748,6 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   except ValueError:
     msglvl = {'DEBUG':0,'INFORM':2,'WARNIN':4,'ERRORS':6,'FATALE':8,'SYSTEM':10,'CATAST':10}[msglvl]
   fstopt ('MSGLVL',msglvl)
-  # Turn off fst2nc information messages for higher message levels.
-  if msglvl > 2:
-    global info
-    info = lambda msg: None
-  # Turn off fstd2nc warning messages for higher message levels.
-  if msglvl > 4:
-    global warn
-    warn = lambda msg: None
-    # Also turn off general warning messages (e.g. from numpy)
-    import warnings
-    warnings.simplefilter('ignore')
 
   try:
     buf = buffer_type(infiles, **args)
