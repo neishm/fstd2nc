@@ -404,6 +404,11 @@ class _Buffer_Base (object):
     filenames = [self._files[f] for f in file_ids]
     if len(filenames) > 500:
       error(_("Holy crap, how many coordinates do you have???"))
+    # If no coordinates found, just open the first file as a dummy file.
+    # Less error-prone than checking if _meta_funit is defined every time
+    # an FSTD function is called.
+    if len(filenames) == 0:
+      filenames = self._files[0:1]
     # Open these files and link them together
     self._meta_funit = fstopenall(filenames, FST_RO)
 
