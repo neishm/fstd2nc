@@ -1304,9 +1304,15 @@ class _XYCoords (_Buffer_Base):
           yield var
           continue
 
-        yield lat
-        yield lon
-        grids[key] = gridaxes
+        # Sanity check on lat/lon - make sure we have something of the right size.
+        if lat.array.shape == tuple(map(len,lat.axes.values())) and lon.array.shape == tuple(map(len,lon.axes.values())):
+          yield lat
+          yield lon
+          grids[key] = gridaxes
+        else:
+          warn(_("Wrong shape of lat/lon for '%s'")%var.name)
+          yield var
+          continue
 
       gridaxes = grids[key]
 
