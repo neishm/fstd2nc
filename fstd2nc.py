@@ -244,8 +244,9 @@ class _Buffer_Base (object):
       self._close()
       from rpnpy.librmn.fstd98 import fstcloseall
       fstcloseall(self._meta_funit)
-    except ImportError:
+    except (ImportError, AttributeError):
       pass  # May fail if Python is doing a final cleanup of everything.
+            # Or, if buffer wasn't fully initialized yet.
 
   # Extract metadata from a particular header.
   def _get_header_atts (self, header):
