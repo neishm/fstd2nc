@@ -188,6 +188,12 @@ class _FakeBar (object):
   def next(self): pass
   def finish(self): pass
 
+# Try importing progress module.
+try:
+  from progress.bar import Bar as _ProgressBar
+except ImportError:
+  _ProgressBar = _FakeBar
+
 
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
@@ -235,7 +241,7 @@ class _Buffer_Base (object):
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
     parser.add_argument('--version', action='version', version=__version__)
-    parser.add_argument('--progress', action='store_true', help=_('Display a progress bar during the conversion.'))
+    parser.add_argument('--progress', action='store_true', help=_('Display a progress bar during the conversion.  Requires the "progress" module.'))
     parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
@@ -313,22 +319,8 @@ class _Buffer_Base (object):
     import os
     import warnings
 
-    # Set up the progress bar.
-    Bar = _FakeBar
-    if progress is True:
-      try:
-        from progress.bar import Bar as _Bar
-        # Sub-class it so that it shows the cursor if the program crashes.
-        # Also, display nothing if only 1 item to iterate over.
-        class Bar(_Bar):
-          def __new__(self, *args, **kwargs):
-            if kwargs.get('max',None) == 1: return _FakeBar()
-            return object.__new__(self, *args, **kwargs)
-          def __del__(self): self.finish()
-      except ImportError:
-        warn(_("'progress' module not found.  No progress bar will be displayed."))
     self._progress = progress
-    self._Bar = Bar
+    self._Bar = _ProgressBar if progress is True else _FakeBar
 
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
@@ -360,26 +352,32 @@ class _Buffer_Base (object):
 
     # Filter out non-FST files.
     nfiles = sum(map(len,expanded_infiles.values()))
-    bar = Bar(_("Looking for RPN files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=nfiles)
-    for infile, files in expanded_infiles.items():
-      for i,f in enumerate(files):
-        if not isFST(f):
-          files[i] = None
-        bar.next()
-      files = filter(None,files)
-      # Check if this input entry actually matched anything.
-      if len(files) == 0:
-        if os.path.isfile(infile):
-          error(_("'%s' is not an RPN standard file.")%infile)
-        elif os.path.isdir(infile):
-          error(_("directory '%s' does not contain any RPN standard files.")%infile)
-        elif '?' in infile or '*' in infile:
-          error(_("no RPN standard files match '%s'.")%infile)
-        else:
-          error(_("'%s' does not exist.")%infile)
-        continue
-      expanded_infiles[infile] = files
-    bar.finish()
+    bar = self._Bar(_("Looking for RPN files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=nfiles)
+    try: # Catch keyboard interrupts, so the cursor can be restored.
+      for infile, files in expanded_infiles.items():
+        for i,f in enumerate(files):
+          if not isFST(f):
+            files[i] = None
+          bar.next()
+        files = filter(None,files)
+        # Check if this input entry actually matched anything.
+        if len(files) == 0:
+          if os.path.isfile(infile):
+            bar.finish()
+            error(_("'%s' is not an RPN standard file.")%infile)
+          elif os.path.isdir(infile):
+            bar.finish()
+            error(_("directory '%s' does not contain any RPN standard files.")%infile)
+          elif '?' in infile or '*' in infile:
+            bar.finish()
+            error(_("no RPN standard files match '%s'.")%infile)
+          else:
+            bar.finish()
+            error(_("'%s' does not exist.")%infile)
+          continue
+        expanded_infiles[infile] = files
+    finally:
+      bar.finish()  # Restore the cursor.
     if len(expanded_infiles) == 0:
       error(_("no input files found!"))
 
@@ -392,7 +390,7 @@ class _Buffer_Base (object):
     # Create a table of record headers for reference.
     headers = []
     self._files = []
-    for filenum, infile in Bar(_("Scanning RPN files"), suffix='(%(index)d/%(max)d)', max=nfiles).iter(enumerate(infiles)):
+    for filenum, infile in self._Bar(_("Scanning RPN files"), suffix='(%(index)d/%(max)d)', max=nfiles).iter(enumerate(infiles)):
       self._files.append(infile)
       funit = self._open(filenum)
       nrecs = fstnbr(funit)
@@ -1671,7 +1669,8 @@ class _netCDF_IO (_netCDF_Atts):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    for r,shape,v,ind in self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(eta_td)s]", max=len(keys)).iter(sorted(io)):
+    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(eta_td)s]", max=len(keys))
+    for r,shape,v,ind in bar.iter(sorted(io)):
       try:
         data = self._fstluk(r)['d'].transpose().reshape(shape)
         v[ind] = data
