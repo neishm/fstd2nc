@@ -203,6 +203,15 @@ try:
       speed = self.index / dt
       time_remaining = (self.max-self.index) / speed
       return timedelta(seconds=int(time_remaining))
+    # Rate limit the message update so it only happens once a second.
+    def update(self):
+      if not hasattr(self,'_last_update'):
+        self._last_update = self._ts
+      if self.index < self.max:
+        if self._ts - self._last_update < 1:
+          return
+      super(_ProgressBar,self).update()
+      self._last_update = self._ts
   del Bar
 except ImportError:
   _ProgressBar = _FakeBar
