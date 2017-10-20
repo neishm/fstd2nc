@@ -190,7 +190,20 @@ class _FakeBar (object):
 
 # Try importing progress module.
 try:
-  from progress.bar import Bar as _ProgressBar
+  from progress.bar import Bar
+  class _ProgressBar(Bar):
+    # Define a custom ETA, which prints the elapsed time at the end.
+    @property
+    def myeta(self):
+      from datetime import timedelta
+      if self.index == self.max:
+        return self.elapsed_td
+      dt = self._ts - self.start_ts
+      if dt == 0: return '??:??:??'
+      speed = self.index / dt
+      time_remaining = (self.max-self.index) / speed
+      return timedelta(seconds=int(time_remaining))
+  del Bar
 except ImportError:
   _ProgressBar = _FakeBar
 
@@ -1669,7 +1682,7 @@ class _netCDF_IO (_netCDF_Atts):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(eta_td)s]", max=len(keys))
+    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]", max=len(keys))
     for r,shape,v,ind in bar.iter(sorted(io)):
       try:
         data = self._fstluk(r)['d'].transpose().reshape(shape)
