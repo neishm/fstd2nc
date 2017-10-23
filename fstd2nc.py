@@ -161,13 +161,17 @@ def stamp2datetime (date):
   else:
     return None
 
-# Cached version of DecodeIp, to minimize the number of calls to librmn.
-def DecodeIp (ip1, ip2, ip3, cache={}):
+# Decode ip1 information
+@vectorize
+def decode_ip1 (ip1):
   from rpnpy.librmn.fstd98 import DecodeIp
-  key = (ip1,ip2,ip3)
-  if key not in cache:
-    cache[key] = DecodeIp(ip1,ip2,ip3)
-  return cache[key]
+  import numpy as np
+  dtype = np.dtype([('kind','int32'),('level','float32')])
+  out = np.empty(1,dtype=dtype)
+  r1, r2, r3 = DecodeIp(ip1,0,0)
+  out['kind'] = r1.kind
+  out['level'] = r1.v1
+  return out
 
 
 
@@ -1027,13 +1031,10 @@ class _VCoords (_Buffer_Base):
     self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
     fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
-    decoded = map(DecodeIp,fields['ip1'],fields['ip2'],fields['ip3'])
-    rp1 = zip(*decoded)[0]
-    levels = np.array([r.v1 for r in rp1])
-    kind = np.array([r.kind for r in rp1], dtype='int32')
+    decoded = np.concatenate(decode_ip1(fields['ip1']))
     # Only use first set of levels (can't handle ranges yet).
-    fields['level'] = levels
-    fields['kind'] = kind
+    fields['level'] = decoded['level']
+    fields['kind'] = decoded['kind']
   # Add vertical axis as another variable.
   def _iter (self):
     from collections import OrderedDict
@@ -1175,7 +1176,7 @@ class _VCoords (_Buffer_Base):
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
               # Get A and B info.
               eta = np.asarray(levels)
-              ptop = DecodeIp(header['ip1'],0,0)[0].v1
+              ptop = decode_ip1(header['ip1'])['level']
               # Conversion taken from 'ig_to_hybref' function in librmn:
               pref = float(header['ig1'])
               rcoef = header['ig2']/1000.0
