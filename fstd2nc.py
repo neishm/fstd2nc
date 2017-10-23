@@ -334,8 +334,9 @@ class _Buffer_Base (object):
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
     """
-    from rpnpy.librmn.fstd98 import isFST, fstnbr, fstinl, fstprm, fstopenall
+    from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
+    from fstd2nc_extra import maybeFST as isFST
     import numpy as np
     from glob import glob
     import os

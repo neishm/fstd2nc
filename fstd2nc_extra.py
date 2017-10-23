@@ -304,3 +304,17 @@ def all_params (funit):
     xtra3 = xtra3,
   )
 
+
+# Lightweight test for FST files.
+# Uses the same test for fstd98 random files from wkoffit.c (librmn 16.2).
+#
+# The 'isFST' test from rpnpy calls c_wkoffit, which has a bug when testing
+# many small (non-FST) files.  Under certain conditions the file handles are
+# not closed properly, which causes the application to run out of file handles
+# after testing ~1020 small non-FST files.
+def maybeFST(filename):
+  with open(filename, 'rb') as f:
+    buf = f.read(16)
+    if len(buf) < 16: return False
+    # Same check as c_wkoffit in librmn
+    return buf[12:] == 'STDR'
