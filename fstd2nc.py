@@ -120,17 +120,46 @@ def gdgaxes (gdid):
   ay = np.concatenate(ay, axis=1)
   return {'ax':ax, 'ay':ay}
 
+# Decorator for efficiently converting a scalar function to a vectorized
+# function.
+def vectorize (f):
+  from functools import wraps
+  try:
+    from pandas import Series, unique
+    @wraps(f)
+    def vectorized_f (x):
+      # If we're given a scalar value, then simply return it.
+      if not hasattr(x,'__len__'):
+        return f(x)
+      # Get unique values
+      inputs = unique(x)
+      outputs = map(f,inputs)
+      table = dict(zip(inputs,outputs))
+      result = Series(x).map(table)
+      return result.values
+  except ImportError:
+    def cached_f(x, cache={}):
+      if x not in cache:
+        cache[x] = f(x)
+      return cache[x]
+    @wraps(f)
+    def vectorized_f (x):
+      # If we're given a scalar value, then simply return it.
+      if not hasattr(x,'__len__'):
+        return cached_f(x)
+      return map(cached_f,x)
+  return vectorized_f
+
 # Convert an RPN date stamp to datetime object.
 # Returns None for invalid stamps.
-def stamp2datetime (date, cache={}):
+@vectorize
+def stamp2datetime (date):
   from rpnpy.rpndate import RPNDate
   dummy_stamps = (0, 10101011)
-  if date not in cache:
-    if date not in dummy_stamps:
-      cache[date] = RPNDate(date).toDateTime().replace(tzinfo=None)
-    else:
-      cache[date] = None
-  return cache[date]
+  if date not in dummy_stamps:
+    return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
+  else:
+    return None
 
 # Cached version of DecodeIp, to minimize the number of calls to librmn.
 def DecodeIp (ip1, ip2, ip3, cache={}):
@@ -747,7 +776,7 @@ class _Dates (_Buffer_Base):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(_Dates,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('time','O'),('forecast','int32')]
+    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','int32')]
     return obj
 
   def __init__ (self, *args, **kwargs):
@@ -765,12 +794,13 @@ class _Dates (_Buffer_Base):
     fields['forecast']=fields['deet']*fields['npas']/3600.
     # Time axis
     if self._squash_forecasts:
-      dates = map(int,fields['datev'])
+      dates = fields['datev']
     else:
-      dates = map(int,fields['dateo'])
+      dates = fields['dateo']
     # Convert date stamps to datetime objects, filtering out dummy values.
-    dates = map(stamp2datetime,dates)
-    dates = np.ma.masked_equal(dates,None)
+    dates = stamp2datetime(dates)
+    dates = np.ma.asarray(dates, dtype='datetime64[s]')
+    dates.mask = np.isnat(dates)
     # Where there are dummy dates, ignore the forecast information too.
     forecast = np.ma.asarray(fields['forecast'])
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dates) & (fields['deet'] == 0))
@@ -1510,7 +1540,9 @@ class _netCDF_IO (_netCDF_Atts):
     for var in varlist:
 
       # Modify time axes to be relative units instead of datetime objects.
-      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],datetime):
+      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
+         # Convert from np.datetime64 to datetime.datetime
+        var.array = var.array.tolist()
         units = '%s since %s'%(self._time_units, reference_date or var.array[0])
         var.atts.update(units=units)
         var.array = np.asarray(date2num(var.array,units=units))
