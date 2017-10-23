@@ -180,6 +180,42 @@ def _modify_axes (axes, **kwargs):
     new_axes[name] = values
   return new_axes
 
+# Fake progress bar - does nothing.
+class _FakeBar (object):
+  def __init__ (self, *args, **kwargs): pass
+  def iter(self, it):
+    for i in it: yield i
+  def next(self): pass
+  def finish(self): pass
+
+# Try importing progress module.
+try:
+  from progress.bar import Bar
+  class _ProgressBar(Bar):
+    # Define a custom ETA, which prints the elapsed time at the end.
+    @property
+    def myeta(self):
+      from datetime import timedelta
+      if self.index == self.max:
+        return self.elapsed_td
+      dt = self._ts - self.start_ts
+      if dt == 0: return '??:??:??'
+      speed = self.index / dt
+      time_remaining = (self.max-self.index) / speed
+      return timedelta(seconds=int(time_remaining))
+    # Rate limit the message update so it only happens once a second.
+    def update(self):
+      if not hasattr(self,'_last_update'):
+        self._last_update = self._ts
+      if self.index < self.max:
+        if self._ts - self._last_update < 1:
+          return
+      super(_ProgressBar,self).update()
+      self._last_update = self._ts
+  del Bar
+except ImportError:
+  _ProgressBar = _FakeBar
+
 
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
@@ -227,6 +263,7 @@ class _Buffer_Base (object):
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
     parser.add_argument('--version', action='version', version=__version__)
+    parser.add_argument('--progress', action='store_true', help=_('Display a progress bar during the conversion.  Requires the "progress" module.'))
     parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
@@ -292,7 +329,7 @@ class _Buffer_Base (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
+  def __init__ (self, filename, progress=False, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -303,6 +340,10 @@ class _Buffer_Base (object):
     from glob import glob
     import os
     import warnings
+
+    self._progress = progress
+    self._Bar = _ProgressBar if progress is True else _FakeBar
+
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
@@ -329,30 +370,49 @@ class _Buffer_Base (object):
               files.append(os.path.join(dirpath,filename))
         else:
           files.append(f)
-      # Filter out non-FST files.
-      files = filter(isFST,files)
-      # Check if this input entry actually matched anything.
-      if len(files) == 0:
-        if os.path.isfile(infile):
-          error(_("'%s' is not an RPN standard file.")%infile)
-        elif os.path.isdir(infile):
-          error(_("directory '%s' does not contain any RPN standard files.")%infile)
-        elif '?' in infile or '*' in infile:
-          error(_("no RPN standard files match '%s'.")%infile)
-        else:
-          error(_("'%s' does not exist.")%infile)
-        continue
       expanded_infiles[infile] = files
+
+    # Filter out non-FST files.
+    nfiles = sum(map(len,expanded_infiles.values()))
+    bar = self._Bar(_("Looking for RPN files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=nfiles)
+    try: # Catch keyboard interrupts, so the cursor can be restored.
+      for infile, files in expanded_infiles.items():
+        for i,f in enumerate(files):
+          if not isFST(f):
+            files[i] = None
+          bar.next()
+        files = filter(None,files)
+        # Check if this input entry actually matched anything.
+        if len(files) == 0:
+          if os.path.isfile(infile):
+            bar.finish()
+            error(_("'%s' is not an RPN standard file.")%infile)
+          elif os.path.isdir(infile):
+            bar.finish()
+            error(_("directory '%s' does not contain any RPN standard files.")%infile)
+          elif '?' in infile or '*' in infile:
+            bar.finish()
+            error(_("no RPN standard files match '%s'.")%infile)
+          else:
+            bar.finish()
+            error(_("'%s' does not exist.")%infile)
+          continue
+        expanded_infiles[infile] = files
+    finally:
+      bar.finish()  # Restore the cursor.
     if len(expanded_infiles) == 0:
       error(_("no input files found!"))
 
     infiles = sum((sorted(expanded_infiles[f]) for f in infiles),[])
+    nfiles = len(infiles)
+    if self._progress:
+      info(_("Found %d RPN file(s)"%nfiles))
 
     # Scan all the files.
     # Create a table of record headers for reference.
     headers = []
     self._files = []
-    for filenum, infile in enumerate(infiles):
+    for filenum, infile in self._Bar(_("Scanning RPN files"), suffix='(%(index)d/%(max)d)', max=nfiles).iter(enumerate(infiles)):
       self._files.append(infile)
       funit = self._open(filenum)
       nrecs = fstnbr(funit)
@@ -1631,7 +1691,8 @@ class _netCDF_IO (_netCDF_Atts):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    for r,shape,v,ind in sorted(io):
+    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]", max=len(keys))
+    for r,shape,v,ind in bar.iter(sorted(io)):
       try:
         data = self._fstluk(r)['d'].transpose().reshape(shape)
         v[ind] = data
