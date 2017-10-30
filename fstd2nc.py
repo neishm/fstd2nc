@@ -408,7 +408,7 @@ class _Buffer_Base (object):
 
     # Filter out non-FST files.
     nfiles = sum(map(len,expanded_infiles.values()))
-    bar = self._Bar(_("Looking for RPN files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=nfiles)
+    bar = self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=nfiles)
     try: # Catch keyboard interrupts, so the cursor can be restored.
       for infile, files in expanded_infiles.items():
         for i,f in enumerate(files):
