@@ -550,8 +550,9 @@ class _Buffer_Base (object):
 
     # Loop over each variable and construct the data & metadata.
     for var_id in var_ids:
-      var_records = records[(all_var_ids == var_id)]
-      var_record_indices = np.where(all_var_ids == var_id)[0]
+      selection = (all_var_ids == var_id)
+      var_records = records[selection]
+      var_record_indices = np.where(selection)[0]
       nomvar = var_id['nomvar'].strip()
       # Ignore coordinate records.
       if nomvar in self._meta_records: continue
@@ -612,7 +613,7 @@ class _Buffer_Base (object):
       # Determine the optimal data type to use.
       # First, find unique combos of datyp, nbits
       # (want to minimize calls to dtype_fst2numpy).
-      datyp, nbits = zip(*set(zip(var_records['datyp'],var_records['nbits'])))
+      datyp, nbits = zip(*np.unique(var_records[['datyp','nbits']]))
       datyp = map(int,datyp)
       nbits = map(int,nbits)
       dtype_list = map(dtype_fst2numpy, datyp, nbits)
