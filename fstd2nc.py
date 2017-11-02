@@ -1556,7 +1556,11 @@ class _netCDF_IO (_netCDF_Atts):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    for k,shape,v,ind in sorted(io):
+    def key_order(x):
+      k = x[0]
+      # Sort by file number, followed by internal order within the file.
+      return (k%1024), (k//1024)
+    for k,shape,v,ind in sorted(io,key=key_order):
       try:
         data = self._fstluk(k)['d'].transpose().reshape(shape)
         v[ind] = data
