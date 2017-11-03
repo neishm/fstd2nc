@@ -23,7 +23,7 @@
 Functionality for converting between FSTD and netCDF files.
 """
 
-__version__ = "0.20170922.0"
+__version__ = "0.20171103.0"
 
 # Enable multi-language support.
 from gettext import gettext as _
