@@ -42,6 +42,7 @@ setup (
   install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps'],
   extras_require = {
     'dap': ['Pydap[server,functions]'],
+    'manyfiles': ['progress','pandas'],
   },
   package_data = {
     'fstd2nc_locale': ['*/LC_MESSAGES/fstd2nc.mo'],
