@@ -268,6 +268,7 @@ class _Buffer_Base (object):
   _outer_axes = ()
 
   # Attributes which uniquely identify a variable.
+  # Note: nomvar should always be the first attribute
   _var_id = ('nomvar','ni','nj','nk')
 
   # Similar to above, but a human-readable version of the id.
@@ -509,7 +510,9 @@ class _Buffer_Base (object):
 
 
   # Internal iterator.
-  def _iter (self):
+
+  # Normal version (without use of pandas).
+  def _iter_slow (self):
     from collections import OrderedDict
     import numpy as np
     import warnings
@@ -628,6 +631,107 @@ class _Buffer_Base (object):
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
       # for other times).
+
+  # Faster version of iterator (using pandas).
+  def _iter_pandas (self):
+    from collections import OrderedDict
+    import numpy as np
+    import pandas as pd
+    import warnings
+
+    nrecs = len(self._headers)
+
+    # Degenerate case: no data in buffer
+    if nrecs == 0: return
+
+    # Convert records to a pandas DataFrame, which is faster to operate on.
+    records = pd.DataFrame.from_records(self._headers)
+
+    # Ignore deleted / invalidated records.
+    records = records[records['dltf']==0]
+
+    # Iterate over each variable.
+    # Variables are defined by the entries in _var_id.
+    for var_id, var_records in records.groupby(self._var_id):
+      var_id = OrderedDict(zip(self._var_id, var_id))
+      nomvar = var_id['nomvar'].strip()
+      # Ignore coordinate records.
+      if nomvar in self._meta_records: continue
+
+      # Get the metadata, axes, and corresponding indices of each record.
+      atts = OrderedDict()
+      axes = OrderedDict()
+      indices = []
+      for n in records.columns:
+        if n in self._ignore_atts: continue
+        # Ignore columns which are masked out.
+        # https://stackoverflow.com/questions/29530232/python-pandas-check-if-any-value-is-nan-in-dataframe
+        if var_records[n].isnull().values.any(): continue
+        # Get the unique values, in order.
+        cat = pd.Categorical(var_records[n])
+        # Is this column a coordinate?
+        if n in self._outer_axes:
+          axes[n] = tuple(cat.categories)
+          indices.append(cat.codes)
+        # Otherwise, does it have a consistent value?
+        # If so, can add it to the metadata.
+        elif len(cat.categories) == 1:
+          v = cat[0]
+          # Trim string attributes (remove whitespace padding).
+          if isinstance(v,str): v = v.strip()
+          # Use regular integers for numeric types.
+          elif np.can_cast(v.dtype,int):
+            v = int(v)
+          atts[n] = v
+
+      # Construct a multidimensional array to hold the record keys.
+      record_id = np.empty(map(len,axes.values()), dtype='int32')
+
+      # Assume missing data (nan) unless filled in later.
+      record_id[()] = -1
+
+      # Arrange the record keys in the appropriate locations.
+      record_id[indices] = var_records.index
+
+      # Check if we have full coverage along all axes.
+      have_data = [k >= 0 for k in record_id.flatten()]
+      if not np.all(have_data):
+        warn (_("Missing some records for %s.")%nomvar)
+
+      # Add dummy axes for the ni,nj,nk record dimensions.
+      axes['k'] = tuple(range(var_id['nk']))
+      axes['j'] = tuple(range(var_id['nj']))
+      axes['i'] = tuple(range(var_id['ni']))
+
+      # Determine the optimal data type to use.
+      # First, find unique combos of datyp, nbits
+      # (want to minimize calls to dtype_fst2numpy).
+      x = var_records[['datyp','nbits']].drop_duplicates()
+      datyp = map(int,x['datyp'])
+      nbits = map(int,x['nbits'])
+      dtype_list = map(dtype_fst2numpy, datyp, nbits)
+      dtype = np.result_type(*dtype_list)
+
+      var = _iter_type( name = nomvar, atts = atts,
+                        axes = axes,
+                        dtype = dtype,
+                        record_id = record_id )
+      yield var
+
+      #TODO: Find a minimum set of partial coverages for the data.
+      # (e.g., if we have surface-level output for some times, and 3D output
+      # for other times).
+
+  # Choose which method to iterate over the data
+  # (depending on if pandas is installed).
+  def _iter (self):
+    try:
+      import pandas as pd
+      iterfunc = self._iter_pandas
+    except ImportError:
+      iterfunc = self._iter_slow
+    for var in iterfunc():
+      yield var
 
   # How to read the data.
   # Override fstluk so it takes a record index instead of a key/handle.
@@ -830,7 +934,7 @@ class _Dates (_Buffer_Base):
           atts = OrderedDict([('axis','T')])
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
-          yield _var_type('time',atts,axes,np.asarray(times))
+          yield _var_type('time',atts,axes,np.asarray(times,dtype='datetime64[s]'))
       if 'forecast' in var.axes:
         forecasts = var.axes['forecast']
         if forecasts not in forecast_axes:
