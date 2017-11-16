@@ -308,12 +308,13 @@ def all_params (funit):
   typvar = typvar.view('|S2')[:,0]
   gtyp = gtyp.view('|S1')
   ig2 = (ig2a << 16) | (ig2b << 8) | ig2c
-  run = date_stamp & 0x7
-  date_valid = (date_stamp >> 3) * 10 + run
+  date_valid = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
   # Note: this dateo calculation is based on my assumption that
-  # the stamps increase in 4-second intervals.
+  # the raw stamps increase in 5-second intervals.
   # Doing it this way to avoid a gazillion calls to incdat.
-  dateo = np.asarray(date_valid - (deet*npas)/4, dtype='int32')
+  date_stamp = date_stamp - (deet*npas)/5
+  date_origin = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
+  dateo = np.asarray(date_origin, dtype='int32')
   datev = np.asarray(date_valid, dtype='int32')
   xtra1 = date_valid
   xtra2 = np.zeros(nrecs, dtype='uint32')
