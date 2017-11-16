@@ -883,7 +883,7 @@ class _Dates (_Buffer_Base):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(_Dates,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','int32')]
+    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','float32')]
     return obj
 
   def __init__ (self, *args, **kwargs):
