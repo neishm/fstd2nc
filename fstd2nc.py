@@ -1355,6 +1355,9 @@ class _XYCoords (_Buffer_Base):
     header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
                            ip2=var.atts['ig2'], ip3=var.atts['ig3'], rank=3)
     if header is not None:
+      # Override output dtype
+      dtype = dtype_fst2numpy(header['datyp'],header['nbits'])
+      header['d'] = header['d'].view(dtype)
       return header
     raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
 
@@ -1829,7 +1832,7 @@ class _netCDF_IO (_netCDF_Atts):
     for r,shape,v,ind in bar.iter(sorted(io)):
       try:
         data = self._fstluk(r)['d'].transpose().reshape(shape)
-        v[ind] = data
+        v[ind] = data.view(v.dtype)
       except (IndexError,ValueError):
         warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
         continue
