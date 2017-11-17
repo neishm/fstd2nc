@@ -369,8 +369,9 @@ class _Buffer_Base (object):
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
     from fstd2nc_extra import maybeFST as isFST
+    from collections import Counter
     import numpy as np
-    from glob import glob
+    from glob import glob, has_magic
     import os
     import warnings
 
@@ -393,65 +394,33 @@ class _Buffer_Base (object):
       infiles = list(filename)
 
     # Apply wildcard and directory expansion to filenames.
-    expanded_infiles = dict()
+    expanded_infiles = []
     for infile in infiles:
-      files = []
-      for f in sorted(glob(infile)):
+      for f in sorted(glob(infile)) or [infile]:
         if os.path.isdir(f):
           for dirpath, dirnames, filenames in os.walk(f,followlinks=True):
             for filename in filenames:
-              files.append(os.path.join(dirpath,filename))
+              expanded_infiles.append((infile,os.path.join(dirpath,filename)))
         else:
-          files.append(f)
-      expanded_infiles[infile] = files
+          expanded_infiles.append((infile,f))
 
-    # Filter out non-FST files.
-    nfiles = sum(map(len,expanded_infiles.values()))
-    bar = self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=nfiles)
-    try: # Catch keyboard interrupts, so the cursor can be restored.
-      for infile, files in expanded_infiles.items():
-        for i,f in enumerate(files):
-          if not isFST(f):
-            files[i] = None
-          bar.next()
-        files = filter(None,files)
-        # Check if this input entry actually matched anything.
-        if len(files) == 0:
-          if os.path.isfile(infile):
-            bar.finish()
-            error(_("'%s' is not an RPN standard file.")%infile)
-          elif os.path.isdir(infile):
-            bar.finish()
-            error(_("directory '%s' does not contain any RPN standard files.")%infile)
-          elif '?' in infile or '*' in infile:
-            bar.finish()
-            error(_("no RPN standard files match '%s'.")%infile)
-          else:
-            bar.finish()
-            error(_("'%s' does not exist.")%infile)
-          continue
-        expanded_infiles[infile] = files
-    finally:
-      bar.finish()  # Restore the cursor.
-    if len(expanded_infiles) == 0:
-      error(_("no input files found!"))
-
-    infiles = sum((sorted(expanded_infiles[f]) for f in infiles),[])
-    nfiles = len(infiles)
-    if self._progress:
-      info(_("Found %d RPN file(s)"%nfiles))
-
-    # Scan all the files.
-    # Create a table of record headers for reference.
+    # Inspect all input files, and extract the headers from valid RPN files.
+    matches = Counter()
     headers = []
     self._files = []
-    for filenum, infile in self._Bar(_("Scanning RPN files"), suffix='(%(index)d/%(max)d)', max=nfiles).iter(enumerate(infiles)):
-      self._files.append(infile)
+    for infile, f in self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles)).iter(expanded_infiles):
+      if not os.path.exists(f) or not isFST(f):
+        matches[infile] += 0
+        continue
+      matches[infile] += 1
+
+      # Read the headers from the file(s) and store the info in the table.
+      filenum = len(self._files)
+      self._files.append(f)
       funit = self._open(filenum)
       nrecs = fstnbr(funit)
       h = np.ma.empty(nrecs, dtype=self._headers_dtype)
 
-      # Read the headers from the file(s) and store the info in the table.
       if no_quick_scan:
         keys = fstinl(funit)
         params = map(fstprm, keys)
@@ -475,7 +444,27 @@ class _Buffer_Base (object):
 
       headers.append(h)
 
+    # Check if the input entries actually matched anything.
+    for infile, count in matches.items():
+      if count == 0:
+        if os.path.isfile(infile):
+          warn(_("'%s' is not an RPN standard file.")%infile)
+        elif os.path.isdir(infile):
+          warn(_("Directory '%s' does not contain any RPN standard files.")%infile)
+        elif has_magic(infile):
+          warn(_("No RPN standard files match '%s'.")%infile)
+        elif not os.path.exists(infile):
+          warn(_("'%s' does not exist.")%infile)
+        else:
+          warn(_("Problem with input file '%s'")%infile)
+
+    nfiles = len(headers)
+    if nfiles == 0:
+      error(_("no input files found!"))
+    info(_("Found %d RPN input file(s)"%nfiles))
+
     self._headers = np.concatenate(headers)
+
 
     # Find all unique meta (coordinate) records, and link a subset of files
     # that provide all unique metadata records.
