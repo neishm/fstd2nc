@@ -221,29 +221,37 @@ class _FakeBar (object):
 
 # Try importing progress module.
 try:
-  from progress.bar import Bar
-  class _ProgressBar(Bar):
+  from progress.bar import IncrementalBar
+  class _ProgressBar(IncrementalBar):
     # Define a custom ETA, which prints the elapsed time at the end.
     @property
     def myeta(self):
       from datetime import timedelta
+      # Print elapsed time at the end.
       if self.index == self.max:
         return self.elapsed_td
+      # Don't update the eta too quickly, or the estimate will jump around.
+      if not hasattr(self,'_last_eta_update'):
+        self._last_eta_update = self._ts
+      if self._ts - self._last_eta_update < 1.0 and hasattr(self,'_last_eta'):
+        return self._last_eta
       dt = self._ts - self.start_ts
       if dt == 0: return '??:??:??'
       speed = self.index / dt
       time_remaining = (self.max-self.index) / speed
-      return timedelta(seconds=int(time_remaining))
+      self._last_eta = timedelta(seconds=int(time_remaining))
+      self._last_eta_update = self._ts
+      return self._last_eta
     # Rate limit the message update so it only happens once a second.
     def update(self):
       if not hasattr(self,'_last_update'):
         self._last_update = self._ts
       if self.index < self.max:
-        if self._ts - self._last_update < 1:
+        if self._ts - self._last_update < 0.1:
           return
       super(_ProgressBar,self).update()
       self._last_update = self._ts
-  del Bar
+  del IncrementalBar
 except ImportError:
   _ProgressBar = _FakeBar
 
