@@ -430,10 +430,7 @@ class _Buffer_Base (object):
               h[n][i] = v
       else:
         from fstd2nc_extra import all_params
-        params = all_params(funit)
-        for n,v in params.items():
-          if n in h.dtype.names:
-            h[n] = v
+        params = all_params(funit,out=h)
         keys = params['key']
 
       # Encode the keys without the file index info.

@@ -205,7 +205,7 @@ librmn.file_index.restype = c_int
 file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
 
 
-def all_params (funit):
+def all_params (funit, out=None):
   '''
   Extract parameters for *all* records.
   Returns a dictionary similar to fstprm, only the entries are
@@ -246,91 +246,95 @@ def all_params (funit):
   # 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
   # 8      word ip3:28, pad6:4, date_stamp:32;
   nrecs = raw.shape[0]
-  lng = np.empty(nrecs, dtype='int32')
-  ds = np.empty(nrecs, dtype='ubyte')
-  np.divmod(raw[:,0,0],2**24, ds, lng)
-  deleted = np.empty(nrecs, dtype='ubyte')
-  select = np.empty(nrecs, dtype='ubyte')
-  np.divmod(ds,128, deleted, select)
-  addr = raw[:,0,1]
-  deet = np.empty(nrecs, dtype='int32')
-  nbits = np.empty(nrecs, dtype='byte')
-  np.divmod(raw[:,1,0],256, deet, nbits)
-  ni = np.empty(nrecs, dtype='int32')
-  gtyp = np.empty(nrecs, dtype='ubyte')
-  np.divmod(raw[:,1,1],256, ni, gtyp)
-  nj = np.empty(nrecs, dtype='int32')
-  datyp = np.empty(nrecs, dtype='ubyte')
-  np.divmod(raw[:,2,0],256, nj, datyp)
-  nk = np.empty(nrecs, dtype='int32')
-  ubc = np.empty(nrecs, dtype='uint16')
-  np.divmod(raw[:,2,1],4096, nk, ubc)
-  npas = np.asarray(raw[:,3,0]//64, dtype='int32')
-  ig4 = np.empty(nrecs, dtype='int32')
-  ig2a = np.empty(nrecs, dtype='int32')
-  np.divmod(raw[:,3,1],256, ig4, ig2a)
-  ig1 = np.empty(nrecs, dtype='int32')
-  ig2b = np.empty(nrecs, dtype='int32')
-  np.divmod(raw[:,4,0],256, ig1, ig2b)
-  ig3 = np.empty(nrecs, dtype='int32')
-  ig2c = np.empty(nrecs, dtype='int32')
-  np.divmod(raw[:,4,1],256, ig3, ig2c)
+  if out is None:
+    out = {}
+    out['lng'] = np.empty(nrecs, dtype='int32')
+    out['dltf'] = np.empty(nrecs, dtype='ubyte')
+    out['swa'] =  np.empty(nrecs, dtype='uint32')
+    out['deet'] = np.empty(nrecs, dtype='int32')
+    out['nbits'] = np.empty(nrecs, dtype='byte')
+    out['grtyp'] = np.empty(nrecs, dtype='|S1')
+    out['ni'] = np.empty(nrecs, dtype='int32')
+    out['nj'] = np.empty(nrecs, dtype='int32')
+    out['datyp'] = np.empty(nrecs, dtype='ubyte')
+    out['nk'] = np.empty(nrecs, dtype='int32')
+    out['ubc'] = np.empty(nrecs, dtype='uint16')
+    out['npas'] = np.empty(nrecs, dtype='int32')
+    out['ig1'] = np.empty(nrecs, dtype='int32')
+    out['ig2'] = np.empty(nrecs, dtype='int32')
+    out['ig3'] = np.empty(nrecs, dtype='int32')
+    out['ig4'] = np.empty(nrecs, dtype='int32')
+    out['etiket'] = np.empty(nrecs,dtype='|S12')
+    out['typvar'] = np.empty(nrecs,dtype='|S2')
+    out['nomvar'] = np.empty(nrecs,dtype='|S4')
+    out['ip1'] = np.empty(nrecs, dtype='int32')
+    out['ip2'] = np.empty(nrecs, dtype='int32')
+    out['ip3'] = np.empty(nrecs, dtype='int32')
+    out['datev'] = np.empty(nrecs, dtype='int32')
+    out['dateo'] = np.empty(nrecs, dtype='int32')
+    out['xtra1'] = np.empty(nrecs, dtype='uint32')
+    out['xtra2'] = np.empty(nrecs, dtype='uint32')
+    out['xtra3'] = np.empty(nrecs, dtype='uint32')
+    out['key'] = np.empty(nrecs, dtype='int32')
+
+  temp8 = np.empty(nrecs, dtype='ubyte')
+  temp32 = np.empty(nrecs, dtype='int32')
+
+  np.divmod(raw[:,0,0],2**24, temp8, out['lng'])
+  np.divmod(temp8,128, out['dltf'], temp8)
+  out['swa'][:] = raw[:,0,1]
+  np.divmod(raw[:,1,0],256, out['deet'], out['nbits'])
+  np.divmod(raw[:,1,1],256, out['ni'], out['grtyp'].view('ubyte'))
+  np.divmod(raw[:,2,0],256, out['nj'], out['datyp'])
+  np.divmod(raw[:,2,1],4096, out['nk'], out['ubc'])
+  out['npas'][:] = raw[:,3,0]//64
+  np.divmod(raw[:,3,1],256, out['ig4'], temp32)
+  out['ig2'][:] = (temp32 << 16) # ig2a
+  np.divmod(raw[:,4,0],256, out['ig1'], temp32)
+  out['ig2'] |= (temp32 << 8) # ig2b
+  np.divmod(raw[:,4,1],256, out['ig3'], temp32)
+  out['ig2'] |= temp32 # ig2c
   etik15 = raw[:,5,0]//4
   etik6a = raw[:,5,1]//4
   et = raw[:,6,0]//256
-  etikbc, typvar = divmod(et, 4096)
-  nomvar = raw[:,6,1]//256
-  ip1 = np.empty(nrecs, dtype='int32')
-  levtyp = np.empty(nrecs, dtype='ubyte')
-  np.divmod(raw[:,7,0],16, ip1, levtyp)
-  ip2 = np.asarray(raw[:,7,1]//16,dtype='int32')
-  ip3 = np.asarray(raw[:,8,0]//16,dtype='int32')
+  etikbc, _typvar = divmod(et, 4096)
+  _nomvar = raw[:,6,1]//256
+  np.divmod(raw[:,7,0],16, out['ip1'], temp8)
+  out['ip2'][:] = raw[:,7,1]//16
+  out['ip3'][:] = raw[:,8,0]//16
   date_stamp = raw[:,8,1]
   # Reassemble and decode.
   # (Based on fstd98.c)
-  etiket = np.empty((nrecs,12),dtype='ubyte')
+  etiket_bytes = np.empty((nrecs,12),dtype='ubyte')
   for i in range(5):
-    etiket[:,i] = ((etik15 >> ((4-i)*6)) & 0x3f) + 32
+    etiket_bytes[:,i] = ((etik15 >> ((4-i)*6)) & 0x3f) + 32
   for i in range(5,10):
-    etiket[:,i] = ((etik6a >> ((9-i)*6)) & 0x3f) + 32
-  etiket[:,10] = ((etikbc >> 6) & 0x3f) + 32
-  etiket[:,11] = (etikbc & 0x3f) + 32
-  etiket = etiket.view('|S12')[:,0]
-  _nomvar = nomvar
-  nomvar = np.empty((nrecs,4),dtype='ubyte')
+    etiket_bytes[:,i] = ((etik6a >> ((9-i)*6)) & 0x3f) + 32
+  etiket_bytes[:,10] = ((etikbc >> 6) & 0x3f) + 32
+  etiket_bytes[:,11] = (etikbc & 0x3f) + 32
+  out['etiket'][:] = etiket_bytes.flatten().view('|S12')
+  nomvar_bytes = np.empty((nrecs,4),dtype='ubyte')
   for i in range(4):
-    nomvar[:,i] = ((_nomvar >> ((3-i)*6)) & 0x3f) + 32
-  nomvar = nomvar.view('|S4')[:,0]
-  _typvar = typvar
-  typvar = np.empty((nrecs,2),dtype='ubyte')
-  typvar[:,0] = ((_typvar >> 6) & 0x3f) + 32
-  typvar[:,1] = ((_typvar & 0x3f)) + 32
-  typvar = typvar.view('|S2')[:,0]
-  gtyp = gtyp.view('|S1')
-  ig2 = (ig2a << 16) | (ig2b << 8) | ig2c
-  date_valid = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
+    nomvar_bytes[:,i] = ((_nomvar >> ((3-i)*6)) & 0x3f) + 32
+  out['nomvar'][:] = nomvar_bytes.flatten().view('|S4')
+  typvar_bytes = np.empty((nrecs,2),dtype='ubyte')
+  typvar_bytes[:,0] = ((_typvar >> 6) & 0x3f) + 32
+  typvar_bytes[:,1] = ((_typvar & 0x3f)) + 32
+  out['typvar'][:] = typvar_bytes.flatten().view('|S2')
+  out['datev'][:] = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
   # Note: this dateo calculation is based on my assumption that
   # the raw stamps increase in 5-second intervals.
   # Doing it this way to avoid a gazillion calls to incdat.
-  date_stamp = date_stamp - (deet*npas)/5
-  date_origin = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
-  dateo = np.asarray(date_origin, dtype='int32')
-  datev = np.asarray(date_valid, dtype='int32')
-  xtra1 = date_valid
-  xtra2 = np.zeros(nrecs, dtype='uint32')
-  xtra3 = np.zeros(nrecs, dtype='uint32')
+  date_stamp = date_stamp - (out['deet']*out['npas'])/5
+  out['dateo'][:] = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
+  out['xtra1'][:] = out['datev']
+  out['xtra2'][:] = 0
+  out['xtra3'][:] = 0
   # Calculate the handles (keys)
   # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
-  key = (np.array(file_index_list)&0x3FF) | ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
+  out['key'][:] = (np.array(file_index_list)&0x3FF) | ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
 
-  return dict(
-    key = key, dateo = dateo, datev = datev, deet = deet, npas = npas,
-    ni = ni, nj = nj, nk = nk, nbits = nbits, datyp = datyp, ip1 = ip1,
-    ip2 = ip2, ip3 = ip3, typvar = typvar, nomvar = nomvar, etiket = etiket,
-    grtyp = gtyp, ig1 = ig1, ig2 = ig2, ig3 = ig3, ig4 = ig4, swa = addr,
-    lng = lng, dltf = deleted, ubc = ubc, xtra1 = xtra1, xtra2 = xtra2,
-    xtra3 = xtra3,
-  )
+  return out
 
 
 # Lightweight test for FST files.
