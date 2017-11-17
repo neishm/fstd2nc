@@ -1357,6 +1357,9 @@ class _XYCoords (_Buffer_Base):
 
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
+    # Only output 1 copy of 1D coords (e.g. could have repetitions with
+    # horizontal staggering.
+    coords = set()
     for var in super(_XYCoords,self)._iter():
       # Don't touch derived variables.
       if not isinstance(var,_iter_type):
@@ -1471,8 +1474,12 @@ class _XYCoords (_Buffer_Base):
             gridaxes = [('subgrid',tuple(range(ngrids))), ('y',tuple(yaxis.array)), ('x',tuple(xaxis.array))]
             latarray = latarray.reshape(ngrids,ny,-1)
             lonarray = lonarray.reshape(ngrids,ny,-1)
-          yield yaxis
-          yield xaxis
+          if tuple(yaxis.axes.items()) not in coords:
+            yield yaxis
+            coords.add(tuple(yaxis.axes.items()))
+          if tuple(xaxis.axes.items()) not in coords:
+            yield xaxis
+            coords.add(tuple(xaxis.axes.items()))
           lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
           lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
