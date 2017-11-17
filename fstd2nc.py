@@ -416,7 +416,7 @@ class _Buffer_Base (object):
     matches = Counter()
     headers = []
     self._files = []
-    for infile, f in self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles)).iter(expanded_infiles):
+    for infile, f in self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles):
       if not os.path.exists(f) or not isFST(f):
         matches[infile] += 0
         continue
@@ -1830,7 +1830,7 @@ class _netCDF_IO (_netCDF_Atts):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]", max=len(keys))
+    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]")
     for r,shape,v,ind in bar.iter(sorted(io)):
       try:
         data = self._fstluk(r)['d'].transpose().reshape(shape)
