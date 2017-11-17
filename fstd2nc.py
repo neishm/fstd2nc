@@ -1082,10 +1082,10 @@ class _Series (_Buffer_Base):
         if getattr(self,'_squash_forecasts',False) is True:
           # Can only do this for a single date of origin, because the time
           # axis and forecast axis are not adjacent for this type of data.
-          if len(var.axes['time']) == 1:
+          if len(var.axes['time']) == 1 and isinstance(var.axes['time'][0],np.datetime64):
             var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('time'))
             time = var.axes.pop('time')[0]
-            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+timedelta(hours=float(h)) for h in var.axes['forecast'])))
+            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(hours=float(h)) for h in var.axes['forecast'])))
             if not created_time_axis:
               yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
               created_time_axis = True
