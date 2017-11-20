@@ -24,7 +24,8 @@ Serve RPN standard files through a pydap server.
 
 # Helper method - construct a Dataset object from a buffer argument string.
 def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
-  from fstd2nc import Buffer, _var_type
+  from fstd2nc import Buffer
+  from fstd2nc.mixins import _var_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename, getmtime
   import numpy as np

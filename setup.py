@@ -48,7 +48,7 @@ setup (
   },
   entry_points={
     'console_scripts': [
-      'fstd2nc = fstd2nc:_fstd2nc_cmdline_trapped',
+      'fstd2nc = fstd2nc.__main__:_fstd2nc_cmdline_trapped',
     ],
     'pydap.handler': [
       'fstd = fstd2nc.dap:FST_Handler',
