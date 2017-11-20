@@ -21,7 +21,7 @@ $(LANGUAGE).po: fstd2nc.pot
 # Also include strings from argparse.
 ARGPARSE_PYC = $(shell python -c "import argparse; print argparse.__file__")
 ARGPARSE_PY = $(basename $(ARGPARSE_PYC)).py
-fstd2nc.pot: ../fstd2nc.py ../fstd2dap.py
+fstd2nc.pot: ../__init__.py ../dap.py
 	xgettext $^ $(ARGPARSE_PY) -d fstd2nc --package-name=fstd2nc --no-location
 	mv fstd2nc.po fstd2nc.pot
 

@@ -18,12 +18,6 @@
 # along with "fstd2nc".  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################################
 
-# Grab necessary dependencies for running this stuff.
-# (e.g., may need to hook in our own copy of rpnpy).
-import fstd2nc
-# Hook in translation support
-from fstd2nc import _
-
 """
 Serve RPN standard files through a pydap server.
 """
@@ -165,6 +159,7 @@ from pydap.wsgi import app as pydap_app
 pydap_app.get_handler = get_handler
 
 # Turn off warning / information messages (can clog up the logs).
+import fstd2nc
 fstd2nc.warn = lambda msg: None
 fstd2nc.info = lambda msg: None
 from rpnpy.librmn.fstd98 import fstopt

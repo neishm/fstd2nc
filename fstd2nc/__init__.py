@@ -29,11 +29,7 @@ __version__ = "0.20171103.0"
 from gettext import gettext as _
 import gettext
 from os import path, environ
-try:
-  import fstd2nc_locale
-  gettext.bindtextdomain('fstd2nc', path.dirname(fstd2nc_locale.__file__))
-  del fstd2nc_locale
-except ImportError: pass
+gettext.bindtextdomain('fstd2nc', path.join(path.dirname(__file__),'locale'))
 gettext.textdomain('fstd2nc')
 # Check for special CMCLNG environment variable
 if environ.get('CMCLNG') == 'francais':
@@ -338,7 +334,7 @@ class _Buffer_Base (object):
     from rpnpy.librmn.base import fnom
     from rpnpy.librmn.fstd98 import fstouv
     from rpnpy.librmn.const import FST_RO
-    from fstd2nc_extra import librmn
+    from fstd2nc.extra import librmn
     opened_file_id = getattr(self,'_opened_file_id',-1)
     # Check if this file already opened.
     if opened_file_id == file_id:
@@ -376,7 +372,7 @@ class _Buffer_Base (object):
     """
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
-    from fstd2nc_extra import maybeFST as isFST
+    from fstd2nc.extra import maybeFST as isFST
     from collections import Counter
     import numpy as np
     from glob import glob, has_magic
@@ -437,7 +433,7 @@ class _Buffer_Base (object):
             if n in h.dtype.names:
               h[n][i] = v
       else:
-        from fstd2nc_extra import all_params
+        from fstd2nc.extra import all_params
         params = all_params(funit,out=h)
         keys = params['key']
 
