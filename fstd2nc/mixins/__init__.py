@@ -316,7 +316,12 @@ class _Buffer_Base (object):
     matches = Counter()
     headers = []
     self._files = []
-    for infile, f in self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles):
+
+    # Show a progress bar when there are multiple input files.
+    if len(expanded_infiles) > 1:
+      expanded_infiles = self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
+
+    for infile, f in expanded_infiles:
       if not os.path.exists(f) or not isFST(f):
         matches[infile] += 0
         continue
