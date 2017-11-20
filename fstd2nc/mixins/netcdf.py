@@ -221,6 +221,9 @@ class _netCDF_IO (_netCDF_Atts):
           # Must match axes.
           if not set(var.axes.keys()) <= set(othervar.axes.keys()): continue
           for key,val in list(othervar.atts.items()):
+            # Don't touch FSTD metadata.
+            if key in internal_meta: continue
+            # Can only modify string attributes.
             if not isinstance(val,str): continue
             val = val.split()
             if orig_varname in val:
