@@ -46,21 +46,27 @@ try:
 except ImportError:
   pass
 
+# Module-level variable to control the amount of information printed.
+stdout_streams=('info','warn','error')
+
+
 # Information messages
 def info (msg):
-  print (msg)
+  if 'info' in stdout_streams:
+    print (msg)
 
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
 def warn (msg, _printed=set()):
-  if msg not in _printed:
+  if msg not in _printed and 'warn' in stdout_streams:
     print (_("Warning: %s")%msg)
     _printed.add(msg)
 
 # Error messages
 def error (msg):
   from sys import exit
-  print (_("Error: %s")%msg)
+  if 'error' in stdout_streams:
+    print (_("Error: %s")%msg)
   exit(1)
 
 
