@@ -45,10 +45,10 @@ from fstd2nc.mixins.vcoords import VCoords
 from fstd2nc.mixins.xycoords import XYCoords
 from fstd2nc.mixins.misc import NoNK
 from fstd2nc.mixins.filter import FilterRecords
-from fstd2nc.mixins.netcdf import netCDF_IO
+from fstd2nc.mixins.netcdf import netCDF_Atts, netCDF_IO
 from fstd2nc.mixins.array import Iter
 
-class Buffer (Iter,netCDF_IO,FilterRecords,NoNK,XYCoords,VCoords,Series,Dates,Masks,SelectVars):
+class Buffer (Iter,netCDF_IO,netCDF_Atts,FilterRecords,NoNK,XYCoords,VCoords,Series,Dates,Masks,SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.

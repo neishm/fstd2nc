@@ -79,7 +79,7 @@ class netCDF_Atts (Buffer_Base):
 #################################################
 # Mixin for reading/writing FSTD data from/to netCDF files.
 
-class netCDF_IO (netCDF_Atts):
+class netCDF_IO (Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     super(netCDF_IO,cls)._cmdline_args(parser)
@@ -253,7 +253,7 @@ class netCDF_IO (netCDF_Atts):
     f = Dataset(filename, "w", format=nc_format)
 
     # Apply global metadata (from config files and global_metadata argument).
-    if 'global' in self._metadata:
+    if 'global' in getattr(self,'_metadata',{}):
       f.setncatts(self._metadata['global'])
     if global_metadata is not None:
       f.setncatts(global_metadata)
