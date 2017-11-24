@@ -161,7 +161,7 @@ pydap_app.get_handler = get_handler
 
 # Turn off warning / information messages (can clog up the logs).
 import fstd2nc
-fstd2nc.stdout_streams=('error',)
+fstd2nc.stdout.streams=('error',)
 from rpnpy.librmn.fstd98 import fstopt
 fstopt('MSGLVL','ERRORS')
 del fstopt

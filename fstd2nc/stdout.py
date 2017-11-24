@@ -1,0 +1,60 @@
+###############################################################################
+# Copyright 2017 - Climate Research Division
+#                  Environment and Climate Change Canada
+#
+# This file is part of the "fstd2nc" package.
+#
+# "fstd2nc" is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# "fstd2nc" is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with "fstd2nc".  If not, see <http://www.gnu.org/licenses/>.
+###############################################################################
+
+######################################################################
+# Helper functions for printing information / warning / error messages,
+# as well as translation support.
+######################################################################
+
+# Enable multi-language support.
+from gettext import gettext as _
+import gettext
+from os import path, environ
+gettext.bindtextdomain('fstd2nc', path.join(path.dirname(__file__),'locale'))
+gettext.textdomain('fstd2nc')
+# Check for special CMCLNG environment variable
+if environ.get('CMCLNG') == 'francais':
+  environ['LANGUAGE'] = 'fr_CA'
+del gettext, path, environ
+
+# Module-level variable to control the amount of information printed.
+streams=('info','warn','error')
+
+
+# Information messages
+def info (msg):
+  if 'info' in streams:
+    print (msg)
+
+# How to handle warning messages.
+# E.g., can either pass them through warnings.warn, or simply print them.
+def warn (msg, _printed=set()):
+  if msg not in _printed and 'warn' in streams:
+    print (_("Warning: %s")%msg)
+    _printed.add(msg)
+
+# Error messages
+def error (msg):
+  from sys import exit
+  if 'error' in streams:
+    print (_("Error: %s")%msg)
+  exit(1)
+
+

@@ -25,16 +25,6 @@ Functionality for converting between FSTD and netCDF files.
 
 __version__ = "0.20171103.0"
 
-# Enable multi-language support.
-from gettext import gettext as _
-import gettext
-from os import path, environ
-gettext.bindtextdomain('fstd2nc', path.join(path.dirname(__file__),'locale'))
-gettext.textdomain('fstd2nc')
-# Check for special CMCLNG environment variable
-if environ.get('CMCLNG') == 'francais':
-  environ['LANGUAGE'] = 'fr_CA'
-del gettext, path, environ
 
 # Check for bundled rpnpy package.
 # Fall back to this one if no standard rpnpy package available.
@@ -46,31 +36,7 @@ try:
 except ImportError:
   pass
 
-# Module-level variable to control the amount of information printed.
-stdout_streams=('info','warn','error')
-
-
-# Information messages
-def info (msg):
-  if 'info' in stdout_streams:
-    print (msg)
-
-# How to handle warning messages.
-# E.g., can either pass them through warnings.warn, or simply print them.
-def warn (msg, _printed=set()):
-  if msg not in _printed and 'warn' in stdout_streams:
-    print (_("Warning: %s")%msg)
-    _printed.add(msg)
-
-# Error messages
-def error (msg):
-  from sys import exit
-  if 'error' in stdout_streams:
-    print (_("Error: %s")%msg)
-  exit(1)
-
-
-# Combin all the mixins to create a final interface for I/O.
+# Combine all the mixins to create a final interface for I/O.
 from fstd2nc.mixins.select import SelectVars
 from fstd2nc.mixins.masks import Masks
 from fstd2nc.mixins.dates import Dates

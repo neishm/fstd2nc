@@ -26,7 +26,7 @@
 # are derived.
 
 
-from fstd2nc import _, info, warn, error
+from fstd2nc.stdout import _, info, warn, error
 
 # Override default dtype for "binary" (datyp 0) data.
 # This is probably float32 data, not integer.

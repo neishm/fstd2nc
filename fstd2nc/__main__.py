@@ -19,7 +19,8 @@
 ###############################################################################
 
 
-from fstd2nc import _, info, warn, error, Buffer
+from fstd2nc.stdout import _, info, warn, error
+from fstd2nc import Buffer
 
 
 # Command-line invocation of the converter.
