@@ -19,16 +19,16 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 
 #################################################
 # Mixin for pre-filtering the RPN file records.
 
-class _FilterRecords (_Buffer_Base):
+class FilterRecords (Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_FilterRecords,cls)._cmdline_args(parser)
+    super(FilterRecords,cls)._cmdline_args(parser)
     parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
   def __init__ (self, *args, **kwargs):
     import numpy as np
@@ -36,7 +36,7 @@ class _FilterRecords (_Buffer_Base):
     if filter is None:
       filter = []
     self._filters = tuple(filter)
-    super(_FilterRecords,self).__init__(*args,**kwargs)
+    super(FilterRecords,self).__init__(*args,**kwargs)
     if len(self._filters) == 0: return
     flags = np.ones(len(self._headers),dtype='bool')
     records = dict([(n,self._headers[n]) for n in self._headers.dtype.names])

@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 #################################################
 # A user-friendly iterator for using the Buffer in other Python scripts.
@@ -70,7 +70,7 @@ class _Array (object):
   def __array__ (self):
     return self.__getitem__(())
 
-class _Iter (_Buffer_Base):
+class Iter (Buffer_Base):
   def __iter__ (self):
     """
     Processes the records into multidimensional variables.

@@ -158,7 +158,7 @@ except ImportError:
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
 # new behaviour if more exotic FSTD files are encountered in the future.
-class _Buffer_Base (object):
+class Buffer_Base (object):
 
   # Keep a reference to fstd98 so it's available during cleanup.
   try:

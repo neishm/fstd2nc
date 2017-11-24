@@ -19,20 +19,20 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 
 #################################################
 # Mixin for handling masks.
 
-class _Masks (_Buffer_Base):
+class Masks (Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_Masks,cls)._cmdline_args(parser)
+    super(Masks,cls)._cmdline_args(parser)
     parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the metadata.  Default is '%(default)s'."))
   def __init__ (self, *args, **kwargs):
     self._fill_value = kwargs.pop('fill_value',1e30)
-    super(_Masks,self).__init__(*args,**kwargs)
+    super(Masks,self).__init__(*args,**kwargs)
     # Remove all mask records from the table, they should not become variables
     # themselves.
     is_mask = (self._headers['typvar'] == '@@')
@@ -41,7 +41,7 @@ class _Masks (_Buffer_Base):
   # Apply the fill value to the data.
   def _iter (self):
     from fstd2nc.mixins import _iter_type
-    for var in super(_Masks,self)._iter():
+    for var in super(Masks,self)._iter():
       if not isinstance(var,_iter_type):
         yield var
         continue
@@ -54,7 +54,7 @@ class _Masks (_Buffer_Base):
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     import numpy as np
     from rpnpy.librmn.fstd98 import fstinf
-    prm = super(_Masks,self)._fstluk(rec_id, dtype, rank, dataArray)
+    prm = super(Masks,self)._fstluk(rec_id, dtype, rank, dataArray)
     # If this data is not masked, or if this data *is* as mask, then just
     # return it.
     if not prm['typvar'].endswith('@'): return prm

@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 
 # Convert an RPN date stamp to datetime object.
@@ -38,15 +38,15 @@ def stamp2datetime (date):
 #################################################
 # Mixin for handling dates/times.
 
-class _Dates (_Buffer_Base):
+class Dates (Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_Dates,cls)._cmdline_args(parser)
+    super(Dates,cls)._cmdline_args(parser)
     parser.add_argument('--squash-forecasts', action='store_true', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
-    obj = super(_Dates,cls).__new__(cls, *args, **kwargs)
+    obj = super(Dates,cls).__new__(cls, *args, **kwargs)
     obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','float32')]
     return obj
 
@@ -57,7 +57,7 @@ class _Dates (_Buffer_Base):
       self._outer_axes = ('time',) + self._outer_axes
     else:
       self._outer_axes = ('time','forecast') + self._outer_axes
-    super(_Dates,self).__init__(*args,**kwargs)
+    super(Dates,self).__init__(*args,**kwargs)
 
     # Get any extra (derived) fields needed for doing the decoding.
     # Calculate the forecast (in hours).
@@ -86,7 +86,7 @@ class _Dates (_Buffer_Base):
     # Keep track of all time and forecast axes found in the data.
     time_axes = set()
     forecast_axes = set()
-    for var in super(_Dates,self)._iter():
+    for var in super(Dates,self)._iter():
       if not isinstance(var,_iter_type):
         yield var
         continue

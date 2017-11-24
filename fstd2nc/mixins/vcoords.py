@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 # Decode ip1 information
 from fstd2nc.mixins import vectorize
@@ -39,12 +39,12 @@ def decode_ip1 (ip1):
 #################################################
 # Mixin for handling vertical coordinates.
 
-class _VCoords (_Buffer_Base):
+class VCoords (Buffer_Base):
   _vcoord_nomvars = ('HY','!!')
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
-    obj = super(_VCoords,cls).__new__(cls, *args, **kwargs)
+    obj = super(VCoords,cls).__new__(cls, *args, **kwargs)
     obj._headers_dtype = obj._headers_dtype + [('level','float32'),('kind','int32')]
     return obj
 
@@ -54,7 +54,7 @@ class _VCoords (_Buffer_Base):
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
     self._meta_records = self._meta_records + self._vcoord_nomvars
-    super(_VCoords,self).__init__(*args,**kwargs)
+    super(VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
@@ -89,7 +89,7 @@ class _VCoords (_Buffer_Base):
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
-    for var in super(_VCoords,self)._iter():
+    for var in super(VCoords,self)._iter():
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
         if 'level' in var.axes and len(var.axes['level']) == 1:

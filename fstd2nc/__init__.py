@@ -71,18 +71,18 @@ def error (msg):
 
 
 # Combin all the mixins to create a final interface for I/O.
-from fstd2nc.mixins.select import _SelectVars
-from fstd2nc.mixins.masks import _Masks
-from fstd2nc.mixins.dates import _Dates
-from fstd2nc.mixins.series import _Series
-from fstd2nc.mixins.vcoords import _VCoords
-from fstd2nc.mixins.xycoords import _XYCoords
-from fstd2nc.mixins.misc import _NoNK
-from fstd2nc.mixins.filter import _FilterRecords
-from fstd2nc.mixins.netcdf import _netCDF_IO
-from fstd2nc.mixins.array import _Iter
+from fstd2nc.mixins.select import SelectVars
+from fstd2nc.mixins.masks import Masks
+from fstd2nc.mixins.dates import Dates
+from fstd2nc.mixins.series import Series
+from fstd2nc.mixins.vcoords import VCoords
+from fstd2nc.mixins.xycoords import XYCoords
+from fstd2nc.mixins.misc import NoNK
+from fstd2nc.mixins.filter import FilterRecords
+from fstd2nc.mixins.netcdf import netCDF_IO
+from fstd2nc.mixins.array import Iter
 
-class Buffer (_Iter,_netCDF_IO,_FilterRecords,_NoNK,_XYCoords,_VCoords,_Series,_Dates,_Masks,_SelectVars):
+class Buffer (Iter,netCDF_IO,FilterRecords,NoNK,XYCoords,VCoords,Series,Dates,Masks,SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.

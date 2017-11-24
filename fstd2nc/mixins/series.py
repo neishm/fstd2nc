@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 
 #################################################
@@ -49,10 +49,10 @@ from fstd2nc.mixins import _Buffer_Base
 #   with one extra level?
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
-class _Series (_Buffer_Base):
+class Series (Buffer_Base):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
-    obj = super(_Series,cls).__new__(cls, *args, **kwargs)
+    obj = super(Series,cls).__new__(cls, *args, **kwargs)
     obj._headers_dtype = obj._headers_dtype + [('station_id','int32')]
     return obj
 
@@ -62,7 +62,7 @@ class _Series (_Buffer_Base):
     self._meta_records = self._meta_records + ('HH','STNS')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
-    super(_Series,self).__init__(*args,**kwargs)
+    super(Series,self).__init__(*args,**kwargs)
 
     fields = self._headers
     nrecs = len(fields)
@@ -139,7 +139,7 @@ class _Series (_Buffer_Base):
         if getattr(self,'_squash_forecasts',False) is False:
           yield forecast
 
-    for var in super(_Series,self)._iter():
+    for var in super(Series,self)._iter():
 
       if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
         yield var

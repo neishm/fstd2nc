@@ -19,16 +19,16 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 #################################################
 # Mixin for adding netCDF metadata to the variables
 
-class _netCDF_Atts (_Buffer_Base):
+class netCDF_Atts (Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
     import argparse
-    super(_netCDF_Atts,cls)._cmdline_args(parser)
+    super(netCDF_Atts,cls)._cmdline_args(parser)
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
   def __init__ (self, *args, **kwargs):
     import ConfigParser
@@ -51,13 +51,13 @@ class _netCDF_Atts (_Buffer_Base):
           metadata[varname][k] = int(v) # Try further conversion to int.
         except ValueError: pass
     self._metadata = metadata
-    super(_netCDF_Atts,self).__init__(*args,**kwargs)
+    super(netCDF_Atts,self).__init__(*args,**kwargs)
   def _iter (self):
     from collections import OrderedDict
 
     axis_renames = {}
 
-    for var in super(_netCDF_Atts,self)._iter():
+    for var in super(netCDF_Atts,self)._iter():
       orig_name = var.name
       # Add extra metadata provided by the user?
       if var.name in self._metadata:
@@ -79,17 +79,17 @@ class _netCDF_Atts (_Buffer_Base):
 #################################################
 # Mixin for reading/writing FSTD data from/to netCDF files.
 
-class _netCDF_IO (_netCDF_Atts):
+class netCDF_IO (netCDF_Atts):
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_netCDF_IO,cls)._cmdline_args(parser)
+    super(netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units for the output time axis.  Default is %(default)s.'))
     parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the RPN file.'))
 
   @classmethod
   def _check_args (cls, parser, args):
     from datetime import datetime
-    super(_netCDF_IO,cls)._check_args(parser,args)
+    super(netCDF_IO,cls)._check_args(parser,args)
     # Parse the reference date into a datetime object.
     if args.reference_date is not None:
       try:
@@ -101,7 +101,7 @@ class _netCDF_IO (_netCDF_Atts):
     self._time_units = kwargs.pop('time_units','hours')
     self._reference_date = kwargs.pop('reference_date',None)
     self._unique_names = kwargs.pop('unique_names',True)
-    super(_netCDF_IO,self).__init__(*args,**kwargs)
+    super(netCDF_IO,self).__init__(*args,**kwargs)
 
   def _iter (self):
     from fstd2nc.mixins import _var_type
@@ -114,7 +114,7 @@ class _netCDF_IO (_netCDF_Atts):
     else:
       reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
-    varlist = super(_netCDF_IO,self)._iter()
+    varlist = super(netCDF_IO,self)._iter()
     if self._unique_names:
       varlist = list(varlist)
       self._fix_names(varlist)

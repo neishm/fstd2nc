@@ -19,16 +19,16 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 
 #################################################
 # Mixin for selecting particular fields.
 
-class _SelectVars (_Buffer_Base):
+class SelectVars (Buffer_Base):
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_SelectVars,cls)._cmdline_args(parser)
+    super(SelectVars,cls)._cmdline_args(parser)
     parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables to convert.  By default, all variables are converted.'))
   def __init__ (self, *args, **kwargs):
     vars = kwargs.pop('vars',None)
@@ -37,10 +37,10 @@ class _SelectVars (_Buffer_Base):
       info (_('Will look for variables: ') + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
-    super(_SelectVars,self).__init__(*args,**kwargs)
+    super(SelectVars,self).__init__(*args,**kwargs)
   def _iter (self):
     found = set()
-    for var in super(_SelectVars,self)._iter():
+    for var in super(SelectVars,self)._iter():
       if self._selected_vars is not None:
         if var.name not in self._selected_vars:
           continue

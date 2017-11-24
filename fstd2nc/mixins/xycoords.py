@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc import _, info, warn, error
-from fstd2nc.mixins import _Buffer_Base
+from fstd2nc.mixins import Buffer_Base
 
 
 # Modify gdll to handle supergrids.
@@ -65,7 +65,7 @@ def gdgaxes (gdid):
 #################################################
 # Mixin for handling lat/lon coordinates.
 
-class _XYCoords (_Buffer_Base):
+class XYCoords (Buffer_Base):
   # Special records that contain coordinate info.
   # We don't want to output these directly as variables, need to decode first.
   _xycoord_nomvars = ('^^','>>','^>')
@@ -77,14 +77,14 @@ class _XYCoords (_Buffer_Base):
 
   @classmethod
   def _cmdline_args (cls, parser):
-    super(_XYCoords,cls)._cmdline_args(parser)
+    super(XYCoords,cls)._cmdline_args(parser)
     parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
 
   def __init__ (self, *args, **kwargs):
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
-    super(_XYCoords,self).__init__(*args,**kwargs)
+    super(XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)
     self._human_var_id = self._human_var_id + ('%(grtyp)s',)
@@ -121,7 +121,7 @@ class _XYCoords (_Buffer_Base):
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
-    for var in super(_XYCoords,self)._iter():
+    for var in super(XYCoords,self)._iter():
       # Don't touch derived variables.
       if not isinstance(var,_iter_type):
         yield var
