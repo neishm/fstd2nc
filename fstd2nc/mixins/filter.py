@@ -35,6 +35,8 @@ class FilterRecords (Buffer_Base):
     filter = kwargs.pop('filter',None)
     if filter is None:
       filter = []
+    if isinstance(filter,str):
+      filter = [filter]
     self._filters = tuple(filter)
     super(FilterRecords,self).__init__(*args,**kwargs)
     if len(self._filters) == 0: return

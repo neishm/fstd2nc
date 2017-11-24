@@ -36,8 +36,12 @@ class netCDF_Atts (Buffer_Base):
     metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:
       metafiles = []
+    elif isinstance(metadata_file,str):
+      metafiles = [metadata_file]
     else:
       metafiles = metadata_file
+    # Open the files if only the filename is provided.
+    metafiles = [open(m,'r') if isinstance(m,str) else m for m in metafiles]
     metadata = OrderedDict()
     configparser = ConfigParser.SafeConfigParser()
     for metafile in metafiles:
