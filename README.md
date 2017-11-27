@@ -62,21 +62,28 @@ optional arguments:
 
 From Python
 -----------
-Simple conversion to netCDF:
+**Simple conversion to netCDF:**
 ```python
 import fstd2nc
 data = fstd2nc.Buffer("myfile.fst")
 data.write_nc_file("myfile.nc")
 ```
-To get an [xarray](http://xarray.pydata.org) `Dataset` object:
+**More complicated conversion using an [xarray](http://xarray.pydata.org) `Dataset` object:**
 ```python
 import fstd2nc
-import numpy as np
-data = fstd2nc.Buffer("myfile.fst").to_xarray()
-print data
-# (manipulate data here)
+
+# Open the FSTD file.
+data = fstd2nc.Buffer("myfile.fst")
+
+# Access the data as an xarray.Dataset object.
+dataset = data.to_xarray()
+print (dataset)
+
+# (Can manipulate the dataset here)
 # ...
-data.to_netcdf("myfile.nc")
+
+# Write the final result to netCDF using xarray:
+dataset.to_netcdf("myfile.nc")
 ```
 
 Requirements
@@ -87,5 +94,5 @@ For reading large numbers of input files (>100), this utility can leverage [pand
 
 The [progress](https://github.com/verigak/progress) module is required in order to use the `--progress` option.
 
-The `.to\_xarray()` Python method requires the [xarray](http://xarray.pydata.org) and [dask](http://dask.pydata.org) packages.
+The `.to_xarray()` Python method requires the [xarray](http://xarray.pydata.org) and [dask](http://dask.pydata.org) packages.
 
