@@ -46,7 +46,7 @@ from fstd2nc.mixins.xycoords import XYCoords
 from fstd2nc.mixins.misc import NoNK
 from fstd2nc.mixins.filter import FilterRecords
 from fstd2nc.mixins.netcdf import netCDF_Atts, netCDF_IO
-from fstd2nc.mixins.array import Iter
+from fstd2nc.mixins.iter import Iter
 
 class Buffer (Iter,netCDF_IO,netCDF_Atts,FilterRecords,NoNK,XYCoords,VCoords,Series,Dates,Masks,SelectVars):
   """
