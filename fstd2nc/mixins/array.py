@@ -33,6 +33,7 @@ class XArray (Buffer_Base):
   def to_xarray (self):
     """
     Create an xarray interface for the RPN data.
+    Requires the xarray and dask packages.
     """
     from fstd2nc.mixins import _iter_type, _var_type
     import xarray as xr

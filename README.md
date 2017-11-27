@@ -68,34 +68,24 @@ import fstd2nc
 data = fstd2nc.Buffer("myfile.fst")
 data.write_nc_file("myfile.nc")
 ```
-To use the higher-level data structures in Python for other purposes:
+To get an [xarray](http://xarray.pydata.org) `Dataset` object:
 ```python
 import fstd2nc
 import numpy as np
-data = fstd2nc.Buffer("myfile.fst")
-
-for name, atts, axes, array in data:
-
-  # The name of the field
-  print (name)
-
-  # 'atts' is a dictionary of metadata associated with this field.
-  # Contains info from the FSTD record header(s), as well as extra metadata
-  # that's useful for netCDF utilities.
-  print (atts)
-
-  # 'axes' is an ordered dictionary containing the coordinate system.
-  print (list(axes.keys()))   # Names of the dimensions
-
-  # 'array' points to a "symbolic" array, which isn't yet loaded in memory.
-  # That way, you can slice it to select only the subset of data you need.
-  # To load the values, pass it to numpy.asarray(), or do a numpy operation
-  # on it.
-  print (array.shape)
-  print (np.mean(array))
+data = fstd2nc.Buffer("myfile.fst").to_xarray()
+print data
+# (manipulate data here)
+# ...
+data.to_netcdf("myfile.nc")
 ```
 
 Requirements
 ============
 This package requires [Python-RPN](https://github.com/meteokid/python-rpn) for reading/writing FSTD files, and [netcdf4-python](https://github.com/Unidata/netcdf4-python) for reading/writing netCDF files.
+
+For reading large numbers of input files (>100), this utility can leverage [pandas](https://github.com/pandas-dev/pandas) to quickly process the FSTD record headers.
+
+The [progress](https://github.com/verigak/progress) module is required in order to use the `--progress` option.
+
+The `.to\_xarray()` Python method requires the [xarray](http://xarray.pydata.org) and [dask](http://dask.pydata.org) packages.
 
