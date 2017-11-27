@@ -42,6 +42,7 @@ setup (
   extras_require = {
     'dap': ['Pydap[server,functions]'],
     'manyfiles': ['progress','pandas'],
+    'array': ['xarray','dask','toolz'],
   },
   package_data = {
     'fstd2nc': ['locale/*/LC_MESSAGES/fstd2nc.mo'],
