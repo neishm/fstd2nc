@@ -64,7 +64,7 @@ class XArray (Buffer_Base):
         warn(_("Unhandled type %s - ignoring variable.")%type(var))
         continue
 
-      coords = dict((n,out[n]) for n in var.atts.get('coordinates','').split() if n in out)
+      coords = dict((n,out[n]) for n in var.atts.pop('coordinates','').split() if n in out)
       out[var.name] = xr.DataArray(data=array, coords=coords, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
 
     return xr.Dataset(out)
