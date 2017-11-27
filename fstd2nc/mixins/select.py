@@ -33,7 +33,9 @@ class SelectVars (Buffer_Base):
   def __init__ (self, *args, **kwargs):
     vars = kwargs.pop('vars',None)
     if vars is not None:
-      self._selected_vars = vars.split(',')
+      if isinstance(vars,str):
+        vars = vars.split(',')
+      self._selected_vars = tuple(vars)
       info (_('Will look for variables: ') + ' '.join(self._selected_vars))
     else:
       self._selected_vars = None
