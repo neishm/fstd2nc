@@ -52,6 +52,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   zlib = args.pop('zlib')
   force = args.pop('force')
   no_history = args.pop('no_history')
+  progress = args.get('progress',False)
 
   # Apply message level criteria.
   try:
@@ -98,7 +99,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.write_nc_file(outfile, nc_format, time_units=time_units, reference_date=reference_date, global_metadata=global_metadata, zlib=zlib)
+  buf.write_nc_file(outfile, nc_format, time_units=time_units, reference_date=reference_date, global_metadata=global_metadata, zlib=zlib, progress=progress)
 
 # Command-line invocation with error trapping.
 # Hides the Python stack trace when the user aborts the command.

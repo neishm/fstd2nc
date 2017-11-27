@@ -207,12 +207,12 @@ class netCDF_IO (Buffer_Base):
           var.atts.pop(n,None)
 
 
-  def write_nc_file (self, filename, nc_format='NETCDF4', time_units='hours', reference_date=None, global_metadata=None, zlib=False):
+  def write_nc_file (self, filename, nc_format='NETCDF4', time_units='hours', reference_date=None, global_metadata=None, zlib=False, progress=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
     """
-    from fstd2nc.mixins import _var_type
+    from fstd2nc.mixins import _var_type, _ProgressBar, _FakeBar
     from netCDF4 import Dataset, date2num
     import numpy as np
     from datetime import datetime
@@ -293,7 +293,8 @@ class netCDF_IO (Buffer_Base):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    bar = self._Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]")
+    Bar = _ProgressBar if progress is True else _FakeBar
+    bar = Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]")
     for r,shape,v,ind in bar.iter(sorted(io)):
       try:
         data = self._fstluk(r)['d'].transpose().reshape(shape)

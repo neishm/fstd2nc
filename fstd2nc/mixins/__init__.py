@@ -284,7 +284,7 @@ class Buffer_Base (object):
     import warnings
 
     self._progress = progress
-    self._Bar = _ProgressBar if progress is True else _FakeBar
+    Bar = _ProgressBar if progress is True else _FakeBar
 
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
@@ -319,7 +319,7 @@ class Buffer_Base (object):
 
     # Show a progress bar when there are multiple input files.
     if len(expanded_infiles) > 1:
-      expanded_infiles = self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
+      expanded_infiles = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
 
     for infile, f in expanded_infiles:
       if not os.path.exists(f) or not isFST(f):
