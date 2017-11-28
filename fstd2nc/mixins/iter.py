@@ -77,7 +77,11 @@ class Iter (Buffer_Base):
     Iterates over (name, atts, axes, array) tuples.
     Note that array may not be a true numpy array (values are not yet loaded
     in memory).  To load the array, pass it to numpy.asarray().
+
+    Deprecated - use .to_xarray() to get a multidimensional structure.
     """
+    from warnings import warn
+    warn ("Iterating over a Buffer is deprecated.  Use .to_xarray() to access the multidimensional data.", stacklevel=2)
     from fstd2nc.mixins import _iter_type, _var_type
     for var in self._iter():
       if isinstance(var, _iter_type):
