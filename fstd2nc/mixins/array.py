@@ -50,10 +50,15 @@ class XArray (Buffer_Base):
         ndim_inner = ndim - ndim_outer
         dsk = dict()
         for ind in np.ndindex(var.record_id.shape):
-          rec_id = var.record_id[ind]
           # Pad index with all dimensions (including inner ones).
           key = (var.name,) + ind + (0,)*ndim_inner
-          dsk[key] = (self._read_chunk, rec_id, (1,)*ndim_outer+shape[ndim_outer:], var.dtype)
+          chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
+          rec_id = var.record_id[ind]
+          if rec_id >= 0:
+            dsk[key] = (self._read_chunk, rec_id, chunk_shape, var.dtype)
+          else:
+            # Fill missing chunks with NaN.
+            dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
         chunks = []
         for i in range(ndim_outer):
           chunks.append((1,)*shape[i])
@@ -66,6 +71,11 @@ class XArray (Buffer_Base):
 
       coords = dict((n,out[n]) for n in var.atts.pop('coordinates','').split() if n in out)
       out[var.name] = xr.DataArray(data=array, coords=coords, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
+
+    # Use single thread for accessing the data
+    # TODO: add support for multiple threads to the Buffer interface.
+    import dask
+    dask.set_options(get=dask.get)
 
     return xr.Dataset(out)
 
