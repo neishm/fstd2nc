@@ -274,7 +274,7 @@ class netCDF_IO (Buffer_Base):
       # Use this as the "chunk size" for the netCDF file, to improve I/O
       # performance.
       chunksizes = (1,)*var.record_id.ndim + record_shape
-      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib, chunksizes=chunksizes)
+      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib, chunksizes=chunksizes, fill_value=getattr(self,'_fill_value',None))
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.

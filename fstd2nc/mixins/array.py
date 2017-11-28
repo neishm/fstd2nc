@@ -57,8 +57,12 @@ class XArray (Buffer_Base):
           if rec_id >= 0:
             dsk[key] = (self._read_chunk, rec_id, chunk_shape, var.dtype)
           else:
-            # Fill missing chunks with NaN.
-            dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
+            # Fill missing chunks with fill value or NaN.
+            if hasattr(self,'_fill_value'):
+              var.atts['_FillValue'] = self._fill_value
+              dsk[key] = (np.full, chunk_shape, self._fill_value, var.dtype)
+            else:
+              dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
         chunks = []
         for i in range(ndim_outer):
           chunks.append((1,)*shape[i])
