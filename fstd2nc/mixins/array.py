@@ -81,5 +81,11 @@ class XArray (Buffer_Base):
     import dask
     dask.set_options(get=dask.get)
 
-    return xr.Dataset(out)
+    # Construct the Dataset from all the variables.
+    out = xr.Dataset(out)
+
+    # Make the time dimension unlimited when writing to netCDF.
+    out.encoding['unlimited_dims'] = ('time',)
+
+    return out
 
