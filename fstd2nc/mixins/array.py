@@ -76,11 +76,6 @@ class XArray (Buffer_Base):
       coords = dict((n,out[n]) for n in var.atts.pop('coordinates','').split() if n in out)
       out[var.name] = xr.DataArray(data=array, coords=coords, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
 
-    # Use single thread for accessing the data
-    # TODO: add support for multiple threads to the Buffer interface.
-    import dask
-    dask.set_options(get=dask.get)
-
     # Construct the Dataset from all the variables.
     out = xr.Dataset(out)
 
