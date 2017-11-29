@@ -62,40 +62,37 @@ optional arguments:
 
 From Python
 -----------
-Simple conversion to netCDF:
+**Simple conversion to netCDF:**
 ```python
 import fstd2nc
 data = fstd2nc.Buffer("myfile.fst")
 data.write_nc_file("myfile.nc")
 ```
-To use the higher-level data structures in Python for other purposes:
+**More complicated conversion using an [xarray](http://xarray.pydata.org) `Dataset` object:**
 ```python
 import fstd2nc
-import numpy as np
+
+# Open the FSTD file.
 data = fstd2nc.Buffer("myfile.fst")
 
-for name, atts, axes, array in data:
+# Access the data as an xarray.Dataset object.
+dataset = data.to_xarray()
+print (dataset)
 
-  # The name of the field
-  print (name)
+# (Can manipulate the dataset here)
+# ...
 
-  # 'atts' is a dictionary of metadata associated with this field.
-  # Contains info from the FSTD record header(s), as well as extra metadata
-  # that's useful for netCDF utilities.
-  print (atts)
-
-  # 'axes' is an ordered dictionary containing the coordinate system.
-  print (list(axes.keys()))   # Names of the dimensions
-
-  # 'array' points to a "symbolic" array, which isn't yet loaded in memory.
-  # That way, you can slice it to select only the subset of data you need.
-  # To load the values, pass it to numpy.asarray(), or do a numpy operation
-  # on it.
-  print (array.shape)
-  print (np.mean(array))
+# Write the final result to netCDF using xarray:
+dataset.to_netcdf("myfile.nc")
 ```
 
 Requirements
 ============
 This package requires [Python-RPN](https://github.com/meteokid/python-rpn) for reading/writing FSTD files, and [netcdf4-python](https://github.com/Unidata/netcdf4-python) for reading/writing netCDF files.
+
+For reading large numbers of input files (>100), this utility can leverage [pandas](https://github.com/pandas-dev/pandas) to quickly process the FSTD record headers.
+
+The [progress](https://github.com/verigak/progress) module is required in order to use the `--progress` option.
+
+The `.to_xarray()` Python method requires the [xarray](http://xarray.pydata.org) and [dask](http://dask.pydata.org) packages.
 

@@ -22,66 +22,65 @@ from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import Buffer_Base
 
 #################################################
-# A user-friendly iterator for using the Buffer in other Python scripts.
+# Provide an xarray+dask interface for the FSTD data.
 
-# Lightweight wrapper for the data.
-# Allows the user to load the data through np.asarray or by slicing it.
-class _Array (object):
-  # Set some common attributes for the object.
-  def __init__ (self, buffer, var):
-    from functools import reduce
-    self._buffer = buffer
-    self._record_id = var.record_id
-    # Expected shape and type of the array.
-    self.shape = tuple(map(len,var.axes.values()))
-    self.ndim = len(self.shape)
-    self.size = reduce(int.__mul__, self.shape, 1)
-    self.dtype = var.dtype
-  def __getitem__ (self, key):
-    import numpy as np
-    # Coerce key into a tuple of slice objects.
-    if not isinstance(key,tuple):
-      if hasattr(key,'__len__'): key = tuple(key)
-      else: key = (key,)
-    if len(key) == 1 and hasattr(key[0],'__len__'):
-      key = tuple(key[0])
-    if Ellipsis in key:
-      i = key.index(Ellipsis)
-      key = key[:i] + (slice(None),)*(self.ndim-len(key)+1) + key[i+1:]
-    key = key + (slice(None),)*(self.ndim-len(key))
-    if len(key) > self.ndim:
-      raise ValueError(("Too many dimensions for slicing."))
-    final_shape = tuple(len(np.arange(n)[k]) for n,k in zip(self.shape,key) if not isinstance(k,int))
-    data = np.ma.empty(final_shape, dtype=self.dtype)
-    outer_ndim = self._record_id.ndim
-    record_id = self._record_id.__getitem__(key[:outer_ndim])
-    # Final shape of each record (in case we did any reshaping along ni,nj,nk
-    # dimensions).
-    record_shape = self.shape[self._record_id.ndim:]
-    # Iterate of each record.
-    for ind in np.ndindex(record_id.shape):
-      r = int(record_id[ind])
-      if r >= 0:
-        data[ind] = self._buffer._fstluk(r)['d'].transpose().reshape(record_shape)[(Ellipsis,)+key[outer_ndim:]]
-      else:
-        data.mask = np.ma.getmaskarray(data)
-        data.mask[ind] = True
-    return data
-  def __array__ (self):
-    return self.__getitem__(())
+class XArray (Buffer_Base):
 
-class Iter (Buffer_Base):
-  def __iter__ (self):
+  # The interface for getting chunks into dask.
+  def _read_chunk (self, rec_id, shape, dtype):
+    return self._fstluk(rec_id)['d'].transpose().reshape(shape).view(dtype)
+
+  def to_xarray (self):
     """
-    Processes the records into multidimensional variables.
-    Iterates over (name, atts, axes, array) tuples.
-    Note that array may not be a true numpy array (values are not yet loaded
-    in memory).  To load the array, pass it to numpy.asarray().
+    Create an xarray interface for the RPN data.
+    Requires the xarray and dask packages.
     """
     from fstd2nc.mixins import _iter_type, _var_type
+    import xarray as xr
+    from dask import array as da
+    import numpy as np
+    out = dict()
     for var in self._iter():
-      if isinstance(var, _iter_type):
-        array = _Array(self, var)
-        var = _var_type (var.name, var.atts, var.axes, array)
-      yield var
+      if isinstance(var,_var_type):
+        array = var.array
+      elif isinstance(var,_iter_type):
+        ndim = len(var.axes)
+        shape = tuple(map(len,var.axes.values()))
+        ndim_outer = var.record_id.ndim
+        ndim_inner = ndim - ndim_outer
+        dsk = dict()
+        for ind in np.ndindex(var.record_id.shape):
+          # Pad index with all dimensions (including inner ones).
+          key = (var.name,) + ind + (0,)*ndim_inner
+          chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
+          rec_id = var.record_id[ind]
+          if rec_id >= 0:
+            dsk[key] = (self._read_chunk, rec_id, chunk_shape, var.dtype)
+          else:
+            # Fill missing chunks with fill value or NaN.
+            if hasattr(self,'_fill_value'):
+              var.atts['_FillValue'] = self._fill_value
+              dsk[key] = (np.full, chunk_shape, self._fill_value, var.dtype)
+            else:
+              dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
+        chunks = []
+        for i in range(ndim_outer):
+          chunks.append((1,)*shape[i])
+        for i in range(ndim_outer,ndim):
+          chunks.append((shape[i],))
+        array = da.Array(dsk, var.name, chunks, var.dtype)
+      else:
+        warn(_("Unhandled type %s - ignoring variable.")%type(var))
+        continue
+
+      coords = dict((n,out[n]) for n in var.atts.pop('coordinates','').split() if n in out)
+      out[var.name] = xr.DataArray(data=array, coords=coords, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
+
+    # Construct the Dataset from all the variables.
+    out = xr.Dataset(out)
+
+    # Make the time dimension unlimited when writing to netCDF.
+    out.encoding['unlimited_dims'] = ('time',)
+
+    return out
 

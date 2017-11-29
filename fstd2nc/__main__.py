@@ -33,6 +33,8 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
+  parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units for the output time axis.  Default is %(default)s.'))
+  parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the RPN file.'))
   parser.add_argument('--msglvl', choices=['0','DEBUG','2','INFORM','4','WARNIN','6','ERRORS','8','FATALE','10','SYSTEM','CATAST'], default='WARNIN', help=_('How much information to print to stdout during the conversion.  Default is %(default)s.'))
   parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
   parser.add_argument('--zlib', action='store_true', help=_("Turn on compression for the netCDF file.  Only works for NETCDF4 and NETCDF4_CLASSIC formats."))
@@ -43,11 +45,14 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   args = vars(args)
   infiles = args.pop('infile')
   outfile = args.pop('outfile')
+  time_units = args.pop('time_units')
+  reference_date = args.pop('reference_date')
   msglvl = args.pop('msglvl')
   nc_format = args.pop('nc_format')
   zlib = args.pop('zlib')
   force = args.pop('force')
   no_history = args.pop('no_history')
+  progress = args.get('progress',False)
 
   # Apply message level criteria.
   try:
@@ -94,7 +99,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.write_nc_file(outfile, nc_format, global_metadata, zlib=zlib)
+  buf.write_nc_file(outfile, nc_format, time_units=time_units, reference_date=reference_date, global_metadata=global_metadata, zlib=zlib, progress=progress)
 
 # Command-line invocation with error trapping.
 # Hides the Python stack trace when the user aborts the command.

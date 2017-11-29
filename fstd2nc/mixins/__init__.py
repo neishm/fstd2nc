@@ -282,9 +282,16 @@ class Buffer_Base (object):
     from glob import glob, has_magic
     import os
     import warnings
+    from threading import Lock
 
-    self._progress = progress
-    self._Bar = _ProgressBar if progress is True else _FakeBar
+    # Define a lock for controlling threaded access to the RPN file(s).
+    # This is necessary because we can only open a limited number of files
+    # at a time, so need to control which ones are opened and available in
+    # a thread-safe way.
+    self._lock = Lock()
+
+    # Set up a progress bar for scanning the input files.
+    Bar = _ProgressBar if progress is True else _FakeBar
 
     self._minimal_metadata = minimal_metadata
     if not ignore_typvar:
@@ -319,7 +326,7 @@ class Buffer_Base (object):
 
     # Show a progress bar when there are multiple input files.
     if len(expanded_infiles) > 1:
-      expanded_infiles = self._Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
+      expanded_infiles = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
 
     for infile, f in expanded_infiles:
       if not os.path.exists(f) or not isFST(f):
@@ -639,16 +646,18 @@ class Buffer_Base (object):
       if 'datyp' in rec_id and 'nbits' in rec_id:
         dtype = dtype_fst2numpy(rec_id['datyp'],rec_id['nbits'])
 
-    if isinstance(rec_id,dict):
-      # If we were given a dict, assume it's for a valid open file.
-      key = rec_id['key']
-    else:
-      # Otherwise, need to open the file and get the proper key.
-      file_id = self._headers['file_id'][rec_id]
-      self._open(file_id)
-      key = int(self._headers['key'][rec_id]<<10) + self._opened_librmn_index
+    # Lock the opened file so another thread doesn't close it.
+    with self._lock:
+      if isinstance(rec_id,dict):
+        # If we were given a dict, assume it's for a valid open file.
+        key = rec_id['key']
+      else:
+        # Otherwise, need to open the file and get the proper key.
+        file_id = self._headers['file_id'][rec_id]
+        self._open(file_id)
+        key = int(self._headers['key'][rec_id]<<10) + self._opened_librmn_index
 
-    return fstluk (key, dtype, rank, dataArray)
+      return fstluk (key, dtype, rank, dataArray)
 
   #
   ###############################################
