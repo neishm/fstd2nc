@@ -19,13 +19,13 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 
 #################################################
 # Mixin for selecting particular fields.
 
-class SelectVars (Buffer_Base):
+class SelectVars (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(SelectVars,cls)._cmdline_args(parser)

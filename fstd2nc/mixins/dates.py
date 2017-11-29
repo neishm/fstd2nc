@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 
 # Convert an RPN date stamp to datetime object.
@@ -38,7 +38,7 @@ def stamp2datetime (date):
 #################################################
 # Mixin for handling dates/times.
 
-class Dates (Buffer_Base):
+class Dates (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(Dates,cls)._cmdline_args(parser)

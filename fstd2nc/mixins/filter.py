@@ -19,13 +19,13 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 
 #################################################
 # Mixin for pre-filtering the RPN file records.
 
-class FilterRecords (Buffer_Base):
+class FilterRecords (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(FilterRecords,cls)._cmdline_args(parser)

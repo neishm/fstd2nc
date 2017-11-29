@@ -19,13 +19,13 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 
 #################################################
 # Mixin for handling masks.
 
-class Masks (Buffer_Base):
+class Masks (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(Masks,cls)._cmdline_args(parser)

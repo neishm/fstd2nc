@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 #################################################
 # Miscellaneous mixins that don't fit anywhere else.
@@ -28,7 +28,7 @@ from fstd2nc.mixins import Buffer_Base
 #################################################
 # Remove extraneous dimensions from the output.
 
-class NoNK (Buffer_Base):
+class NoNK (BufferBase):
   def _iter (self):
     for var in super(NoNK,self)._iter():
       if 'k' in var.axes and len(var.axes['k']) == 1:

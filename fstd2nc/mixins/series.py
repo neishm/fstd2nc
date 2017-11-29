@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 
 #################################################
@@ -49,7 +49,7 @@ from fstd2nc.mixins import Buffer_Base
 #   with one extra level?
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
-class Series (Buffer_Base):
+class Series (BufferBase):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(Series,cls).__new__(cls, *args, **kwargs)

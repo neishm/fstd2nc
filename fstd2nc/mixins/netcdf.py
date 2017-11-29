@@ -19,12 +19,12 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 #################################################
 # Mixin for adding netCDF metadata to the variables
 
-class netCDF_Atts (Buffer_Base):
+class netCDF_Atts (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     import argparse
@@ -83,7 +83,7 @@ class netCDF_Atts (Buffer_Base):
 #################################################
 # Mixin for reading/writing FSTD data from/to netCDF files.
 
-class netCDF_IO (Buffer_Base):
+class netCDF_IO (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     self._unique_names = kwargs.pop('unique_names',True)

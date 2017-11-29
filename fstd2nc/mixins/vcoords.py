@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 # Decode ip1 information
 from fstd2nc.mixins import vectorize
@@ -39,7 +39,7 @@ def decode_ip1 (ip1):
 #################################################
 # Mixin for handling vertical coordinates.
 
-class VCoords (Buffer_Base):
+class VCoords (BufferBase):
   _vcoord_nomvars = ('HY','!!')
 
   # Need to extend _headers_dtype before __init__.

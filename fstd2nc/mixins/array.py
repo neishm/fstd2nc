@@ -19,12 +19,12 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 #################################################
 # Provide an xarray+dask interface for the FSTD data.
 
-class XArray (Buffer_Base):
+class XArray (BufferBase):
 
   # The interface for getting chunks into dask.
   def _read_chunk (self, rec_id, shape, dtype):

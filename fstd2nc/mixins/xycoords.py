@@ -19,7 +19,7 @@
 ###############################################################################
 
 from fstd2nc.stdout import _, info, warn, error
-from fstd2nc.mixins import Buffer_Base
+from fstd2nc.mixins import BufferBase
 
 
 # Modify gdll to handle supergrids.
@@ -65,7 +65,7 @@ def gdgaxes (gdid):
 #################################################
 # Mixin for handling lat/lon coordinates.
 
-class XYCoords (Buffer_Base):
+class XYCoords (BufferBase):
   # Special records that contain coordinate info.
   # We don't want to output these directly as variables, need to decode first.
   _xycoord_nomvars = ('^^','>>','^>')
