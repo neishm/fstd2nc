@@ -107,9 +107,34 @@ dataset['P0'].attrs['units'] = 'Pa'
 dataset.to_netcdf("myfile.nc")
 ```
 
+Installing
+==========
+
+The easiest way to install is using [pip](https://pip.pypa.io/en/stable):
+```
+pip install fstd2nc
+```
+
+If you're processing many input files into a single netCDF file, you could get some useful features (progress bar, quick file scans) by running:
+```
+pip install fstd2nc[manyfiles]
+```
+
+
 Using in a Pydap server
 =======================
+
 This package includes a handler for [Pydap](https://github.com/pydap/pydap), which enables you to serve your FSTD files via the OPeNDAP protocol.
+
+To install all the pre-requisites:
+```
+pip install pydap fstd2nc[dap]
+```
+
+You can then test it by running
+```
+pydap -d [your data directory]
+```
 
 
 Requirements
