@@ -26,6 +26,7 @@ Serve RPN standard files through a pydap server.
 def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
   from fstd2nc import Buffer
   from fstd2nc.mixins import _var_type
+  from fstd2nc.mixins.netcdf import netCDF_IO
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename, getmtime
   import numpy as np
@@ -82,6 +83,7 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
 
   # Split into vars / dims.
   buf = list(buf)
+  map(netCDF_IO._encode_var,buf)
   variables = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
   dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
 

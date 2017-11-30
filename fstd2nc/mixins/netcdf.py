@@ -206,6 +206,27 @@ class netCDF_IO (BufferBase):
         for n in internal_meta:
           var.atts.pop(n,None)
 
+  # Encode the data for use in netCDF.
+  @staticmethod
+  def _encode_var (var, time_units='hours', reference_date=None):
+    from fstd2nc.mixins import _var_type
+    from netCDF4 import date2num
+    import numpy as np
+    from datetime import datetime
+    # Reference date for the output file.
+    if reference_date is not None:
+      try:
+        reference_date = datetime.strptime(reference_date,'%Y-%m-%d')
+      except ValueError:
+        error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(reference_date,_('YYYY-MM-DD')))
+
+    # Modify time axes to be relative units instead of datetime objects.
+    if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
+       # Convert from np.datetime64 to datetime.datetime
+      var.array = var.array.tolist()
+      units = '%s since %s'%(time_units, reference_date or var.array[0])
+      var.atts.update(units=units)
+      var.array = np.asarray(date2num(var.array,units=units))
 
   def write_nc_file (self, filename, nc_format='NETCDF4', time_units='hours', reference_date=None, global_metadata=None, zlib=False, progress=False):
     """
@@ -213,18 +234,10 @@ class netCDF_IO (BufferBase):
     Requires the netCDF4 package.
     """
     from fstd2nc.mixins import _var_type, _ProgressBar, _FakeBar
-    from netCDF4 import Dataset, date2num
+    from netCDF4 import Dataset
     import numpy as np
-    from datetime import datetime
 
     f = Dataset(filename, "w", format=nc_format)
-
-    # Reference date for the output file.
-    if reference_date is not None:
-      try:
-        reference_date = datetime.strptime(reference_date,'%Y-%m-%d')
-      except ValueError:
-        error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(reference_date,_('YYYY-MM-DD')))
 
     # Apply global metadata (from config files and global_metadata argument).
     if 'global' in getattr(self,'_metadata',{}):
@@ -240,13 +253,7 @@ class netCDF_IO (BufferBase):
 
     for var in self._iter():
 
-      # Modify time axes to be relative units instead of datetime objects.
-      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
-         # Convert from np.datetime64 to datetime.datetime
-        var.array = var.array.tolist()
-        units = '%s since %s'%(time_units, reference_date or var.array[0])
-        var.atts.update(units=units)
-        var.array = np.asarray(date2num(var.array,units=units))
+      self._encode_var(var, time_units, reference_date)
 
       for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
