@@ -82,10 +82,10 @@ data = fstd2nc.Buffer("myfile.fst", minimal_metadata=True, vars=['TT','HU'])
 data.write_nc_file("myfile.nc", reference_date='2000-01-01')
 ```
 
-Interfacing with [xarray](http://xarray.pydata.org)
+Interfacing with xarray
 ---------------------------------------------------------------------------------
 
-For more complicated conversions, you can manipulate the data as an [xarray](http://xarray.pydata.org) object:
+For more complicated conversions, you can manipulate the data as an `xarray.Dataset` object:
 ```python
 import fstd2nc
 
@@ -115,5 +115,5 @@ For reading large numbers of input files (>100), this utility can leverage [pand
 
 The [progress](https://github.com/verigak/progress) module is required in order to use the `--progress` option.
 
-The `.to_xarray()` Python method requires the [xarray](http://xarray.pydata.org) and [dask](http://dask.pydata.org) packages.
+The `.to_xarray()` Python method requires the [xarray](https://github.com/pydata/xarray) and [dask](https://github.com/dask/dask) packages.
 
