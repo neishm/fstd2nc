@@ -60,26 +60,47 @@ optional arguments:
                         metadata.
 ```
 
-From Python
------------
-**Simple conversion to netCDF:**
+Using in a Python script
+========================
+
+Simple conversion
+--------------------------------------
 ```python
 import fstd2nc
 data = fstd2nc.Buffer("myfile.fst")
 data.write_nc_file("myfile.nc")
 ```
-**More complicated conversion using an [xarray](http://xarray.pydata.org) `Dataset` object:**
+
+You can control `fstd2nc.Buffer` using parameters similar to the command-line arguments.  The usual convention is *--arg-name* from the command-line would be passed as *arg_name* from Python.
+
+For example:
+```python
+import fstd2nc
+# Strip out FSTD metadata from the dataset, and select only TT,HU variables.
+data = fstd2nc.Buffer("myfile.fst", minimal_metadata=True, vars=['TT','HU'])
+# Set the reference date to Jan 1, 2000 in the netCDF file.
+data.write_nc_file("myfile.nc", reference_date='2000-01-01')
+```
+
+Interfacing with [xarray](http://xarray.pydata.org)
+---------------------------------------------------------------------------------
+
+For more complicated conversions, you can manipulate the data as an [xarray](http://xarray.pydata.org) object:
 ```python
 import fstd2nc
 
-# Open the FSTD file.
-data = fstd2nc.Buffer("myfile.fst")
+# Open the FSTD file, and use dates of validity for the time axis.
+data = fstd2nc.Buffer("myfile.fst", squash_forecasts=True)
 
 # Access the data as an xarray.Dataset object.
 dataset = data.to_xarray()
 print (dataset)
 
-# (Can manipulate the dataset here)
+# Convert surface pressure to Pa.
+dataset['P0'] *= 100
+dataset['P0'].attrs['units'] = 'Pa'
+
+# (Can further manipulate the dataset here)
 # ...
 
 # Write the final result to netCDF using xarray:
