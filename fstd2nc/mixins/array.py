@@ -38,12 +38,15 @@ class XArray (BufferBase):
     from fstd2nc.mixins import _iter_type, _var_type
     import xarray as xr
     from dask import array as da
+    from dask.base import tokenize
     import numpy as np
+    unique_token = tokenize(self._files,self._headers)
     out = dict()
     for var in self._iter():
       if isinstance(var,_var_type):
         array = var.array
       elif isinstance(var,_iter_type):
+        name = var.name+"-"+unique_token
         ndim = len(var.axes)
         shape = tuple(map(len,var.axes.values()))
         ndim_outer = var.record_id.ndim
@@ -51,7 +54,7 @@ class XArray (BufferBase):
         dsk = dict()
         for ind in np.ndindex(var.record_id.shape):
           # Pad index with all dimensions (including inner ones).
-          key = (var.name,) + ind + (0,)*ndim_inner
+          key = (name,) + ind + (0,)*ndim_inner
           chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
           rec_id = var.record_id[ind]
           if rec_id >= 0:
@@ -68,7 +71,7 @@ class XArray (BufferBase):
           chunks.append((1,)*shape[i])
         for i in range(ndim_outer,ndim):
           chunks.append((shape[i],))
-        array = da.Array(dsk, var.name, chunks, var.dtype)
+        array = da.Array(dsk, name, chunks, var.dtype)
       else:
         warn(_("Unhandled type %s - ignoring variable.")%type(var))
         continue
