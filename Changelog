@@ -1,0 +1,91 @@
+Version 0.20171130.0 (Nov 30, 2017)
+	* Faster scanning of input file headers.
+	* New --progress option to show a progress bar for long conversions.
+	* More speed optimizations for RPN date and IP1 value conversions.
+	* Faster determination of dimensions from the record headers, using
+	  pandas package.
+	* Restructured the package so each feature is in a separate Python
+	  module, for easier development.
+	* Added xarray interface to facilitate custom netCDF conversions from
+	  Python.
+
+Version 0.20171103.0 (Nov 3, 2017)
+	* Faster I/O when converting multiple input files.
+
+Version 0.20170922.0 (Sep 22, 2017)
+	* Support for ''scale_factor'' and ''offset'' attributes in metadata
+	  files, as a rudimentary form of unit conversion.
+	* New --zlib option for compression of netCDF files.
+	* Some speed optimizations for converting to netCDF4:
+	  - Chunk size is set equal to FSTD record size.
+	  - FSTD records are read in order, to better utilize buffering /
+	    read-ahead on the input file(s).
+
+Version 0.20170908.0 (Sep 8, 2017)
+	* ''station_id'' axis for series files.
+	* Allow --squash-forecasts to work on series data (only with one date
+	  of origin).
+	* New --subgrid-axis option for splitting supergrids (e.g. yinyang)
+	  into multiple sub-grids that are aligned on a ''subgrid'' axis.
+	* Experimental [https://github.com/pydap/pydap pydap] plugin for
+	  browsing FSTD files through a web interface.  To test it:
+	  python -m pydap.wsgi.app
+	* Allow directory names and wildcard patterns (surrounded by quotes)
+	  as inputs to the converter.
+	* Speed optimizations for RPN date and IP1 value conversions.
+	* Speed optimizations for data type detection (dtype_fst2numpy).
+	* Speed optimizations for --filter option
+	* Experimental (and undocumented) --quick-scan option to quickly
+	  extract record headers from input files.  Gives a good speed boost
+	  when reading many input files, but relies on some internal structures 
+	  of librmn.
+	* New --msglvl option to control verbosity of librmn messages.
+	  Default is changed to display only warning / error.  Old behaviour
+	  can be restored by using --msglvl=INFORM.
+
+Version 0.20170728 (Jul 28, 2017)
+	* Make ''time'' dimension unlimited in the netCDF file.
+	* New --nc-format parameter to control the type of netCDF file being
+	  created.
+	* Verify input file(s) are RPN files before trying to convert them.
+	* New --force option to overwrite the netCDF file if it already exists.
+	* New --filter option to select records based on some criteria
+	  (e.g. "--filter ip1==24" to select 24-hour forecasts only).
+	* Some decoding of vertical coordinate for series data.
+	* Make sure nomvars are valid netCDF variable names, otherwise prepend
+	  an underscore to them so the netCDF library doesn't complain.
+	* Remove degenerate ni/nj axes from the output file, and remove
+	  degenerate time axes which contain dummy RPN dates.
+	* Support for 'U' grids ("supergrids").
+
+Version 0.20170712.1 (Jul 13, 2017)
+	* Bug fix for station name decoding (series files).
+	* New --metadata-file option for adding arbitrary metadata to the
+	  netCDF file.
+	* Wrap all messages with gettext, to facilitate translation to French.  
+	  Note: no actual translations done yet.
+	* New --minimal-metadata option to strip out FSTD-specific metadata
+	  from the netCDF file (such as kind, datyp, npas, etc.).
+	* Support for multiple input files.
+	* Write the command invocation into a global "history" attribute of
+	  the netCDF file.  Can be disabled by new option --no-history.
+	* When fudging variable names to make them unique in the output file,
+	  use more context-specific modifiers such as etiket, typvar, etc.
+	  instead of an integer counter.
+	* Warn when variable / dimension names have to be modified.
+	* New --ignore-typvar option to allow records with different typvars
+	  to be combined into a single variable.
+	* New --reference-date option to control the reference date of the
+	  time axis.
+
+Version 0.20170427 (Apr 28, 2017)
+	* Check if netCDF output file already exists, and prompt the user
+	  before overwriting.
+	* Check if input file exists before trying to convert it.
+	* Some support for series files.
+	* Some more metadata for identifying horizontal and time dimensions.
+	* Some support for masked data.  Detects records that have an '@' in
+	  their typvar, and looks for a corresponding mask record (typvar='@@').
+	* New --ignore-etiket option to allow records with different etikets
+	  to be combined into a single output variable.
+
