@@ -108,12 +108,33 @@ class netCDF_IO (BufferBase):
     super(netCDF_IO,self).__init__(*args,**kwargs)
 
   def _iter (self):
+    from fstd2nc.mixins import _var_type
+    from datetime import datetime
+    import numpy as np
+    from netCDF4 import date2num
+
+    if self._reference_date is None:
+      reference_date = None
+    else:
+      reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
+
     varlist = super(netCDF_IO,self)._iter()
     if self._unique_names:
       varlist = list(varlist)
       self._fix_names(varlist)
+
     for var in varlist:
+
+      # Modify time axes to be relative units instead of datetime objects.
+      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
+         # Convert from np.datetime64 to datetime.datetime
+        var.array = var.array.tolist()
+        units = '%s since %s'%(self._time_units, reference_date or var.array[0])
+        var.atts.update(units=units)
+        var.array = np.asarray(date2num(var.array,units=units))
+
       yield var
+
 
   def _fix_names (self, varlist):
     from fstd2nc.mixins import _var_type
@@ -231,17 +252,9 @@ class netCDF_IO (BufferBase):
     Requires the netCDF4 package.
     """
     from fstd2nc.mixins import _var_type, _ProgressBar, _FakeBar
-    from netCDF4 import Dataset, date2num
+    from netCDF4 import Dataset
     import numpy as np
-    from datetime import datetime
-
     f = Dataset(filename, "w", format=nc_format)
-
-    # Reference date for the output file.
-    if self._reference_date is None:
-      reference_date = None
-    else:
-      reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
     # Apply global metadata (from config files and global_metadata argument).
     if 'global' in getattr(self,'_metadata',{}):
@@ -256,14 +269,6 @@ class netCDF_IO (BufferBase):
     io = []
 
     for var in self._iter():
-
-      # Modify time axes to be relative units instead of datetime objects.
-      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
-         # Convert from np.datetime64 to datetime.datetime
-        var.array = var.array.tolist()
-        units = '%s since %s'%(self._time_units, reference_date or var.array[0])
-        var.atts.update(units=units)
-        var.array = np.asarray(date2num(var.array,units=units))
 
       for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
