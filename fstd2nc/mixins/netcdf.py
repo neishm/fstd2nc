@@ -84,8 +84,26 @@ class netCDF_Atts (BufferBase):
 # Mixin for reading/writing FSTD data from/to netCDF files.
 
 class netCDF_IO (BufferBase):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(netCDF_IO,cls)._cmdline_args(parser)
+    parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units for the output time axis.  Default is %(default)s.'))
+    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the RPN file.'))
+
+  @classmethod
+  def _check_args (cls, parser, args):
+    from datetime import datetime
+    super(netCDF_IO,cls)._check_args(parser,args)
+    # Parse the reference date into a datetime object.
+    if args.reference_date is not None:
+      try:
+        datetime.strptime(args.reference_date,'%Y-%m-%d')
+      except ValueError:
+        parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
 
   def __init__ (self, *args, **kwargs):
+    self._time_units = kwargs.pop('time_units','hours')
+    self._reference_date = kwargs.pop('reference_date',None)
     self._unique_names = kwargs.pop('unique_names',True)
     super(netCDF_IO,self).__init__(*args,**kwargs)
 
@@ -207,7 +225,7 @@ class netCDF_IO (BufferBase):
           var.atts.pop(n,None)
 
 
-  def write_nc_file (self, filename, nc_format='NETCDF4', time_units='hours', reference_date=None, global_metadata=None, zlib=False, progress=False):
+  def write_nc_file (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, progress=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
@@ -220,11 +238,10 @@ class netCDF_IO (BufferBase):
     f = Dataset(filename, "w", format=nc_format)
 
     # Reference date for the output file.
-    if reference_date is not None:
-      try:
-        reference_date = datetime.strptime(reference_date,'%Y-%m-%d')
-      except ValueError:
-        error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(reference_date,_('YYYY-MM-DD')))
+    if self._reference_date is None:
+      reference_date = None
+    else:
+      reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
     # Apply global metadata (from config files and global_metadata argument).
     if 'global' in getattr(self,'_metadata',{}):
@@ -244,7 +261,7 @@ class netCDF_IO (BufferBase):
       if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
          # Convert from np.datetime64 to datetime.datetime
         var.array = var.array.tolist()
-        units = '%s since %s'%(time_units, reference_date or var.array[0])
+        units = '%s since %s'%(self._time_units, reference_date or var.array[0])
         var.atts.update(units=units)
         var.array = np.asarray(date2num(var.array,units=units))
 
