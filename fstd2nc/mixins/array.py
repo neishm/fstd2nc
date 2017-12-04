@@ -81,6 +81,8 @@ class XArray (BufferBase):
 
     # Construct the Dataset from all the variables.
     out = xr.Dataset(out)
+    # Decode CF metadata
+    out = xr.conventions.decode_cf(out)
 
     # Make the time dimension unlimited when writing to netCDF.
     out.encoding['unlimited_dims'] = ('time',)
