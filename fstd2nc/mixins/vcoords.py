@@ -231,6 +231,7 @@ class VCoords (BufferBase):
         axes = OrderedDict([(name,levels)])
         if len(ancillary_variables) > 0:
           atts['ancillary_variables'] = ' '.join(v.name for v in ancillary_variables)
+          atts['coordinates'] = atts['ancillary_variables']
         array = np.asarray(levels)
         vaxes[(levels,kind)] = _var_type(name,atts,axes,array)
         yield vaxes[(levels,kind)]
