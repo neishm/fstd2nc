@@ -280,7 +280,9 @@ class XYCoords (BufferBase):
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
       if 'lat' not in var.axes or 'lon' not in var.axes:
-        var.atts['coordinates'] = 'lon lat'
+        coordinates = var.atts.get('coordinates','').split()
+        coordinates.extend(['lon','lat'])
+        var.atts['coordinates'] = ' '.join(coordinates)
 
       yield var
 

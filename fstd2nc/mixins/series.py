@@ -103,6 +103,7 @@ class Series (BufferBase):
     forecast_hours = None
     created_time_axis = False  # To only create squashed time axis once.
                                # (for --squashed-forecasts option).
+    station = None             # To attach the station names as coordinates.
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
@@ -140,6 +141,10 @@ class Series (BufferBase):
           yield forecast
 
     for var in super(Series,self)._iter():
+
+      # Hook in the station names as coordinate information.
+      if 'station_id' in var.axes and station is not None:
+        var.atts['coordinates'] = 'station'
 
       if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
         yield var
