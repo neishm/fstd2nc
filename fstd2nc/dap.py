@@ -110,7 +110,7 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
     # Handle unlimited dimension.
     if dim.name == 'time':
       dataset.attributes['DODS_EXTRA'] = {
-        'Unlimited_Dimension': dim,
+        'Unlimited_Dimension': dim.name,
       }
 
   return dataset
