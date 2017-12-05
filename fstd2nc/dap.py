@@ -151,7 +151,7 @@ class FST_Handler(BaseHandler):
 # extensions for the handler.
 from pydap.handlers.lib import get_handler as pydap_get_handler
 def get_handler(filepath, handlers=None):
-  from rpnpy.librmn.fstd98 import isFST
+  from fstd2nc.extra import maybeFST as isFST
   if isFST(str(filepath)):
     return FST_Handler(str(filepath))
   return pydap_get_handler(filepath, handlers)
