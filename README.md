@@ -90,7 +90,7 @@ For more complicated conversions, you can manipulate the data as an `xarray.Data
 import fstd2nc
 
 # Open the FSTD file, and use dates of validity for the time axis.
-data = fstd2nc.Buffer("myfile.fst", squash_forecasts=True)
+data = fstd2nc.Buffer("myfile.fst", datev=True)
 
 # Access the data as an xarray.Dataset object.
 dataset = data.to_xarray()

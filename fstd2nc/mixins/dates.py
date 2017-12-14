@@ -52,7 +52,7 @@ class Dates (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
-    self._squash_forecasts = kwargs.pop('squash_forecasts',False)
+    self._squash_forecasts = kwargs.pop('squash_forecasts',False) or kwargs.pop('datev',False)
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
     else:
