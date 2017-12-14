@@ -203,7 +203,10 @@ class BufferBase (object):
     from fstd2nc import __version__
     from argparse import SUPPRESS
     parser.add_argument('--version', action='version', version=__version__)
-    parser.add_argument('--progress', action='store_true', help=_('Display a progress bar during the conversion.  Requires the "progress" module.'))
+    group = parser.add_mutually_exclusive_group()
+    _('Display a progress bar during the conversion, if the "progress" module is installed.')
+    group.add_argument('--progress', action='store_true', default=True, help=SUPPRESS)
+    group.add_argument('--no-progress', action='store_false', dest='progress', help=_('Disable the progress bar.'))
     parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))

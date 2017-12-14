@@ -13,8 +13,7 @@ python -m fstd2nc [options] <infile> <outfile>
 optional arguments:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
-  --progress            Display a progress bar during the conversion. Requires
-                        the "progress" module.
+  --no-progress         Disable the progress bar.
   --minimal-metadata    Don't include RPN record attributes and other internal
                         information in the output metadata.
   --ignore-typvar       Tells the converter to ignore the typvar when deciding
