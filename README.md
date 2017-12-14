@@ -29,7 +29,8 @@ optional arguments:
                         The fill value to use for masked (missing) data. Gets
                         stored as '_FillValue' attribute in the metadata.
                         Default is '1e+30'.
-  --squash-forecasts    Use the date of validity for the "time" axis.
+  --datev, --squash-forecasts
+                        Use the date of validity for the "time" axis.
                         Otherwise, the default is to use the date of original
                         analysis, and the forecast length goes in a "forecast"
                         axis.
