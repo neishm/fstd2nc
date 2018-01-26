@@ -399,7 +399,7 @@ class BufferBase (object):
     # Suppress FutureWarning from numpy about doing this.  Probably benign...
     with warnings.catch_warnings():
       warnings.simplefilter("ignore")
-      meta_keys = self._headers[meta_mask][list(self._var_id)+['ig1','ig2','ig3','ig4']]
+      meta_keys = self._headers.data[meta_mask][list(self._var_id)+['ig1','ig2','ig3','ig4']]
     meta_keys, ind = np.unique(meta_keys, return_index=True)
     meta_recids = meta_recids[ind]
     # Find the files that give these unique coord records.
@@ -442,7 +442,7 @@ class BufferBase (object):
     # Suppress FutureWarning from numpy about doing this.  Probably benign...
     with warnings.catch_warnings():
       warnings.simplefilter("ignore")
-      all_var_ids = records[list(self._var_id)]
+      all_var_ids = records.data[list(self._var_id)]
 
     # Do a pre-processing step to remove ids that are identical to the one
     # immediately before it.
@@ -523,7 +523,7 @@ class BufferBase (object):
       # Determine the optimal data type to use.
       # First, find unique combos of datyp, nbits
       # (want to minimize calls to dtype_fst2numpy).
-      datyp, nbits = zip(*np.unique(var_records[['datyp','nbits']]))
+      datyp, nbits = zip(*np.unique(var_records.data[['datyp','nbits']]))
       datyp = map(int,datyp)
       nbits = map(int,nbits)
       dtype_list = map(dtype_fst2numpy, datyp, nbits)

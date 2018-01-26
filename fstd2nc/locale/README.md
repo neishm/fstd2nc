@@ -17,5 +17,5 @@ export CMCLNG=francais
 python fstd2nc.py --help
 ```
 
-To contribute your translations back to the project, please create a commit with your ```fr_CA.po``` file, and submit a merge request.
+To contribute your translations back to the project, please create a commit with your ```fr_CA.po``` file, and submit a pull request.
 
