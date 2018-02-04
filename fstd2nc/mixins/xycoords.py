@@ -249,7 +249,7 @@ class XYCoords (BufferBase):
             grd = {}
           # Everything else should be handled by ezqkdef.
           else:
-            grd = readGrid(self._meta_funit, var.atts)
+            grd = readGrid(self._meta_funit, var.atts.copy())
             if grd['grref'].upper() != 'E' :
               gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
               ll = gdll(gdid)
@@ -391,7 +391,7 @@ class XYCoords (BufferBase):
         coordinates.extend(['lon','lat'])
         var.atts['coordinates'] = ' '.join(coordinates)
 
-      if gridmaps:
+      if key in gridmaps:
         var.atts['grid_mapping'] = gridmaps[key]
 
       yield var
