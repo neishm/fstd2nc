@@ -60,6 +60,96 @@ def gdgaxes (gdid):
   ay = np.concatenate(ay, axis=1)
   return {'ax':ax, 'ay':ay}
 
+# Base class for grid mapping classes
+class GridMap(object):
+  # Mean radius of the Earth used in OGC CRS (coord. ref. system) descriptions
+  # Note that Earth's mean radius = 6371000. m in librmn!
+  _earth_radius = 6371229. 
+  def __init__(self, grd):
+#   grd is a dictionary returned by readGrid containing grid parameters 
+    from collections import OrderedDict
+    self._grd = grd
+    self._name = ''
+    self._atts = OrderedDict()
+    self._xaxisatts = OrderedDict()
+    self._yaxisatts = OrderedDict()
+# Factory method that creates various types of grid mapping objects
+  @classmethod
+  def gen_gmap(cls, grd):
+    if grd['grref'].upper() == 'E' :
+      return RotLatLon(grd)
+    else:
+      pass
+
+class RotLatLon(GridMap):
+  def __init__(self, *args, **kwargs):
+    from rpnpy.librmn.all import egrid_rll2ll, egrid_ll2rll
+    super(RotLatLon,self).__init__(*args,**kwargs)
+    # Grid mapping variable name
+    self._name = 'rotated_pole'
+    # Calculate geographical latitude and longitude of rotated grid's North Pole
+    (__rlat_RNP, __rlon_RNP) = (90., 0.)
+    (self._grid_north_pole_latitude,self._grid_north_pole_longitude) = \
+       egrid_rll2ll(self._grd['xlat1'], self._grd['xlon1'], 
+       self._grd['xlat2'], self._grd['xlon2'], __rlat_RNP, __rlon_RNP)
+    # Calculate rotated-grid latitude and longitude of the geographical North Pole
+    (__lat_NP, __lon_NP) = (90., 0.)
+    (self._north_pole_grid_latitude,self._north_pole_grid_longitude) = \
+       egrid_ll2rll(self._grd['xlat1'], self._grd['xlon1'], 
+       self._grd['xlat2'], self._grd['xlon2'], __lat_NP, __lon_NP)
+    self._ax = self._grd['ax'][:,0] 
+    # Offset applied to bring rotated longitude in range [-180,180]
+    # Done to avoid crossing the dateline and representation problems 
+    # in some software (e.g. IDV, Panoply, Iris)
+    if self._ax.max() > 180. :
+      self._ax = self._ax - self._north_pole_grid_longitude 
+    self._ay = self._grd['ay'][0,:]
+  def gen_gmapvar(self):
+    from fstd2nc.mixins import _var_type
+    import numpy as np
+    self._atts['grid_mapping_name'] = 'rotated_latitude_longitude'
+    self._atts['earth_radius'] = self._earth_radius
+    self._atts['grid_north_pole_latitude'] = self._grid_north_pole_latitude
+    self._atts['grid_north_pole_longitude'] = self._grid_north_pole_longitude
+#    self._atts['north_pole_grid_longitude'] = self._north_pole_grid_longitude 
+#   Set the optional grid mapping parameter 'north_pole_grid_longitude' to 0 to avoid 
+#   some problems, such as the conversion from netcdf to grib performed by some tools
+#    self._atts['north_pole_grid_longitude'] = 0.
+#    self._atts['longitude_of_prime_meridian'] = 0.
+    # Grid mapping variable
+    self.gmap = _var_type(self._name,self._atts,{},np.array(""))
+    return self.gmap
+  # Generate latitudes and longitudes in rotated pole grid 
+  # and true latitudes and longitudes
+  def gen_xyll(self):
+    from collections import OrderedDict
+    from rpnpy.librmn.all import gdll
+    from fstd2nc.mixins import _var_type
+    self._xaxisatts['long_name'] = 'longitude in rotated pole grid'
+    self._xaxisatts['standard_name'] = 'grid_longitude'
+    self._xaxisatts['units'] = 'degrees'
+    self._xaxisatts['axis'] = 'X'
+    self._yaxisatts['long_name'] = 'latitude in rotated pole grid'
+    self._yaxisatts['standard_name'] = 'grid_latitude'
+    self._yaxisatts['units'] = 'degrees'
+    self._yaxisatts['axis'] = 'Y'
+    self.xaxis = _var_type('rlon',self._xaxisatts,{'rlon':tuple(self._ax)},self._ax)
+    self.yaxis = _var_type('rlat',self._yaxisatts,{'rlat':tuple(self._ay)},self._ay) 
+    self.gridaxes = [('rlat',tuple(self.yaxis.array)),('rlon',tuple(self.xaxis.array))]
+    ll = gdll(self._grd['id'])
+    self._lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
+    self._lonatts = OrderedDict()
+    self._lonatts['long_name'] = 'longitude'
+    self._lonatts['standard_name'] = 'longitude'
+    self._lonatts['units'] = 'degrees_east'
+    self._latarray = ll['lat'].transpose() # Switch from Fortran to C order.
+    self._latatts = OrderedDict()
+    self._latatts['long_name'] = 'latitude'
+    self._latatts['standard_name'] = 'latitude'
+    self._latatts['units'] = 'degrees_north'
+    self.lon = _var_type('lon',self._lonatts,OrderedDict(self.gridaxes),self._lonarray)
+    self.lat = _var_type('lat',self._latatts,OrderedDict(self.gridaxes),self._latarray)
+    return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
 
 
 #################################################
@@ -114,10 +204,12 @@ class XYCoords (BufferBase):
     from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
+    from rpnpy.librmn.all import readGrid
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
+    gridmaps = OrderedDict()
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
@@ -154,106 +246,121 @@ class XYCoords (BufferBase):
             lat = self._find_coord(var,'^^')['d'].squeeze(axis=2)
             lon = self._find_coord(var,'>>')['d'].squeeze(axis=2)
             ll = {'lat':lat, 'lon':lon}
+            grd = {}
           # Everything else should be handled by ezqkdef.
           else:
-            gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
-            ll = gdll(gdid)
+            grd = readGrid(self._meta_funit, var.atts.copy())
+            if grd['grref'].upper() != 'E' :
+              gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
+              ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
           warn(_("Unable to get grid info for '%s'")%var.name)
           yield var
           continue
 
 
-        # Find X/Y coordinates (if applicable).
+        # Find projection's X/Y coordinates (if applicable).
         try:
           # Can't do this for direct grids (don't have a gdid defined).
           if grtyp in self._direct_grids: raise TypeError
-          xycoords = gdgaxes(gdid)
-          ax = xycoords['ax'].transpose()
-          ay = xycoords['ay'].transpose()
-          # Convert from degenerate 2D arrays to 1D arrays.
-          ax = ax[0,:]
-          ay = ay[:,0]
-          xaxis = _var_type('x',{'axis':'X'},{'x':tuple(ax)},ax)
-          yaxis = _var_type('y',{'axis':'Y'},{'y':tuple(ay)},ay)
+
+          # Reference grid for current grid is type 'E'
+          if grd['grref'].upper() == 'E' : 
+            gmap = GridMap.gen_gmap(grd)
+            gmapvar = gmap.gen_gmapvar()
+            gridmaps[key] = gmapvar.name
+            yield gmapvar
+            (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll() 
+            yield yaxis
+            yield xaxis
+          else:
+            xycoords = gdgaxes(gdid)
+            ax = xycoords['ax'].transpose()
+            ay = xycoords['ay'].transpose()
+            # Convert from degenerate 2D arrays to 1D arrays.
+            ax = ax[0,:]
+            ay = ay[:,0]
+            xaxis = _var_type('x',{'axis':'X'},{'x':tuple(ax)},ax)
+            yaxis = _var_type('y',{'axis':'Y'},{'y':tuple(ay)},ay)
         except (TypeError,EzscintError):
           # Can't get X/Y coords for this grid?
           xaxis = yaxis = None
 
         # Construct lat/lon fields.
-        latarray = ll['lat'].transpose() # Switch from Fortran to C order.
-        latatts = OrderedDict()
-        latatts['long_name'] = 'latitude'
-        latatts['standard_name'] = 'latitude'
-        latatts['units'] = 'degrees_north'
-        lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
-        lonatts = OrderedDict()
-        lonatts['long_name'] = 'longitude'
-        lonatts['standard_name'] = 'longitude'
-        lonatts['units'] = 'degrees_east'
+        if not grd or ('grref' in grd and grd['grref'].upper() != 'E') : 
+          latarray = ll['lat'].transpose() # Switch from Fortran to C order.
+          latatts = OrderedDict()
+          latatts['long_name'] = 'latitude'
+          latatts['standard_name'] = 'latitude'
+          latatts['units'] = 'degrees_north'
+          lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
+          lonatts = OrderedDict()
+          lonatts['long_name'] = 'longitude'
+          lonatts['standard_name'] = 'longitude'
+          lonatts['units'] = 'degrees_east'
 
-        # Case 1: lat/lon can be resolved into 1D Cartesian coordinates.
-        # Calculate the mean lat/lon arrays in double precision.
-        meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
-        meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
-        if latarray.shape[1] > 1 and lonarray.shape[1] > 1 and np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
-          # Reduce back to single precision for writing out.
-          meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
-          meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
-          # Ensure monotonicity of longitude field.
-          # (gdll may sometimes wrap last longitude to zero).
-          # Taken from old fstd_core.c code.
-          if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
-            meanlon[-1] += 360.
-          latarray = meanlat
-          lonarray = meanlon
-          lat = _var_type('lat',latatts,{'lat':tuple(latarray)},latarray)
-          lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
-          gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
+          # Case 1: lat/lon can be resolved into 1D Cartesian coordinates.
+          # Calculate the mean lat/lon arrays in double precision.
+          meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
+          meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
+          if latarray.shape[1] > 1 and lonarray.shape[1] > 1 and np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
+            # Reduce back to single precision for writing out.
+            meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
+            meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
+            # Ensure monotonicity of longitude field.
+            # (gdll may sometimes wrap last longitude to zero).
+            # Taken from old fstd_core.c code.
+            if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
+              meanlon[-1] += 360.
+            latarray = meanlat
+            lonarray = meanlon
+            lat = _var_type('lat',latatts,{'lat':tuple(latarray)},latarray)
+            lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
+            gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
 
-        # Case 2: lat/lon are series of points.
-        elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.axes or 'station_id' in var.axes):
-          latarray = latarray[0,:]
-          lonarray = lonarray[0,:]
-          # Special case for station data
-          if 'station_id' in var.axes:
-            gridaxes = [('station_id',var.axes['station_id'])]
+          # Case 2: lat/lon are series of points.
+          elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.axes or 'station_id' in var.axes):
+            latarray = latarray[0,:]
+            lonarray = lonarray[0,:]
+            # Special case for station data
+            if 'station_id' in var.axes:
+              gridaxes = [('station_id',var.axes['station_id'])]
+            else:
+              gridaxes = [('i',var.axes['i'])]
+            lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+            lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+
+          # Case 3: General 2D lat/lon fields on X/Y coordinate system.
+          elif xaxis is not None and yaxis is not None:
+            gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
+            # Special case: have supergrid data, and the user wants to split it?
+            if grtyp == 'U' and self._subgrid_axis:
+              ngrids = ezget_nsubgrids(gdid)
+              ny = len(yaxis.array)//ngrids
+              yaxis.array = yaxis.array[:ny]
+              yaxis.axes['y'] = tuple(yaxis.array)
+              gridaxes = [('subgrid',tuple(range(ngrids))), ('y',tuple(yaxis.array)), ('x',tuple(xaxis.array))]
+              latarray = latarray.reshape(ngrids,ny,-1)
+              lonarray = lonarray.reshape(ngrids,ny,-1)
+            if tuple(yaxis.axes.items()) not in coords:
+              yield yaxis
+              coords.add(tuple(yaxis.axes.items()))
+            if tuple(xaxis.axes.items()) not in coords:
+              yield xaxis
+              coords.add(tuple(xaxis.axes.items()))
+            lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+            lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+
+          # Case 4: General 2D lat/lon fields with no coordinate system.
+          elif 'i' in var.axes and 'j' in var.axes:
+            gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
+            lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
+            lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+
           else:
-            gridaxes = [('i',var.axes['i'])]
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
-
-        # Case 3: General 2D lat/lon fields on X/Y coordinate system.
-        elif xaxis is not None and yaxis is not None:
-          gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
-          # Special case: have supergrid data, and the user wants to split it?
-          if grtyp == 'U' and self._subgrid_axis:
-            ngrids = ezget_nsubgrids(gdid)
-            ny = len(yaxis.array)//ngrids
-            yaxis.array = yaxis.array[:ny]
-            yaxis.axes['y'] = tuple(yaxis.array)
-            gridaxes = [('subgrid',tuple(range(ngrids))), ('y',tuple(yaxis.array)), ('x',tuple(xaxis.array))]
-            latarray = latarray.reshape(ngrids,ny,-1)
-            lonarray = lonarray.reshape(ngrids,ny,-1)
-          if tuple(yaxis.axes.items()) not in coords:
-            yield yaxis
-            coords.add(tuple(yaxis.axes.items()))
-          if tuple(xaxis.axes.items()) not in coords:
-            yield xaxis
-            coords.add(tuple(xaxis.axes.items()))
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
-
-        # Case 4: General 2D lat/lon fields with no coordinate system.
-        elif 'i' in var.axes and 'j' in var.axes:
-          gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
-          lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-          lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
-
-        else:
-          warn(_("Unhandled lat/lon coords for '%s'")%var.name)
-          yield var
-          continue
+            warn(_("Unhandled lat/lon coords for '%s'")%var.name)
+            yield var
+            continue
 
         # Sanity check on lat/lon - make sure we have something of the right size.
         if lat.array.shape == tuple(map(len,lat.axes.values())) and lon.array.shape == tuple(map(len,lon.axes.values())):
@@ -264,7 +371,7 @@ class XYCoords (BufferBase):
           warn(_("Wrong shape of lat/lon for '%s'")%var.name)
           yield var
           continue
-
+      
       gridaxes = grids[key]
 
       # Update the var's horizontal coordinates.
@@ -283,6 +390,9 @@ class XYCoords (BufferBase):
         coordinates = var.atts.get('coordinates','').split()
         coordinates.extend(['lon','lat'])
         var.atts['coordinates'] = ' '.join(coordinates)
+
+      if key in gridmaps:
+        var.atts['grid_mapping'] = gridmaps[key]
 
       yield var
 

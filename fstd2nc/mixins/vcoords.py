@@ -127,6 +127,7 @@ class VCoords (BufferBase):
           # sigma [sg] (0.0->1.0)
           name = 'sigma'
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
+          atts['units'] = 'sigma_level'   # units defined for compliancy with COARDS
           atts['positive'] = 'down'
         elif kind == 2:
           # pressure [mb] (millibars)
@@ -137,6 +138,7 @@ class VCoords (BufferBase):
         elif kind == 3:
           # arbitrary code
           name = 'code'
+          atts['units'] = 'level'  # units defined for compliancy with COARDS
           atts.pop('axis',None)  # Not really a vertical axis?
         elif kind == 4:
           # height [M] (metres) with respect to ground level
@@ -146,6 +148,7 @@ class VCoords (BufferBase):
           atts['positive'] = 'up'
         elif kind == 5:
           # hybrid coordinates [hy] (0.0->1.0)
+          atts['units'] = 'level'  # units defined for compliancy with COARDS
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
           # If we're dealing with the old 'HY' records, then we don't match on

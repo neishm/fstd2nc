@@ -73,7 +73,7 @@ class netCDF_Atts (BufferBase):
           axis_renames[orig_name] = var.name
 
       # Check if any of the axes in this variable need to be renamed.
-      axis_names, axis_values = zip(*var.axes.items())
+      axis_names, axis_values = zip(*var.axes.items()) or ([],[])
       axis_names = [axis_renames.get(n,n) for n in axis_names]
       var.axes = OrderedDict(zip(axis_names,axis_values))
 
@@ -124,7 +124,6 @@ class netCDF_IO (BufferBase):
       self._fix_names(varlist)
 
     for var in varlist:
-
       # Modify time axes to be relative units instead of datetime objects.
       if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
          # Convert from np.datetime64 to datetime.datetime
@@ -270,6 +269,11 @@ class netCDF_IO (BufferBase):
 
     for var in self._iter():
 
+      if isinstance(var,_var_type) and not var.axes:
+        v = f.createVariable(var.name,'a1')
+        v.setncatts(var.atts)
+        continue
+        
       for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).
