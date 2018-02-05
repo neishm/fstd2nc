@@ -183,7 +183,7 @@ class Series (BufferBase):
             time = var.axes.pop('time')[0]
             # Convert pandas times (if using pandas for processing the headers)
             time = np.datetime64(time,'s')
-            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(hours=float(h)) for h in var.axes['forecast'])))
+            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in var.axes['forecast'])))
             if not created_time_axis:
               yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
               created_time_axis = True
