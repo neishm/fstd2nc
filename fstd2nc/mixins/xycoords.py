@@ -76,10 +76,48 @@ class GridMap(object):
 # Factory method that creates various types of grid mapping objects
   @classmethod
   def gen_gmap(cls, grd):
-    if grd['grref'].upper() == 'E' :
+    grref = grd['grref'].upper() 
+    if grref == 'E' :
       return RotLatLon(grd)
+    elif grref == 'L' :
+      return LatLon(grd)
     else:
-      pass
+      raise ValueError('Grid mapping variable cannot be created for grids based on grid type %s!' \
+                       % (grref))
+
+class LatLon(GridMap):
+  def __init__(self, *args, **kwargs):
+    super(LatLon,self).__init__(*args,**kwargs)
+    # Grid mapping variable name
+    self._name = 'crs_latlon'
+  def gen_gmapvar(self):
+    from fstd2nc.mixins import _var_type
+    import numpy as np
+    self._atts['grid_mapping_name'] = 'latitude_longitude'
+    self._atts['earth_radius'] = self._earth_radius
+    # Grid mapping variable
+    self.gmap = _var_type(self._name,self._atts,{},np.array(""))
+    return self.gmap     
+  # Generate true latitudes and longitudes
+  def gen_ll(self):    
+    from collections import OrderedDict
+    from rpnpy.librmn.all import gdll 
+    from fstd2nc.mixins import _var_type
+    ll = gdll(self._grd['id'])
+    self._lonarray = ll['lon'][:,0]
+    self._lonatts = OrderedDict()
+    self._lonatts['long_name'] = 'longitude'
+    self._lonatts['standard_name'] = 'longitude'
+    self._lonatts['units'] = 'degrees_east'
+    self._latarray = ll['lat'][0,:]
+    self._latatts = OrderedDict()
+    self._latatts['long_name'] = 'latitude'
+    self._latatts['standard_name'] = 'latitude'
+    self._latatts['units'] = 'degrees_north'
+    self.lon = _var_type('lon',self._lonatts,{'lon':tuple(self._lonarray)},self._lonarray)
+    self.lat = _var_type('lat',self._latatts,{'lat':tuple(self._latarray)},self._latarray)
+    self.gridaxes = [('lat',tuple(self._latarray)),('lon',tuple(self._lonarray))]
+    return (self.gridaxes, self.lon, self.lat)
 
 class RotLatLon(GridMap):
   def __init__(self, *args, **kwargs):
@@ -210,6 +248,8 @@ class XYCoords (BufferBase):
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
     gridmaps = OrderedDict()
+    # Grid mappings will be defined for grids based on the grid types listed in 'grrefs' 
+    grrefs = ['E','L']
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
@@ -250,7 +290,7 @@ class XYCoords (BufferBase):
           # Everything else should be handled by ezqkdef.
           else:
             grd = readGrid(self._meta_funit, var.atts.copy())
-            if grd['grref'].upper() != 'E' :
+            if grd['grref'].upper() in grrefs :
               gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
               ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
@@ -264,15 +304,18 @@ class XYCoords (BufferBase):
           # Can't do this for direct grids (don't have a gdid defined).
           if grtyp in self._direct_grids: raise TypeError
 
-          # Reference grid for current grid is type 'E'
-          if grd['grref'].upper() == 'E' : 
+          # Base grid for current grid is recognized
+          if grd['grref'].upper() in grrefs : 
             gmap = GridMap.gen_gmap(grd)
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar.name
             yield gmapvar
-            (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll() 
-            yield yaxis
-            yield xaxis
+            if grd['grref'].upper() == 'E' : 
+              (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll() 
+              yield yaxis
+              yield xaxis
+            elif grd['grref'].upper() == 'L' :
+              (gridaxes,lon,lat) = gmap.gen_ll() 
           else:
             xycoords = gdgaxes(gdid)
             ax = xycoords['ax'].transpose()
@@ -287,7 +330,7 @@ class XYCoords (BufferBase):
           xaxis = yaxis = None
 
         # Construct lat/lon fields.
-        if not grd or ('grref' in grd and grd['grref'].upper() != 'E') : 
+        if not grd or ('grref' in grd and grd['grref'].upper() not in grrefs) : 
           latarray = ll['lat'].transpose() # Switch from Fortran to C order.
           latatts = OrderedDict()
           latatts['long_name'] = 'latitude'
