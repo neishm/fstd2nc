@@ -42,7 +42,9 @@ class Dates (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(Dates,cls)._cmdline_args(parser)
-    parser.add_argument('--datev', '--squash-forecasts', action='store_true', dest='squash_forecasts', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--datev', '--squash-forecasts', action='store_true', default=True, dest='squash_forecasts', help=_('Use the date of validity for the "time" axis.  This is the default.'))
+    group.add_argument('--dateo', '--forecast-axis', action='store_false', dest='squash_forecasts', help=_('Use the date of original analysis for the time axis, and put the forecast times into a separate "forecast" axis.'))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):

@@ -188,7 +188,7 @@ class Series (BufferBase):
               yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
               created_time_axis = True
           else:
-            warn(_("Can't squash forecast axis for timeseries data with multiple dates of origin."))
+            warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
       var.atts.pop('kind',None)
