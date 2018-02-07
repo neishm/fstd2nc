@@ -76,8 +76,13 @@ class GridMap(object):
 # Factory method that creates various types of grid mapping objects
   @classmethod
   def gen_gmap(cls, grd):
+    import numpy as np
     grref = grd['grref'].upper() 
     if grref == 'E' :
+      # Special case: 'E' grid is not actually rotated.
+      if np.allclose(grd['lat0'],grd['rlat0']) and np.allclose(grd['lon0'],grd['rlon0']):
+        return LatLon(grd)
+      # Usual case: 'E' grid is rotated.
       return RotLatLon(grd)
     elif grref == 'L' :
       return LatLon(grd)
