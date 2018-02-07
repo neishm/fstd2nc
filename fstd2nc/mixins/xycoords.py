@@ -290,7 +290,7 @@ class XYCoords (BufferBase):
           # Everything else should be handled by ezqkdef.
           else:
             grd = readGrid(self._meta_funit, var.atts.copy())
-            if grd['grref'].upper() in grrefs :
+            if grd['grref'].upper() not in grrefs :
               gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
               ll = gdll(gdid)
         except (TypeError,EzscintError,KeyError):
