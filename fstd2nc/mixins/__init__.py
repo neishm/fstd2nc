@@ -172,6 +172,13 @@ class BufferBase (object):
   # Attributes which could potentially be used as axes.
   _outer_axes = ()
 
+  # Attributes which could be used as auxiliary coordinates for the outer
+  # axes.  The dictionary keys are the outer axis names, and the values are
+  # a list of columns which can act as coordinates.
+  from collections import OrderedDict
+  _outer_coords = OrderedDict()
+  del OrderedDict
+
   # Attributes which uniquely identify a variable.
   # Note: nomvar should always be the first attribute
   _var_id = ('nomvar','ni','nj','nk')
@@ -557,17 +564,21 @@ class BufferBase (object):
     # Ignore deleted / invalidated records.
     records = records[records['dltf']==0]
 
+    # Keep track of any auxiliary coordinates that were generated.
+    known_coords = []
+
     # Iterate over each variable.
     # Variables are defined by the entries in _var_id.
     for var_id, var_records in records.groupby(self._var_id):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
-      # Ignore coordinate records.
+      # Ignore meta records.
       if nomvar in self._meta_records: continue
 
-      # Get the metadata, axes, and corresponding indices of each record.
+      # Get the attributes, axes, and corresponding indices of each record.
       atts = OrderedDict()
       axes = OrderedDict()
+      coords = OrderedDict()
       indices = []
       for n in records.columns:
         if n in self._ignore_atts: continue
@@ -576,10 +587,19 @@ class BufferBase (object):
         if var_records[n].isnull().values.any(): continue
         # Get the unique values, in order.
         cat = pd.Categorical(var_records[n])
-        # Is this column a coordinate?
+        # Is this column an outer axis?
         if n in self._outer_axes:
           axes[n] = tuple(cat.categories)
           indices.append(cat.codes)
+        # Is this column an auxiliary coordinate?
+        elif n in self._outer_coords:
+          # Get the axes for this coordinate, as columns of a dataframe.
+          # Use the same order of columns as was used for the outer axes,
+          # so we get the right coordinate order after sorting on the columns.
+          cols = var_records[[x for x in var_records.columns if x in self._outer_coords[n]]+[n]]
+          cols = cols.drop_duplicates()
+          # Sort the coordinate values in the same order as the axes.
+          coords[n] = cols.sort_values(by=list(cols.columns))
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
         elif len(cat.categories) == 1:
@@ -618,6 +638,22 @@ class BufferBase (object):
       nbits = map(int,x['nbits'])
       dtype_list = map(dtype_fst2numpy, datyp, nbits)
       dtype = np.result_type(*dtype_list)
+
+      # Add auxiliary coordinates to the attributes.
+      if len(coords) > 0:
+        atts['coordinates'] = ' '.join(coords.keys())
+        for coordname,coordcols in coords.items():
+          coordaxes = [axes[n] for n in coordcols if n in self._outer_axes]
+          # Unique key for this coordinate
+          key = (coordname,tuple(coordaxes))
+          if key in known_coords: continue
+          # Extract the coord values, and reshape.
+          shape = map(len,coordaxes)
+          values = np.array(coordcols[coordname]).reshape(shape)
+          yield _var_type (name = coordname, atts = OrderedDict(),
+                           axes = OrderedDict((n,v) for n,v in axes.items() if n in coordcols.columns), 
+                           array = values )
+          known_coords.append(key)
 
       var = _iter_type( name = nomvar, atts = atts,
                         axes = axes,

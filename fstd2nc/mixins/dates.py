@@ -57,6 +57,7 @@ class Dates (BufferBase):
     self._squash_forecasts = kwargs.pop('squash_forecasts',False) or kwargs.pop('datev',False)
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
+      self._outer_coords['forecast'] = ('time',)
     else:
       self._outer_axes = ('time','forecast') + self._outer_axes
     super(Dates,self).__init__(*args,**kwargs)
