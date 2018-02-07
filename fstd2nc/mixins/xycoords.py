@@ -118,6 +118,10 @@ class LatLon(GridMap):
     self.lat = _var_type('lat',self._latatts,{'lat':tuple(self._latarray)},self._latarray)
     self.gridaxes = [('lat',tuple(self._latarray)),('lon',tuple(self._lonarray))]
     return (self.gridaxes, self.lon, self.lat)
+  # Generic gen_xyll function.
+  def gen_xyll(self):
+    gridaxes, lon, lat = self.gen_ll()
+    return (None, None, gridaxes, lon, lat)
 
 class RotLatLon(GridMap):
   def __init__(self, *args, **kwargs):
@@ -310,12 +314,14 @@ class XYCoords (BufferBase):
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar.name
             yield gmapvar
-            if grd['grref'].upper() == 'E' : 
-              (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll() 
+            (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll()
+            if yaxis is not None and tuple(yaxis.axes.items()) not in coords:
               yield yaxis
+              coords.add(tuple(yaxis.axes.items()))
+            if xaxis is not None and tuple(xaxis.axes.items()) not in coords:
               yield xaxis
-            elif grd['grref'].upper() == 'L' :
-              (gridaxes,lon,lat) = gmap.gen_ll() 
+              coords.add(tuple(xaxis.axes.items()))
+
           else:
             xycoords = gdgaxes(gdid)
             ax = xycoords['ax'].transpose()
