@@ -465,13 +465,16 @@ class BufferBase (object):
     # Now, find the unique var_ids from this pruned list.
     var_ids = np.unique(var_ids)
 
+    # Keep track of any auxiliary coordinates that were generated.
+    known_coords = []
+
     # Loop over each variable and construct the data & metadata.
     for var_id in var_ids:
       selection = (all_var_ids == var_id)
       var_records = records[selection]
       var_record_indices = np.where(selection)[0]
       nomvar = var_id['nomvar'].strip()
-      # Ignore coordinate records.
+      # Ignore meta records.
       if nomvar in self._meta_records: continue
 
       # Get the metadata for each record.
@@ -492,7 +495,7 @@ class BufferBase (object):
         if isinstance(v,str): v = v.strip()
         atts[n] = v
 
-      # Get the axis coordinates.
+      # Get the axes.
       axes = OrderedDict()
       for n in self._outer_axes:
         values = var_records[n]
@@ -509,13 +512,41 @@ class BufferBase (object):
 
       # Assume missing data (nan) unless filled in later.
       record_id[()] = -1
-      
+
       # Arrange the record keys in the appropriate locations.
       indices = []
       for n in axes.keys():
         u, ind = np.unique(var_records[n], return_inverse=True)
         indices.append(ind)
       record_id[indices] = header_indices[var_record_indices]
+
+      # Get the auxiliary coordinates.
+      coords = []
+      for n, coordaxes in self._outer_coords.items():
+        coords.append(n)
+        # Get the axes for this coordinate.
+        # Use the same order of columns as was used for the outer axes,
+        # so we get the right coordinate order after sorting.
+        coordaxes = OrderedDict((k,v) for k,v in axes.items() if k in coordaxes)
+        # Unique key for this coordinate
+        key = (n,tuple(coordaxes.items()))
+        if key in known_coords: continue
+        # Arrange the coordinate values in the appropriate location.
+        shape = map(len,coordaxes.values())
+        # Extract all values of the coordinate (including duplicates over
+        # other axes).  Will determine which values to put in what order later.
+        all_coord_values = var_records[n]
+        values = np.zeros(shape,dtype=all_coord_values.dtype)
+        indices = []
+        for k in coordaxes.keys():
+          u, ind = np.unique(var_records[k], return_inverse=True)
+          indices.append(ind)
+        values[indices] = all_coord_values
+        yield _var_type (name = n, atts = OrderedDict(),
+                         axes = coordaxes, array = values )
+        known_coords.append(key)
+      if len(coords) > 0:
+        atts['coordinates'] = ' '.join(coords)
 
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_id.flatten()]
