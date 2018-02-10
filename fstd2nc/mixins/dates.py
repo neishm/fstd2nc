@@ -54,7 +54,18 @@ class Dates (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
-    self._squash_forecasts = kwargs.pop('squash_forecasts',False) or kwargs.pop('datev',False)
+    squash_forecasts = kwargs.pop('squash_forecasts',None)
+    if squash_forecasts is None:
+      squash_forecasts = kwargs.pop('datev',None)
+    forecast_axis = kwargs.pop('forecast_axis',None)
+    if forecast_axis is None:
+      forecast_axis = kwargs.pop('dateo',None)
+    if squash_forecasts is None and forecast_axis is not None:
+      squash_forecasts = not forecast_axis
+    if squash_forecasts is None:
+      squash_forecasts = True
+    self._squash_forecasts = squash_forecasts
+
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
       self._outer_coords['forecast'] = ('time',)
