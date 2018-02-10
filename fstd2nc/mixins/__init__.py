@@ -523,11 +523,13 @@ class BufferBase (object):
       # Get the auxiliary coordinates.
       coords = []
       for n, coordaxes in self._outer_coords.items():
-        coords.append(n)
         # Get the axes for this coordinate.
         # Use the same order of columns as was used for the outer axes,
         # so we get the right coordinate order after sorting.
         coordaxes = OrderedDict((k,v) for k,v in axes.items() if k in coordaxes)
+        # Sanity check - do we actually have any of the coordinate axes?
+        if len(coordaxes) == 0: continue
+        coords.append(n)
         # Unique key for this coordinate
         key = (n,tuple(coordaxes.items()))
         if key in known_coords: continue
@@ -609,8 +611,10 @@ class BufferBase (object):
       # Get the attributes, axes, and corresponding indices of each record.
       atts = OrderedDict()
       axes = OrderedDict()
-      coords = OrderedDict()
       indices = []
+      coordnames = []
+      coord_axes = OrderedDict()
+      coord_indices = OrderedDict()
       for n in records.columns:
         if n in self._ignore_atts: continue
         # Ignore columns which are masked out.
@@ -622,15 +626,12 @@ class BufferBase (object):
         if n in self._outer_axes:
           axes[n] = tuple(cat.categories)
           indices.append(cat.codes)
-        # Is this column an auxiliary coordinate?
-        elif n in self._outer_coords:
-          # Get the axes for this coordinate, as columns of a dataframe.
-          # Use the same order of columns as was used for the outer axes,
-          # so we get the right coordinate order after sorting on the columns.
-          cols = var_records[[x for x in var_records.columns if x in self._outer_coords[n]]+[n]]
-          cols = cols.drop_duplicates()
-          # Sort the coordinate values in the same order as the axes.
-          coords[n] = cols.sort_values(by=list(cols.columns))
+          # Is this also an axis for an auxiliary coordinate?
+          for coordname,coordaxes in self._outer_coords.items():
+            if n in coordaxes:
+              coordnames.append(coordname)
+              coord_axes.setdefault(coordname,OrderedDict())[n] = axes[n]
+              coord_indices.setdefault(coordname,[]).append(cat.codes)
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
         elif len(cat.categories) == 1:
@@ -651,6 +652,24 @@ class BufferBase (object):
       # Arrange the record keys in the appropriate locations.
       record_id[indices] = var_records.index
 
+      # Get the auxiliary coordinates.
+      for n in coordnames:
+        # Unique key for this coordinate
+        key = (n,tuple(coord_axes[n].items()))
+        if key in known_coords: continue
+        # Arrange the coordinate values in the appropriate location.
+        shape = map(len,coord_axes[n].values())
+        values = np.zeros(shape,dtype=var_records[n].dtype)
+        indices = coord_indices[n]
+        values[indices] = var_records[n]
+        yield _var_type (name = n, atts = OrderedDict(),
+                         axes = coord_axes[n], array = values )
+        known_coords.append(key)
+      if len(coordnames) > 0:
+        atts['coordinates'] = ' '.join(coordnames)
+
+
+
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_id.flatten()]
       if not np.all(have_data):
@@ -669,22 +688,6 @@ class BufferBase (object):
       nbits = map(int,x['nbits'])
       dtype_list = map(dtype_fst2numpy, datyp, nbits)
       dtype = np.result_type(*dtype_list)
-
-      # Add auxiliary coordinates to the attributes.
-      if len(coords) > 0:
-        atts['coordinates'] = ' '.join(coords.keys())
-        for coordname,coordcols in coords.items():
-          coordaxes = [axes[n] for n in coordcols if n in self._outer_axes]
-          # Unique key for this coordinate
-          key = (coordname,tuple(coordaxes))
-          if key in known_coords: continue
-          # Extract the coord values, and reshape.
-          shape = map(len,coordaxes)
-          values = np.array(coordcols[coordname]).reshape(shape)
-          yield _var_type (name = coordname, atts = OrderedDict(),
-                           axes = OrderedDict((n,v) for n,v in axes.items() if n in coordcols.columns), 
-                           array = values )
-          known_coords.append(key)
 
       var = _iter_type( name = nomvar, atts = atts,
                         axes = axes,
