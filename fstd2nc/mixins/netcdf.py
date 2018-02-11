@@ -125,8 +125,8 @@ class netCDF_IO (BufferBase):
 
     for var in varlist:
       # Modify time axes to be relative units instead of datetime objects.
-      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
-         # Convert from np.datetime64 to datetime.datetime
+      if isinstance(var,_var_type) and isinstance(var.array.reshape(-1)[0],np.datetime64):
+        # Convert from np.datetime64 to datetime.datetime
         var.array = var.array.tolist()
         units = '%s since %s'%(self._time_units, reference_date or var.array[0])
         var.atts.update(units=units)

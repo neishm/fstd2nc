@@ -49,7 +49,7 @@ class Dates (BufferBase):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(Dates,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','float32')]
+    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','float32'),('reftime','datetime64[s]')]
     return obj
 
   def __init__ (self, *args, **kwargs):
@@ -69,6 +69,7 @@ class Dates (BufferBase):
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
       self._outer_coords['forecast'] = ('time',)
+      self._outer_coords['reftime'] = ('time',)
     else:
       self._outer_axes = ('time','forecast') + self._outer_axes
     super(Dates,self).__init__(*args,**kwargs)
@@ -77,20 +78,23 @@ class Dates (BufferBase):
     # Calculate the forecast (in hours).
     fields = self._headers
     fields['forecast']=fields['deet']*fields['npas']/3600.
-    # Time axis
-    if self._squash_forecasts:
-      dates = fields['datev']
-    else:
-      dates = fields['dateo']
+    dateo = stamp2datetime(fields['dateo'])
+    datev = stamp2datetime(fields['datev'])
     # Convert date stamps to datetime objects, filtering out dummy values.
-    dates = stamp2datetime(dates)
-    dates = np.ma.asarray(dates, dtype='datetime64[s]')
-    dates.mask = np.isnat(dates)
+    dateo = np.ma.asarray(dateo, dtype='datetime64[s]')
+    datev = np.ma.asarray(datev, dtype='datetime64[s]')
+    dateo.mask = np.isnat(dateo)
+    datev.mask = np.isnat(datev)
     # Where there are dummy dates, ignore the forecast information too.
     forecast = np.ma.asarray(fields['forecast'])
-    forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dates) & (fields['deet'] == 0))
+    forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))
     fields['forecast'] = forecast
-    fields['time'] = dates
+    fields['reftime'] = dateo
+    # Time axis
+    if self._squash_forecasts:
+      fields['time'] = datev
+    else:
+      fields['time'] = dateo
 
   # Add time and forecast axes to the data stream.
   def _iter (self):
@@ -101,6 +105,12 @@ class Dates (BufferBase):
     time_axes = set()
     forecast_axes = set()
     for var in super(Dates,self)._iter():
+      if var.name == 'forecast':
+        var.atts['standard_name'] = 'forecast_period'
+        var.atts['units'] = 'hours'
+      if var.name == 'reftime':
+        var.atts['standard_name'] = 'forecast_reference_time'
+        var.array = np.asarray(var.array,dtype='datetime64[s]')
       if not isinstance(var,_iter_type):
         yield var
         continue
