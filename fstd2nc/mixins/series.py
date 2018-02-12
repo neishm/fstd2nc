@@ -183,9 +183,14 @@ class Series (BufferBase):
             time = var.axes.pop('time')[0]
             # Convert pandas times (if using pandas for processing the headers)
             time = np.datetime64(time,'s')
-            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in var.axes['forecast'])))
+            forecast = var.axes['forecast']
+            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in forecast)))
             if not created_time_axis:
               yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
+              # Include forecast and reftime auxiliary coordinates (emulate
+              # what's done in the dates mixin)
+              yield _var_type('forecast',OrderedDict([('standard_name','forecast_period'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
+              yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{'time':var.axes['time']},np.array([time]*len(forecast)))
               created_time_axis = True
           else:
             warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
