@@ -90,6 +90,7 @@ class Dates (BufferBase):
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))
     fields['forecast'] = forecast
     fields['reftime'] = dateo
+    fields['reftime'].mask = forecast.mask
     # Time axis
     if self._squash_forecasts:
       fields['time'] = datev

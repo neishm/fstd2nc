@@ -529,24 +529,25 @@ class BufferBase (object):
         coordaxes = OrderedDict((k,v) for k,v in axes.items() if k in coordaxes)
         # Sanity check - do we actually have any of the coordinate axes?
         if len(coordaxes) == 0: continue
-        coords.append(n)
         # Unique key for this coordinate
         key = (n,tuple(coordaxes.items()))
-        if key in known_coords: continue
         # Arrange the coordinate values in the appropriate location.
         shape = map(len,coordaxes.values())
         # Extract all values of the coordinate (including duplicates over
         # other axes).  Will determine which values to put in what order later.
-        all_coord_values = var_records[n]
+        all_coord_values = np.ma.compressed(var_records[n])
+        if len(all_coord_values) == 0: continue
         values = np.zeros(shape,dtype=all_coord_values.dtype)
         indices = []
         for k in coordaxes.keys():
           u, ind = np.unique(var_records[k], return_inverse=True)
           indices.append(ind)
         values[indices] = all_coord_values
-        yield _var_type (name = n, atts = OrderedDict(),
-                         axes = coordaxes, array = values )
-        known_coords.append(key)
+        coords.append(n)
+        if key not in known_coords:
+          yield _var_type (name = n, atts = OrderedDict(),
+                           axes = coordaxes, array = values )
+          known_coords.append(key)
       if len(coords) > 0:
         atts['coordinates'] = ' '.join(coords)
 
@@ -635,13 +636,16 @@ class BufferBase (object):
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
         elif len(cat.categories) == 1:
-          v = cat[0]
-          # Trim string attributes (remove whitespace padding).
-          if isinstance(v,str): v = v.strip()
-          # Use regular integers for numeric types.
-          elif np.can_cast(v.dtype,int):
-            v = int(v)
-          atts[n] = v
+          try:
+            v = cat[0]
+            # Trim string attributes (remove whitespace padding).
+            if isinstance(v,str): v = v.strip()
+            # Use regular integers for numeric types.
+            elif np.can_cast(v,int):
+              v = int(v)
+            atts[n] = v
+          except (TypeError,ValueError):
+            pass
 
       # Construct a multidimensional array to hold the record keys.
       record_id = np.empty(map(len,axes.values()), dtype='int32')
@@ -653,20 +657,24 @@ class BufferBase (object):
       record_id[indices] = var_records.index
 
       # Get the auxiliary coordinates.
+      coords = []
       for n in coordnames:
+        # Ignore auxiliary coordinates which are masked out.
+        if var_records[n].isnull().values.any(): continue
         # Unique key for this coordinate
         key = (n,tuple(coord_axes[n].items()))
-        if key in known_coords: continue
         # Arrange the coordinate values in the appropriate location.
         shape = map(len,coord_axes[n].values())
         values = np.zeros(shape,dtype=var_records[n].dtype)
         indices = coord_indices[n]
         values[indices] = var_records[n]
-        yield _var_type (name = n, atts = OrderedDict(),
-                         axes = coord_axes[n], array = values )
-        known_coords.append(key)
-      if len(coordnames) > 0:
-        atts['coordinates'] = ' '.join(coordnames)
+        coords.append(n)
+        if key not in known_coords:
+          yield _var_type (name = n, atts = OrderedDict(),
+                           axes = coord_axes[n], array = values )
+          known_coords.append(key)
+      if len(coords) > 0:
+        atts['coordinates'] = ' '.join(coords)
 
 
 
