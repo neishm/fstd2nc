@@ -86,6 +86,8 @@ class GridMap(object):
       return RotLatLon(grd)
     elif grref == 'L' :
       return LatLon(grd)
+    elif grref in ['N','S'] :
+      return PolarStereo(grd)
     else:
       raise ValueError('Grid mapping variable cannot be created for grids based on grid type %s!' \
                        % (grref))
@@ -199,6 +201,97 @@ class RotLatLon(GridMap):
     return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
 
 
+class PolarStereo(GridMap):
+  # The standard parallel is fixed at 60 N as this is
+  # the only standard parallel used in the RPN routines
+  def __init__(self, *args, **kwargs):
+    super(PolarStereo,self).__init__(*args,**kwargs)
+    # Grid mapping variable name
+    self._std_parallel = 60.
+    self._name = 'polar_stereo'
+    # Grid resolution (spacing) in projection plane (at standard parallel)
+    self._res = self._grd['d60']    # metres
+    self.xaxis = None
+    self.yaxis = None
+  @staticmethod
+  def map_scale_factor(std_parallel_deg):
+    # Calculate map scale factor from latitude of standard parallel
+    # with formula found at:
+    # https://www.unidata.ucar.edu/software/thredds/current/netcdf-java/reference/StandardCoordinateTransforms.html
+    from math import fabs, sin, radians
+    abs_sin = fabs(sin(radians(std_parallel_deg)))
+    # value returned for standard parallel at 60 deg: 0.933012701892
+    # value retrieved using mscale function (rmnlib): 0.9330124
+    return (1. + abs_sin)/2. 
+  def gen_gmapvar(self):
+    import numpy as np
+    from fstd2nc.mixins import _var_type
+    self._atts['grid_mapping_name'] = 'polar_stereographic'
+    self._atts['earth_radius'] = self._earth_radius
+    if self._grd['north']:
+      self._atts['latitude_of_projection_origin'] = 90.
+    else:
+      self._atts['latitude_of_projection_origin'] = -90.
+    # Set central meridian so that easting and northing directions match those returned by RPN routines
+    self._atts['straight_vertical_longitude_from_pole'] = -(self._grd['dgrw'] + 90.)
+    # Set either 'standard_parallel' or 'scale_factor_at_projection_origin', not both!
+#    self._atts['standard_parallel'] = 60.
+    self._atts['scale_factor_at_projection_origin']= self.map_scale_factor(self._std_parallel)
+    self._atts['resolution_at_standard_parallel'] = self._res
+    self._gen_xyll()
+    self._atts['false_easting'] = self._false_easting
+    self._atts['false_northing'] = self._false_northing
+    # Grid mapping variable
+    self.gmap = _var_type(self._name,self._atts,{},np.array(""))
+    return self.gmap
+  # Generate projection coordinates
+  def _gen_xyll(self):  
+    from collections import OrderedDict 
+    import numpy as np
+    from rpnpy.librmn.all import gdll, gdxyfll
+    from fstd2nc.mixins import _var_type
+    ll = gdll(self._grd['id'])
+    self._lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
+    self._lonatts = OrderedDict()
+    self._lonatts['long_name'] = 'longitude'
+    self._lonatts['standard_name'] = 'longitude'
+    self._lonatts['units'] = 'degrees_east'
+    self._latarray = ll['lat'].transpose() # Switch from Fortran to C order.
+    self._latatts = OrderedDict()
+    self._latatts['long_name'] = 'latitude'
+    self._latatts['standard_name'] = 'latitude'
+    self._latatts['units'] = 'degrees_north'
+    xy = gdxyfll(self._grd['id'],ll['lat'],ll['lon'])
+    # Scale grid coordinates back to actual coordinates in projection plane   
+    self._ax = ( np.rint(xy['x'][:,0]) - 1) * self._res   # metres
+    self._ay = ( np.rint(xy['y'][0,:]) - 1) * self._res
+    # Determine the false easting and northing from 
+    # the coordinates of the pole and of grid point (1,1)
+    _pole_pi = self._grd['pi']
+    _pole_pj = self._grd['pj']
+    self._false_easting =  self._ax[int(round(_pole_pi)) - 1] - self._ax[0]
+    self._false_northing = self._ay[int(round(_pole_pj)) - 1] - self._ay[0]
+    self._xaxisatts['long_name'] = 'x-coordinate of polar-stereographic projection'
+    self._xaxisatts['standard_name'] = 'projection_x_coordinate'
+    self._xaxisatts['units'] = 'm'
+    self._xaxisatts['axis'] = 'X'
+    self._yaxisatts['long_name'] = 'y-coordinate of polar-stereographic projection'
+    self._yaxisatts['standard_name'] = 'projection_y_coordinate'
+    self._yaxisatts['units'] = 'm'
+    self._yaxisatts['axis'] = 'Y'
+    self.xaxis = _var_type('xc',self._xaxisatts,{'xc':tuple(self._ax)},self._ax)
+    self.yaxis = _var_type('yc',self._yaxisatts,{'yc':tuple(self._ay)},self._ay) 
+    self.gridaxes = [('yc',tuple(self.yaxis.array)),('xc',tuple(self.xaxis.array))]
+    self.lon = _var_type('lon',self._lonatts,OrderedDict(self.gridaxes),self._lonarray)
+    self.lat = _var_type('lat',self._latatts,OrderedDict(self.gridaxes),self._latarray)
+    return (self._false_easting, self._false_northing, self.xaxis, self.yaxis, \
+            self.gridaxes, self.lon, self.lat)
+  def gen_xyll(self):
+    if self.xaxis == None:
+      self._gen_xyll()
+    return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
+      
+
 #################################################
 # Mixin for handling lat/lon coordinates.
 
@@ -258,7 +351,7 @@ class XYCoords (BufferBase):
     grids = OrderedDict()
     gridmaps = OrderedDict()
     # Grid mappings will be defined for grids based on the grid types listed in 'grrefs' 
-    grrefs = ['E','L']
+    grrefs = ['E','L','N','S']
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
