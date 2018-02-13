@@ -323,8 +323,8 @@ class netCDF_IO (BufferBase):
     bar = Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]")
     for r,shape,v,ind in bar.iter(sorted(io)):
       try:
-        data = self._fstluk(r)['d'].transpose().reshape(shape)
-        v[ind] = data.view(v.dtype)
+        data = self._fstluk(r,dtype=v.dtype)['d'].transpose().reshape(shape)
+        v[ind] = data
       except (IndexError,ValueError):
         warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
         continue
