@@ -42,6 +42,11 @@ def decode_ip1 (ip1):
 class VCoords (BufferBase):
   _vcoord_nomvars = ('HY','!!')
 
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(VCoords,cls)._cmdline_args(parser)
+    parser.add_argument('--squash-height', action='store_true', help=_('Drop the "height" axis when it is degenerate (0m only)'))
+
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(VCoords,cls).__new__(cls, *args, **kwargs)
@@ -50,6 +55,7 @@ class VCoords (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
+    self._squash_height = kwargs.pop('squash_height',False)
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
@@ -91,7 +97,10 @@ class VCoords (BufferBase):
     vaxes = OrderedDict()
     for var in super(VCoords,self)._iter():
       # Degenerate vertical axis?
-      if 'ip1' in var.atts and var.atts['ip1'] == 0:
+      degenerate_ip1 = [0]  # 0 hPa
+      if self._squash_height:
+        degenerate_ip1.extend([12001,15728640])  # 0 m
+      if 'ip1' in var.atts and var.atts['ip1'] in degenerate_ip1:
         if 'level' in var.axes and len(var.axes['level']) == 1:
           i = list(var.axes).index('level')
           del var.axes['level']
