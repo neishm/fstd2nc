@@ -110,6 +110,7 @@ class Dates (BufferBase):
       # Add metadata to auxiliary coordinates.
       if var.name == 'leadtime':
         var.atts['standard_name'] = 'forecast_period'
+        var.atts['long_name'] = "Lead time (since forecast_reference_time)"
         var.atts['units'] = 'hours'
       if var.name == 'reftime':
         var.atts['standard_name'] = 'forecast_reference_time'
@@ -121,7 +122,7 @@ class Dates (BufferBase):
         times = var.axes['time']
         if times not in time_axes:
           time_axes.add(times)
-          atts = OrderedDict([('axis','T')])
+          atts = OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')])
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
           yield _var_type('time',atts,axes,np.asarray(times,dtype='datetime64[s]'))

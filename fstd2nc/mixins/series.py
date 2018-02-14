@@ -191,10 +191,10 @@ class Series (BufferBase):
             forecast = var.axes['forecast']
             var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in forecast)))
             if not created_time_axis:
-              yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
+              yield _var_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),{'time':var.axes['time']},np.array(var.axes['time']))
               # Include forecast and reftime auxiliary coordinates (emulate
               # what's done in the dates mixin)
-              yield _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
+              yield _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
               yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{'time':var.axes['time']},np.array([time]*len(forecast)))
               created_time_axis = True
           else:
