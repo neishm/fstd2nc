@@ -195,7 +195,7 @@ class Series (BufferBase):
               # Include forecast and reftime auxiliary coordinates (emulate
               # what's done in the dates mixin)
               yield _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
-              yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{'time':var.axes['time']},np.array([time]*len(forecast)))
+              yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time))
               created_time_axis = True
           else:
             warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))

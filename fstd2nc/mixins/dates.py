@@ -115,6 +115,12 @@ class Dates (BufferBase):
       if var.name == 'reftime':
         var.atts['standard_name'] = 'forecast_reference_time'
         var.array = np.asarray(var.array,dtype='datetime64[s]')
+        # Special case: reftimes are all identical.
+        # Convert to a scalar.
+        reftimes = set(var.array)
+        if len(reftimes) == 1:
+          var.axes.pop('time')
+          var.array = var.array[0]
       if not isinstance(var,_iter_type):
         yield var
         continue
