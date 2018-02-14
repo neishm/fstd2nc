@@ -65,9 +65,6 @@ class Masks (BufferBase):
     if mask_key is not None:
       mask = self._fstluk(mask_key, rank=rank)['d']
       prm['d'] *= mask
-#      prm['d'] += self._fill_value * (1-mask)
-# To avoid getting  
-# TypeError: Cannot cast ufunc add output from dtype('float64') to dtype('uint32') with casting rule 'same_kind'
-      prm['d'] = prm['d'] + self._fill_value * (1-mask)
+      prm['d'] += self._fill_value * (1-mask)
     return prm
 
