@@ -76,11 +76,16 @@ class Series (BufferBase):
     # For non-timeseries data, ignore this info.
     station_id.mask = ~is_split_series
     fields['station_id'] = station_id
-    # For timeseries data, the usual 'forecast' axis (from deet*npas) is not
+    # For timeseries data, the usual leadtime (from deet*npas) is not
     # used.  Instead, we will get forecast info from nj coordinate.
-    if 'forecast' in fields.dtype.names:
-      fields['forecast'] = np.ma.asarray(fields['forecast'])
-      fields['forecast'].mask = np.ma.getmaskarray(fields['forecast']) | is_series
+    if 'leadtime' in fields.dtype.names:
+      fields['leadtime'] = np.ma.asarray(fields['leadtime'])
+      fields['leadtime'].mask = np.ma.getmaskarray(fields['leadtime']) | is_series
+    # Similarly, the 'reftime' is not used either.
+    if 'reftime' in fields.dtype.names:
+      fields['reftime'] = np.ma.asarray(fields['reftime'])
+      fields['reftime'].mask = np.ma.getmaskarray(fields['reftime']) | is_series
+
     # True grid identifier is in ip1/ip2?
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
@@ -189,7 +194,7 @@ class Series (BufferBase):
               yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
               # Include forecast and reftime auxiliary coordinates (emulate
               # what's done in the dates mixin)
-              yield _var_type('forecast',OrderedDict([('standard_name','forecast_period'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
+              yield _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
               yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{'time':var.axes['time']},np.array([time]*len(forecast)))
               created_time_axis = True
           else:

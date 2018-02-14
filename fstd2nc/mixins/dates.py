@@ -49,7 +49,7 @@ class Dates (BufferBase):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(Dates,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','float32'),('reftime','datetime64[s]')]
+    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('leadtime','float32'),('reftime','datetime64[s]')]
     return obj
 
   def __init__ (self, *args, **kwargs):
@@ -68,16 +68,17 @@ class Dates (BufferBase):
 
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
-      self._outer_coords['forecast'] = ('time',)
+      # Define some auxiliary coordinates along the time axis.
+      self._outer_coords['leadtime'] = ('time',)
       self._outer_coords['reftime'] = ('time',)
     else:
-      self._outer_axes = ('time','forecast') + self._outer_axes
+      self._outer_axes = ('time','leadtime') + self._outer_axes
     super(Dates,self).__init__(*args,**kwargs)
 
     # Get any extra (derived) fields needed for doing the decoding.
     # Calculate the forecast (in hours).
     fields = self._headers
-    fields['forecast']=fields['deet']*fields['npas']/3600.
+    fields['leadtime']=fields['deet']*fields['npas']/3600.
     dateo = stamp2datetime(fields['dateo'])
     datev = stamp2datetime(fields['datev'])
     # Convert date stamps to datetime objects, filtering out dummy values.
@@ -86,9 +87,9 @@ class Dates (BufferBase):
     dateo.mask = np.isnat(dateo)
     datev.mask = np.isnat(datev)
     # Where there are dummy dates, ignore the forecast information too.
-    forecast = np.ma.asarray(fields['forecast'])
+    forecast = np.ma.asarray(fields['leadtime'])
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))
-    fields['forecast'] = forecast
+    fields['leadtime'] = forecast
     fields['reftime'] = dateo
     fields['reftime'].mask = forecast.mask
     # Time axis
@@ -99,14 +100,15 @@ class Dates (BufferBase):
 
   # Add time and forecast axes to the data stream.
   def _iter (self):
-    from fstd2nc.mixins import _iter_type, _var_type
+    from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
     from collections import OrderedDict
     import numpy as np
     # Keep track of all time and forecast axes found in the data.
     time_axes = set()
     forecast_axes = set()
     for var in super(Dates,self)._iter():
-      if var.name == 'forecast':
+      # Add metadata to auxiliary coordinates.
+      if var.name == 'leadtime':
         var.atts['standard_name'] = 'forecast_period'
         var.atts['units'] = 'hours'
       if var.name == 'reftime':
@@ -123,7 +125,10 @@ class Dates (BufferBase):
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
           yield _var_type('time',atts,axes,np.asarray(times,dtype='datetime64[s]'))
-      if 'forecast' in var.axes:
+      # When used as an axis, rename 'leadtime' to 'forecast' for backwards
+      # compatibility with previous versions of the converter.
+      if 'leadtime' in var.axes:
+        var.axes = _modify_axes(var.axes, leadtime='forecast')
         forecasts = var.axes['forecast']
         if forecasts not in forecast_axes:
           forecast_axes.add(forecasts)
