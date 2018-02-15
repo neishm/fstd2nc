@@ -50,6 +50,21 @@ agg_nomvars = (
   'ZT','WT','SD','7A',
 )
 
+# Codes for deep / superficial surface layers in rpnphy.
+# Note: Can't find any standard CF encoding for this, feel free to update if
+# you know of one!
+# Order of codes based on rpnphy src/surface/glaciers.F90
+surface_codes = {
+  1: "superficial",
+  2: "deep",
+}
+# List of deep/superficial variables in rpnphy
+# To get the list, from the rpnphy git repository run:
+#  git grep 'ON=.*row\*2 ' | sed 's/.*ON=//;s/ .*//'
+surface_nomvars = (
+  '2W','I9','I0','9A','I1','5A',
+)
+
 class Sfc_Codes (BufferBase):
 
   def _iter (self):
@@ -60,18 +75,23 @@ class Sfc_Codes (BufferBase):
     from rpnpy.librmn.fstd98 import fstlir
 
     handled_agg_codes = []
+    handled_surface_codes = []
 
     for var in super(Sfc_Codes,self)._iter():
 
-      # Look for variables with surface codes:
-      if var.name in agg_nomvars and var.atts.get('kind',None) == 3 and 'level' in var.axes:
-        codes = tuple(var.axes['level'])
+      # Look for variables with surface codes.
+      if var.atts.get('kind',None) != 3 or 'level' not in var.axes:
+        yield var
+        continue
+
+      codes = tuple(var.axes['level'])
+      coordinates = var.atts.get('coordinates','').split()
+
+      if var.name in agg_nomvars:
         # Change the axis name so the vcoord mixin doesn't look at it.
         var.axes = _modify_axes(var.axes, level='area_type_id')
         # Add the area type to the list of auxiliary coordinates.
-        coordinates = var.atts.get('coordinates','').split()
         coordinates.append('area_type')
-        var.atts['coordinates'] = ' '.join(coordinates)
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
           codenames = tuple(agg_codes.get(code,"unknown") for code in codes)
@@ -80,6 +100,23 @@ class Sfc_Codes (BufferBase):
           axes = OrderedDict([('area_type_id',codes),('area_type_strlen',tuple(range(array.shape[1])))])
           yield _var_type("area_type",atts,axes,array)
           handled_agg_codes.append(codes)
+
+      if var.name in surface_nomvars:
+        # Change the axis name so the vcoord mixin doesn't look at it.
+        var.axes = _modify_axes(var.axes, level='surface_id')
+        # Add the layer type to the list of auxiliary coordinates.
+        coordinates.append('surface')
+        # Generate the list of surface types.
+        if codes not in handled_surface_codes:
+          codenames = tuple(surface_codes.get(code,"unknown") for code in codes)
+          array = np.array(codenames).view('|S1').reshape(len(codes),-1)
+          atts = OrderedDict([('long_name','surface_layer')])
+          axes = OrderedDict([('surface_id',codes),('surface_strlen',tuple(range(array.shape[1])))])
+          yield _var_type("surface",atts,axes,array)
+          handled_surface_codes.append(codes)
+
+      if len(coordinates) > 0:
+        var.atts['coordinates'] = ' '.join(coordinates)
 
       yield var
 
