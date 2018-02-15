@@ -68,11 +68,9 @@ surface_nomvars = (
 class Sfc_Codes (BufferBase):
 
   def _iter (self):
-    from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
+    from fstd2nc.mixins import _var_type, _modify_axes
     from collections import OrderedDict
     import numpy as np
-    from datetime import timedelta
-    from rpnpy.librmn.fstd98 import fstlir
 
     handled_agg_codes = []
     handled_surface_codes = []
@@ -114,6 +112,11 @@ class Sfc_Codes (BufferBase):
           axes = OrderedDict([('surface_id',codes),('surface_strlen',tuple(range(array.shape[1])))])
           yield _var_type("surface",atts,axes,array)
           handled_surface_codes.append(codes)
+
+      # Sea ice layers
+      if var.name == 'I7':  # Sea ice temperature
+        var.axes = _modify_axes(var.axes, level='sea_ice_layer')
+        # Don't know any coordinates for these ice layers.
 
       if len(coordinates) > 0:
         var.atts['coordinates'] = ' '.join(coordinates)
