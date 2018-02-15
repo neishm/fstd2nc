@@ -31,15 +31,16 @@ from fstd2nc.mixins import BufferBase
 # Note: due to the limited information available in the RPN files, the codes
 # must be determined from a hard-coded list of variable names.
 
-# Codes from "aggregated" variables in rpnphy
+# Codes from "aggregated" variables in rpnphy.
 # Equivalent CF labels from:
 # http://cfconventions.org/Data/area-type-table/current/build/area-type-table.html
 agg_codes = {
-  1: "all_area_types", # (Aggregated)
-  2: "sea_ice",        # (Sea Ice)
+  1: "ice_free_land",  # (Soil)
+  2: "land_ice",       # (Glacier)
   3: "ice_free_sea",   # (Water)
-  4: "land_ice",       # (Glacier)
-  5: "ice_free_land",  # (Soil)
+  4: "sea_ice",        # (Sea Ice)
+  5: "all_area_types", # (Aggregated)
+  6: "urban",          # (Urban)
 }
 # List of "aggregated" variables in rpnphy
 # To get the list, from the rpnphy git repository run:
