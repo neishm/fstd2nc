@@ -31,39 +31,37 @@ from fstd2nc.mixins import BufferBase
 # Note: due to the limited information available in the RPN files, the codes
 # must be determined from a hard-coded list of variable names.
 
-# Codes from "aggregated" variables in rpnphy.
+# Codes from "aggregated" surface variables in rpnphy.
 # Equivalent CF labels from:
 # http://cfconventions.org/Data/area-type-table/current/build/area-type-table.html
-agg_codes = {
-  1: "ice_free_land",  # (Soil)
-  2: "land_ice",       # (Glacier)
-  3: "ice_free_sea",   # (Water)
-  4: "sea_ice",        # (Sea Ice)
-  5: "all_area_types", # (Aggregated)
-  6: "urban",          # (Urban)
+sfc_agg_codes = {
+  1: "ice_free_land",  # (soil)
+  2: "land_ice",       # (glaciers, ice caps)
+  3: "ice_free_sea",   # (lake water, sea water)
+  4: "sea_ice",        # (lake ice, sea ice))
+  5: "all_area_types", # (aggregated)
+  6: "urban",          # (urban)
 }
 # List of "aggregated" variables in rpnphy
 # To get the list, from the rpnphy git repository run:
 #  git grep 'ON=.*nagg' | sed 's/.*ON=//;s/ .*//'
-agg_nomvars = (
+sfc_agg_nomvars = (
   'AL','BT','FC','B5','FT','FV','HF','H1','IO','J9','Z0',
   'ZT','WT','SD','7A',
 )
 
-# Codes for deep / superficial surface layers in rpnphy.
-# Note: Can't find any standard CF encoding for this, feel free to update if
-# you know of one!
+# Codes for  deep / superficial surface layers in rpnphy.
 # Order of codes based on rpnphy src/surface/glaciers.F90
-surface_codes = {
-  1: "superficial",
-  2: "deep",
-}
+#sfc_level_codes = {
+#  1: "superficial",
+#  2: "deep",
+#}
 # List of deep/superficial variables in rpnphy
 # To get the list, from the rpnphy git repository run:
 #  git grep 'ON=.*row\*2 ' | sed 's/.*ON=//;s/ .*//'
-surface_nomvars = (
-  '2W','I9','I0','9A','I1','5A',
-)
+#sfc_level_nomvars = (
+#  '2W','I9','9A','I1','5A',
+#)
 
 class Sfc_Codes (BufferBase):
 
@@ -73,7 +71,7 @@ class Sfc_Codes (BufferBase):
     import numpy as np
 
     handled_agg_codes = []
-    handled_surface_codes = []
+    handled_level_codes = []
 
     for var in super(Sfc_Codes,self)._iter():
 
@@ -85,37 +83,37 @@ class Sfc_Codes (BufferBase):
       codes = tuple(var.axes['level'])
       coordinates = var.atts.get('coordinates','').split()
 
-      if var.name in agg_nomvars:
+      if var.name in sfc_agg_nomvars:
         # Change the axis name so the vcoord mixin doesn't look at it.
-        var.axes = _modify_axes(var.axes, level='area_type_id')
+        var.axes = _modify_axes(var.axes, level='sfctype')
         # Add the area type to the list of auxiliary coordinates.
-        coordinates.append('area_type')
+        coordinates.append('surface_type')
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
-          codenames = tuple(agg_codes.get(code,"unknown") for code in codes)
+          codenames = tuple(sfc_agg_codes.get(code,"unknown") for code in codes)
           array = np.array(codenames).view('|S1').reshape(len(codes),-1)
           atts = OrderedDict([('standard_name','area_type')])
-          axes = OrderedDict([('area_type_id',codes),('area_type_strlen',tuple(range(array.shape[1])))])
-          yield _var_type("area_type",atts,axes,array)
+          axes = OrderedDict([('sfctype',codes),('sfctype_strlen',tuple(range(array.shape[1])))])
+          yield _var_type("surface_type",atts,axes,array)
           handled_agg_codes.append(codes)
 
-      if var.name in surface_nomvars:
+#      if var.name in sfc_level_nomvars:
         # Change the axis name so the vcoord mixin doesn't look at it.
-        var.axes = _modify_axes(var.axes, level='surface_id')
+#        var.axes = _modify_axes(var.axes, level='levels')
         # Add the layer type to the list of auxiliary coordinates.
-        coordinates.append('surface')
+#        coordinates.append('surface_layer')
         # Generate the list of surface types.
-        if codes not in handled_surface_codes:
-          codenames = tuple(surface_codes.get(code,"unknown") for code in codes)
-          array = np.array(codenames).view('|S1').reshape(len(codes),-1)
-          atts = OrderedDict([('long_name','surface_layer')])
-          axes = OrderedDict([('surface_id',codes),('surface_strlen',tuple(range(array.shape[1])))])
-          yield _var_type("surface",atts,axes,array)
-          handled_surface_codes.append(codes)
+#        if codes not in handled_level_codes:
+#          codenames = tuple(sfc_level_codes.get(code,"unknown") for code in codes)
+#          array = np.array(codenames).view('|S1').reshape(len(codes),-1)
+#          atts = OrderedDict([('long_name','surface layer')])
+#          axes = OrderedDict([('levels',codes),('surface_strlen',tuple(range(array.shape[1])))])
+#          yield _var_type("surface_layer",atts,axes,array)
+#          handled_level_codes.append(codes)
 
       # Sea ice layers
-      if var.name == 'I7':  # Sea ice temperature
-        var.axes = _modify_axes(var.axes, level='sea_ice_layer')
+#      if var.name == 'I7':  # Sea ice temperature
+#        var.axes = _modify_axes(var.axes, level='sea_ice_layer')
         # Don't know any coordinates for these ice layers.
 
       if len(coordinates) > 0:
