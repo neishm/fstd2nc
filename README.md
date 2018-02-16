@@ -29,9 +29,11 @@ optional arguments:
                         stored as '_FillValue' attribute in the metadata.
                         Default is '1e+30'.
   --datev, --squash-forecasts
-                        Use the date of validity for the "time" axis.
-                        Otherwise, the default is to use the date of original
-                        analysis, and the forecast length goes in a "forecast"
+                        Use the date of validity for the "time" axis. This is
+                        the default.
+  --dateo, --forecast-axis
+                        Use the date of original analysis for the time axis,
+                        and put the forecast times into a separate "forecast"
                         axis.
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids

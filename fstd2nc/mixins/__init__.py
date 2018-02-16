@@ -172,6 +172,13 @@ class BufferBase (object):
   # Attributes which could potentially be used as axes.
   _outer_axes = ()
 
+  # Attributes which could be used as auxiliary coordinates for the outer
+  # axes.  The dictionary keys are the outer axis names, and the values are
+  # a list of columns which can act as coordinates.
+  from collections import OrderedDict
+  _outer_coords = OrderedDict()
+  del OrderedDict
+
   # Attributes which uniquely identify a variable.
   # Note: nomvar should always be the first attribute
   _var_id = ('nomvar','ni','nj','nk')
@@ -458,13 +465,16 @@ class BufferBase (object):
     # Now, find the unique var_ids from this pruned list.
     var_ids = np.unique(var_ids)
 
+    # Keep track of any auxiliary coordinates that were generated.
+    known_coords = []
+
     # Loop over each variable and construct the data & metadata.
     for var_id in var_ids:
       selection = (all_var_ids == var_id)
       var_records = records[selection]
       var_record_indices = np.where(selection)[0]
       nomvar = var_id['nomvar'].strip()
-      # Ignore coordinate records.
+      # Ignore meta records.
       if nomvar in self._meta_records: continue
 
       # Get the metadata for each record.
@@ -485,7 +495,7 @@ class BufferBase (object):
         if isinstance(v,str): v = v.strip()
         atts[n] = v
 
-      # Get the axis coordinates.
+      # Get the axes.
       axes = OrderedDict()
       for n in self._outer_axes:
         values = var_records[n]
@@ -502,13 +512,44 @@ class BufferBase (object):
 
       # Assume missing data (nan) unless filled in later.
       record_id[()] = -1
-      
+
       # Arrange the record keys in the appropriate locations.
       indices = []
       for n in axes.keys():
         u, ind = np.unique(var_records[n], return_inverse=True)
         indices.append(ind)
       record_id[indices] = header_indices[var_record_indices]
+
+      # Get the auxiliary coordinates.
+      coords = []
+      for n, coordaxes in self._outer_coords.items():
+        # Get the axes for this coordinate.
+        # Use the same order of columns as was used for the outer axes,
+        # so we get the right coordinate order after sorting.
+        coordaxes = OrderedDict((k,v) for k,v in axes.items() if k in coordaxes)
+        # Sanity check - do we actually have any of the coordinate axes?
+        if len(coordaxes) == 0: continue
+        # Unique key for this coordinate
+        key = (n,tuple(coordaxes.items()))
+        # Arrange the coordinate values in the appropriate location.
+        shape = map(len,coordaxes.values())
+        # Extract all values of the coordinate (including duplicates over
+        # other axes).  Will determine which values to put in what order later.
+        all_coord_values = np.ma.compressed(var_records[n])
+        if len(all_coord_values) == 0: continue
+        values = np.zeros(shape,dtype=all_coord_values.dtype)
+        indices = []
+        for k in coordaxes.keys():
+          u, ind = np.unique(var_records[k], return_inverse=True)
+          indices.append(ind)
+        values[indices] = all_coord_values
+        coords.append(n)
+        if key not in known_coords:
+          yield _var_type (name = n, atts = OrderedDict(),
+                           axes = coordaxes, array = values )
+          known_coords.append(key)
+      if len(coords) > 0:
+        atts['coordinates'] = ' '.join(coords)
 
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_id.flatten()]
@@ -557,18 +598,24 @@ class BufferBase (object):
     # Ignore deleted / invalidated records.
     records = records[records['dltf']==0]
 
+    # Keep track of any auxiliary coordinates that were generated.
+    known_coords = []
+
     # Iterate over each variable.
     # Variables are defined by the entries in _var_id.
     for var_id, var_records in records.groupby(self._var_id):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
-      # Ignore coordinate records.
+      # Ignore meta records.
       if nomvar in self._meta_records: continue
 
-      # Get the metadata, axes, and corresponding indices of each record.
+      # Get the attributes, axes, and corresponding indices of each record.
       atts = OrderedDict()
       axes = OrderedDict()
       indices = []
+      coordnames = []
+      coord_axes = OrderedDict()
+      coord_indices = OrderedDict()
       for n in records.columns:
         if n in self._ignore_atts: continue
         # Ignore columns which are masked out.
@@ -576,20 +623,29 @@ class BufferBase (object):
         if var_records[n].isnull().values.any(): continue
         # Get the unique values, in order.
         cat = pd.Categorical(var_records[n])
-        # Is this column a coordinate?
+        # Is this column an outer axis?
         if n in self._outer_axes:
           axes[n] = tuple(cat.categories)
           indices.append(cat.codes)
+          # Is this also an axis for an auxiliary coordinate?
+          for coordname,coordaxes in self._outer_coords.items():
+            if n in coordaxes:
+              coordnames.append(coordname)
+              coord_axes.setdefault(coordname,OrderedDict())[n] = axes[n]
+              coord_indices.setdefault(coordname,[]).append(cat.codes)
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
         elif len(cat.categories) == 1:
-          v = cat[0]
-          # Trim string attributes (remove whitespace padding).
-          if isinstance(v,str): v = v.strip()
-          # Use regular integers for numeric types.
-          elif np.can_cast(v.dtype,int):
-            v = int(v)
-          atts[n] = v
+          try:
+            v = cat[0]
+            # Trim string attributes (remove whitespace padding).
+            if isinstance(v,str): v = v.strip()
+            # Use regular integers for numeric types.
+            elif np.can_cast(v,int):
+              v = int(v)
+            atts[n] = v
+          except (TypeError,ValueError):
+            pass
 
       # Construct a multidimensional array to hold the record keys.
       record_id = np.empty(map(len,axes.values()), dtype='int32')
@@ -599,6 +655,28 @@ class BufferBase (object):
 
       # Arrange the record keys in the appropriate locations.
       record_id[indices] = var_records.index
+
+      # Get the auxiliary coordinates.
+      coords = []
+      for n in coordnames:
+        # Ignore auxiliary coordinates which are masked out.
+        if var_records[n].isnull().values.any(): continue
+        # Unique key for this coordinate
+        key = (n,tuple(coord_axes[n].items()))
+        # Arrange the coordinate values in the appropriate location.
+        shape = map(len,coord_axes[n].values())
+        values = np.zeros(shape,dtype=var_records[n].dtype)
+        indices = coord_indices[n]
+        values[indices] = var_records[n]
+        coords.append(n)
+        if key not in known_coords:
+          yield _var_type (name = n, atts = OrderedDict(),
+                           axes = coord_axes[n], array = values )
+          known_coords.append(key)
+      if len(coords) > 0:
+        atts['coordinates'] = ' '.join(coords)
+
+
 
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_id.flatten()]

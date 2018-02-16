@@ -42,51 +42,85 @@ class Dates (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(Dates,cls)._cmdline_args(parser)
-    parser.add_argument('--datev', '--squash-forecasts', action='store_true', dest='squash_forecasts', help=_('Use the date of validity for the "time" axis.  Otherwise, the default is to use the date of original analysis, and the forecast length goes in a "forecast" axis.'))
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--datev', '--squash-forecasts', action='store_true', default=True, dest='squash_forecasts', help=_('Use the date of validity for the "time" axis.  This is the default.'))
+    group.add_argument('--dateo', '--forecast-axis', action='store_false', dest='squash_forecasts', help=_('Use the date of original analysis for the time axis, and put the forecast times into a separate "forecast" axis.'))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(Dates,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('forecast','float32')]
+    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('leadtime','float32'),('reftime','datetime64[s]')]
     return obj
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
-    self._squash_forecasts = kwargs.pop('squash_forecasts',False) or kwargs.pop('datev',False)
+    squash_forecasts = kwargs.pop('squash_forecasts',None)
+    if squash_forecasts is None:
+      squash_forecasts = kwargs.pop('datev',None)
+    forecast_axis = kwargs.pop('forecast_axis',None)
+    if forecast_axis is None:
+      forecast_axis = kwargs.pop('dateo',None)
+    if squash_forecasts is None and forecast_axis is not None:
+      squash_forecasts = not forecast_axis
+    if squash_forecasts is None:
+      squash_forecasts = True
+    self._squash_forecasts = squash_forecasts
+
     if self._squash_forecasts:
       self._outer_axes = ('time',) + self._outer_axes
+      # Define some auxiliary coordinates along the time axis.
+      self._outer_coords['leadtime'] = ('time',)
+      self._outer_coords['reftime'] = ('time',)
     else:
-      self._outer_axes = ('time','forecast') + self._outer_axes
+      self._outer_axes = ('time','leadtime') + self._outer_axes
     super(Dates,self).__init__(*args,**kwargs)
 
     # Get any extra (derived) fields needed for doing the decoding.
     # Calculate the forecast (in hours).
     fields = self._headers
-    fields['forecast']=fields['deet']*fields['npas']/3600.
+    fields['leadtime']=fields['deet']*fields['npas']/3600.
+    dateo = stamp2datetime(fields['dateo'])
+    datev = stamp2datetime(fields['datev'])
+    # Convert date stamps to datetime objects, filtering out dummy values.
+    dateo = np.ma.asarray(dateo, dtype='datetime64[s]')
+    datev = np.ma.asarray(datev, dtype='datetime64[s]')
+    dateo.mask = np.isnat(dateo)
+    datev.mask = np.isnat(datev)
+    # Where there are dummy dates, ignore the forecast information too.
+    forecast = np.ma.asarray(fields['leadtime'])
+    forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))
+    fields['leadtime'] = forecast
+    fields['reftime'] = dateo
+    fields['reftime'].mask = forecast.mask
     # Time axis
     if self._squash_forecasts:
-      dates = fields['datev']
+      fields['time'] = datev
     else:
-      dates = fields['dateo']
-    # Convert date stamps to datetime objects, filtering out dummy values.
-    dates = stamp2datetime(dates)
-    dates = np.ma.asarray(dates, dtype='datetime64[s]')
-    dates.mask = np.isnat(dates)
-    # Where there are dummy dates, ignore the forecast information too.
-    forecast = np.ma.asarray(fields['forecast'])
-    forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dates) & (fields['deet'] == 0))
-    fields['forecast'] = forecast
-    fields['time'] = dates
+      fields['time'] = dateo
 
   # Add time and forecast axes to the data stream.
   def _iter (self):
-    from fstd2nc.mixins import _iter_type, _var_type
+    from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
     from collections import OrderedDict
     import numpy as np
     # Keep track of all time and forecast axes found in the data.
     time_axes = set()
     forecast_axes = set()
     for var in super(Dates,self)._iter():
+      # Add metadata to auxiliary coordinates.
+      if var.name == 'leadtime':
+        var.atts['standard_name'] = 'forecast_period'
+        var.atts['long_name'] = "Lead time (since forecast_reference_time)"
+        var.atts['units'] = 'hours'
+      if var.name == 'reftime':
+        var.atts['standard_name'] = 'forecast_reference_time'
+        var.array = np.asarray(var.array,dtype='datetime64[s]')
+        # Special case: reftimes are all identical.
+        # Convert to a scalar.
+        reftimes = set(var.array)
+        if len(reftimes) == 1:
+          var.axes.pop('time')
+          var.array = var.array[0]
       if not isinstance(var,_iter_type):
         yield var
         continue
@@ -94,11 +128,14 @@ class Dates (BufferBase):
         times = var.axes['time']
         if times not in time_axes:
           time_axes.add(times)
-          atts = OrderedDict([('axis','T')])
+          atts = OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')])
           axes = OrderedDict([('time',var.axes['time'])])
           # Add the time axis to the data stream.
           yield _var_type('time',atts,axes,np.asarray(times,dtype='datetime64[s]'))
-      if 'forecast' in var.axes:
+      # When used as an axis, rename 'leadtime' to 'forecast' for backwards
+      # compatibility with previous versions of the converter.
+      if 'leadtime' in var.axes:
+        var.axes = _modify_axes(var.axes, leadtime='forecast')
         forecasts = var.axes['forecast']
         if forecasts not in forecast_axes:
           forecast_axes.add(forecasts)

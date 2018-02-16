@@ -31,25 +31,26 @@ class SelectVars (BufferBase):
     super(SelectVars,cls)._cmdline_args(parser)
     parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables to convert.  By default, all variables are converted.'))
   def __init__ (self, *args, **kwargs):
+    import numpy as np
     vars = kwargs.pop('vars',None)
-    if vars is not None:
-      if isinstance(vars,str):
-        vars = vars.split(',')
-      self._selected_vars = tuple(vars)
-      info (_('Will look for variables: ') + ' '.join(self._selected_vars))
-    else:
-      self._selected_vars = None
     super(SelectVars,self).__init__(*args,**kwargs)
-  def _iter (self):
-    found = set()
-    for var in super(SelectVars,self)._iter():
-      if self._selected_vars is not None:
-        if var.name not in self._selected_vars:
-          continue
-      found.add(var.name)
-      yield var
-    if self._selected_vars is None: return
-    missing = set(self._selected_vars) - found
+
+    if vars is None:
+      return
+
+    if isinstance(vars,str):
+      vars = vars.split(',')
+    info (_('Will look for variables: ') + ' '.join(vars))
+    select = np.zeros(len(self._headers),dtype='bool')
+    missing = []
+    for v in vars:
+      f = self._headers['nomvar'] ==  v.ljust(4)
+      if not np.any(f):
+        missing.append(v)
+      select |= f
     if len(missing) > 0:
-      warn(_('Unable to find variables: ') + ' '.join(missing))
+      warn(_('Unable to find variable(s): ') + ' '.join(missing))
+    if not np.any(select):
+      error(_('Nothing to convert.'))
+    self._headers = self._headers[select]
 

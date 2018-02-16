@@ -125,11 +125,12 @@ class netCDF_IO (BufferBase):
 
     for var in varlist:
       # Modify time axes to be relative units instead of datetime objects.
-      if var.name in var.axes and isinstance(var,_var_type) and isinstance(var.array[0],np.datetime64):
-         # Convert from np.datetime64 to datetime.datetime
-        var.array = var.array.tolist()
-        units = '%s since %s'%(self._time_units, reference_date or var.array[0])
-        var.atts.update(units=units)
+      # Also attach relevant metadata.
+      if isinstance(var,_var_type) and isinstance(var.array.reshape(-1)[0],np.datetime64):
+        # Convert from np.datetime64 to datetime.datetime
+        var.array = np.array(var.array.tolist())
+        units = '%s since %s'%(self._time_units, reference_date or var.array.reshape(-1)[0])
+        var.atts.update(units=units, calendar='gregorian')
         var.array = np.asarray(date2num(var.array,units=units))
 
       yield var
@@ -269,11 +270,6 @@ class netCDF_IO (BufferBase):
 
     for var in self._iter():
 
-      if isinstance(var,_var_type) and not var.axes:
-        v = f.createVariable(var.name,'a1')
-        v.setncatts(var.atts)
-        continue
-        
       for axisname, axisvalues in var.axes.items():
         # Only need to create each dimension once (even if it's in multiple
         # variables).

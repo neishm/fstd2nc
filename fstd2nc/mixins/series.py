@@ -76,11 +76,16 @@ class Series (BufferBase):
     # For non-timeseries data, ignore this info.
     station_id.mask = ~is_split_series
     fields['station_id'] = station_id
-    # For timeseries data, the usual 'forecast' axis (from deet*npas) is not
+    # For timeseries data, the usual leadtime (from deet*npas) is not
     # used.  Instead, we will get forecast info from nj coordinate.
-    if 'forecast' in fields.dtype.names:
-      fields['forecast'] = np.ma.asarray(fields['forecast'])
-      fields['forecast'].mask = np.ma.getmaskarray(fields['forecast']) | is_series
+    if 'leadtime' in fields.dtype.names:
+      fields['leadtime'] = np.ma.asarray(fields['leadtime'])
+      fields['leadtime'].mask = np.ma.getmaskarray(fields['leadtime']) | is_series
+    # Similarly, the 'reftime' is not used either.
+    if 'reftime' in fields.dtype.names:
+      fields['reftime'] = np.ma.asarray(fields['reftime'])
+      fields['reftime'].mask = np.ma.getmaskarray(fields['reftime']) | is_series
+
     # True grid identifier is in ip1/ip2?
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
@@ -183,12 +188,17 @@ class Series (BufferBase):
             time = var.axes.pop('time')[0]
             # Convert pandas times (if using pandas for processing the headers)
             time = np.datetime64(time,'s')
-            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in var.axes['forecast'])))
+            forecast = var.axes['forecast']
+            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in forecast)))
             if not created_time_axis:
-              yield _var_type('time',{},{'time':var.axes['time']},np.array(var.axes['time']))
+              yield _var_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),{'time':var.axes['time']},np.array(var.axes['time']))
+              # Include forecast and reftime auxiliary coordinates (emulate
+              # what's done in the dates mixin)
+              yield _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
+              yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time))
               created_time_axis = True
           else:
-            warn(_("Can't squash forecast axis for timeseries data with multiple dates of origin."))
+            warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
       var.atts.pop('kind',None)
