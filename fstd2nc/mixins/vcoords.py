@@ -137,9 +137,10 @@ class VCoords (BufferBase):
           atts['positive'] = 'down'
         elif kind == 3:
           # arbitrary code
-          name = 'code'
+          name = 'sfclevel'
+          atts['standard_name'] = 'model_level_number'
           atts['units'] = 'level'  # units defined for compliancy with COARDS
-          atts.pop('axis',None)  # Not really a vertical axis?
+          atts['positive'] = 'down'
         elif kind == 4:
           # height [M] (metres) with respect to ground level
           name = 'height'
