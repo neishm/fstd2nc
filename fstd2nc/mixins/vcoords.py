@@ -31,7 +31,10 @@ def decode_ip1 (ip1):
   out = np.empty(1,dtype=dtype)
   r1, r2, r3 = DecodeIp(ip1,0,0)
   out['kind'] = r1.kind
-  out['level'] = r1.v1
+  if int(r1.v1) == 0 and int(r1.v2) != 0 :
+    out['level'] = r1.v2
+  else:
+    out['level'] = r1.v1
   return out
 
 
@@ -118,11 +121,17 @@ class VCoords (BufferBase):
         atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
         if kind == 0:
-          # height [m] (metres)
-          name = 'height'
-          atts['standard_name'] = 'height'
-          atts['units'] = 'm'
-          atts['positive'] = 'up'
+          if var.atts['typvar'] == 'P@' :   # masked ocean variable
+            name = 'depth'
+            atts['standard_name'] = 'depth'
+            atts['units'] = 'm'
+            atts['positive'] = 'down'
+          else:
+            # height [m] (metres)
+            name = 'height'
+            atts['standard_name'] = 'height'
+            atts['units'] = 'm'
+            atts['positive'] = 'up'
         elif kind == 1:
           # sigma [sg] (0.0->1.0)
           name = 'sigma'
