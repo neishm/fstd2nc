@@ -28,7 +28,7 @@ class XArray (BufferBase):
 
   # The interface for getting chunks into dask.
   def _read_chunk (self, rec_id, shape, dtype):
-    return self._fstluk(rec_id)['d'].transpose().reshape(shape).view(dtype)
+    return self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
 
   def to_xarray (self):
     """
