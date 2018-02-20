@@ -121,7 +121,7 @@ class VCoords (BufferBase):
         atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
         if kind == 0:
-          if var.atts['typvar'] == 'P@' :   # masked ocean variable
+          if var.atts.get('typvar',None) == 'P@' :   # masked ocean variable
             name = 'depth'
             atts['standard_name'] = 'depth'
             atts['units'] = 'm'
