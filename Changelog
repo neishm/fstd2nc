@@ -1,3 +1,27 @@
+Version 0.20180220.0 (Feb 20, 2017)
+	* Improvements to xarray interface to utilize the CF conventions
+	  metadata (such as auxiliary coordinates).
+	* Add station, leadtime, and reftime as auxiliary coordinates in series
+	  files.
+	* Use the date of validity by default.  Old behaviour (date of origin)
+	  can be restored by using --dateo or --forecast-axis options.
+	* Added 'leadtime' and 'reftime' auxiliary coordinates to encode the
+	  forecast information.
+	* Progress bar is enabled by default.  Can be turned off with
+	  --no-progress option.
+	* Added CF metadata for various grid projections (rotated pole, polar
+	  stereographic, lat-lon).
+	* Decode surface types (ice, land, sea, etc.).
+	* Decode depth coordinate for ocean model output.
+	* Fix decoding of masked data in raw binary (X32) format.
+
+Version 0.20171130.1 (Feb 13, 2017)
+	* Fixed unlimited dimension specification for PyDAP interface.
+	* Workaround for bug in numpy 1.14 when using masked structured arrays.
+	* Fix forecast times for series files.
+	* Don't discard LA/LO fields.  They needed in some circumstances such
+	  as trajectory files.
+
 Version 0.20171130.0 (Nov 30, 2017)
 	* Faster scanning of input file headers.
 	* New --progress option to show a progress bar for long conversions.
