@@ -68,7 +68,7 @@ class netCDF_Atts (BufferBase):
         var.atts.update(self._metadata[var.name])
         # Rename the field? (Using special 'rename' key in the metadata file).
         if 'rename' in var.atts:
-          var.name = var.atts.pop('rename')
+          var.name = var.atts['rename']
           # Also rename any axis with this name.
           axis_renames[orig_name] = var.name
 
@@ -242,7 +242,14 @@ class netCDF_IO (BufferBase):
 
       # Strip out FSTD-specific metadata?
       if self._minimal_metadata:
-        for n in internal_meta:
+        var_internal_meta = internal_meta
+        # Keep 'nomvar' as attribute if 'rename' is defined in metadata file
+        if 'rename' in var.atts and 'nomvar' in internal_meta:
+          var.atts.pop('rename')
+          metalist = list(internal_meta)
+          metalist.remove('nomvar')
+          var_internal_meta = tuple(metalist)
+        for n in var_internal_meta:
           var.atts.pop(n,None)
 
 
