@@ -303,8 +303,12 @@ class BufferBase (object):
     # Set up a progress bar for scanning the input files.
     Bar = _ProgressBar if progress is True else _FakeBar
 
-    if minimal_metadata is not False:
-      minimal_metadata = tuple(minimal_metadata.split(','))
+    if minimal_metadata is True:
+      minimal_metadata = ''
+    if isinstance(minimal_metadata,str):
+      minimal_metadata = minimal_metadata.split(',')
+    if hasattr(minimal_metadata,'__len__'):
+      minimal_metadata = tuple(minimal_metadata)
     self._minimal_metadata = minimal_metadata
 
     if not ignore_typvar:
