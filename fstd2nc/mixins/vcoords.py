@@ -196,8 +196,9 @@ class VCoords (BufferBase):
                 except (KeyError,VGDError):
                   pass  # Some keys not available in some vgrids?
               # Put this information in the final output file?
-              if not self._minimal_metadata:
-                atts.update(internal_atts)
+              for k,v in internal_atts.items():
+                if self._minimal_metadata is False or k in self._minimal_metadata:
+                  atts[k] = v
               # Attempt to fill in A/B ancillary data (if available).
               try:
                 all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])

@@ -14,8 +14,11 @@ optional arguments:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   --no-progress         Disable the progress bar.
-  --minimal-metadata    Don't include RPN record attributes and other internal
-                        information in the output metadata.
+  --minimal-metadata [nomvar,...]
+                        Specify a minimal set of RPN record attributes to
+                        include in the output file. If you use this flag
+                        without any values, then no RPN attributes will be
+                        included.
   --ignore-typvar       Tells the converter to ignore the typvar when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different typvars.
