@@ -274,11 +274,7 @@ class netCDF_IO (BufferBase):
         # Only need to create each dimension once (even if it's in multiple
         # variables).
         if axisname not in f.dimensions:
-          # Special case: make the time dimension unlimited.
-          if axisname == 'time':
-            f.createDimension(axisname, None)
-          else:
-            f.createDimension(axisname, len(axisvalues))
+          f.createDimension(axisname, len(axisvalues))
 
       dimensions = list(var.axes.keys())
 
