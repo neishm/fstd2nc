@@ -214,7 +214,9 @@ class BufferBase (object):
     _('Display a progress bar during the conversion, if the "progress" module is installed.')
     group.add_argument('--progress', action='store_true', default=True, help=SUPPRESS)
     group.add_argument('--no-progress', action='store_false', dest='progress', help=_('Disable the progress bar.'))
-    parser.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
+    group.add_argument('--rpnstd-metadata-list', metavar='nomvar,...', help=_("Specify a minimal set of RPN record attributes to include in the output file."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
     parser.add_argument('--no-quick-scan', action='store_true', help=SUPPRESS)
@@ -279,7 +281,7 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, progress=False, minimal_metadata=False, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
+  def __init__ (self, filename, progress=False, minimal_metadata=False, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -303,7 +305,14 @@ class BufferBase (object):
     # Set up a progress bar for scanning the input files.
     Bar = _ProgressBar if progress is True else _FakeBar
 
-    self._minimal_metadata = minimal_metadata
+    if minimal_metadata is True:
+      rpnstd_metadata_list = ''
+    if isinstance(rpnstd_metadata_list,str):
+      rpnstd_metadata_list = rpnstd_metadata_list.split(',')
+    if hasattr(rpnstd_metadata_list,'__len__'):
+      rpnstd_metadata_list = tuple(rpnstd_metadata_list)
+    self._rpnstd_metadata_list = rpnstd_metadata_list
+
     if not ignore_typvar:
       # Insert typvar value just after nomvar.
       self._var_id = self._var_id[0:1] + ('typvar',) + self._var_id[1:]

@@ -241,9 +241,10 @@ class netCDF_IO (BufferBase):
         var.name = '_'+var.name
 
       # Strip out FSTD-specific metadata?
-      if self._minimal_metadata:
+      if self._rpnstd_metadata_list is not None:
         for n in internal_meta:
-          var.atts.pop(n,None)
+          if n not in self._rpnstd_metadata_list:
+            var.atts.pop(n,None)
 
 
   def write_nc_file (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, progress=False):
