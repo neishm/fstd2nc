@@ -59,7 +59,7 @@ class Series (BufferBase):
   def __init__ (self, *args, **kwargs):
     import numpy as np
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH','STNS')
+    self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
@@ -113,55 +113,61 @@ class Series (BufferBase):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    header = fstlir(self._meta_funit, nomvar='STNS')
-    if header is not None:
-        atts = OrderedDict()
-        array = header['d'].transpose()
-        # Re-cast array as string.
-        # I don't know why I have to subtract 128 - maybe something to do with
-        # how the characters are encoded in the file?
-        # This isn't always needed.  Have test files for both cases.
-        # Need help making this more robust!
-        if array.flatten()[0] >= 128:
-          array -= 128
-        array = array.view('|S1')
-        nstations, strlen = array.shape
-        # Strip out trailing whitespace.
-        array = array.flatten().view('|S%d'%strlen)
-        array[:] = map(str.rstrip,array)
-        array = array.view('|S1').reshape(nstations,strlen)
-        # Encode it as 2D character array for netCDF file output.
-        axes = OrderedDict([('station_id',tuple(range(1,nstations+1))),('station_strlen',tuple(range(strlen)))])
-        station = _var_type('station',atts,axes,array)
-        yield station
+    station_header = fstlir(self._meta_funit, nomvar='STNS')
     # Create forecast axis.
-    header = fstlir (self._meta_funit, nomvar='HH')
-    if header is not None:
+    forecast_header = fstlir (self._meta_funit, nomvar='HH')
+    if forecast_header is not None:
         atts = OrderedDict(units='hours')
-        array = header['d'].flatten()
+        array = forecast_header['d'].flatten()
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
         if getattr(self,'_squash_forecasts',False) is False:
           yield forecast
+    # Extract vertical coordinates.
+    for vertvar in ('SH','SV'):
+      header = fstlir (self._meta_funit, nomvar=vertvar)
+      if header is None: continue
+      array = header['d'].squeeze()
+      if array.ndim != 1: continue
+      atts = OrderedDict(self._get_header_atts(header))
+      atts['kind'] = 5
+      yield _var_type(vertvar,atts,{'level':tuple(array)},array)
+
 
     for var in super(Series,self)._iter():
 
       # Hook in the station names as coordinate information.
-      if 'station_id' in var.axes and station is not None:
+      if 'station_id' in var.axes and station_header is not None:
+        if station is None:
+          atts = OrderedDict()
+          array = station_header['d'].transpose()
+          # Subset the stations to match the IP3 values found in the file
+          # (in case we don't have records for all the stations).
+          station_id = var.axes['station_id']
+          indices = np.array(var.axes['station_id'],dtype=int) - 1
+          array = array[indices,:]
+          # Re-cast array as string.
+          # I don't know why I have to subtract 128 - maybe something to do with
+          # how the characters are encoded in the file?
+          # This isn't always needed.  Have test files for both cases.
+          # Need help making this more robust!
+          if array.flatten()[0] >= 128:
+            array -= 128
+          array = array.view('|S1')
+          nstations, strlen = array.shape
+          # Strip out trailing whitespace.
+          array = array.flatten().view('|S%d'%strlen)
+          array[:] = map(str.rstrip,array)
+          array = array.view('|S1').reshape(nstations,strlen)
+          # Encode it as 2D character array for netCDF file output.
+          axes = OrderedDict([('station_id',station_id),('station_strlen',tuple(range(strlen)))])
+          station = _var_type('station',atts,axes,array)
+          yield station
         var.atts['coordinates'] = 'station'
 
       if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
         yield var
-        continue
-
-      # Vertical coordinates for series data.
-      if var.name in ('SH','SV'):
-        ind = int(var.record_id.flatten()[0])
-        array = self._fstluk(ind)['d'].squeeze()
-        if array.ndim != 1: continue
-        var.atts['kind'] = 5
-        yield _var_type(var.name,var.atts,{'level':tuple(array)},array)
         continue
 
       # 'Y' data should be handled fine by _XYCoords - just give a more
