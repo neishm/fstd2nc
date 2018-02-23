@@ -241,9 +241,9 @@ class netCDF_IO (BufferBase):
         var.name = '_'+var.name
 
       # Strip out FSTD-specific metadata?
-      if self._minimal_metadata is not False:
+      if self._rpnstd_metadata_list is not None:
         for n in internal_meta:
-          if n not in self._minimal_metadata:
+          if n not in self._rpnstd_metadata_list:
             var.atts.pop(n,None)
 
 

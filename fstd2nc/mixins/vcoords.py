@@ -197,7 +197,7 @@ class VCoords (BufferBase):
                   pass  # Some keys not available in some vgrids?
               # Put this information in the final output file?
               for k,v in internal_atts.items():
-                if self._minimal_metadata is False or k in self._minimal_metadata:
+                if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
                   atts[k] = v
               # Attempt to fill in A/B ancillary data (if available).
               try:
