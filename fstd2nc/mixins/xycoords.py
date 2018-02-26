@@ -432,7 +432,7 @@ class XYCoords (BufferBase):
             pass
 
           if latarray is None or lonarray is None:
-            warn(_("Unable to find lat/lon coordinates for '%s'")%var.name)
+            warn(_("Unable to get lat/lon coordinates for '%s'")%var.name)
             yield var
             continue
 
@@ -492,15 +492,10 @@ class XYCoords (BufferBase):
             lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
             lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
-          else:
-            warn(_("Unhandled lat/lon coords for '%s'")%var.name)
-            yield var
-            continue
-
         # --- End of lat/lon/xaxis/yaxis decoding.
 
         if lat is None or lon is None:
-          warn(_("Unable to get grid info for '%s'")%var.name)
+          warn(_("Unable to get lat/lon coordinates for '%s'")%var.name)
           yield var
           continue
 
