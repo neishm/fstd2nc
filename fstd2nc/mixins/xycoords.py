@@ -348,8 +348,6 @@ class XYCoords (BufferBase):
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
     gridmaps = OrderedDict()
-    # Grid mappings will be defined for grids based on the grid types listed in 'grrefs' 
-    grrefs = ['E','L','N','S']
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
@@ -379,73 +377,63 @@ class XYCoords (BufferBase):
       # Check if we already defined this grid.
       if key not in grids:
 
-        try:
-          # Get basic information about this grid.
-          # First, handle non-ezqkdef grids.
-          if grtyp in self._direct_grids:
-            lat = self._find_coord(var,'^^')['d'].squeeze(axis=2)
-            lon = self._find_coord(var,'>>')['d'].squeeze(axis=2)
-            ll = {'lat':lat, 'lon':lon}
-            grd = {}
-          # Everything else should be handled by ezqkdef.
-          else:
-            try:
-              grd = readGrid(self._meta_funit, var.atts.copy())
-            except RMNError:
-              grd = {'grref':''}
-            if grd['grref'].upper() not in grrefs :
-              gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
-              ll = gdll(gdid)
-        except (TypeError,EzscintError,KeyError):
-          warn(_("Unable to get grid info for '%s'")%var.name)
-          yield var
-          continue
+        lat = lon = xaxis = yaxis = None
 
-
-        # Find projection's X/Y coordinates (if applicable).
-        try:
-          # Can't do this for direct grids (don't have a gdid defined).
-          if grtyp in self._direct_grids: raise TypeError
-
-          # Base grid for current grid is recognized
-          if grd['grref'].upper() in grrefs : 
+        # Check if GridMap recognizes this grid.
+        if grtyp not in self._direct_grids:
+          try:
+            grd = readGrid(self._meta_funit, var.atts.copy())
             gmap = GridMap.gen_gmap(grd)
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar.name
             yield gmapvar
             (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll()
-            if yaxis is not None and tuple(yaxis.axes.items()) not in coords:
-              yield yaxis
-              coords.add(tuple(yaxis.axes.items()))
-            if xaxis is not None and tuple(xaxis.axes.items()) not in coords:
-              yield xaxis
-              coords.add(tuple(xaxis.axes.items()))
+          except (TypeError,EzscintError,KeyError,RMNError,ValueError):
+            pass # Wasn't supported.
 
-          else:
-            xycoords = gdgaxes(gdid)
-            ax = xycoords['ax'].transpose()
-            ay = xycoords['ay'].transpose()
-            # Convert from degenerate 2D arrays to 1D arrays.
-            ax = ax[0,:]
-            ay = ay[:,0]
-            xaxis = _var_type('x',{'axis':'X'},{'x':tuple(ax)},ax)
-            yaxis = _var_type('y',{'axis':'Y'},{'y':tuple(ay)},ay)
-        except (TypeError,EzscintError):
-          # Can't get X/Y coords for this grid?
-          xaxis = yaxis = None
+        # Otherwise, need to decode the information here.
+        if lat is None or lon is None:
 
-        # Construct lat/lon fields.
-        if not grd or ('grref' in grd and grd['grref'].upper() not in grrefs) : 
-          latarray = ll['lat'].transpose() # Switch from Fortran to C order.
           latatts = OrderedDict()
           latatts['long_name'] = 'latitude'
           latatts['standard_name'] = 'latitude'
           latatts['units'] = 'degrees_north'
-          lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
           lonatts = OrderedDict()
           lonatts['long_name'] = 'longitude'
           lonatts['standard_name'] = 'longitude'
           lonatts['units'] = 'degrees_east'
+
+          latarray = lonarray = None
+          try:
+            # First, handle non-ezqkdef grids.
+            if grtyp in self._direct_grids:
+              latarray = self._find_coord(var,'^^')['d'].squeeze(axis=2)
+              lonarray = self._find_coord(var,'>>')['d'].squeeze(axis=2)
+            else:
+              gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
+              ll = gdll(gdid)
+              latarray = ll['lat']
+              lonarray = ll['lon']
+              xycoords = gdgaxes(gdid)
+              ax = xycoords['ax'].transpose()
+              ay = xycoords['ay'].transpose()
+              # Convert from degenerate 2D arrays to 1D arrays.
+              ax = ax[0,:]
+              ay = ay[:,0]
+              xaxis = _var_type('x',{'axis':'X'},{'x':tuple(ax)},ax)
+              yaxis = _var_type('y',{'axis':'Y'},{'y':tuple(ay)},ay)
+
+          except (TypeError,EzscintError,KeyError,RMNError,ValueError):
+            pass
+
+          if latarray is None or lonarray is None:
+            warn(_("Unable to find lat/lon coordinates for '%s'")%var.name)
+            yield var
+            continue
+
+          # Construct lat/lon variables.
+          latarray = latarray.transpose() # Switch from Fortran to C order.
+          lonarray = lonarray.transpose() # Switch from Fortran to C order.
 
           # Case 1: lat/lon can be resolved into 1D Cartesian coordinates.
           # Calculate the mean lat/lon arrays in double precision.
@@ -490,12 +478,6 @@ class XYCoords (BufferBase):
               gridaxes = [('subgrid',tuple(range(ngrids))), ('y',tuple(yaxis.array)), ('x',tuple(xaxis.array))]
               latarray = latarray.reshape(ngrids,ny,-1)
               lonarray = lonarray.reshape(ngrids,ny,-1)
-            if tuple(yaxis.axes.items()) not in coords:
-              yield yaxis
-              coords.add(tuple(yaxis.axes.items()))
-            if tuple(xaxis.axes.items()) not in coords:
-              yield xaxis
-              coords.add(tuple(xaxis.axes.items()))
             lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
             lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
 
@@ -510,6 +492,20 @@ class XYCoords (BufferBase):
             yield var
             continue
 
+        # --- End of lat/lon/xaxis/yaxis decoding.
+
+        if lat is None or lon is None:
+          warn(_("Unable to get grid info for '%s'")%var.name)
+          yield var
+          continue
+
+        if yaxis is not None and tuple(yaxis.axes.items()) not in coords:
+          yield yaxis
+          coords.add(tuple(yaxis.axes.items()))
+        if xaxis is not None and tuple(xaxis.axes.items()) not in coords:
+          yield xaxis
+          coords.add(tuple(xaxis.axes.items()))
+
         # Sanity check on lat/lon - make sure we have something of the right size.
         if lat.array.shape == tuple(map(len,lat.axes.values())) and lon.array.shape == tuple(map(len,lon.axes.values())):
           yield lat
@@ -520,6 +516,8 @@ class XYCoords (BufferBase):
           yield var
           continue
       
+      # --- End of grid decoding.
+
       gridaxes = grids[key]
 
       # Update the var's horizontal coordinates.
