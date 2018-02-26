@@ -472,7 +472,13 @@ class XYCoords (BufferBase):
             lonarray = lonarray[0,:]
             # Special case for station data
             if 'station_id' in var.axes:
-              gridaxes = [('station_id',var.axes['station_id'])]
+              station_id = var.axes['station_id']
+              gridaxes = [('station_id',station_id)]
+              # Subset the lat/lon to the stations that are actually found.
+              # Assuming the station id (ip3) starts at 1.
+              indices = np.array(station_id,dtype=int) - 1
+              latarray = latarray[indices]
+              lonarray = lonarray[indices]
             else:
               gridaxes = [('i',var.axes['i'])]
             lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
