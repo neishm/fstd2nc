@@ -342,7 +342,7 @@ class XYCoords (BufferBase):
     from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
-    from rpnpy.librmn.all import readGrid
+    from rpnpy.librmn.all import readGrid, RMNError
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
@@ -389,7 +389,10 @@ class XYCoords (BufferBase):
             grd = {}
           # Everything else should be handled by ezqkdef.
           else:
-            grd = readGrid(self._meta_funit, var.atts.copy())
+            try:
+              grd = readGrid(self._meta_funit, var.atts.copy())
+            except RMNError:
+              grd = {'grref':''}
             if grd['grref'].upper() not in grrefs :
               gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
               ll = gdll(gdid)
