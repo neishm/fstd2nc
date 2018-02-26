@@ -124,6 +124,11 @@ class LatLon(GridMap):
     self.lon = _var_type('lon',self._lonatts,{'lon':tuple(self._lonarray)},self._lonarray)
     self.lat = _var_type('lat',self._latatts,{'lat':tuple(self._latarray)},self._latarray)
     self.gridaxes = [('lat',tuple(self._latarray)),('lon',tuple(self._lonarray))]
+    # Ensure monotonicity of longitude field.
+    # (gdll may sometimes wrap last longitude to zero).
+    # Taken from old fstd_core.c code.
+    if len(self._lonarray) >= 3 and self._lonarray[-2] > self._lonarray[-3] and self._lonarray[-1] < self._lonarray[-2]:
+      self._lonarray[-1] += 360.
     return (self.gridaxes, self.lon, self.lat)
   # Generic gen_xyll function.
   def gen_xyll(self):
