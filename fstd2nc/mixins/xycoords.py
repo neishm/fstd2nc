@@ -84,7 +84,7 @@ class GridMap(object):
         return LatLon(grd)
       # Usual case: 'E' grid is rotated.
       return RotLatLon(grd)
-    elif grref == 'L' :
+    elif grref in ('A','B','G','L') :
       return LatLon(grd)
     elif grref in ['N','S'] :
       return PolarStereo(grd)
