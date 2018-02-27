@@ -472,7 +472,10 @@ class BufferBase (object):
     var_ids = var_ids[flag]
 
     # Now, find the unique var_ids from this pruned list.
-    var_ids = np.unique(var_ids)
+    # Keep the original order of the variables.
+    # https://stackoverflow.com/questions/15637336/numpy-unique-with-order-preserved
+    _, ind = np.unique(var_ids, return_index=True)
+    var_ids = var_ids[np.sort(ind)]
 
     # Keep track of any auxiliary coordinates that were generated.
     known_coords = []
@@ -612,7 +615,7 @@ class BufferBase (object):
 
     # Iterate over each variable.
     # Variables are defined by the entries in _var_id.
-    for var_id, var_records in records.groupby(self._var_id):
+    for var_id, var_records in records.groupby(self._var_id, sort=False):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
       # Ignore meta records.
