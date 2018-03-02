@@ -113,7 +113,6 @@ class VCoords (BufferBase):
       # Only need to provide one copy of the vertical axis.
       if (levels,kind) not in vaxes:
         # Keep track of any extra arrays needed for this axis.
-        ancillary_variables = []
         coordinates = []
         # Get metadata that's specific to this axis.
         name = 'level'
@@ -196,7 +195,7 @@ class VCoords (BufferBase):
               for k,v in internal_atts.items():
                 if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
                   atts[k] = v
-              # Attempt to fill in A/B ancillary data (if available).
+              # Attempt to fill in A/B coefficients (if available).
               try:
                 all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
                 all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
@@ -207,9 +206,6 @@ class VCoords (BufferBase):
                   ind = all_z.index(z)
                   A.append(all_a[ind])
                   B.append(all_b[ind])
-                ancA = _var_type(name+'_A', {}, {name:levels}, np.asarray(A))
-                ancB = _var_type(name+'_B', {}, {name:levels}, np.asarray(B))
-                ancillary_variables.extend([ancA,ancB])
                 coordA = _var_type('a', {}, {name:levels}, np.asarray(A))
                 coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
                 coordinates.extend([coordA,coordB])
@@ -229,9 +225,6 @@ class VCoords (BufferBase):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
               A = pref * 100. * (eta - B)
-              ancB = _var_type(name+'_B', {}, {name:levels}, B)
-              ancA = _var_type(name+'_A', {}, {name:levels}, A)
-              ancillary_variables.extend([ancA,ancB])
               coordA = _var_type('a', {}, {name:levels}, np.asarray(A))
               coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
               coordinates.extend([coordA,coordB])
@@ -246,15 +239,11 @@ class VCoords (BufferBase):
 
         # Add this vertical axis.
         axes = OrderedDict([(name,levels)])
-        if len(ancillary_variables) > 0:
-          atts['ancillary_variables'] = ' '.join(v.name for v in ancillary_variables)
+        if len(coordinates) > 0:
           atts['coordinates'] = ' '.join(v.name for v in coordinates)
         array = np.asarray(levels)
         vaxes[(levels,kind)] = _var_type(name,atts,axes,array)
         yield vaxes[(levels,kind)]
-        # Add any ancillary data needed for the axis.
-        for anc in ancillary_variables:
-          yield anc
         # Add coordinates.
         for coord in coordinates:
           yield coord
