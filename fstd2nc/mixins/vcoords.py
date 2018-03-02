@@ -116,7 +116,7 @@ class VCoords (BufferBase):
         ancillary_variables = []
         coordinates = []
         # Get metadata that's specific to this axis.
-        name = 'zaxis'
+        name = 'level'
         atts = OrderedDict()
         atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
@@ -134,7 +134,6 @@ class VCoords (BufferBase):
             atts['positive'] = 'up'
         elif kind == 1:
           # sigma [sg] (0.0->1.0)
-          name = 'sigma'
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['units'] = 'sigma_level'   # units defined for compliancy with COARDS
           atts['positive'] = 'down'
@@ -175,7 +174,6 @@ class VCoords (BufferBase):
               # Get A and B info.
               vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
               if vgd_get (vgd_id,'LOGP'):
-                name = 'zeta'
                 # Not really a "standard" name, but there's nothing in the
                 # CF convensions document on how to encode this.
                 # I just merged the atmosphere_ln_pressure_coordinate and
@@ -183,7 +181,6 @@ class VCoords (BufferBase):
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
               else:
-                name = 'eta'
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
               # Add all parameters for this coordinate.
               internal_atts = OrderedDict()
@@ -221,7 +218,6 @@ class VCoords (BufferBase):
               vgd_free (vgd_id)
             # Not a '!!' coordinate, so must be 'HY'?
             else:
-              name = 'eta'
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
               # Get A and B info.
               eta = np.asarray(levels)
