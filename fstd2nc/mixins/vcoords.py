@@ -136,6 +136,7 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['units'] = 'sigma_level'   # units defined for compliancy with COARDS
           atts['positive'] = 'down'
+          atts['formula_terms'] = 'sigma: level ps: P0'
         elif kind == 2:
           # pressure [mb] (millibars)
           name = 'pres'
@@ -179,8 +180,16 @@ class VCoords (BufferBase):
                 # atmosphere_hybrid_sigma_pressure_coordinate together.
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
+                # Document the formula to follow, since it's not in the conventions.
+                atts['formula'] = "p = exp(a+b*log(p0/pref))"
+                #TODO: update this once there's an actual convention to follow!
+                try:
+                  atts['formula_terms'] = 'a: a b: b ps: P0 pref: %s'%vgd_get(vgd_id,'PREF')
+                except (KeyError,VGDError):
+                  pass # Don't have PREF available for some reason?
               else:
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+                atts['formula_terms'] = 'ap: a b: b ps: P0'
               # Add all parameters for this coordinate.
               internal_atts = OrderedDict()
               for key in VGD_KEYS:
@@ -215,6 +224,7 @@ class VCoords (BufferBase):
             # Not a '!!' coordinate, so must be 'HY'?
             else:
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+              atts['formula_terms'] = 'ap: a b: b ps: P0'
               # Get A and B info.
               eta = np.asarray(levels)
               ptop = decode_ip1(header['ip1'])['level']
