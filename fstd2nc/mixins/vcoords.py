@@ -92,6 +92,7 @@ class VCoords (BufferBase):
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
+    prefs = set()  # Reference pressure scalar variables.
     for var in super(VCoords,self)._iter():
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
@@ -181,10 +182,15 @@ class VCoords (BufferBase):
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
-                atts['formula'] = "p = exp(a+b*log(ps/pref))"
                 #TODO: update this once there's an actual convention to follow!
+                atts['formula'] = "p = exp(a+b*log(ps/pref))"
+                atts['formula_terms'] = 'a: a b: b ps: P0 pref: pref'
+                # Try getting reference pressure as a scalar.
                 try:
-                  atts['formula_terms'] = 'a: a b: b ps: P0 pref: %s'%vgd_get(vgd_id,'PREF')
+                  pref = vgd_get(vgd_id,'PREF')
+                  if pref not in prefs:
+                    prefs.add(pref)
+                    yield _var_type('pref',{'units':'Pa'},{},np.array(pref))
                 except (KeyError,VGDError):
                   pass # Don't have PREF available for some reason?
               else:
