@@ -181,7 +181,7 @@ class VCoords (BufferBase):
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
-                atts['formula'] = "p = exp(a+b*log(p0/pref))"
+                atts['formula'] = "p = exp(a+b*log(ps/pref))"
                 #TODO: update this once there's an actual convention to follow!
                 try:
                   atts['formula_terms'] = 'a: a b: b ps: P0 pref: %s'%vgd_get(vgd_id,'PREF')
