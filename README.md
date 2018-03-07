@@ -15,7 +15,10 @@ optional arguments:
   --version             show program's version number and exit
   --no-progress         Disable the progress bar.
   --minimal-metadata    Don't include RPN record attributes and other internal
-                        information in the output metadata.
+                        information in the output metadata. This is the
+                        default behaviour.
+  --rpnstd-metadata     Include all RPN record attributes in the output
+                        metadata.
   --rpnstd-metadata-list nomvar,...
                         Specify a minimal set of RPN record attributes to
                         include in the output file.

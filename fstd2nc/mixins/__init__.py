@@ -215,7 +215,8 @@ class BufferBase (object):
     group.add_argument('--progress', action='store_true', default=True, help=SUPPRESS)
     group.add_argument('--no-progress', action='store_false', dest='progress', help=_('Disable the progress bar.'))
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--minimal-metadata', action='store_true', help=_("Don't include RPN record attributes and other internal information in the output metadata."))
+    group.add_argument('--minimal-metadata', action='store_true', default=True, help=_("Don't include RPN record attributes and other internal information in the output metadata.")+" "+_("This is the default behaviour."))
+    group.add_argument('--rpnstd-metadata', action='store_false', dest='minimal_metadata', help=_("Include all RPN record attributes in the output metadata."))
     group.add_argument('--rpnstd-metadata-list', metavar='nomvar,...', help=_("Specify a minimal set of RPN record attributes to include in the output file."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
@@ -281,7 +282,7 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, progress=False, minimal_metadata=False, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
+  def __init__ (self, filename, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -305,7 +306,13 @@ class BufferBase (object):
     # Set up a progress bar for scanning the input files.
     Bar = _ProgressBar if progress is True else _FakeBar
 
-    if minimal_metadata is True:
+    # Set default for minimal_metadata
+    if rpnstd_metadata is not None:
+      minimal_metadata = not rpnstd_metadata
+    if minimal_metadata is None:
+      minimal_metadata is True
+    # Set default for rpnstd_metadata_list
+    if minimal_metadata is True and rpnstd_metadata_list is None:
       rpnstd_metadata_list = ''
     if isinstance(rpnstd_metadata_list,str):
       rpnstd_metadata_list = rpnstd_metadata_list.split(',')
