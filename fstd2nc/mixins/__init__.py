@@ -496,7 +496,8 @@ class BufferBase (object):
       # Get the metadata for each record.
       atts = OrderedDict()
       for n in records.dtype.names:
-        if n in self._outer_axes or n in self._ignore_atts: continue
+        if n in self._outer_axes or n in self._outer_coords or n in self._ignore_atts:
+          continue
         v = var_records[n]
         # Remove missing values before continuing.
         v = np.ma.compressed(v)
@@ -651,7 +652,8 @@ class BufferBase (object):
               coord_indices.setdefault(coordname,[]).append(cat.codes)
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
-        elif len(cat.categories) == 1:
+        # Ignore outer coords, since the value is already encoded elsewhere.
+        elif len(cat.categories) == 1 and n not in self._outer_coords:
           try:
             v = cat[0]
             # Trim string attributes (remove whitespace padding).
