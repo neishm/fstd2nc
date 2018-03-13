@@ -84,8 +84,8 @@ You can control `fstd2nc.Buffer` using parameters similar to the command-line ar
 For example:
 ```python
 import fstd2nc
-# Strip out FSTD metadata from the dataset, and select only TT,HU variables.
-data = fstd2nc.Buffer("myfile.fst", minimal_metadata=True, vars=['TT','HU'])
+# Select only TT,HU variables.
+data = fstd2nc.Buffer("myfile.fst", vars=['TT','HU'])
 # Set the reference date to Jan 1, 2000 in the netCDF file.
 data.write_nc_file("myfile.nc", reference_date='2000-01-01')
 ```
@@ -97,8 +97,8 @@ For more complicated conversions, you can manipulate the data as an `xarray.Data
 ```python
 import fstd2nc
 
-# Open the FSTD file, and use dates of validity for the time axis.
-data = fstd2nc.Buffer("myfile.fst", datev=True)
+# Open the FSTD file.
+data = fstd2nc.Buffer("myfile.fst")
 
 # Access the data as an xarray.Dataset object.
 dataset = data.to_xarray()
