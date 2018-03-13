@@ -128,6 +128,11 @@ If you're processing many input files into a single netCDF file, you could get s
 pip install fstd2nc[manyfiles]
 ```
 
+Alternatively, you can install it in a [conda](https://conda.io/docs/index.html) environment:
+```
+conda install -c neishm fstd2nc
+```
+
 
 Using in a Pydap server
 =======================
