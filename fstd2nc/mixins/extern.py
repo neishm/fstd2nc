@@ -22,7 +22,7 @@ from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
 #################################################
-# Provide an xarray+dask interface for the FSTD data.
+# Provide various external array interfaces for the FSTD data.
 
 # Helper interface for ordering tasks based on FSTD record order.
 # Might provide a small speed boost when the OS employs a read-ahead buffer.
@@ -68,7 +68,7 @@ except ImportError:
   pass
 
 
-class XArray (BufferBase):
+class Extern (BufferBase):
 
   # The interface for getting chunks into dask.
   def _read_chunk (self, rec_id, shape, dtype):
