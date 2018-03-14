@@ -74,22 +74,17 @@ class XArray (BufferBase):
   def _read_chunk (self, rec_id, shape, dtype):
     return self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
 
-  def to_xarray (self):
+  def _iter_dask (self):
     """
-    Create an xarray interface for the RPN data.
-    Requires the xarray and dask packages.
+    Iterate over all the variables, and convert to dask arrays.
     """
     from fstd2nc.mixins import _iter_type, _var_type
-    import xarray as xr
     from dask import array as da
     from dask.base import tokenize
     import numpy as np
-    unique_token = tokenize(self._files,self._headers)
-    out = dict()
+    unique_token = tokenize(self._files,id(self))
     for var in self._iter():
-      if isinstance(var,_var_type):
-        array = var.array
-      elif isinstance(var,_iter_type):
+      if isinstance(var,_iter_type):
         name = var.name+"-"+unique_token
         ndim = len(var.axes)
         shape = tuple(map(len,var.axes.values()))
@@ -116,11 +111,18 @@ class XArray (BufferBase):
         for i in range(ndim_outer,ndim):
           chunks.append((shape[i],))
         array = da.Array(dsk, name, chunks, var.dtype)
-      else:
-        warn(_("Unhandled type %s - ignoring variable.")%type(var))
-        continue
+        var = _var_type(var.name,var.atts,var.axes,array)
+      yield var
 
-      out[var.name] = xr.DataArray(data=array, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
+  def to_xarray (self):
+    """
+    Create an xarray interface for the RPN data.
+    Requires the xarray and dask packages.
+    """
+    import xarray as xr
+    out = dict()
+    for var in self._iter_dask():
+      out[var.name] = xr.DataArray(data=var.array, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
 
     # Construct the Dataset from all the variables.
     out = xr.Dataset(out)
