@@ -69,7 +69,6 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
 
   # Get global metadata.
   global_metadata = buf._metadata.get('global',{})
-  global_metadata['Conventions'] = "CF-1.6"
   # Add history to global metadata.
   timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
   history = timestamp + ": %s via Pydap+fstd2dap"%path.basename(name)
