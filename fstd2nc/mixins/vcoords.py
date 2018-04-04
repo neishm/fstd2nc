@@ -45,6 +45,11 @@ def decode_ip1 (ip1):
 class VCoords (BufferBase):
   _vcoord_nomvars = ('HY','!!')
 
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(VCoords,cls)._cmdline_args(parser)
+    parser.add_argument('--strict-vcoord-match', action='store_true', help=_("Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the IG1/IG2/IG3 paramters of the field in order to be used.  The default behaviour is to use the vertical record anyway if it's the only one in the file."))
+
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(VCoords,cls).__new__(cls, *args, **kwargs)
@@ -53,6 +58,7 @@ class VCoords (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
+    self._strict_vcoord_match = kwargs.pop('strict_vcoord_match',False)
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
@@ -165,6 +171,9 @@ class VCoords (BufferBase):
           # ig1/ig2.
           if key not in vrecs and 'HY' in vrecs:
             key = 'HY'
+          # If there's only a single vertical record, then match that regardless of keys.
+          if len(vrecs) == 1 and not self._strict_vcoord_match:
+            key = list(vrecs.keys())[0]
           # Check if we have a vertical coordinate record to use.
           if key in vrecs:
             header = vrecs[key]
