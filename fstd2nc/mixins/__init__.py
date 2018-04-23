@@ -639,10 +639,11 @@ class BufferBase (object):
         # https://stackoverflow.com/questions/29530232/python-pandas-check-if-any-value-is-nan-in-dataframe
         if var_records[n].isnull().values.any(): continue
         # Get the unique values, in order.
-        cat = pd.Categorical(var_records[n])
+        column = var_records[n]
+        cat = pd.Categorical(column)
         # Is this column an outer axis?
         if n in self._outer_axes:
-          axes[n] = tuple(cat.categories)
+          axes[n] = tuple(np.array(cat.categories,dtype=column.dtype))
           indices.append(cat.codes)
           # Is this also an axis for an auxiliary coordinate?
           for coordname,coordaxes in self._outer_coords.items():
