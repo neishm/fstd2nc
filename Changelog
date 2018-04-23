@@ -1,4 +1,23 @@
-Version 0.20180220.0 (Feb 20, 2017)
+Version 0.20180423.0 (Apr 23, 2018)
+	* New --rpnstd-metadata-list to select a subset of RPN metadata
+	  attributes to copy to the netCDF file.
+	* Made --minimal-metadata the default.  The old behaviour (copying all
+	  RPN metadata) can be triggered with a new --rpnstd-metadata option.
+	* Coordinate-related RPN metadata is no longer copied, since the values
+	  are already encoded in the coordinate variable.
+	* Restored support for 'A', 'B', and 'G' grids.
+	* Fixed the repeated longitude in global grids - value is now 360
+	  instead of wrapping back to 0.
+	* Use consistent lat/lon/station coordinates for series data when using
+	  a --filter on the ip3 values.
+	* Unused axes are now pruned from the file.  Mostly affected series
+	  files, which had an extra time axis from the unused datev values.
+	* Vertical axes are now encoded as floats, since that's the precision
+	  of the original ip1 values.  The pandas version of the iterator was
+	  upconverting these to doubles, which would cause different results
+	  depending on whether pandas was installed or not.
+
+Version 0.20180220.0 (Feb 20, 2018)
 	* Improvements to xarray interface to utilize the CF conventions
 	  metadata (such as auxiliary coordinates).
 	* Add station, leadtime, and reftime as auxiliary coordinates in series
@@ -15,7 +34,7 @@ Version 0.20180220.0 (Feb 20, 2017)
 	* Decode depth coordinate for ocean model output.
 	* Fix decoding of masked data in raw binary (X32) format.
 
-Version 0.20171130.1 (Feb 13, 2017)
+Version 0.20171130.1 (Feb 13, 2018)
 	* Fixed unlimited dimension specification for PyDAP interface.
 	* Workaround for bug in numpy 1.14 when using masked structured arrays.
 	* Fix forecast times for series files.
