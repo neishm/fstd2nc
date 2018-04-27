@@ -41,6 +41,7 @@ optional arguments:
                         Use the date of original analysis for the time axis,
                         and put the forecast times into a separate "forecast"
                         axis.
+  --squash-height       Drop the "height" axis when it is degenerate (0m only)
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids
                         stacked together as they are in the RPN file.
