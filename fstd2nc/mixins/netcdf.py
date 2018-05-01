@@ -118,9 +118,19 @@ class netCDF_IO (BufferBase):
     else:
       reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
-    varlist = super(netCDF_IO,self)._iter()
+    # Pre-fetch all the variables.
+    varlist = list(super(netCDF_IO,self)._iter())
+
+    # Check if time axis can be made an unlimited dimension.
+    # Can only work if it only appears as the outermost dimension, otherwise
+    # the netCDF4 module will crash (maybe a bug with netCDF4?)
+    self._time_unlimited = True
+    for var in varlist:
+      if 'time' not in var.axes: continue
+      if list(var.axes.keys()).index('time') > 0:
+        self._time_unlimited = False
+
     if self._unique_names:
-      varlist = list(varlist)
       self._fix_names(varlist)
 
     for var in varlist:
@@ -275,7 +285,11 @@ class netCDF_IO (BufferBase):
         # Only need to create each dimension once (even if it's in multiple
         # variables).
         if axisname not in f.dimensions:
-          f.createDimension(axisname, len(axisvalues))
+          # Special case: make the time dimension unlimited.
+          if axisname == 'time' and self._time_unlimited:
+            f.createDimension(axisname, None)
+          else:
+            f.createDimension(axisname, len(axisvalues))
 
       dimensions = list(var.axes.keys())
 
