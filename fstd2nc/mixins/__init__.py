@@ -422,7 +422,7 @@ class BufferBase (object):
     # Suppress FutureWarning from numpy about doing this.  Probably benign...
     with warnings.catch_warnings():
       warnings.simplefilter("ignore")
-      meta_keys = self._headers.data[meta_mask][list(self._var_id)+['ig1','ig2','ig3','ig4']]
+      meta_keys = self._headers.data[meta_mask][list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
     meta_keys, ind = np.unique(meta_keys, return_index=True)
     meta_recids = meta_recids[ind]
     # Find the files that give these unique coord records.
