@@ -148,6 +148,10 @@ class netCDF_IO (BufferBase):
         var.atts.update(units=units, calendar='gregorian')
         var.array = np.asarray(date2num(var.array,units=units))
 
+      # Encode the attributes so they're ready for writing to netCDF.
+      # Handles things like encoding coordinate objects to a string.
+      var.atts = self._encode_atts(var.atts)
+
       yield var
 
   # Helper method - apply name changes to all the references found in the
@@ -317,14 +321,13 @@ class netCDF_IO (BufferBase):
             f.createDimension(axisname, len(axisvalues))
 
       dimensions = list(var.axes.keys())
-      atts = self._encode_atts(var.atts)
 
       # Write the variable.
       # Easy case: already have the data.
       if isinstance(var,_var_type):
         v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions, zlib=zlib)
         # Write the metadata.
-        v.setncatts(atts)
+        v.setncatts(var.atts)
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
@@ -339,7 +342,7 @@ class netCDF_IO (BufferBase):
       # the file after it's created.
       v.set_auto_scale(False)
       # Write the metadata.
-      v.setncatts(atts)
+      v.setncatts(var.atts)
       # Write the data.
       indices = list(np.ndindex(var.record_id.shape))
       # Sort the indices by FSTD key, so we're reading the records in the same
