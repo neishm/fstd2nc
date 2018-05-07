@@ -53,6 +53,10 @@ optional arguments:
   --filter CONDITION    Subset RPN file records using the given criteria. For
                         example, to convert only 24-hour forecasts you could
                         use --filter ip2==24
+  --omit NAME1,NAME2,...
+                        Omit some axes or derived variables from the output.
+                        Note that axes can only be omitted if they have a
+                        length of 1.
   --metadata-file METADATA_FILE
                         Use metadata from the specified file. You can repeat
                         this option multiple times to build metadata from
