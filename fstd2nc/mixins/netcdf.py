@@ -59,23 +59,28 @@ class netCDF_Atts (BufferBase):
   def _iter (self):
     from collections import OrderedDict
 
-    axis_renames = {}
+    # Extract variable rename requests from the user-supplied metadata.
+    renames = {}
+    for varname, atts in self._metadata.items():
+      if 'rename' in atts:
+        renames[varname] = atts.pop('rename')
 
+    # Apply the user-supplied metadata.
     for var in super(netCDF_Atts,self)._iter():
-      orig_name = var.name
       # Add extra metadata provided by the user?
       if var.name in self._metadata:
         var.atts.update(self._metadata[var.name])
-        # Rename the field? (Using special 'rename' key in the metadata file).
-        if 'rename' in var.atts:
-          var.name = var.atts.pop('rename')
-          # Also rename any axis with this name.
-          axis_renames[orig_name] = var.name
+        # Rename the field?
+        if var.name in renames:
+          var.name = renames[var.name]
 
       # Check if any of the axes in this variable need to be renamed.
       axis_names, axis_values = zip(*var.axes.items()) or ([],[])
-      axis_names = [axis_renames.get(n,n) for n in axis_names]
+      axis_names = [renames.get(n,n) for n in axis_names]
       var.axes = OrderedDict(zip(axis_names,axis_values))
+
+      # Check if we need to update the variable's metadata for renames.
+      self._apply_renames_to_metadata(var.atts, renames)
 
       yield var
 
@@ -144,6 +149,22 @@ class netCDF_IO (BufferBase):
         var.array = np.asarray(date2num(var.array,units=units))
 
       yield var
+
+  # Helper method - apply name changes to all the references found in the
+  # metadata.
+  def _apply_renames_to_metadata (self, atts, renames):
+    # List of metadata keys that are internal to the FSTD file.
+    internal_meta = self._headers.dtype.names
+    for oldname, newname in renames.items():
+      for key,val in list(atts.items()):
+        # Don't touch FSTD metadata.
+        if key in internal_meta: continue
+        # Can only modify string attributes.
+        if not isinstance(val,str): continue
+        val = val.split()
+        if oldname in val:
+          val[val.index(oldname)] = newname
+        atts[key] = ' '.join(val)
 
 
   def _fix_names (self, varlist):
@@ -234,15 +255,7 @@ class netCDF_IO (BufferBase):
         for othervar in varlist:
           # Must match axes.
           if not set(var.axes.keys()) <= set(othervar.axes.keys()): continue
-          for key,val in list(othervar.atts.items()):
-            # Don't touch FSTD metadata.
-            if key in internal_meta: continue
-            # Can only modify string attributes.
-            if not isinstance(val,str): continue
-            val = val.split()
-            if orig_varname in val:
-              val[val.index(orig_varname)] = var.name
-            othervar.atts[key] = ' '.join(val)
+          self._apply_renames_to_metadata(othervar.atts, {orig_varname:var.name})
 
     for var in varlist:
       # Names must start with a letter or underscore.

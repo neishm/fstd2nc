@@ -45,6 +45,11 @@ def decode_ip1 (ip1):
 class VCoords (BufferBase):
   _vcoord_nomvars = ('HY','!!')
 
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(VCoords,cls)._cmdline_args(parser)
+    parser.add_argument('--strict-vcoord-match', action='store_true', help=_("Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the IG1/IG2/IG3 paramters of the field in order to be used.  The default behaviour is to use the vertical record anyway if it's the only one in the file."))
+
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(VCoords,cls).__new__(cls, *args, **kwargs)
@@ -53,6 +58,7 @@ class VCoords (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
+    self._strict_vcoord_match = kwargs.pop('strict_vcoord_match',False)
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
@@ -92,6 +98,7 @@ class VCoords (BufferBase):
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
+    prefs = set()  # Reference pressure scalar variables.
     for var in super(VCoords,self)._iter():
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
@@ -113,10 +120,9 @@ class VCoords (BufferBase):
       # Only need to provide one copy of the vertical axis.
       if (levels,kind) not in vaxes:
         # Keep track of any extra arrays needed for this axis.
-        ancillary_variables = []
         coordinates = []
         # Get metadata that's specific to this axis.
-        name = 'zaxis'
+        name = 'level'
         atts = OrderedDict()
         atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
@@ -134,10 +140,10 @@ class VCoords (BufferBase):
             atts['positive'] = 'up'
         elif kind == 1:
           # sigma [sg] (0.0->1.0)
-          name = 'sigma'
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['units'] = 'sigma_level'   # units defined for compliancy with COARDS
           atts['positive'] = 'down'
+          atts['formula_terms'] = 'sigma: level ps: P0'
         elif kind == 2:
           # pressure [mb] (millibars)
           name = 'pres'
@@ -165,6 +171,9 @@ class VCoords (BufferBase):
           # ig1/ig2.
           if key not in vrecs and 'HY' in vrecs:
             key = 'HY'
+          # If there's only a single vertical record, then match that regardless of keys.
+          if len(vrecs) == 1 and not self._strict_vcoord_match:
+            key = list(vrecs.keys())[0]
           # Check if we have a vertical coordinate record to use.
           if key in vrecs:
             header = vrecs[key]
@@ -175,16 +184,27 @@ class VCoords (BufferBase):
               # Get A and B info.
               vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
               if vgd_get (vgd_id,'LOGP'):
-                name = 'zeta'
                 # Not really a "standard" name, but there's nothing in the
                 # CF convensions document on how to encode this.
                 # I just merged the atmosphere_ln_pressure_coordinate and
                 # atmosphere_hybrid_sigma_pressure_coordinate together.
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
+                # Document the formula to follow, since it's not in the conventions.
+                #TODO: update this once there's an actual convention to follow!
+                atts['formula'] = "p = exp(a+b*log(ps/pref))"
+                atts['formula_terms'] = 'a: a b: b ps: P0 pref: pref'
+                # Try getting reference pressure as a scalar.
+                try:
+                  pref = vgd_get(vgd_id,'PREF')
+                  if pref not in prefs:
+                    prefs.add(pref)
+                    yield _var_type('pref',{'units':'Pa'},{},np.array(pref))
+                except (KeyError,VGDError):
+                  pass # Don't have PREF available for some reason?
               else:
-                name = 'eta'
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+                atts['formula_terms'] = 'ap: a b: b ps: P0'
               # Add all parameters for this coordinate.
               internal_atts = OrderedDict()
               for key in VGD_KEYS:
@@ -199,7 +219,7 @@ class VCoords (BufferBase):
               for k,v in internal_atts.items():
                 if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
                   atts[k] = v
-              # Attempt to fill in A/B ancillary data (if available).
+              # Attempt to fill in A/B coefficients (if available).
               try:
                 all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
                 all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
@@ -210,9 +230,6 @@ class VCoords (BufferBase):
                   ind = all_z.index(z)
                   A.append(all_a[ind])
                   B.append(all_b[ind])
-                ancA = _var_type(name+'_A', {}, {name:levels}, np.asarray(A))
-                ancB = _var_type(name+'_B', {}, {name:levels}, np.asarray(B))
-                ancillary_variables.extend([ancA,ancB])
                 coordA = _var_type('a', {}, {name:levels}, np.asarray(A))
                 coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
                 coordinates.extend([coordA,coordB])
@@ -221,8 +238,8 @@ class VCoords (BufferBase):
               vgd_free (vgd_id)
             # Not a '!!' coordinate, so must be 'HY'?
             else:
-              name = 'eta'
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+              atts['formula_terms'] = 'ap: a b: b ps: P0'
               # Get A and B info.
               eta = np.asarray(levels)
               ptop = decode_ip1(header['ip1'])['level']
@@ -233,9 +250,6 @@ class VCoords (BufferBase):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
               A = pref * 100. * (eta - B)
-              ancB = _var_type(name+'_B', {}, {name:levels}, B)
-              ancA = _var_type(name+'_A', {}, {name:levels}, A)
-              ancillary_variables.extend([ancA,ancB])
               coordA = _var_type('a', {}, {name:levels}, np.asarray(A))
               coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
               coordinates.extend([coordA,coordB])
@@ -250,15 +264,11 @@ class VCoords (BufferBase):
 
         # Add this vertical axis.
         axes = OrderedDict([(name,levels)])
-        if len(ancillary_variables) > 0:
-          atts['ancillary_variables'] = ' '.join(v.name for v in ancillary_variables)
+        if len(coordinates) > 0:
           atts['coordinates'] = ' '.join(v.name for v in coordinates)
         array = np.asarray(levels)
         vaxes[(levels,kind)] = _var_type(name,atts,axes,array)
         yield vaxes[(levels,kind)]
-        # Add any ancillary data needed for the axis.
-        for anc in ancillary_variables:
-          yield anc
         # Add coordinates.
         for coord in coordinates:
           yield coord

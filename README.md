@@ -41,6 +41,12 @@ optional arguments:
                         Use the date of original analysis for the time axis,
                         and put the forecast times into a separate "forecast"
                         axis.
+  --strict-vcoord-match
+                        Require the IP1/IP2/IP3 parameters of the vertical
+                        coordinate to match the IG1/IG2/IG3 paramters of the
+                        field in order to be used. The default behaviour is to
+                        use the vertical record anyway if it's the only one in
+                        the file.
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids
                         stacked together as they are in the RPN file.
