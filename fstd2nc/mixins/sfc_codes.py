@@ -57,8 +57,7 @@ class Sfc_Codes (BufferBase):
     from collections import OrderedDict
     import numpy as np
 
-    handled_agg_codes = []
-    handled_level_codes = []
+    handled_agg_codes = dict()
 
     for var in super(Sfc_Codes,self)._iter():
 
@@ -68,24 +67,25 @@ class Sfc_Codes (BufferBase):
         continue
 
       codes = tuple(var.axes['level'])
-      coordinates = var.atts.get('coordinates','').split()
+      coordinates = var.atts.get('coordinates',[])
 
       if var.name in sfc_agg_nomvars:
         # Change the axis name so the vcoord mixin doesn't look at it.
         var.axes = _modify_axes(var.axes, level='sfctype')
-        # Add the area type to the list of auxiliary coordinates.
-        coordinates.append('surface_type')
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
           codenames = tuple(sfc_agg_codes.get(code,"unknown") for code in codes)
           array = np.array(codenames).view('|S1').reshape(len(codes),-1)
           atts = OrderedDict([('standard_name','area_type')])
           axes = OrderedDict([('sfctype',codes),('sfctype_strlen',tuple(range(array.shape[1])))])
-          yield _var_type("surface_type",atts,axes,array)
-          handled_agg_codes.append(codes)
+          surface_type = _var_type("surface_type",atts,axes,array)
+          yield surface_type
+          handled_agg_codes[codes] = surface_type
+        # Add the area type to the list of auxiliary coordinates.
+        coordinates.append(handled_agg_codes[codes])
 
       if len(coordinates) > 0:
-        var.atts['coordinates'] = ' '.join(coordinates)
+        var.atts['coordinates'] = coordinates
 
       yield var
 

@@ -353,6 +353,8 @@ class XYCoords (BufferBase):
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
     gridmaps = OrderedDict()
+    lats = OrderedDict()
+    lons = OrderedDict()
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
@@ -517,6 +519,8 @@ class XYCoords (BufferBase):
           yield lat
           yield lon
           grids[key] = gridaxes
+          lats[key] = lat
+          lons[key] = lon
         else:
           warn(_("Wrong shape of lat/lon for '%s'")%var.name)
           yield var
@@ -525,6 +529,8 @@ class XYCoords (BufferBase):
       # --- End of grid decoding.
 
       gridaxes = grids[key]
+      lat = lats[key]
+      lon = lons[key]
 
       # Update the var's horizontal coordinates.
       if len(gridaxes) == 1:
@@ -539,9 +545,9 @@ class XYCoords (BufferBase):
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
       if 'lat' not in var.axes or 'lon' not in var.axes:
-        coordinates = var.atts.get('coordinates','').split()
-        coordinates.extend(['lon','lat'])
-        var.atts['coordinates'] = ' '.join(coordinates)
+        coordinates = var.atts.get('coordinates',[])
+        coordinates.extend([lon,lat])
+        var.atts['coordinates'] = coordinates
 
       if key in gridmaps:
         var.atts['grid_mapping'] = gridmaps[key]

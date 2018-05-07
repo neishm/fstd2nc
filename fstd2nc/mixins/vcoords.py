@@ -265,7 +265,7 @@ class VCoords (BufferBase):
         # Add this vertical axis.
         axes = OrderedDict([(name,levels)])
         if len(coordinates) > 0:
-          atts['coordinates'] = ' '.join(v.name for v in coordinates)
+          atts['coordinates'] = coordinates
         array = np.asarray(levels)
         vaxes[(levels,kind)] = _var_type(name,atts,axes,array)
         yield vaxes[(levels,kind)]

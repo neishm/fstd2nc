@@ -164,7 +164,7 @@ class Series (BufferBase):
           axes = OrderedDict([('station_id',station_id),('station_strlen',tuple(range(strlen)))])
           station = _var_type('station',atts,axes,array)
           yield station
-        var.atts['coordinates'] = 'station'
+        var.atts['coordinates'] = [station]
 
       if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
         yield var
@@ -200,13 +200,15 @@ class Series (BufferBase):
               yield _var_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),{'time':var.axes['time']},np.array(var.axes['time']))
               # Include forecast and reftime auxiliary coordinates (emulate
               # what's done in the dates mixin)
-              yield _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
-              yield _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time))
+              leadtime = _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
+              yield leadtime
+              reftime = _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time))
+              yield reftime
               created_time_axis = True
             # Add leadtime and reftime as auxiliary coordinates.
-            coords = var.atts.get('coordinates','').split()
-            coords.extend(['leadtime','reftime'])
-            var.atts['coordinates'] = ' '.join(coords)
+            coords = var.atts.get('coordinates',[])
+            coords.extend([leadtime,reftime])
+            var.atts['coordinates'] = coords
           else:
             warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
       # Remove 'kind' information for now - still need to figure out vertical

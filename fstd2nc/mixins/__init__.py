@@ -482,7 +482,7 @@ class BufferBase (object):
     var_ids = np.unique(var_ids)
 
     # Keep track of any auxiliary coordinates that were generated.
-    known_coords = []
+    known_coords = dict()
 
     # Loop over each variable and construct the data & metadata.
     for var_id in var_ids:
@@ -560,13 +560,14 @@ class BufferBase (object):
           u, ind = np.unique(var_records[k], return_inverse=True)
           indices.append(ind)
         values[indices] = all_coord_values
-        coords.append(n)
         if key not in known_coords:
-          yield _var_type (name = n, atts = OrderedDict(),
+          coord = _var_type (name = n, atts = OrderedDict(),
                            axes = coordaxes, array = values )
-          known_coords.append(key)
+          yield coord
+          known_coords[key] = coord
+        coords.append(known_coords[key])
       if len(coords) > 0:
-        atts['coordinates'] = ' '.join(coords)
+        atts['coordinates'] = coords
 
       # Check if we have full coverage along all axes.
       have_data = [k >= 0 for k in record_id.flatten()]
@@ -616,7 +617,7 @@ class BufferBase (object):
     records = records[records['dltf']==0]
 
     # Keep track of any auxiliary coordinates that were generated.
-    known_coords = []
+    known_coords = dict()
 
     # Iterate over each variable.
     # Variables are defined by the entries in _var_id.
@@ -687,13 +688,14 @@ class BufferBase (object):
         values = np.zeros(shape,dtype=var_records[n].dtype)
         indices = coord_indices[n]
         values[indices] = var_records[n]
-        coords.append(n)
         if key not in known_coords:
-          yield _var_type (name = n, atts = OrderedDict(),
+          coord = _var_type (name = n, atts = OrderedDict(),
                            axes = coord_axes[n], array = values )
-          known_coords.append(key)
+          yield coord
+          known_coords[key] = coord
+        coords.append(known_coords[key])
       if len(coords) > 0:
-        atts['coordinates'] = ' '.join(coords)
+        atts['coordinates'] = coords
 
 
 

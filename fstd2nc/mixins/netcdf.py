@@ -166,6 +166,18 @@ class netCDF_IO (BufferBase):
           val[val.index(oldname)] = newname
         atts[key] = ' '.join(val)
 
+  # Helper method - prepare attributes for writing to netCDF.
+  @staticmethod
+  def _encode_atts (atts):
+    from collections import OrderedDict
+    from fstd2nc.mixins import _var_type
+    # Make a copy of the attributes (don't clobber the originals).
+    atts = OrderedDict(atts)
+    for attname, attval in list(atts.items()):
+      # Detect list of objects, convert to space-separated string.
+      if isinstance(attval,list):
+        atts[attname] = ' '.join(v.name for v in attval)
+    return atts
 
   def _fix_names (self, varlist):
     from fstd2nc.mixins import _var_type
@@ -305,13 +317,14 @@ class netCDF_IO (BufferBase):
             f.createDimension(axisname, len(axisvalues))
 
       dimensions = list(var.axes.keys())
+      atts = self._encode_atts(var.atts)
 
       # Write the variable.
       # Easy case: already have the data.
       if isinstance(var,_var_type):
         v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions, zlib=zlib)
         # Write the metadata.
-        v.setncatts(var.atts)
+        v.setncatts(atts)
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
@@ -326,7 +339,7 @@ class netCDF_IO (BufferBase):
       # the file after it's created.
       v.set_auto_scale(False)
       # Write the metadata.
-      v.setncatts(var.atts)
+      v.setncatts(atts)
       # Write the data.
       indices = list(np.ndindex(var.record_id.shape))
       # Sort the indices by FSTD key, so we're reading the records in the same
