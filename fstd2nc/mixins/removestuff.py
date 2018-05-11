@@ -30,7 +30,7 @@ class RemoveStuff (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(RemoveStuff,cls)._cmdline_args(parser)
-    parser.add_argument('--exclude', metavar='NAME1,NAME2,...', help=_("Exclude some axes or derived variables from the output.  Note that axes can only be excluded if they have a length of 1."))
+    parser.add_argument('--exclude', metavar='NAME,NAME,...', help=_("Exclude some axes or derived variables from the output.  Note that axes will only be excluded if they have a length of 1."))
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
@@ -45,8 +45,15 @@ class RemoveStuff (BufferBase):
   def _iter (self):
     from fstd2nc.mixins import _var_type, _iter_type
     for var in super(RemoveStuff,self)._iter():
+
+      # Omit the excluded variables from the data stream.
+      # Note: will not remove the var associated with an axis if the axis is
+      # non-degenerate.
       if var.name in self._exclude:
-        continue
+        if list(var.axes.keys()) != [var.name]:
+          continue
+        elif len(var.axes[var.name]) == 1:
+          continue
 
       # Remove the excluded axes.
       for exclude in self._exclude:
