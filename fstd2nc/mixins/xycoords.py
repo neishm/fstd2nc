@@ -358,7 +358,13 @@ class XYCoords (BufferBase):
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
     # horizontal staggering.
     coords = set()
-    for var in super(XYCoords,self)._iter():
+
+    # Make sure any LA/LO records get processed first, so we can apply them as
+    # coordinates to other variables.
+    varlist = list(super(XYCoords,self)._iter())
+    varlist = [v for v in varlist if v.name in ('LA','LO')] + [v for v in varlist if v.name not in ('LA','LO')]
+
+    for var in varlist:
       # Don't touch derived variables.
       if not isinstance(var,_iter_type):
         yield var
