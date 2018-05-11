@@ -416,6 +416,7 @@ class XYCoords (BufferBase):
             if grtyp in self._direct_grids:
               latarray = self._find_coord(var,'^^')['d'].squeeze(axis=2)
               lonarray = self._find_coord(var,'>>')['d'].squeeze(axis=2)
+            # Handle ezqkdef grids.
             else:
               gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
               ll = gdll(gdid)
@@ -433,12 +434,27 @@ class XYCoords (BufferBase):
           except (TypeError,EzscintError,KeyError,RMNError,ValueError):
             pass
 
+          # Check for LA/LO variables, and use these as the coordinates if
+          # nothing else available.
+          if latarray is None and var.name == 'LA':
+            var.name = 'lat'
+            var.atts.update(latatts)
+            yield var
+            #grids[key] = list(var.axes.items())
+            continue
+          if lonarray is None and var.name == 'LO':
+            var.name = 'lon'
+            var.atts.update(lonatts)
+            yield var
+            grids[key] = list(var.axes.items())
+            continue
+
           if latarray is None or lonarray is None:
             warn(_("Unable to get lat/lon coordinates for '%s'")%var.name)
             yield var
             continue
 
-          # Construct lat/lon variables.
+          # Construct lat/lon variables from latarray and lonarray.
           latarray = latarray.transpose() # Switch from Fortran to C order.
           lonarray = lonarray.transpose() # Switch from Fortran to C order.
 
@@ -551,6 +567,12 @@ class XYCoords (BufferBase):
 
       if key in gridmaps:
         var.atts['grid_mapping'] = gridmaps[key]
+
+      # Throw out superfluous LA/LO variables, if lat/lon was already decoded.
+      if var.name == 'LA' and ('lat' in var.axes or 'lat' in coordinates):
+        continue
+      if var.name == 'LO' and ('lon' in var.axes or 'lon' in coordinates):
+        continue
 
       yield var
 
