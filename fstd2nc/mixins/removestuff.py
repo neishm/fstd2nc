@@ -30,30 +30,30 @@ class RemoveStuff (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(RemoveStuff,cls)._cmdline_args(parser)
-    parser.add_argument('--omit', metavar='NAME1,NAME2,...', help=_("Omit some axes or derived variables from the output.  Note that axes can only be omitted if they have a length of 1."))
+    parser.add_argument('--exclude', metavar='NAME1,NAME2,...', help=_("Exclude some axes or derived variables from the output.  Note that axes can only be excluded if they have a length of 1."))
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
-    omit = kwargs.pop('omit',None)
-    if omit is None:
-      omit = []
-    if isinstance(omit,str):
-      omit = omit.split(',')
-    self._omit = tuple(omit)
+    exclude = kwargs.pop('exclude',None)
+    if exclude is None:
+      exclude = []
+    if isinstance(exclude,str):
+      exclude = exclude.split(',')
+    self._exclude = tuple(exclude)
     super(RemoveStuff,self).__init__(*args,**kwargs)
 
   def _iter (self):
     from fstd2nc.mixins import _var_type, _iter_type
     for var in super(RemoveStuff,self)._iter():
-      if var.name in self._omit:
+      if var.name in self._exclude:
         continue
 
-      # Remove omitted axes.
-      for omit in self._omit:
+      # Remove the excluded axes.
+      for exclude in self._exclude:
         axisnames = list(var.axes.keys())
-        if omit in axisnames and len(var.axes[omit]) == 1:
-          i = axisnames.index(omit)
-          var.axes.pop(omit)
+        if exclude in axisnames and len(var.axes[exclude]) == 1:
+          i = axisnames.index(exclude)
+          var.axes.pop(exclude)
           if isinstance(var,_var_type):
             shape = var.array.shape
             shape = shape[:i] + shape[i+1:]
@@ -63,18 +63,18 @@ class RemoveStuff (BufferBase):
             shape = shape[:i] + shape[i+1:]
             var.record_id = var.record_id.reshape(shape)
 
-      # Remove all references to omitted vars from the metadata.
+      # Remove all references to excluded vars from the metadata.
       for key,val in list(var.atts.items()):
         if isinstance(val,str):
           val = val.split()
-          for omit in self._omit:
-            if omit in val:
-              val[val.index(omit)] = None
+          for exclude in self._exclude:
+            if exclude in val:
+              val[val.index(exclude)] = None
           val = filter(None,val)
           var.atts[key] = ' '.join(val)
         # Special case - list of object references
         elif isinstance(val,list):
-          val = [v for v in val if v.name not in self._omit]
+          val = [v for v in val if v.name not in self._exclude]
           var.atts[key] = val
 
       yield var
