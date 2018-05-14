@@ -72,15 +72,8 @@ class RemoveStuff (BufferBase):
 
       # Remove all references to excluded vars from the metadata.
       for key,val in list(var.atts.items()):
-        if isinstance(val,str):
-          val = val.split()
-          for exclude in self._exclude:
-            if exclude in val:
-              val[val.index(exclude)] = None
-          val = filter(None,val)
-          var.atts[key] = ' '.join(val)
         # Special case - list of object references
-        elif isinstance(val,list):
+        if isinstance(val,list):
           val = [v for v in val if v.name not in self._exclude]
           var.atts[key] = val
 
