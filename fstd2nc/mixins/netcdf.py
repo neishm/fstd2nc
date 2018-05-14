@@ -180,7 +180,11 @@ class netCDF_IO (BufferBase):
     for attname, attval in list(atts.items()):
       # Detect list of objects, convert to space-separated string.
       if isinstance(attval,list):
-        atts[attname] = ' '.join(v.name for v in attval)
+        if len(attval) > 0:
+          atts[attname] = ' '.join(v.name for v in attval)
+        # Remove the attribute if the list of objects is empty
+        else:
+          atts.pop(attname)
     return atts
 
   def _fix_names (self, varlist):
