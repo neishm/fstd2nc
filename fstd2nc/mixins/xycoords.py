@@ -577,9 +577,9 @@ class XYCoords (BufferBase):
         var.atts['grid_mapping'] = gridmaps[key]
 
       # Throw out superfluous LA/LO variables, if lat/lon was already decoded.
-      if var.name == 'LA' and ('lat' in var.axes or 'lat' in coordinates):
+      if var.name == 'LA' and ('lat' in var.axes or lat in coordinates):
         continue
-      if var.name == 'LO' and ('lon' in var.axes or 'lon' in coordinates):
+      if var.name == 'LO' and ('lon' in var.axes or lon in coordinates):
         continue
 
       yield var
