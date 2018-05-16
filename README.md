@@ -86,7 +86,7 @@ Simple conversion
 ```python
 import fstd2nc
 data = fstd2nc.Buffer("myfile.fst")
-data.write_nc_file("myfile.nc")
+data.to_netcdf("myfile.nc")
 ```
 
 You can control `fstd2nc.Buffer` using parameters similar to the command-line arguments.  The usual convention is *--arg-name* from the command-line would be passed as *arg_name* from Python.
@@ -97,7 +97,7 @@ import fstd2nc
 # Select only TT,HU variables.
 data = fstd2nc.Buffer("myfile.fst", vars=['TT','HU'])
 # Set the reference date to Jan 1, 2000 in the netCDF file.
-data.write_nc_file("myfile.nc", reference_date='2000-01-01')
+data.to_netcdf("myfile.nc", reference_date='2000-01-01')
 ```
 
 Interfacing with xarray

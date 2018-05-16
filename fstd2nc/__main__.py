@@ -95,7 +95,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.write_nc_file(outfile, nc_format, global_metadata=global_metadata, zlib=zlib, progress=progress)
+  buf.to_netcdf(outfile, nc_format=nc_format, global_metadata=global_metadata, zlib=zlib, progress=progress)
 
 # Command-line invocation with error trapping.
 # Hides the Python stack trace when the user aborts the command.

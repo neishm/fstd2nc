@@ -290,7 +290,7 @@ class netCDF_IO (BufferBase):
             var.atts.pop(n,None)
 
 
-  def write_nc_file (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, progress=False):
+  def to_netcdf (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, progress=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
@@ -374,4 +374,5 @@ class netCDF_IO (BufferBase):
 
     f.close()
 
-
+  # Alias "to_netcdf" as "write_nc_file" for backwards compatibility.
+  write_nc_file = to_netcdf
