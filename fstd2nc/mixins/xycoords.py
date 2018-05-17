@@ -369,6 +369,10 @@ class XYCoords (BufferBase):
       if not isinstance(var,_iter_type):
         yield var
         continue
+      # Don't touch variables with no horizontal grid.
+      if all(a not in var.axes for a in ('i','j','station_id')):
+        yield var
+        continue
       # Get grid parameters.
       ni = int(var.atts['ni'])
       nj = int(var.atts['nj'])

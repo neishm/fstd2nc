@@ -59,7 +59,7 @@ class Series (BufferBase):
   def __init__ (self, *args, **kwargs):
     import numpy as np
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
+    self._meta_records = self._meta_records + ('HH','STNS')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
@@ -124,18 +124,25 @@ class Series (BufferBase):
         forecast_hours = list(array)
         if getattr(self,'_squash_forecasts',False) is False:
           yield forecast
-    # Extract vertical coordinates.
-    for vertvar in ('SH','SV'):
-      header = fstlir (self._meta_funit, nomvar=vertvar)
-      if header is None: continue
-      array = header['d'].squeeze()
-      if array.ndim != 1: continue
-      atts = OrderedDict(self._get_header_atts(header))
-      atts['kind'] = 5
-      yield _var_type(vertvar,atts,{'level':tuple(array)},array)
 
 
     for var in super(Series,self)._iter():
+
+      # Handle SV/SH vertical coordinates.
+      if var.name in ('SH','SV'):
+        # Should be able to find these records in the same file as STNS/HH.
+        record = var.record_id.squeeze()
+        if record.shape != (): continue
+        record = int(record)
+        header = self._fstluk (record)
+        if header is None: continue
+        array = header['d'].squeeze()
+        if array.ndim != 1: continue
+        var.atts['kind'] = 5
+        var.axes = {'level':tuple(array)}
+        var.record_id = var.record_id.squeeze()
+        yield var
+        continue
 
       # Hook in the station names as coordinate information.
       if 'station_id' in var.axes and station_header is not None:
