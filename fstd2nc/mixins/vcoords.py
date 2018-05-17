@@ -234,7 +234,9 @@ class VCoords (BufferBase):
                 coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
                 coordinates.extend([coordA,coordB])
               except (KeyError,ValueError,VGDError):
-                warn (_("Unable to get A/B coefficients."))
+                warn (_("Unable to get A/B coefficients for %s.")%var.name)
+                atts.pop('formula',None)
+                atts.pop('formula_terms',None)
               vgd_free (vgd_id)
             # Not a '!!' coordinate, so must be 'HY'?
             else:
