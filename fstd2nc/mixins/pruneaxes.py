@@ -23,7 +23,7 @@ from fstd2nc.mixins import BufferBase
 
 
 #################################################
-# Mixin for pruning unnecessary axes from the data.
+# Mixin for pruning unnecessary axes and coordinates from the data.
 
 class PruneAxes (BufferBase):
   def _iter (self):
@@ -33,20 +33,37 @@ class PruneAxes (BufferBase):
     from datetime import timedelta
     from rpnpy.librmn.fstd98 import fstlir
 
-    used_axes = dict()
+    used_axes = set()
     all_axes = dict()
+    varlist = []
 
+    # Pull axes out of the stream.
     for var in super(PruneAxes,self)._iter():
-      # Pull axes out of the stream.
       if isinstance(var,_var_type) and list(var.axes.keys()) == [var.name]:
         all_axes[(var.name,tuple(var.axes[var.name]))] = var
-        #yield var
+      else:
+        varlist.append(var)
+
+    # Provide axes only when they are needed by FST variables.
+    # (Use by derived variables doesn't count).
+    for var in varlist:
+      if isinstance(var,_var_type):
         continue
-      # Provide axes only when they are needed by variables.
       for name, values in var.axes.items():
         key = (name,tuple(values))
         if key in all_axes and key not in used_axes:
           axis = all_axes[key]
           yield axis
-          used_axes[key] = axis
-      yield var
+        used_axes.add(key)
+
+    # Finally, re-insert variables back into the stream.
+    # Ignore derived variables that are coordinates for unnecessary axes.
+    for var in varlist:
+      remove_var = False
+      for name, values in var.axes.items():
+        key = (name,tuple(values))
+        if key in all_axes and key not in used_axes:
+          remove_var = True
+      if not remove_var:
+        yield var
+
