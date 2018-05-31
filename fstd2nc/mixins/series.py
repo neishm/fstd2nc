@@ -50,6 +50,16 @@ from fstd2nc.mixins import BufferBase
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
 class Series (BufferBase):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(Series,cls)._cmdline_args(parser)
+    #group = parser.add_argument_group(_('Options for profile data'))
+    group = parser
+    group.add_argument('--profile-momentum-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use momentum levels.'))
+    group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
+    group.add_argument('--ignore-bottom-profile-level', action='store_true', help=_('Ignore the bottom level of thermodynamic and momentum coordinates from SH and SV records for profile data.'))
+    group.add_argument('--ignore-top-profile-level', action='store_true', help=_('Ignore the topmost level of thermodynamic and momentum coordinates from SH and SV records for profile data.'))
+
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(Series,cls).__new__(cls, *args, **kwargs)
@@ -58,6 +68,17 @@ class Series (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
+    momentum_vars = kwargs.pop('profile_momentum_vars',None)
+    if isinstance(momentum_vars,str):
+      momentum_vars = momentum_vars.split(',')
+    thermo_vars = kwargs.pop('profile_thermodynamic_vars',None)
+    if isinstance(thermo_vars,str):
+      thermo_vars = thermo_vars.split(',')
+    self._momentum_vars = momentum_vars
+    self._thermo_vars = thermo_vars
+    self._ignore_bottom_profile_level = kwargs.pop('ignore_bottom_profile_level',False)
+    self._ignore_top_profile_level = kwargs.pop('ignore_top_profile_level',False)
+
     # Don't process series time/station/height records as variables.
     self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
     # Add station # as another axis.
@@ -109,6 +130,7 @@ class Series (BufferBase):
     created_time_axis = False  # To only create squashed time axis once.
                                # (for --squashed-forecasts option).
     station = None             # To attach the station names as coordinates.
+    momentum = thermo = None   # To attach the vertical axes.
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
@@ -129,11 +151,18 @@ class Series (BufferBase):
       header = fstlir (self._meta_funit, nomvar=vertvar)
       if header is None: continue
       array = header['d'].squeeze()
+      # Drop the top or bottom levels to match the profile data?
+      if self._ignore_bottom_profile_level:
+        array = array[:-1]
+      if self._ignore_top_profile_level:
+        array = array[1:]
       if array.ndim != 1: continue
       atts = OrderedDict(self._get_header_atts(header))
       atts['kind'] = 5
-      yield _var_type(vertvar,atts,{'level':tuple(array)},array)
-
+      var = _var_type(vertvar,atts,{'level':tuple(array)},array)
+      if vertvar == 'SH': thermo = tuple(array)
+      if vertvar == 'SV': momentum = tuple(array)
+      yield var
 
     for var in super(Series,self)._iter():
 
@@ -183,7 +212,13 @@ class Series (BufferBase):
           var.axes.pop('level')
         # ni is actually vertical level.
         # nj is actually forecast time.
-        var.axes = _modify_axes(var.axes, i='level', j=('forecast',forecast_hours))
+        if self._momentum_vars is not None and var.name in self._momentum_vars and momentum is not None:
+          level_def = ('level',momentum)
+        elif self._thermo_vars is not None and var.name in self._thermo_vars and thermo is not None:
+          level_def = ('level',thermo)
+        else:
+          level_def = 'level'
+        var.axes = _modify_axes(var.axes, i=level_def, j=('forecast',forecast_hours))
 
         # Some support for squashing forecasts.
         if getattr(self,'_squash_forecasts',False) is True:
