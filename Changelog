@@ -16,6 +16,7 @@ Version 0.20180604.0 (Jun 4, 2018)
 	  Note: only needed for profile data.
 	* New --missing-bottom-profile-level option to work around a bug in
 	  profile data coming from rpnphy output.
+	* Fixed a bug in the times for profile / series data.
 
 Version 0.20180423.0 (Apr 23, 2018)
 	* New --rpnstd-metadata-list to select a subset of RPN metadata
