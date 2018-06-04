@@ -57,8 +57,8 @@ class Series (BufferBase):
     group = parser
     group.add_argument('--profile-momentum-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use momentum levels.'))
     group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
-    group.add_argument('--ignore-bottom-profile-level', action='store_true', help=_('Ignore the bottom level of thermodynamic and momentum coordinates from SH and SV records for profile data.'))
-    group.add_argument('--ignore-top-profile-level', action='store_true', help=_('Ignore the topmost level of thermodynamic and momentum coordinates from SH and SV records for profile data.'))
+    group.add_argument('--missing-bottom-profile-level', action='store_true', help=_('Assume the bottom level of the profile data is missing.'))
+    group.add_argument('--missing-top-profile-level', action='store_true', help=_('ASsume the top level of the profile data is missing.'))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
@@ -69,15 +69,19 @@ class Series (BufferBase):
   def __init__ (self, *args, **kwargs):
     import numpy as np
     momentum_vars = kwargs.pop('profile_momentum_vars',None)
+    if momentum_vars is None:
+      momentum_vars = []
     if isinstance(momentum_vars,str):
       momentum_vars = momentum_vars.split(',')
     thermo_vars = kwargs.pop('profile_thermodynamic_vars',None)
+    if thermo_vars is None:
+      thermo_vars = []
     if isinstance(thermo_vars,str):
       thermo_vars = thermo_vars.split(',')
     self._momentum_vars = momentum_vars
     self._thermo_vars = thermo_vars
-    self._ignore_bottom_profile_level = kwargs.pop('ignore_bottom_profile_level',False)
-    self._ignore_top_profile_level = kwargs.pop('ignore_top_profile_level',False)
+    self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
+    self._missing_top_profile_level = kwargs.pop('missing_top_profile_level',False)
 
     # Don't process series time/station/height records as variables.
     self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
@@ -152,9 +156,9 @@ class Series (BufferBase):
       if header is None: continue
       array = header['d'].squeeze()
       # Drop the top or bottom levels to match the profile data?
-      if self._ignore_bottom_profile_level:
+      if self._missing_bottom_profile_level:
         array = array[:-1]
-      if self._ignore_top_profile_level:
+      if self._missing_top_profile_level:
         array = array[1:]
       if array.ndim != 1: continue
       atts = OrderedDict(self._get_header_atts(header))
@@ -205,19 +209,27 @@ class Series (BufferBase):
         var.axes = _modify_axes(var.axes, i=('station_id',tuple(range(1,len(var.axes['i'])+1))))
 
       # '+' data has different meanings for the axes.
+      # ni is actually vertical level.
+      # nj is actually forecast time.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
         # Remove degenerate vertical axis.
         if 'level' in var.axes:
           var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('level'))
           var.axes.pop('level')
-        # ni is actually vertical level.
-        # nj is actually forecast time.
-        if self._momentum_vars is not None and var.name in self._momentum_vars and momentum is not None:
-          level_def = ('level',momentum)
-        elif self._thermo_vars is not None and var.name in self._thermo_vars and thermo is not None:
-          level_def = ('level',thermo)
-        else:
-          level_def = 'level'
+        # Try to map to thermodynamic or momentum levels.
+        level_def = 'level'
+        if var.name in self._momentum_vars and momentum is not None:
+          if len(var.axes['i']) == len(momentum):
+            level_def = ('level',momentum)
+          else:
+            warn (_("Wrong number of momentum levels found in the data."))
+        if var.name in self._thermo_vars and thermo is not None:
+          if len(var.axes['i']) == len(thermo):
+            level_def = ('level',thermo)
+          else:
+            warn (_("Wrong number of thermodynamic levels found in the data."))
+        if level_def == 'level':
+          warn (_("Unable to find the vertical coordinates for %s."%var.name))
         var.axes = _modify_axes(var.axes, i=level_def, j=('forecast',forecast_hours))
 
         # Some support for squashing forecasts.
