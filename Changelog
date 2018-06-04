@@ -1,3 +1,22 @@
+Version 0.20180604.0 (Jun 4, 2018)
+	* Re-enabled unlimited time dimension for applicable files.
+	* Renamed zaxis,zeta,eta,sigma axes to just 'level'.
+	* Removed old anciliary_variables stuff for A/B vertical coeficients.
+	* Added formula_terms for vertical coordinates, along with a "pref"
+	  (reference pressure) scalar variable.
+	* Loosened criteria for matching vertical (!!) record when there's only
+	  one vertical record in the file.
+	* Fixed bug when there are multiple reftimes in a file (issue #15).
+	* Added support for time-dependant lat/lon coordinates from LA/LO
+	  records.
+	* New --exclude option to remove variables and degenerate axes from
+	  the netCDF file.
+	* New --profile-momentum-vars and --profile-thermodynamic-vars options
+	  to specify which variables are on which type of level.
+	  Note: only needed for profile data.
+	* New --missing-bottom-profile-level option to work around a bug in
+	  profile data coming from rpnphy output.
+
 Version 0.20180423.0 (Apr 23, 2018)
 	* New --rpnstd-metadata-list to select a subset of RPN metadata
 	  attributes to copy to the netCDF file.
