@@ -217,20 +217,24 @@ class Series (BufferBase):
         if 'level' in var.axes:
           var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('level'))
           var.axes.pop('level')
+
         # Try to map to thermodynamic or momentum levels.
         level_def = 'level'
-        if var.name in self._momentum_vars and momentum is not None:
-          if len(var.axes['i']) == len(momentum):
-            level_def = ('level',momentum)
-          else:
-            warn (_("Wrong number of momentum levels found in the data."))
-        if var.name in self._thermo_vars and thermo is not None:
-          if len(var.axes['i']) == len(thermo):
-            level_def = ('level',thermo)
-          else:
-            warn (_("Wrong number of thermodynamic levels found in the data."))
-        if level_def == 'level':
-          warn (_("Unable to find the vertical coordinates for %s."%var.name))
+
+        if len(var.axes['i']) > 1:
+          if var.name in self._momentum_vars and momentum is not None:
+            if len(var.axes['i']) == len(momentum):
+              level_def = ('level',momentum)
+            else:
+              warn (_("Wrong number of momentum levels found in the data."))
+          if var.name in self._thermo_vars and thermo is not None:
+            if len(var.axes['i']) == len(thermo):
+              level_def = ('level',thermo)
+            else:
+              warn (_("Wrong number of thermodynamic levels found in the data."))
+          if level_def == 'level':
+            warn (_("Unable to find the vertical coordinates for %s."%var.name))
+
         var.axes = _modify_axes(var.axes, i=level_def, j=('forecast',forecast_hours))
 
         # Some support for squashing forecasts.
