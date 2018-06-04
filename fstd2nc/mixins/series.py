@@ -50,6 +50,15 @@ from fstd2nc.mixins import BufferBase
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
 class Series (BufferBase):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(Series,cls)._cmdline_args(parser)
+    #group = parser.add_argument_group(_('Options for profile data'))
+    group = parser
+    group.add_argument('--profile-momentum-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use momentum levels.'))
+    group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
+    group.add_argument('--missing-bottom-profile-level', action='store_true', help=_('Assume the bottom level of the profile data is missing.'))
+
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(Series,cls).__new__(cls, *args, **kwargs)
@@ -58,8 +67,22 @@ class Series (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     import numpy as np
+    momentum_vars = kwargs.pop('profile_momentum_vars',None)
+    if momentum_vars is None:
+      momentum_vars = []
+    if isinstance(momentum_vars,str):
+      momentum_vars = momentum_vars.split(',')
+    thermo_vars = kwargs.pop('profile_thermodynamic_vars',None)
+    if thermo_vars is None:
+      thermo_vars = []
+    if isinstance(thermo_vars,str):
+      thermo_vars = thermo_vars.split(',')
+    self._momentum_vars = momentum_vars
+    self._thermo_vars = thermo_vars
+    self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
+
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH','STNS')
+    self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
@@ -100,6 +123,7 @@ class Series (BufferBase):
 
   def _iter (self):
     from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
+    from fstd2nc.mixins.dates import stamp2datetime
     from collections import OrderedDict
     import numpy as np
     from datetime import timedelta
@@ -109,6 +133,7 @@ class Series (BufferBase):
     created_time_axis = False  # To only create squashed time axis once.
                                # (for --squashed-forecasts option).
     station = None             # To attach the station names as coordinates.
+    momentum = thermo = None   # To attach the vertical axes.
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
@@ -118,31 +143,33 @@ class Series (BufferBase):
     forecast_header = fstlir (self._meta_funit, nomvar='HH')
     if forecast_header is not None:
         atts = OrderedDict(units='hours')
-        array = forecast_header['d'].flatten()
+        # Note: the information in 'HH' is actually the hour of validity.
+        # Need to subtract the hour from the date of origin in order to get
+        # the leadtime.
+        starting_hour = stamp2datetime(forecast_header['dateo']).hour
+        array = forecast_header['d'].flatten() - starting_hour
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
         if getattr(self,'_squash_forecasts',False) is False:
           yield forecast
-
+    # Extract vertical coordinates.
+    for vertvar in ('SH','SV'):
+      header = fstlir (self._meta_funit, nomvar=vertvar)
+      if header is None: continue
+      array = header['d'].squeeze()
+      # Drop the top or bottom levels to match the profile data?
+      if self._missing_bottom_profile_level:
+        array = array[:-1]
+      if array.ndim != 1: continue
+      atts = OrderedDict(self._get_header_atts(header))
+      atts['kind'] = 5
+      var = _var_type(vertvar,atts,{'level':tuple(array)},array)
+      if vertvar == 'SH': thermo = tuple(array)
+      if vertvar == 'SV': momentum = tuple(array)
+      yield var
 
     for var in super(Series,self)._iter():
-
-      # Handle SV/SH vertical coordinates.
-      if var.name in ('SH','SV'):
-        # Should be able to find these records in the same file as STNS/HH.
-        record = var.record_id.squeeze()
-        if record.shape != (): continue
-        record = int(record)
-        header = self._fstluk (record)
-        if header is None: continue
-        array = header['d'].squeeze()
-        if array.ndim != 1: continue
-        var.atts['kind'] = 5
-        var.axes = {'level':tuple(array)}
-        var.record_id = var.record_id.squeeze()
-        yield var
-        continue
 
       # Hook in the station names as coordinate information.
       if 'station_id' in var.axes and station_header is not None:
@@ -183,14 +210,32 @@ class Series (BufferBase):
         var.axes = _modify_axes(var.axes, i=('station_id',tuple(range(1,len(var.axes['i'])+1))))
 
       # '+' data has different meanings for the axes.
+      # ni is actually vertical level.
+      # nj is actually forecast time.
       if var.atts.get('grtyp') == '+' and forecast_hours is not None:
         # Remove degenerate vertical axis.
         if 'level' in var.axes:
           var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('level'))
           var.axes.pop('level')
-        # ni is actually vertical level.
-        # nj is actually forecast time.
-        var.axes = _modify_axes(var.axes, i='level', j=('forecast',forecast_hours))
+
+        # Try to map to thermodynamic or momentum levels.
+        level_def = 'level'
+
+        if len(var.axes['i']) > 1:
+          if var.name in self._momentum_vars and momentum is not None:
+            if len(var.axes['i']) == len(momentum):
+              level_def = ('level',momentum)
+            else:
+              warn (_("Wrong number of momentum levels found in the data."))
+          if var.name in self._thermo_vars and thermo is not None:
+            if len(var.axes['i']) == len(thermo):
+              level_def = ('level',thermo)
+            else:
+              warn (_("Wrong number of thermodynamic levels found in the data."))
+          if level_def == 'level':
+            warn (_("Unable to find the vertical coordinates for %s."%var.name))
+
+        var.axes = _modify_axes(var.axes, i=level_def, j=('forecast',forecast_hours))
 
         # Some support for squashing forecasts.
         if getattr(self,'_squash_forecasts',False) is True:

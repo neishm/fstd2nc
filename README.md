@@ -41,6 +41,15 @@ optional arguments:
                         Use the date of original analysis for the time axis,
                         and put the forecast times into a separate "forecast"
                         axis.
+  --profile-momentum-vars VAR1,VAR2,...
+                        Comma-separated list of variables that use momentum
+                        levels.
+  --profile-thermodynamic-vars VAR1,VAR2,...
+                        Comma-separated list of variables that use
+                        thermodynamic levels.
+  --missing-bottom-profile-level
+                        Assume the bottom level of the profile data is
+                        missing.
   --strict-vcoord-match
                         Require the IP1/IP2/IP3 parameters of the vertical
                         coordinate to match the IG1/IG2/IG3 paramters of the
