@@ -125,6 +125,7 @@ class Series (BufferBase):
 
   def _iter (self):
     from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
+    from fstd2nc.mixins.dates import stamp2datetime
     from collections import OrderedDict
     import numpy as np
     from datetime import timedelta
@@ -144,7 +145,11 @@ class Series (BufferBase):
     forecast_header = fstlir (self._meta_funit, nomvar='HH')
     if forecast_header is not None:
         atts = OrderedDict(units='hours')
-        array = forecast_header['d'].flatten()
+        # Note: the information in 'HH' is actually the hour of validity.
+        # Need to subtract the hour from the date of origin in order to get
+        # the leadtime.
+        starting_hour = stamp2datetime(forecast_header['dateo']).hour
+        array = forecast_header['d'].flatten() - starting_hour
         axes = OrderedDict(forecast=tuple(array))
         forecast = _var_type('forecast',atts,axes,array)
         forecast_hours = list(array)
