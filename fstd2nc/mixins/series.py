@@ -58,7 +58,6 @@ class Series (BufferBase):
     group.add_argument('--profile-momentum-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use momentum levels.'))
     group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
     group.add_argument('--missing-bottom-profile-level', action='store_true', help=_('Assume the bottom level of the profile data is missing.'))
-    group.add_argument('--missing-top-profile-level', action='store_true', help=_('ASsume the top level of the profile data is missing.'))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
@@ -81,7 +80,6 @@ class Series (BufferBase):
     self._momentum_vars = momentum_vars
     self._thermo_vars = thermo_vars
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
-    self._missing_top_profile_level = kwargs.pop('missing_top_profile_level',False)
 
     # Don't process series time/station/height records as variables.
     self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
@@ -163,8 +161,6 @@ class Series (BufferBase):
       # Drop the top or bottom levels to match the profile data?
       if self._missing_bottom_profile_level:
         array = array[:-1]
-      if self._missing_top_profile_level:
-        array = array[1:]
       if array.ndim != 1: continue
       atts = OrderedDict(self._get_header_atts(header))
       atts['kind'] = 5
