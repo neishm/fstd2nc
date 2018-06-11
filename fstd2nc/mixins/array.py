@@ -24,6 +24,50 @@ from fstd2nc.mixins import BufferBase
 #################################################
 # Provide an xarray+dask interface for the FSTD data.
 
+# Helper interface for ordering tasks based on FSTD record order.
+# Might provide a small speed boost when the OS employs a read-ahead buffer.
+# Based on dask.core.get_dependencies
+class _RecordOrder (object):
+  def __init__(self, dsk):
+    self.dask = dsk
+  def __call__ (self, arg):
+    dsk = self.dask
+    work = [arg]
+    while work:
+        new_work = []
+        for w in work:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                if getattr(w[0],'__name__',None) == '_read_chunk':
+                  return w[1]
+                else:
+                  new_work += w[1:]
+            elif typ is list:
+                new_work += w
+            elif typ is dict:
+                new_work += w.values()
+            else:
+                try:
+                    if w in dsk:
+                        work.append(dsk[w])
+                except TypeError:  # not hashable
+                    pass
+        work = new_work
+
+# Add a callback to dask to ensure FSTD records are read in a good order.
+try:
+  from dask.callbacks import Callback
+  class _FSTD_Callback (Callback):
+    def _start_state (self, dsk, state):
+      ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
+      state['ready'] = ready[::-1]
+  _FSTD_Callback().register()
+  del Callback
+
+except ImportError:
+  pass
+
+
 class XArray (BufferBase):
 
   # The interface for getting chunks into dask.
