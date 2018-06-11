@@ -621,7 +621,7 @@ class BufferBase (object):
 
     # Iterate over each variable.
     # Variables are defined by the entries in _var_id.
-    for var_id, var_records in records.groupby(self._var_id):
+    for var_id, var_records in records.groupby(list(self._var_id)):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
       # Ignore meta records.
