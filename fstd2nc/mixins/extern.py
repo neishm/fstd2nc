@@ -24,7 +24,7 @@ from fstd2nc.mixins import BufferBase
 #################################################
 # Provide various external array interfaces for the FSTD data.
 
-# Helper interface for ordering tasks based on FSTD record order.
+# Helper interface for ordering dask tasks based on FSTD record order.
 # Might provide a small speed boost when the OS employs a read-ahead buffer.
 # Based on dask.core.get_dependencies
 class _RecordOrder (object):
@@ -119,8 +119,9 @@ class Extern (BufferBase):
     Create an xarray interface for the RPN data.
     Requires the xarray and dask packages.
     """
+    from collections import OrderedDict
     import xarray as xr
-    out = dict()
+    out = OrderedDict()
     for var in self._iter_dask():
       out[var.name] = xr.DataArray(data=var.array, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
 
@@ -133,4 +134,26 @@ class Extern (BufferBase):
     out.encoding['unlimited_dims'] = ('time',)
 
     return out
+
+  def to_iris (self):
+    """
+    Create an iris interface for the RPN data.
+    Requires iris >= 2.0, xarray >= 0.10.3, and dask.
+    Returns a CubeList object.
+    """
+    from iris.cube import CubeList
+    out = []
+    for var in self.to_xarray().data_vars.values():
+      # Omit some problematic variables.
+      if var.name == 'crs_latlon': continue
+      # Need to clean up some unrecognized metadata.
+      for coord in var.coords.values():
+        # Remove units of 'level' (confuses cf_units).
+        if coord.attrs.get('units',None) in ('level','sigma_level'):
+          coord.attrs.pop('units')
+        # Remove non-standard standard names.
+        if coord.attrs.get('standard_name',None) == 'atmosphere_hybrid_sigma_ln_pressure_coordinate':
+          coord.attrs.pop('standard_name')
+      out.append(var.to_iris())
+    return CubeList(out)
 
