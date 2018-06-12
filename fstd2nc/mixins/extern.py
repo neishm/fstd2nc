@@ -157,3 +157,11 @@ class Extern (BufferBase):
       out.append(var.to_iris())
     return CubeList(out)
 
+  def to_pygeode (self):
+    """
+    Create a pygeode interface for the RPN data.
+    Requires pygeode >= 1.2.0, and xarray/dask.
+    """
+    from pygeode.ext_xarray import from_xarray
+    data = self.to_xarray()
+    return from_xarray(data)
