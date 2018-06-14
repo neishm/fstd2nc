@@ -145,7 +145,7 @@ class Extern (BufferBase):
     out = []
     for var in self.to_xarray().data_vars.values():
       # Omit some problematic variables.
-      if var.name == 'crs_latlon': continue
+      if var.dtype == '|S1': continue
       # Need to clean up some unrecognized metadata.
       for coord in var.coords.values():
         # Remove units of 'level' (confuses cf_units).
