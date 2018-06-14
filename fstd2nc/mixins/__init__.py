@@ -282,7 +282,7 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
+  def __init__ (self, filename, header_cache=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -349,13 +349,14 @@ class BufferBase (object):
     matches = Counter()
     headers = []
     self._files = []
+    if header_cache is None: header_cache = {}
 
     # Show a progress bar when there are multiple input files.
     if len(expanded_infiles) > 1:
       expanded_infiles = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
 
     for infile, f in expanded_infiles:
-      if not os.path.exists(f) or not isFST(f):
+      if f not in header_cache and (not os.path.exists(f) or not isFST(f)):
         matches[infile] += 0
         continue
       matches[infile] += 1
@@ -363,25 +364,28 @@ class BufferBase (object):
       # Read the headers from the file(s) and store the info in the table.
       filenum = len(self._files)
       self._files.append(f)
-      funit = self._open(filenum)
-      nrecs = fstnbr(funit)
-      h = np.ma.empty(nrecs, dtype=self._headers_dtype)
+      if f not in header_cache:
+        funit = self._open(filenum)
+        nrecs = fstnbr(funit)
+        h = np.ma.empty(nrecs, dtype=self._headers_dtype)
 
-      if no_quick_scan:
-        keys = fstinl(funit)
-        params = map(fstprm, keys)
-        for i,prm in enumerate(params):
-          for n,v in prm.items():
-            if n in h.dtype.names:
-              h[n][i] = v
-      else:
-        from fstd2nc.extra import all_params
-        params = all_params(funit,out=h)
-        keys = params['key']
+        if no_quick_scan:
+          keys = fstinl(funit)
+          params = map(fstprm, keys)
+          for i,prm in enumerate(params):
+            for n,v in prm.items():
+              if n in h.dtype.names:
+                h[n][i] = v
+        else:
+          from fstd2nc.extra import all_params
+          params = all_params(funit,out=h)
+          keys = params['key']
 
-      # Encode the keys without the file index info.
-      h['key'] = keys
-      h['key'] >>= 10
+        # Encode the keys without the file index info.
+        h['key'] = keys
+        h['key'] >>= 10
+        header_cache[f] = h
+      h = header_cache[f]
       # The file info will be an index into a separate file list.
       h['file_id'] = filenum
 
