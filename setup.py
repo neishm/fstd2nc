@@ -42,7 +42,9 @@ setup (
   extras_require = {
     'dap': ['Pydap[server,functions]'],
     'manyfiles': ['progress','pandas'],
-    'array': ['xarray','dask','toolz'],
+    'array': ['xarray>=0.10.3','dask','toolz'],
+    'iris': ['iris>=2.0','xarray>=0.10.3','dask','toolz'],
+    'pygeode': ['pygeode>=1.2.2','xarray>=0.10.3','dask','toolz'],
   },
   package_data = {
     'fstd2nc': ['locale/*/LC_MESSAGES/fstd2nc.mo'],

@@ -43,11 +43,16 @@ class netCDF_Atts (BufferBase):
     # Open the files if only the filename is provided.
     metafiles = [open(m,'r') if isinstance(m,str) else m for m in metafiles]
     metadata = OrderedDict()
+    # Set some global defaults.
+    # We need to explicitly state that we're using CF conventions in our
+    # output files, or some utilities (like IDV) won't accept the data.
+    metadata['global'] = OrderedDict(Conventions = "CF-1.6")
+
     configparser = ConfigParser.SafeConfigParser()
     for metafile in metafiles:
       configparser.readfp(metafile)
     for varname in configparser.sections():
-      metadata[varname] = OrderedDict(configparser.items(varname))
+      metadata.setdefault(varname,OrderedDict()).update(configparser.items(varname))
       # Detect numerical values
       for k,v in list(metadata[varname].items()):
         try:
@@ -368,9 +373,6 @@ class netCDF_IO (BufferBase):
       except (IndexError,ValueError):
         warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
         continue
-    # We need to explicitly state that we're using CF conventions in our
-    # output files, or some utilities (like IDV) won't accept the data.
-    f.Conventions = "CF-1.6"
 
     f.close()
 

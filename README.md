@@ -112,7 +112,7 @@ data.to_netcdf("myfile.nc", reference_date='2000-01-01')
 Interfacing with xarray
 ---------------------------------------------------------------------------------
 
-For more complicated conversions, you can manipulate the data as an `xarray.Dataset` object:
+For more complicated conversions, you can manipulate the data as an [xarray.Dataset](http://xarray.pydata.org/en/stable/data-structures.html#dataset) object by using the `to_xarray()` method:
 ```python
 import fstd2nc
 
@@ -133,6 +133,47 @@ dataset['P0'].attrs['units'] = 'Pa'
 # Write the final result to netCDF using xarray:
 dataset.to_netcdf("myfile.nc")
 ```
+
+Interfacing with iris
+---------------------------------------------------------------------------------
+
+You can interface with [iris](https://scitools.org.uk/iris/docs/latest/index.html) by using the `.to_iris()` method (requires iris version 2.0 or greater).
+This will give you an [iris.cube.CubeList](https://scitools.org.uk/iris/docs/latest/iris/iris/cube.html#iris.cube.CubeList) object:
+```python
+import fstd2nc
+import iris.quickplot as qp
+from matplotlib import pyplot as pl
+
+# Open the FSTD file.
+data = fstd2nc.Buffer("myfile.fst")
+
+# Access the data as an iris.cube.CubeList object.
+cubes = data.to_iris()
+print (cubes)
+
+# Plot all the data (assuming we have 2D fields)
+for cube in cubes:
+  qp.contourf(cube)
+  pl.gca().coastlines()
+
+pl.show()
+```
+
+Interfacing with pygeode
+---------------------------------------------------------------------------------
+
+You can create a [pygeode.Dataset](http://pygeode.github.io/dataset.html) object using the `.to_pygeode()` method (requires pygeode version 1.2.2 or greater):
+```python
+import fstd2nc
+
+# Open the FSTD file.
+data = fstd2nc.Buffer("myfile.fst")
+
+# Access the data as a pygeode.Dataset object.
+dataset = data.to_pygeode()
+print (dataset)
+```
+
 
 Installing
 ==========
@@ -186,3 +227,6 @@ The [progress](https://github.com/verigak/progress) module is required in order 
 
 The `.to_xarray()` Python method requires the [xarray](https://github.com/pydata/xarray) and [dask](https://github.com/dask/dask) packages.
 
+The `.to_iris()` Python method requires the [iris](https://scitools.org.uk/iris/docs/latest/index.html) package, along with the `.to_xarray()` dependencies.
+
+The `.to_pygeode()` Python method requires the [pygeode](https://github.com/pygeode/pygeode) package, along ith the `.to_xarray()` dependencies.

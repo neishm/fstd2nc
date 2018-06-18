@@ -22,14 +22,14 @@ from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
 #################################################
-# Provide an xarray+dask interface for the FSTD data.
+# Provide various external array interfaces for the FSTD data.
 
 # Helper function to embed information about the preferred chunk order.
 # Use as a wrapper when constructing dask Array objects.
 def _preferred_chunk_order (group, index, array):
   return array
 
-# Helper interface for ordering tasks based on FSTD record order.
+# Helper interface for ordering dask tasks based on FSTD record order.
 # Might provide a small speed boost when the OS employs a read-ahead buffer.
 # Based on dask.core.get_dependencies
 class _RecordOrder (object):
@@ -73,28 +73,23 @@ except ImportError:
   pass
 
 
-class XArray (BufferBase):
+class Extern (BufferBase):
 
   # The interface for getting chunks into dask.
   def _read_chunk (self, rec_id, shape, dtype):
     return self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
 
-  def to_xarray (self):
+  def _iter_dask (self):
     """
-    Create an xarray interface for the RPN data.
-    Requires the xarray and dask packages.
+    Iterate over all the variables, and convert to dask arrays.
     """
     from fstd2nc.mixins import _iter_type, _var_type
-    import xarray as xr
     from dask import array as da
     from dask.base import tokenize
     import numpy as np
-    unique_token = tokenize(self._files,self._headers)
-    out = dict()
+    unique_token = tokenize(self._files,id(self))
     for var in self._iter():
-      if isinstance(var,_var_type):
-        array = var.array
-      elif isinstance(var,_iter_type):
+      if isinstance(var,_iter_type):
         name = var.name+"-"+unique_token
         ndim = len(var.axes)
         shape = tuple(map(len,var.axes.values()))
@@ -121,11 +116,19 @@ class XArray (BufferBase):
         for i in range(ndim_outer,ndim):
           chunks.append((shape[i],))
         array = da.Array(dsk, name, chunks, var.dtype)
-      else:
-        warn(_("Unhandled type %s - ignoring variable.")%type(var))
-        continue
+        var = _var_type(var.name,var.atts,var.axes,array)
+      yield var
 
-      out[var.name] = xr.DataArray(data=array, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
+  def to_xarray (self):
+    """
+    Create an xarray interface for the RPN data.
+    Requires the xarray and dask packages.
+    """
+    from collections import OrderedDict
+    import xarray as xr
+    out = OrderedDict()
+    for var in self._iter_dask():
+      out[var.name] = xr.DataArray(data=var.array, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
 
     # Construct the Dataset from all the variables.
     out = xr.Dataset(out)
@@ -137,3 +140,33 @@ class XArray (BufferBase):
 
     return out
 
+  def to_iris (self):
+    """
+    Create an iris interface for the RPN data.
+    Requires iris >= 2.0, xarray >= 0.10.3, and dask.
+    Returns a CubeList object.
+    """
+    from iris.cube import CubeList
+    out = []
+    for var in self.to_xarray().data_vars.values():
+      # Omit some problematic variables.
+      if var.dtype == '|S1': continue
+      # Need to clean up some unrecognized metadata.
+      for coord in var.coords.values():
+        # Remove units of 'level' (confuses cf_units).
+        if coord.attrs.get('units',None) in ('level','sigma_level'):
+          coord.attrs.pop('units')
+        # Remove non-standard standard names.
+        if coord.attrs.get('standard_name',None) == 'atmosphere_hybrid_sigma_ln_pressure_coordinate':
+          coord.attrs.pop('standard_name')
+      out.append(var.to_iris())
+    return CubeList(out)
+
+  def to_pygeode (self):
+    """
+    Create a pygeode interface for the RPN data.
+    Requires pygeode >= 1.2.0, and xarray/dask.
+    """
+    from pygeode.ext_xarray import from_xarray
+    data = self.to_xarray()
+    return from_xarray(data)
