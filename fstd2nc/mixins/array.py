@@ -24,6 +24,11 @@ from fstd2nc.mixins import BufferBase
 #################################################
 # Provide an xarray+dask interface for the FSTD data.
 
+# Helper function to embed information about the preferred chunk order.
+# Use as a wrapper when constructing dask Array objects.
+def _preferred_chunk_order (group, index, array):
+  return array
+
 # Helper interface for ordering tasks based on FSTD record order.
 # Might provide a small speed boost when the OS employs a read-ahead buffer.
 # Based on dask.core.get_dependencies
@@ -38,8 +43,8 @@ class _RecordOrder (object):
         for w in work:
             typ = type(w)
             if typ is tuple and w and callable(w[0]):  # istask(w)
-                if getattr(w[0],'__name__',None) == '_read_chunk':
-                  return w[1]
+                if w[0] is _preferred_chunk_order:
+                  return w[1], w[2]
                 else:
                   new_work += w[1:]
             elif typ is list:
@@ -49,7 +54,7 @@ class _RecordOrder (object):
             else:
                 try:
                     if w in dsk:
-                        work.append(dsk[w])
+                        new_work.append(dsk[w])
                 except TypeError:  # not hashable
                     pass
         work = new_work
@@ -102,7 +107,7 @@ class XArray (BufferBase):
           chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
           rec_id = var.record_id[ind]
           if rec_id >= 0:
-            dsk[key] = (self._read_chunk, rec_id, chunk_shape, var.dtype)
+            dsk[key] = (_preferred_chunk_order,unique_token,rec_id,(self._read_chunk, rec_id, chunk_shape, var.dtype))
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
