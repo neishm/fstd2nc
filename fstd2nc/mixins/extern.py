@@ -101,8 +101,14 @@ class Extern (BufferBase):
           key = (name,) + ind + (0,)*ndim_inner
           chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
           rec_id = var.record_id[ind]
+          # Add this record as a chunk in the dask Array.
+          # Also, specify the preferred order of reading the chunks within the
+          # file.
           if rec_id >= 0:
-            dsk[key] = (_preferred_chunk_order,unique_token,rec_id,(self._read_chunk, rec_id, chunk_shape, var.dtype))
+            file_id = self._headers['file_id'][rec_id]
+            filename = self._files[file_id]
+            rec_key = self._headers['key'][rec_id]
+            dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
