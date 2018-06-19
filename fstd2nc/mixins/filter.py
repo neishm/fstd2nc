@@ -47,10 +47,8 @@ class FilterRecords (BufferBase):
         flags &= self._do_filter(records, cmd)
       except TypeError:
         error (_("unable to apply the filter: %s")%cmd)
-    nrecs = sum(flags)
-    self._headers = np.ma.empty(nrecs, dtype=self._headers_dtype)
-    for k,v in list(records.items()):
-        self._headers[k] = v[flags]
+    # To filter out unwanted records, mark them as "deleted" in the list.
+    self._headers['dltf'] = self._headers['dltf'] | (~flags)
   @staticmethod
   def _do_filter (p, cmd):
     try:
