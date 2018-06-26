@@ -262,7 +262,9 @@ class Series (BufferBase):
           axes = OrderedDict([('station_id',station_id),('station_strlen',tuple(range(strlen)))])
           station = _var_type('station',atts,axes,array)
           yield station
-        var.atts['coordinates'] = [station]
+        coords = var.atts.get('coordinates',[])
+        coords.append(station)
+        var.atts['coordinates'] = coords
 
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
