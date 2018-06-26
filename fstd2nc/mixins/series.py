@@ -171,35 +171,6 @@ class Series (BufferBase):
 
     for var in super(Series,self)._iter():
 
-      # Hook in the station names as coordinate information.
-      if 'station_id' in var.axes and station_header is not None:
-        if station is None:
-          atts = OrderedDict()
-          array = station_header['d'].transpose()
-          # Subset the stations to match the IP3 values found in the file
-          # (in case we don't have records for all the stations).
-          station_id = var.axes['station_id']
-          indices = np.array(var.axes['station_id'],dtype=int) - 1
-          array = array[indices,:]
-          # Re-cast array as string.
-          # I don't know why I have to subtract 128 - maybe something to do with
-          # how the characters are encoded in the file?
-          # This isn't always needed.  Have test files for both cases.
-          # Need help making this more robust!
-          if array.flatten()[0] >= 128:
-            array -= 128
-          array = array.view('|S1')
-          nstations, strlen = array.shape
-          # Strip out trailing whitespace.
-          array = array.flatten().view('|S%d'%strlen)
-          array[:] = map(str.rstrip,array)
-          array = array.view('|S1').reshape(nstations,strlen)
-          # Encode it as 2D character array for netCDF file output.
-          axes = OrderedDict([('station_id',station_id),('station_strlen',tuple(range(strlen)))])
-          station = _var_type('station',atts,axes,array)
-          yield station
-        var.atts['coordinates'] = [station]
-
       if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
         yield var
         continue
@@ -263,6 +234,36 @@ class Series (BufferBase):
             var.atts['coordinates'] = coords
           else:
             warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
+
+      # Hook in the station names as coordinate information.
+      if 'station_id' in var.axes and station_header is not None:
+        if station is None:
+          atts = OrderedDict()
+          array = station_header['d'].transpose()
+          # Subset the stations to match the IP3 values found in the file
+          # (in case we don't have records for all the stations).
+          station_id = var.axes['station_id']
+          indices = np.array(var.axes['station_id'],dtype=int) - 1
+          array = array[indices,:]
+          # Re-cast array as string.
+          # I don't know why I have to subtract 128 - maybe something to do with
+          # how the characters are encoded in the file?
+          # This isn't always needed.  Have test files for both cases.
+          # Need help making this more robust!
+          if array.flatten()[0] >= 128:
+            array -= 128
+          array = array.view('|S1')
+          nstations, strlen = array.shape
+          # Strip out trailing whitespace.
+          array = array.flatten().view('|S%d'%strlen)
+          array[:] = map(str.rstrip,array)
+          array = array.view('|S1').reshape(nstations,strlen)
+          # Encode it as 2D character array for netCDF file output.
+          axes = OrderedDict([('station_id',station_id),('station_strlen',tuple(range(strlen)))])
+          station = _var_type('station',atts,axes,array)
+          yield station
+        var.atts['coordinates'] = [station]
+
       # Remove 'kind' information for now - still need to figure out vertical
       # coordinates (i.e. how to map SV/SH here).
       var.atts.pop('kind',None)
