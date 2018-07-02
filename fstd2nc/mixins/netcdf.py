@@ -203,7 +203,6 @@ class netCDF_IO (BufferBase):
     axis_table = dict()
     for var in varlist:
       for axisname, axisvalues in var.axes.items():
-        axisvalues = tuple(axisvalues)
         if axisname not in axis_table:
           axis_table[axisname] = []
         if axisvalues not in axis_table[axisname]:
@@ -217,7 +216,7 @@ class netCDF_IO (BufferBase):
 
     # Apply axis renames.
     def rename_axis ((axisname,axisvalues)):
-      key = (axisname,tuple(axisvalues))
+      key = (axisname,axisvalues)
       if key in axis_renames:
         return (axis_renames[key],axisvalues)
       return (axisname,axisvalues)

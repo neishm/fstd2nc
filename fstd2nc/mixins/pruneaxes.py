@@ -40,7 +40,7 @@ class PruneAxes (BufferBase):
     # Pull axes out of the stream.
     for var in super(PruneAxes,self)._iter():
       if isinstance(var,_var_type) and list(var.axes.keys()) == [var.name]:
-        all_axes[(var.name,tuple(var.axes[var.name]))] = var
+        all_axes[(var.name,var.axes[var.name])] = var
       else:
         varlist.append(var)
 
@@ -50,7 +50,7 @@ class PruneAxes (BufferBase):
       if isinstance(var,_var_type):
         continue
       for name, values in var.axes.items():
-        key = (name,tuple(values))
+        key = (name,values)
         if key in all_axes and key not in used_axes:
           axis = all_axes[key]
           yield axis
@@ -61,7 +61,7 @@ class PruneAxes (BufferBase):
     for var in varlist:
       remove_var = False
       for name, values in var.axes.items():
-        key = (name,tuple(values))
+        key = (name,values)
         if key in all_axes and key not in used_axes:
           remove_var = True
       if not remove_var:

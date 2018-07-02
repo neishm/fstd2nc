@@ -142,17 +142,18 @@ class Series (BufferBase):
     # Create forecast axis.
     forecast_header = fstlir (self._meta_funit, nomvar='HH')
     if forecast_header is not None:
-        atts = OrderedDict(units='hours')
-        # Note: the information in 'HH' is actually the hour of validity.
-        # Need to subtract the hour from the date of origin in order to get
-        # the leadtime.
-        starting_hour = stamp2datetime(forecast_header['dateo']).hour
-        array = forecast_header['d'].flatten() - starting_hour
+      atts = OrderedDict(units='hours')
+      # Note: the information in 'HH' is actually the hour of validity.
+      # Need to subtract the hour from the date of origin in order to get
+      # the leadtime.
+      starting_hour = stamp2datetime(forecast_header['dateo']).hour
+      array = forecast_header['d'].flatten() - starting_hour
+      forecast_hours = tuple(array)
+      forecast_timedelta = np.array(array*3600,'timedelta64[s]')
+      if getattr(self,'_squash_forecasts',False) is False:
         axes = OrderedDict(forecast=tuple(array))
-        forecast = _var_type('forecast',atts,axes,array)
-        forecast_hours = list(array)
-        if getattr(self,'_squash_forecasts',False) is False:
-          yield forecast
+        forecast_var = _var_type('forecast',atts,axes,array)
+        yield forecast_var
     # Extract vertical coordinates.
     for vertvar in ('SH','SV'):
       header = fstlir (self._meta_funit, nomvar=vertvar)
@@ -218,16 +219,18 @@ class Series (BufferBase):
             # Convert pandas times (if using pandas for processing the headers)
             time = np.datetime64(time,'s')
             forecast = var.axes['forecast']
-            var.axes = _modify_axes(var.axes, forecast=('time',tuple(time+np.timedelta64(int(h*3600),'s') for h in forecast)))
             if not created_time_axis:
-              yield _var_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),{'time':var.axes['time']},np.array(var.axes['time']))
+              squashed_times_array = time+forecast_timedelta
+              squashed_times = tuple(squashed_times_array)
+              yield _var_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),{'time':squashed_times},squashed_times_array)
               # Include forecast and reftime auxiliary coordinates (emulate
               # what's done in the dates mixin)
-              leadtime = _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':var.axes['time']},np.array(forecast))
+              leadtime = _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':squashed_times},np.array(forecast))
               yield leadtime
               reftime = _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time))
               yield reftime
               created_time_axis = True
+            var.axes = _modify_axes(var.axes, forecast=('time',squashed_times))
             # Add leadtime and reftime as auxiliary coordinates.
             coords = var.atts.get('coordinates',[])
             coords.extend([leadtime,reftime])
