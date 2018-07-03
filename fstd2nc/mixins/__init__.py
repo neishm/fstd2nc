@@ -370,7 +370,7 @@ class BufferBase (object):
       if f not in header_cache:
         funit = self._open(filenum)
         nrecs = fstnbr(funit)
-        h = np.ma.empty(nrecs, dtype=self._headers_dtype)
+        h = np.zeros(nrecs, dtype=self._headers_dtype)
 
         if no_quick_scan:
           keys = fstinl(funit)
@@ -413,7 +413,7 @@ class BufferBase (object):
       error(_("no input files found!"))
     info(_("Found %d RPN input file(s)"%nfiles))
 
-    self._headers = np.concatenate(headers)
+    self._headers = np.ma.concatenate(headers)
 
 
     # Find all unique meta (coordinate) records, and link a subset of files
