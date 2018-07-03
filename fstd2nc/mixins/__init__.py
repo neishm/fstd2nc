@@ -47,12 +47,14 @@ def vectorize (f):
   from functools import wraps
   try:
     from pandas import Series, unique
+    import numpy as np
     @wraps(f)
     def vectorized_f (x):
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return f(x)
       # Get unique values
+      x = np.array(x,copy=True)
       inputs = unique(x)
       outputs = map(f,inputs)
       table = dict(zip(inputs,outputs))

@@ -100,6 +100,10 @@ class Extern (BufferBase):
     from dask.base import tokenize
     import numpy as np
     unique_token = tokenize(self._files,id(self))
+    # Make a local copy of two columns from the header table.
+    # This speeds up access to their elements in the inner loop.
+    all_file_ids = np.array(self._headers['file_id'],copy=True)
+    all_keys = np.array(self._headers['key'],copy=True)
     for var in self._iter():
       if isinstance(var,_iter_type):
         name = var.name+"-"+unique_token
@@ -108,18 +112,18 @@ class Extern (BufferBase):
         ndim_outer = var.record_id.ndim
         ndim_inner = ndim - ndim_outer
         dsk = dict()
+        chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
         for ind in np.ndindex(var.record_id.shape):
           # Pad index with all dimensions (including inner ones).
           key = (name,) + ind + (0,)*ndim_inner
-          chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
           rec_id = var.record_id[ind]
           # Add this record as a chunk in the dask Array.
           # Also, specify the preferred order of reading the chunks within the
           # file.
           if rec_id >= 0:
-            file_id = self._headers['file_id'][rec_id]
+            file_id = all_file_ids[rec_id]
             filename = self._files[file_id]
-            rec_key = self._headers['key'][rec_id]
+            rec_key = all_keys[rec_id]
             dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
           else:
             # Fill missing chunks with fill value or NaN.
