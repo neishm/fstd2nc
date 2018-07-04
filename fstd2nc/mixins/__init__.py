@@ -47,12 +47,14 @@ def vectorize (f):
   from functools import wraps
   try:
     from pandas import Series, unique
+    import numpy as np
     @wraps(f)
     def vectorized_f (x):
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return f(x)
       # Get unique values
+      x = np.array(x,copy=True)
       inputs = unique(x)
       outputs = map(f,inputs)
       table = dict(zip(inputs,outputs))
@@ -357,7 +359,10 @@ class BufferBase (object):
       expanded_infiles = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
 
     for infile, f in expanded_infiles:
-      if f not in header_cache and (not os.path.exists(f) or not isFST(f)):
+      fkey = f
+      if fkey.startswith('/'):
+        fkey = '__ROOT__'+fkey
+      if fkey not in header_cache and (not os.path.exists(f) or not isFST(f)):
         matches[infile] += 0
         continue
       matches[infile] += 1
@@ -365,10 +370,10 @@ class BufferBase (object):
       # Read the headers from the file(s) and store the info in the table.
       filenum = len(self._files)
       self._files.append(f)
-      if f not in header_cache:
+      if fkey not in header_cache:
         funit = self._open(filenum)
         nrecs = fstnbr(funit)
-        h = np.ma.empty(nrecs, dtype=self._headers_dtype)
+        h = np.zeros(nrecs, dtype=self._headers_dtype)
 
         if no_quick_scan:
           keys = fstinl(funit)
@@ -385,8 +390,8 @@ class BufferBase (object):
         # Encode the keys without the file index info.
         h['key'] = keys
         h['key'] >>= 10
-        header_cache[f] = h
-      h = header_cache[f]
+        header_cache[fkey] = h
+      h = header_cache[fkey]
       # The file info will be an index into a separate file list.
       h['file_id'] = filenum
 
@@ -411,7 +416,7 @@ class BufferBase (object):
       error(_("no input files found!"))
     info(_("Found %d RPN input file(s)"%nfiles))
 
-    self._headers = np.concatenate(headers)
+    self._headers = np.ma.concatenate(headers)
 
 
     # Find all unique meta (coordinate) records, and link a subset of files
