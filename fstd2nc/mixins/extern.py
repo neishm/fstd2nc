@@ -99,6 +99,7 @@ class Extern (BufferBase):
     from dask import array as da
     from dask.base import tokenize
     import numpy as np
+    from itertools import product
     unique_token = tokenize(self._files,id(self))
     # Make a local copy of two columns from the header table.
     # This speeds up access to their elements in the inner loop.
@@ -111,12 +112,13 @@ class Extern (BufferBase):
         shape = tuple(map(len,var.axes.values()))
         ndim_outer = var.record_id.ndim
         ndim_inner = ndim - ndim_outer
+        inner_zeros = (0,)*ndim_inner
         dsk = dict()
         chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
-        for ind in np.ndindex(var.record_id.shape):
+        for ind in product(*map(range,var.record_id.shape)):
           # Pad index with all dimensions (including inner ones).
-          key = (name,) + ind + (0,)*ndim_inner
-          rec_id = var.record_id[ind]
+          key = (name,) + ind + inner_zeros
+          rec_id = int(var.record_id[ind])
           # Add this record as a chunk in the dask Array.
           # Also, specify the preferred order of reading the chunks within the
           # file.
