@@ -359,7 +359,10 @@ class BufferBase (object):
       expanded_infiles = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
 
     for infile, f in expanded_infiles:
-      if f not in header_cache and (not os.path.exists(f) or not isFST(f)):
+      fkey = f
+      if fkey.startswith('/'):
+        fkey = '__ROOT__'+fkey
+      if fkey not in header_cache and (not os.path.exists(f) or not isFST(f)):
         matches[infile] += 0
         continue
       matches[infile] += 1
@@ -367,7 +370,7 @@ class BufferBase (object):
       # Read the headers from the file(s) and store the info in the table.
       filenum = len(self._files)
       self._files.append(f)
-      if f not in header_cache:
+      if fkey not in header_cache:
         funit = self._open(filenum)
         nrecs = fstnbr(funit)
         h = np.zeros(nrecs, dtype=self._headers_dtype)
@@ -387,8 +390,8 @@ class BufferBase (object):
         # Encode the keys without the file index info.
         h['key'] = keys
         h['key'] >>= 10
-        header_cache[f] = h
-      h = header_cache[f]
+        header_cache[fkey] = h
+      h = header_cache[fkey]
       # The file info will be an index into a separate file list.
       h['file_id'] = filenum
 
