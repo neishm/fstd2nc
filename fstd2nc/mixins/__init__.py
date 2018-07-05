@@ -640,7 +640,7 @@ class BufferBase (object):
       # Get the attributes, axes, and corresponding indices of each record.
       atts = OrderedDict()
       axes = OrderedDict()
-      indices = []
+      indices = OrderedDict()
       coordnames = []
       coord_axes = OrderedDict()
       coord_indices = OrderedDict()
@@ -655,13 +655,13 @@ class BufferBase (object):
         # Is this column an outer axis?
         if n in self._outer_axes:
           axes[n] = tuple(np.array(cat.categories,dtype=column.dtype))
-          indices.append(cat.codes)
+          indices[n] = cat.codes
           # Is this also an axis for an auxiliary coordinate?
           for coordname,coordaxes in self._outer_coords.items():
             if n in coordaxes:
               coordnames.append(coordname)
               coord_axes.setdefault(coordname,OrderedDict())[n] = axes[n]
-              coord_indices.setdefault(coordname,[]).append(cat.codes)
+              coord_indices.setdefault(coordname,OrderedDict())[n] = cat.codes
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
         # Ignore outer coords, since the value is already encoded elsewhere.
@@ -676,6 +676,14 @@ class BufferBase (object):
             atts[n] = v
           except (TypeError,ValueError):
             pass
+
+      # Recover the proper order for the outer axes.
+      # Not necessarily the order of the header table columns.
+      axes = OrderedDict((n,axes[n]) for n in self._outer_axes if n in axes)
+      indices = [indices[n] for n in self._outer_axes if n in indices]
+      for coordname in coord_axes.keys():
+        coord_axes[coordname] = OrderedDict((n,coord_axes[coordname][n]) for n in self._outer_axes if n in coord_axes[coordname])
+        coord_indices[coordname] = [coord_indices[coordname][n] for n in self._outer_axes if n in coord_indices[coordname]]
 
       # Construct a multidimensional array to hold the record keys.
       record_id = np.empty(map(len,axes.values()), dtype='int32')

@@ -41,6 +41,8 @@ optional arguments:
                         Use the date of original analysis for the time axis,
                         and put the forecast times into a separate "forecast"
                         axis.
+  --ensembles           Collect different etikets for the same variable
+                        together into an "ensemble" axis.
   --profile-momentum-vars VAR1,VAR2,...
                         Comma-separated list of variables that use momentum
                         levels.
