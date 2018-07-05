@@ -70,6 +70,8 @@ optional arguments:
                         Use metadata from the specified file. You can repeat
                         this option multiple times to build metadata from
                         different sources.
+  --rename OLDNAME=NEWNAME,...
+                        Apply the specified name changes to the variables.
   --time-units {seconds,minutes,hours,days}
                         The units for the output time axis. Default is hours.
   --reference-date YYYY-MM-DD

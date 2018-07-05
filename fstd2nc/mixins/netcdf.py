@@ -30,6 +30,15 @@ class netCDF_Atts (BufferBase):
     import argparse
     super(netCDF_Atts,cls)._cmdline_args(parser)
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
+    parser.add_argument('--rename', metavar="OLDNAME=NEWNAME,...", help=_('Apply the specified name changes to the variables.'))
+  @classmethod
+  def _check_args (cls, parser, args):
+    super(netCDF_Atts,cls)._check_args(parser,args)
+    if args.rename is not None:
+      try:
+        dict(r.split('=') for r in args.rename.split(','))
+      except ValueError:
+        parser.error(_("Unable to parse the rename arguments."))
   def __init__ (self, *args, **kwargs):
     import ConfigParser
     from collections import OrderedDict
@@ -60,6 +69,15 @@ class netCDF_Atts (BufferBase):
           metadata[varname][k] = int(v) # Try further conversion to int.
         except ValueError: pass
     self._metadata = metadata
+    # Check for renames.
+    # Will override any renames specified in the metadata file.
+    rename = kwargs.pop('rename',None)
+    if rename is None:
+      rename = {}
+    if isinstance(rename,str):
+      rename = dict(r.split('=') for r in rename.split(','))
+    for oldname, newname in rename.items():
+      self._metadata.setdefault(oldname,OrderedDict())['rename'] = newname
     super(netCDF_Atts,self).__init__(*args,**kwargs)
   def _iter (self):
     from collections import OrderedDict
