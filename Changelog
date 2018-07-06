@@ -1,3 +1,17 @@
+Version 0.20180706.0 (Jul 6, 2018)
+	* Added 'station' as a coordinate for 'Y' series data.
+	* Some incremental speedups in constructing Buffer objects.
+	* Command-line option to rename variables.
+	* Command-line option to create an 'ensemble' axis over varying
+	  etikets.
+	* Some new features / improvements geared towards using this package
+	  in Python scripts:
+	  * Read FST records in their natural order in the xarray interface.
+	  * Added an optional 'header_dict' parameter to Buffer, to allow it to
+	    remember the headers of files that have been previously scanned.
+	  * Added a to_iris() method to generate an Iris CubeList object.
+	  * Added a to_pygeode() method to generate a PyGeode Dataset object.
+
 Version 0.20180604.0 (Jun 4, 2018)
 	* Re-enabled unlimited time dimension for applicable files.
 	* Renamed zaxis,zeta,eta,sigma axes to just 'level'.
