@@ -199,3 +199,16 @@ class Extern (BufferBase):
     from pygeode.ext_xarray import from_xarray
     data = self.to_xarray()
     return from_xarray(data)
+
+# Workaround for recent xarray (>0.10.0) which changed the methods in the
+# conventions module.
+# Fixes an AttributeError when using to_pygeode().
+try:
+  from xarray.coding import times
+  from xarray import conventions
+  if not hasattr(conventions,'maybe_encode_datetime'):
+    conventions.maybe_encode_datetime = times.CFDatetimeCoder().encode
+  if not hasattr(conventions,'maybe_encode_timedelta'):
+    conventions.maybe_encode_timedelta = times.CFTimedeltaCoder().encode
+except ImportError, AttributeError:
+  pass
