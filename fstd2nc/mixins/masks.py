@@ -54,14 +54,15 @@ class Masks (BufferBase):
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     import numpy as np
     from rpnpy.librmn.fstd98 import fstinf
-    prm = super(Masks,self)._fstluk(rec_id, dtype, rank, dataArray)
-    # If this data is not masked, or if this data *is* as mask, then just
-    # return it.
-    if not prm['typvar'].endswith('@'): return prm
-    if prm['typvar'] == '@@' : return prm
-    mask_key = fstinf(self._opened_funit, nomvar=prm['nomvar'], typvar = '@@',
-                      datev=prm['datev'], etiket=prm['etiket'],
-                      ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
+    with self._lock:
+      prm = super(Masks,self)._fstluk(rec_id, dtype, rank, dataArray)
+      # If this data is not masked, or if this data *is* as mask, then just
+      # return it.
+      if not prm['typvar'].endswith('@'): return prm
+      if prm['typvar'] == '@@' : return prm
+      mask_key = fstinf(self._opened_funit, nomvar=prm['nomvar'], typvar = '@@',
+                        datev=prm['datev'], etiket=prm['etiket'],
+                        ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
       mask = self._fstluk(mask_key, rank=rank)['d']
       prm['d'] *= mask

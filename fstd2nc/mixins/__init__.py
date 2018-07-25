@@ -161,9 +161,9 @@ except ImportError:
 # This is necessary because we can only open a limited number of files
 # at a time, so need to control which ones are opened and available in
 # a thread-safe way.
-from threading import Lock
-_lock = Lock()
-del Lock
+from threading import RLock
+_lock = RLock()
+del RLock
 
 # Define a class for encoding / decoding FSTD data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
@@ -305,6 +305,11 @@ class BufferBase (object):
     from glob import glob, has_magic
     import os
     import warnings
+
+    # Set up lock for threading.
+    # The same lock is shared for all Buffer objects, to synchronize access to
+    # librmn.
+    self._lock = _lock
 
     # Set up a progress bar for scanning the input files.
     Bar = _ProgressBar if progress is True else _FakeBar
@@ -767,7 +772,7 @@ class BufferBase (object):
         dtype = dtype_fst2numpy(rec_id['datyp'],rec_id['nbits'])
 
     # Lock the opened file so another thread doesn't close it.
-    with _lock:
+    with self._lock:
       if isinstance(rec_id,dict):
         # If we were given a dict, assume it's for a valid open file.
         key = rec_id['key']
