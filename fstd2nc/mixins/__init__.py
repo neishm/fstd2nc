@@ -627,6 +627,8 @@ class BufferBase (object):
 
     # Convert records to a pandas DataFrame, which is faster to operate on.
     records = pd.DataFrame.from_records(self._headers)
+    # Keep track of original dtypes (may need to re-cast later).
+    original_dtypes = dict(self._headers_dtype)
 
     # Ignore deleted / invalidated records.
     records = records[records['dltf']==0]
@@ -655,7 +657,9 @@ class BufferBase (object):
         # https://stackoverflow.com/questions/29530232/python-pandas-check-if-any-value-is-nan-in-dataframe
         if var_records[n].isnull().values.any(): continue
         # Get the unique values, in order.
-        column = var_records[n]
+        # Coerce back to original dtype, since masked columns get upcasted to
+        # float64 in pandas.DataFrame.from_records.
+        column = var_records[n].astype(original_dtypes[n])
         cat = pd.Categorical(column)
         # Is this column an outer axis?
         if n in self._outer_axes:
