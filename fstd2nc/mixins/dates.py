@@ -99,49 +99,33 @@ class Dates (BufferBase):
       fields['time'] = dateo
 
   # Add time and forecast axes to the data stream.
-  def _iter (self):
-    from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
-    from collections import OrderedDict
+  def _makevars (self):
     import numpy as np
-    # Keep track of all time and forecast axes found in the data.
-    time_axes = set()
-    forecast_axes = set()
-    for var in super(Dates,self)._iter():
+    super(Dates,self)._makevars()
+    for coord in self._iter_coords():
       # Add metadata to auxiliary coordinates.
-      if var.name == 'leadtime':
-        var.atts['standard_name'] = 'forecast_period'
-        var.atts['long_name'] = "Lead time (since forecast_reference_time)"
-        var.atts['units'] = 'hours'
-      if var.name == 'reftime':
-        var.atts['standard_name'] = 'forecast_reference_time'
-        var.array = np.asarray(var.array,dtype='datetime64[s]')
+      if coord.name == 'leadtime':
+        coord.atts['standard_name'] = 'forecast_period'
+        coord.atts['long_name'] = "Lead time (since forecast_reference_time)"
+        coord.atts['units'] = 'hours'
+      if coord.name == 'reftime':
+        coord.atts['standard_name'] = 'forecast_reference_time'
+        coord.array = np.asarray(coord.array,dtype='datetime64[s]')
         # Special case: reftimes are all identical.
         # Convert to a scalar.
-        reftimes = set(var.array)
+        reftimes = set(coord.array)
         if len(reftimes) == 1:
-          var.axes.pop('time')
-          var.array = var.array[0]
-      if not isinstance(var,_iter_type):
-        yield var
-        continue
-      if 'time' in var.axes:
-        times = var.axes['time']
-        if times not in time_axes:
-          time_axes.add(times)
-          atts = OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')])
-          axes = OrderedDict([('time',var.axes['time'])])
-          # Add the time axis to the data stream.
-          yield _var_type('time',atts,axes,np.asarray(times,dtype='datetime64[s]'))
+          coord.axes.pop(0)
+          coord.array = coord.array[0]
+    for axis in self._iter_axes():
+      # Add metadata to time axis.
+      if axis.name == 'time':
+        axis.atts['standard_name'] = 'time'
+        axis.atts['long_name'] = 'Validity time'
+        axis.atts['axis'] = 'T'
       # When used as an axis, rename 'leadtime' to 'forecast' for backwards
       # compatibility with previous versions of the converter.
-      if 'leadtime' in var.axes:
-        var.axes = _modify_axes(var.axes, leadtime='forecast')
-        forecasts = var.axes['forecast']
-        if forecasts not in forecast_axes:
-          forecast_axes.add(forecasts)
-          atts = OrderedDict(units='hours')
-          axes = OrderedDict([('forecast',var.axes['forecast'])])
-          # Add the forecast axis to the data stream.
-          yield _var_type('forecast',atts,axes,np.asarray(forecasts))
-      yield var
+      if axis.name == 'leadtime':
+        axis.name = 'forecast'
+        axis.atts['units'] = 'hours'
 

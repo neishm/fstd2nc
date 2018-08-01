@@ -43,39 +43,62 @@ class RemoveStuff (BufferBase):
     self._exclude = tuple(exclude)
     super(RemoveStuff,self).__init__(*args,**kwargs)
 
-  def _iter (self):
+  def _do_exclude (self, var):
+    from collections import OrderedDict
+    from fstd2nc.mixins import _iter_type, _var_type
+
+    # Remove excluded axes.
+    for axisname in self._exclude:
+      axis = var.getaxis(axisname)
+      if axis is not None and len(axis) == 1:
+        i = var.dims.index(axisname)
+        var.axes.pop(i)
+        if isinstance(var,_var_type):
+          shape = var.array.shape
+          shape = shape[:i] + shape[i+1:]
+          var.array = var.array.reshape(shape)
+        if isinstance(var,_iter_type):
+          shape = var.record_id.shape
+          shape = shape[:i] + shape[i+1:]
+          var.record_id = var.record_id.reshape(shape)
+
+    # Remove all references to excluded vars from the metadata.
+    for key,val in list(var.atts.items()):
+      # Handle list of meta variables.
+      if isinstance(val,list):
+        # Remove any meta variables that are to be excluded.
+        newval = [v for v in val if v.name not in self._exclude]
+        # Recursively process any meta variables.
+        newval = map(self._do_exclude,newval)
+        var.atts[key] = newval
+      # Handle key/value entries for meta variables.
+      # (E.g. for formula_terms).
+      elif isinstance(val,OrderedDict):
+        newval = []
+        for (k,v) in newval:
+          # Remove any meta variables that are to be excluded.
+          if isinstance(k,_var_type) and k.name in self._exclude:
+            continue
+          if isinstance(v,_var_type) and v.name in self._exclude:
+            continue
+          # Recursively process any meta variables.
+          if isinstance(k,_var_type):
+            k = self._do_exclude(k)
+          if isinstance(v,_var_type):
+            v = self._do_exclude(v)
+          newval.append((k,v))
+        var.atts[key] = OrderedDict(newval)
+
+    return var
+
+  def _makevars (self):
     from fstd2nc.mixins import _var_type, _iter_type
-    for var in super(RemoveStuff,self)._iter():
 
-      # Omit the excluded variables from the data stream.
-      # Note: will not remove the var associated with an axis if the axis is
-      # non-degenerate.
-      if var.name in self._exclude:
-        if list(var.axes.keys()) != [var.name]:
-          continue
-        elif len(var.axes[var.name]) == 1:
-          continue
+    super(RemoveStuff,self)._makevars()
 
-      # Remove the excluded axes.
-      for exclude in self._exclude:
-        axisnames = list(var.axes.keys())
-        if exclude in axisnames and len(var.axes[exclude]) == 1:
-          i = axisnames.index(exclude)
-          var.axes.pop(exclude)
-          if isinstance(var,_var_type):
-            shape = var.array.shape
-            shape = shape[:i] + shape[i+1:]
-            var.array = var.array.reshape(shape)
-          if isinstance(var,_iter_type):
-            shape = var.record_id.shape
-            shape = shape[:i] + shape[i+1:]
-            var.record_id = var.record_id.reshape(shape)
+    # Filter out excluded variables.
+    self._varlist = [v for v in self._varlist if v.name not in self._exclude]
 
-      # Remove all references to excluded vars from the metadata.
-      for key,val in list(var.atts.items()):
-        # Special case - list of object references
-        if isinstance(val,list):
-          val = [v for v in val if v.name not in self._exclude]
-          var.atts[key] = val
+    # Apply exclusions to the axes and metadata.
+    self._varlist = list(map(self._do_exclude,self._varlist))
 
-      yield var

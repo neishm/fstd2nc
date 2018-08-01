@@ -123,24 +123,42 @@ class Series (BufferBase):
     # Set it to 0 to indicate a degenerate vertical axis.
     fields['ip1'][is_series] = 0
 
-  def _iter (self):
-    from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
+  def _makevars (self):
+    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
     from fstd2nc.mixins.dates import stamp2datetime
     from collections import OrderedDict
     import numpy as np
-    from datetime import timedelta
     from rpnpy.librmn.fstd98 import fstlir
 
-    forecast_hours = None
-    created_time_axis = False  # To only create squashed time axis once.
-                               # (for --squashed-forecasts option).
+    forecast_axis = None       # To attach the forecast axis.
     station = None             # To attach the station names as coordinates.
     momentum = thermo = None   # To attach the vertical axes.
+
+    super(Series,self)._makevars()
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
     station_header = fstlir(self._meta_funit, nomvar='STNS')
+    if station_header is not None:
+      array = station_header['d'].transpose()
+      # Re-cast array as string.
+      # I don't know why I have to subtract 128 - maybe something to do with
+      # how the characters are encoded in the file?
+      # This isn't always needed.  Have test files for both cases.
+      # Need help making this more robust!
+      if array.flatten()[0] >= 128:
+        array -= 128
+      array = array.view('|S1')
+      nstations, strlen = array.shape
+      # Strip out trailing whitespace.
+      array = array.flatten().view('|S%d'%strlen)
+      array[:] = map(str.rstrip,array)
+      array = array.view('|S1').reshape(nstations,strlen)
+      station_id = _dim_type('station_id',nstations)
+      station_strlen = _dim_type('station_strlen',strlen)
+      # Encode it as 2D character array for netCDF file output.
+      station = _var_type('station',{},[station_id,station_strlen],array)
     # Create forecast axis.
     forecast_header = fstlir (self._meta_funit, nomvar='HH')
     if forecast_header is not None:
@@ -150,12 +168,8 @@ class Series (BufferBase):
       # the leadtime.
       starting_hour = stamp2datetime(forecast_header['dateo']).hour
       array = forecast_header['d'].flatten() - starting_hour
-      forecast_hours = tuple(array)
       forecast_timedelta = np.array(array*3600,'timedelta64[s]')
-      if getattr(self,'_squash_forecasts',False) is False:
-        axes = OrderedDict(forecast=tuple(array))
-        forecast_var = _var_type('forecast',atts,axes,array)
-        yield forecast_var
+      forecast_axis = _axis_type('forecast',atts,array)
     # Extract vertical coordinates.
     for vertvar in ('SH','SV'):
       header = fstlir (self._meta_funit, nomvar=vertvar)
@@ -166,113 +180,138 @@ class Series (BufferBase):
         array = array[:-1]
       if array.ndim != 1: continue
       atts = OrderedDict(self._get_header_atts(header))
-      atts['kind'] = 5
-      var = _var_type(vertvar,atts,{'level':tuple(array)},array)
-      if vertvar == 'SH': thermo = tuple(array)
-      if vertvar == 'SV': momentum = tuple(array)
-      yield var
+      if vertvar == 'SH': thermo = _axis_type('level',atts,array)
+      if vertvar == 'SV': momentum = _axis_type('level',atts,array)
 
-    for var in super(Series,self)._iter():
 
-      if not isinstance(var,_iter_type) or var.atts.get('typvar') != 'T':
-        yield var
-        continue
+    # 'Y' data should be handled fine by _XYCoords - just give a more
+    # specific name to the ni axis for clarity.
+    for var in self._varlist:
+      if var.atts.get('typvar') == 'T' and var.atts.get('grtyp') == 'Y':
+        dims = var.dims
+        iaxis = var.getaxis('i')
+        if iaxis is not None and station is not None and len(iaxis) == station.shape[0]:
+          var.axes[dims.index('i')] = station.axes[0]
 
-      # 'Y' data should be handled fine by _XYCoords - just give a more
-      # specific name to the ni axis for clarity.
-      if var.atts.get('grtyp') == 'Y':
-        var.axes = _modify_axes(var.axes, i=('station_id',tuple(range(1,len(var.axes['i'])+1))))
+    # Remove degenerate vertical axis for '+' data.
+    # (The one coming from IP1, which is not used.)
+    for var in self._varlist:
+      if var.atts.get('typvar') == 'T' and var.atts.get('grtyp') == '+':
+        dims = var.dims
+        if 'level' in dims:
+          var.record_id = var.record_id.squeeze(axis=dims.index('level'))
+          var.axes.pop(dims.index('level'))
 
-      # '+' data has different meanings for the axes.
-      # ni is actually vertical level.
-      # nj is actually forecast time.
-      if var.atts.get('grtyp') == '+' and forecast_hours is not None:
-        # Remove degenerate vertical axis.
-        if 'level' in var.axes:
-          var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('level'))
-          var.axes.pop('level')
 
+    # For '+' data, ni is the vertical level, and nj is the forecast.
+    known_levels = dict()
+    for var in self._varlist:
+
+      if var.atts.get('typvar') != 'T': continue
+      if var.atts.get('grtyp') != '+': continue
+
+      dims = var.dims
+
+      # The j dimension is actually the forecast time.
+      jaxis = var.getaxis('j')
+      if jaxis is not None and forecast_axis is not None and len(jaxis) == len(forecast_axis):
+        var.axes[dims.index('j')] = forecast_axis
+
+      # The i dimension is actually the vertical coordinate for this type of
+      # data.
+      iaxis = var.getaxis('i')
+      if iaxis is not None:
+        # If there's only 1 level (degenerate), then remove that dimension.
+        if len(iaxis) == 1:
+          var.axes.pop(dims.index('i'))
+          continue
         # Try to map to thermodynamic or momentum levels.
-        level_def = 'level'
-
-        if len(var.axes['i']) > 1:
-          if var.name in self._momentum_vars and momentum is not None:
-            if len(var.axes['i']) == len(momentum):
-              level_def = ('level',momentum)
-            else:
-              warn (_("Wrong number of momentum levels found in the data."))
-          if var.name in self._thermo_vars and thermo is not None:
-            if len(var.axes['i']) == len(thermo):
-              level_def = ('level',thermo)
-            else:
-              warn (_("Wrong number of thermodynamic levels found in the data."))
-          if level_def == 'level':
-            warn (_("Unable to find the vertical coordinates for %s."%var.name))
-
-        var.axes = _modify_axes(var.axes, i=level_def, j=('forecast',forecast_hours))
-
-        # Some support for squashing forecasts.
-        if getattr(self,'_squash_forecasts',False) is True:
-          # Can only do this for a single date of origin, because the time
-          # axis and forecast axis are not adjacent for this type of data.
-          if len(var.axes['time']) == 1:
-            var.record_id = var.record_id.squeeze(axis=list(var.axes.keys()).index('time'))
-            time = var.axes.pop('time')[0]
-            # Convert pandas times (if using pandas for processing the headers)
-            time = np.datetime64(time,'s')
-            forecast = var.axes['forecast']
-            if not created_time_axis:
-              squashed_times_array = time+forecast_timedelta
-              squashed_times = tuple(squashed_times_array)
-              yield _var_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),{'time':squashed_times},squashed_times_array)
-              # Include forecast and reftime auxiliary coordinates (emulate
-              # what's done in the dates mixin)
-              leadtime = _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),{'time':squashed_times},np.array(forecast))
-              yield leadtime
-              reftime = _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time))
-              yield reftime
-              created_time_axis = True
-            var.axes = _modify_axes(var.axes, forecast=('time',squashed_times))
-            # Add leadtime and reftime as auxiliary coordinates.
-            coords = var.atts.get('coordinates',[])
-            coords.extend([leadtime,reftime])
-            var.atts['coordinates'] = coords
+        level = iaxis
+        level.name = 'level'
+        if var.name in self._momentum_vars and momentum is not None:
+          if len(level) == len(momentum):
+            level = momentum
           else:
-            warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
+            warn (_("Wrong number of momentum levels found in the data."))
+        if var.name in self._thermo_vars and thermo is not None:
+          if len(level) == len(thermo):
+            level = thermo
+          else:
+            warn (_("Wrong number of thermodynamic levels found in the data."))
+        if level is iaxis:
+          warn (_("Unable to find the vertical coordinates for %s."%var.name))
+          # Attach a generic level dimension.
+          nlev = len(level)
+          if nlev not in known_levels:
+            known_levels[nlev] = _dim_type('level',nlev)
+          level = known_levels[nlev]
+        else:
+          # Found vertical levels, now define the level kind so VCoords
+          # mixin can add more metadata.
+          var.atts['kind'] = 5
+        var.axes[dims.index('i')] = level
 
-      # Hook in the station names as coordinate information.
-      if 'station_id' in var.axes and station_header is not None:
-        if station is None:
-          atts = OrderedDict()
-          array = station_header['d'].transpose()
-          # Subset the stations to match the IP3 values found in the file
-          # (in case we don't have records for all the stations).
-          station_id = var.axes['station_id']
-          indices = np.array(var.axes['station_id'],dtype=int) - 1
-          array = array[indices,:]
-          # Re-cast array as string.
-          # I don't know why I have to subtract 128 - maybe something to do with
-          # how the characters are encoded in the file?
-          # This isn't always needed.  Have test files for both cases.
-          # Need help making this more robust!
-          if array.flatten()[0] >= 128:
-            array -= 128
-          array = array.view('|S1')
-          nstations, strlen = array.shape
-          # Strip out trailing whitespace.
-          array = array.flatten().view('|S%d'%strlen)
-          array[:] = map(str.rstrip,array)
-          array = array.view('|S1').reshape(nstations,strlen)
-          # Encode it as 2D character array for netCDF file output.
-          axes = OrderedDict([('station_id',station_id),('station_strlen',tuple(range(strlen)))])
-          station = _var_type('station',atts,axes,array)
-          yield station
+    # Some support for squashing forecasts.
+    if getattr(self,'_squash_forecasts',False) is True:
+      known_squashed_forecasts = dict()
+      known_leadtimes = dict()
+      known_reftimes = dict()
+      for var in self._varlist:
+        # Can only do this for a single date of origin, because the time
+        # axis and forecast axis are not adjacent for this type of data.
+        time = var.getaxis('time')
+        forecast = var.getaxis('forecast')
+        if time is None or forecast is None: continue
+        if len(time) != 1:
+          warn(_("Can't use datev for timeseries data with multiple dates of origin.  Try re-running with the --dateo option."))
+          continue
+        var.record_id = var.record_id.squeeze(axis=var.dims.index('time'))
+        var.axes.pop(var.dims.index('time'))
+        key = (id(time),id(forecast))
+        if key not in known_squashed_forecasts:
+          time0 = time.array[0]
+          # Convert pandas times (if using pandas for processing the headers)
+          time0 = np.datetime64(time0,'s')
+          # Calculate the date of validity
+          forecast_timedelta = np.array(forecast.array*3600,'timedelta64[s]')
+          squashed_times_array = time0+forecast_timedelta
+          time = _axis_type('time',OrderedDict([('standard_name','time'),('long_name','Validity time'),('axis','T')]),squashed_times_array)
+          known_squashed_forecasts[key] = time
+          # Include forecast and reftime auxiliary coordinates (emulate
+          # what's done in the dates mixin)
+          leadtime = _var_type('leadtime',OrderedDict([('standard_name','forecast_period'),('long_name','Lead time (since forecast_reference_time)'),('units','hours')]),[time],forecast.array)
+          reftime = _var_type('reftime',OrderedDict([('standard_name','forecast_reference_time')]),{},np.array(time0))
+          known_leadtimes[key] = leadtime
+          known_reftimes[key] = reftime
+        var.axes[var.dims.index('forecast')] = known_squashed_forecasts[key]
+        # Add leadtime and reftime as auxiliary coordinates.
         coords = var.atts.get('coordinates',[])
-        coords.append(station)
+        coords.extend([known_leadtimes[key],known_reftimes[key]])
         var.atts['coordinates'] = coords
 
-      # Remove 'kind' information for now - still need to figure out vertical
-      # coordinates (i.e. how to map SV/SH here).
-      var.atts.pop('kind',None)
-      yield var
+    # Hook in the station names as coordinate information.
+    if station is not None:
+      for station_id, varlist in self._iter_axes('station_id', varlist=True):
+        # Try to use the provided station coordinate, if it has a consistent
+        # length.
+        if len(station_id) == station.shape[0]:
+          for var in varlist:
+            var.axes[var.dims.index('station_id')] = station.axes[0]
+          station_id = station.axes[0]
+          station_coord = station
+        # Otherwise, need to construct a new coordinate with the subset of
+        # stations used.
+        # Assume station_ids start at 1 (not 0).
+        else:
+          indices = station_id.array - 1
+          array = station.array[indices,:]
+          # Use _axis_type instead of _dim_type to retain the station_id values.
+          station_id = _axis_type('station_id',{},station_id.array)
+          axes = [station_id,station.axes[1]]
+          station_coord = _var_type('station',{},axes,array)
+        # Attach the station as a coordinate.
+        for var in varlist:
+          coords = var.atts.get('coordinates',[])
+          coords.append(station_coord)
+          var.atts['coordinates'] = coords
 

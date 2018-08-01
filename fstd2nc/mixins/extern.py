@@ -101,11 +101,12 @@ class Extern (BufferBase):
     # This speeds up access to their elements in the inner loop.
     all_file_ids = np.array(self._headers['file_id'],copy=True)
     all_keys = np.array(self._headers['key'],copy=True)
-    for var in self._iter():
+    self._makevars()
+    for var in self._iter_objects():
       if isinstance(var,_iter_type):
         name = var.name+"-"+unique_token
         ndim = len(var.axes)
-        shape = tuple(map(len,var.axes.values()))
+        shape = var.shape
         ndim_outer = var.record_id.ndim
         ndim_inner = ndim - ndim_outer
         inner_zeros = (0,)*ndim_inner
@@ -148,7 +149,8 @@ class Extern (BufferBase):
     import xarray as xr
     out = OrderedDict()
     for var in self._iter_dask():
-      out[var.name] = xr.DataArray(data=var.array, dims=tuple(var.axes.keys()), name=var.name, attrs=var.atts)
+      if not hasattr(var,'array'): continue
+      out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)
       # Preserve chunking information for writing to netCDF4.
       if hasattr(var.array,'chunks'):
         chunk_shape = [c[0] for c in var.array.chunks]

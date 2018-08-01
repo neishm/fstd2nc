@@ -23,47 +23,26 @@ from fstd2nc.mixins import BufferBase
 
 
 #################################################
-# Mixin for pruning unnecessary axes and coordinates from the data.
+# Mixin for pruning duplicate axes.
 
 class PruneAxes (BufferBase):
-  def _iter (self):
-    from fstd2nc.mixins import _var_type
-    from collections import OrderedDict
-    import numpy as np
-    from datetime import timedelta
-    from rpnpy.librmn.fstd98 import fstlir
+  def _makevars (self):
+    from fstd2nc.mixins import _dim_type
 
-    used_axes = set()
-    all_axes = dict()
-    varlist = []
+    handled_axes = dict()
 
-    # Pull axes out of the stream.
-    for var in super(PruneAxes,self)._iter():
-      if isinstance(var,_var_type) and list(var.axes.keys()) == [var.name]:
-        all_axes[(var.name,var.axes[var.name])] = var
+    super(PruneAxes,self)._makevars()
+
+    # Check for identical axes.
+    for axis, varlist in self._iter_axes(varlist=True):
+      if isinstance(axis,_dim_type):
+        key = (axis.name,len(axis))
       else:
-        varlist.append(var)
-
-    # Provide axes only when they are needed by FST variables.
-    # (Use by derived variables doesn't count).
-    for var in varlist:
-      if isinstance(var,_var_type):
-        continue
-      for name, values in var.axes.items():
-        key = (name,values)
-        if key in all_axes and key not in used_axes:
-          axis = all_axes[key]
-          yield axis
-        used_axes.add(key)
-
-    # Finally, re-insert variables back into the stream.
-    # Ignore derived variables that are coordinates for unnecessary axes.
-    for var in varlist:
-      remove_var = False
-      for name, values in var.axes.items():
-        key = (name,values)
-        if key in all_axes and key not in used_axes:
-          remove_var = True
-      if not remove_var:
-        yield var
+        key = (axis.name,tuple(axis.array))
+      # Use only one version of the axis.
+      if key in handled_axes:
+        for var in varlist:
+          var.axes[var.dims.index(axis.name)] = handled_axes[key]
+      else:
+        handled_axes[key] = axis
 

@@ -103,13 +103,13 @@ class LatLon(GridMap):
     self._atts['grid_mapping_name'] = 'latitude_longitude'
     self._atts['earth_radius'] = self._earth_radius
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,{},np.array(""))
+    self.gmap = _var_type(self._name,self._atts,[],np.array(""))
     return self.gmap     
   # Generate true latitudes and longitudes
   def gen_ll(self):    
     from collections import OrderedDict
     from rpnpy.librmn.all import gdll 
-    from fstd2nc.mixins import _var_type
+    from fstd2nc.mixins import _axis_type
     ll = gdll(self._grd['id'])
     self._lonarray = ll['lon'][:,0]
     self._lonatts = OrderedDict()
@@ -121,9 +121,9 @@ class LatLon(GridMap):
     self._latatts['long_name'] = 'latitude'
     self._latatts['standard_name'] = 'latitude'
     self._latatts['units'] = 'degrees_north'
-    self.lon = _var_type('lon',self._lonatts,{'lon':tuple(self._lonarray)},self._lonarray)
-    self.lat = _var_type('lat',self._latatts,{'lat':tuple(self._latarray)},self._latarray)
-    self.gridaxes = [('lat',tuple(self._latarray)),('lon',tuple(self._lonarray))]
+    self.lon = _axis_type('lon',self._lonatts,self._lonarray)
+    self.lat = _axis_type('lat',self._latatts,self._latarray)
+    self.gridaxes = [self.lat,self.lon]
     # Ensure monotonicity of longitude field.
     # (gdll may sometimes wrap last longitude to zero).
     # Taken from old fstd_core.c code.
@@ -171,14 +171,14 @@ class RotLatLon(GridMap):
 #    self._atts['north_pole_grid_longitude'] = 0.
 #    self._atts['longitude_of_prime_meridian'] = 0.
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,{},np.array(""))
+    self.gmap = _var_type(self._name,self._atts,[],np.array(""))
     return self.gmap
   # Generate latitudes and longitudes in rotated pole grid 
   # and true latitudes and longitudes
   def gen_xyll(self):
     from collections import OrderedDict
     from rpnpy.librmn.all import gdll
-    from fstd2nc.mixins import _var_type
+    from fstd2nc.mixins import _var_type, _axis_type
     self._xaxisatts['long_name'] = 'longitude in rotated pole grid'
     self._xaxisatts['standard_name'] = 'grid_longitude'
     self._xaxisatts['units'] = 'degrees'
@@ -187,9 +187,9 @@ class RotLatLon(GridMap):
     self._yaxisatts['standard_name'] = 'grid_latitude'
     self._yaxisatts['units'] = 'degrees'
     self._yaxisatts['axis'] = 'Y'
-    self.xaxis = _var_type('rlon',self._xaxisatts,{'rlon':tuple(self._ax)},self._ax)
-    self.yaxis = _var_type('rlat',self._yaxisatts,{'rlat':tuple(self._ay)},self._ay) 
-    self.gridaxes = [('rlat',tuple(self.yaxis.array)),('rlon',tuple(self.xaxis.array))]
+    self.xaxis = _axis_type('rlon',self._xaxisatts,self._ax)
+    self.yaxis = _axis_type('rlat',self._yaxisatts,self._ay)
+    self.gridaxes = [self.yaxis,self.xaxis]
     ll = gdll(self._grd['id'])
     self._lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
     self._lonatts = OrderedDict()
@@ -201,8 +201,8 @@ class RotLatLon(GridMap):
     self._latatts['long_name'] = 'latitude'
     self._latatts['standard_name'] = 'latitude'
     self._latatts['units'] = 'degrees_north'
-    self.lon = _var_type('lon',self._lonatts,OrderedDict(self.gridaxes),self._lonarray)
-    self.lat = _var_type('lat',self._latatts,OrderedDict(self.gridaxes),self._latarray)
+    self.lon = _var_type('lon',self._lonatts,self.gridaxes,self._lonarray)
+    self.lat = _var_type('lat',self._latatts,self.gridaxes,self._latarray)
     return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
 
 
@@ -247,14 +247,14 @@ class PolarStereo(GridMap):
     self._atts['false_easting'] = self._false_easting
     self._atts['false_northing'] = self._false_northing
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,{},np.array(""))
+    self.gmap = _var_type(self._name,self._atts,[],np.array(""))
     return self.gmap
   # Generate projection coordinates
   def _gen_xyll(self):  
     from collections import OrderedDict 
     import numpy as np
     from rpnpy.librmn.all import gdll, gdxyfll
-    from fstd2nc.mixins import _var_type
+    from fstd2nc.mixins import _var_type, _axis_type
     ll = gdll(self._grd['id'])
     self._lonarray = ll['lon'].transpose() # Switch from Fortran to C order.
     self._lonatts = OrderedDict()
@@ -284,11 +284,11 @@ class PolarStereo(GridMap):
     self._yaxisatts['standard_name'] = 'projection_y_coordinate'
     self._yaxisatts['units'] = 'm'
     self._yaxisatts['axis'] = 'Y'
-    self.xaxis = _var_type('xc',self._xaxisatts,{'xc':tuple(self._ax)},self._ax)
-    self.yaxis = _var_type('yc',self._yaxisatts,{'yc':tuple(self._ay)},self._ay) 
-    self.gridaxes = [('yc',tuple(self.yaxis.array)),('xc',tuple(self.xaxis.array))]
-    self.lon = _var_type('lon',self._lonatts,OrderedDict(self.gridaxes),self._lonarray)
-    self.lat = _var_type('lat',self._latatts,OrderedDict(self.gridaxes),self._latarray)
+    self.xaxis = _axis_type('xc',self._xaxisatts,self._ax)
+    self.yaxis = _axis_type('yc',self._yaxisatts,self._ay)
+    self.gridaxes = [self.yaxis,self.xaxis]
+    self.lon = _var_type('lon',self._lonatts,self.gridaxes,self._lonarray)
+    self.lat = _var_type('lat',self._latatts,self.gridaxes,self._latarray)
     return (self._false_easting, self._false_northing, self.xaxis, self.yaxis, \
             self.gridaxes, self.lon, self.lat)
   def gen_xyll(self):
@@ -342,9 +342,9 @@ class XYCoords (BufferBase):
     raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
 
 
-  # Add horizontal coordinate info to the data stream.
-  def _iter (self):
-    from fstd2nc.mixins import _iter_type, _var_type, _modify_axes
+  # Add horizontal coordinate info to the data.
+  def _makevars (self):
+    from fstd2nc.mixins import _iter_type, _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
     from rpnpy.librmn.all import readGrid, RMNError
@@ -359,19 +359,16 @@ class XYCoords (BufferBase):
     # horizontal staggering.
     coords = set()
 
+    super(XYCoords,self)._makevars()
+
     # Make sure any LA/LO records get processed first, so we can apply them as
     # coordinates to other variables.
-    varlist = list(super(XYCoords,self)._iter())
+    varlist = self._varlist
     varlist = [v for v in varlist if v.name in ('LA','LO')] + [v for v in varlist if v.name not in ('LA','LO')]
 
     for var in varlist:
-      # Don't touch derived variables.
-      if not isinstance(var,_iter_type):
-        yield var
-        continue
       # Don't touch variables with no horizontal grid.
-      if all(a not in var.axes for a in ('i','j','station_id')):
-        yield var
+      if all(a not in var.dims for a in ('i','j','station_id')):
         continue
       # Get grid parameters.
       ni = int(var.atts['ni'])
@@ -402,8 +399,7 @@ class XYCoords (BufferBase):
             grd = readGrid(self._meta_funit, var.atts.copy())
             gmap = GridMap.gen_gmap(grd)
             gmapvar = gmap.gen_gmapvar()
-            gridmaps[key] = gmapvar.name
-            yield gmapvar
+            gridmaps[key] = gmapvar
             (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll()
           except (TypeError,EzscintError,KeyError,RMNError,ValueError):
             pass # Wasn't supported.
@@ -438,8 +434,8 @@ class XYCoords (BufferBase):
               # Convert from degenerate 2D arrays to 1D arrays.
               ax = ax[0,:]
               ay = ay[:,0]
-              xaxis = _var_type('x',{'axis':'X'},{'x':tuple(ax)},ax)
-              yaxis = _var_type('y',{'axis':'Y'},{'y':tuple(ay)},ay)
+              xaxis = _axis_type('x',{'axis':'X'},ax)
+              yaxis = _axis_type('y',{'axis':'Y'},ay)
 
           except (TypeError,EzscintError,KeyError,RMNError,ValueError):
             pass
@@ -449,21 +445,18 @@ class XYCoords (BufferBase):
           if latarray is None and var.name == 'LA':
             var.name = 'lat'
             var.atts.update(latatts)
-            yield var
-            #grids[key] = list(var.axes.items())
+            #grids[key] = list(var.axes)
             lats[key] = var
             continue
           if lonarray is None and var.name == 'LO':
             var.name = 'lon'
             var.atts.update(lonatts)
-            yield var
-            grids[key] = list(var.axes.items())
+            grids[key] = list(var.axes)
             lons[key] = var
             continue
 
           if latarray is None or lonarray is None:
             warn(_("Unable to get lat/lon coordinates for '%s'")%var.name)
-            yield var
             continue
 
           # Construct lat/lon variables from latarray and lonarray.
@@ -485,73 +478,63 @@ class XYCoords (BufferBase):
               meanlon[-1] += 360.
             latarray = meanlat
             lonarray = meanlon
-            lat = _var_type('lat',latatts,{'lat':tuple(latarray)},latarray)
-            lon = _var_type('lon',lonatts,{'lon':tuple(lonarray)},lonarray)
-            gridaxes = [('lat',tuple(latarray)),('lon',tuple(lonarray))]
+            lat = _axis_type('lat',latatts,latarray)
+            lon = _axis_type('lon',lonatts,lonarray)
+            gridaxes = [lat,lon]
 
           # Case 2: lat/lon are series of points.
-          elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.axes or 'station_id' in var.axes):
+          elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.dims or 'station_id' in var.dims):
             latarray = latarray[0,:]
             lonarray = lonarray[0,:]
             # Special case for station data
-            if 'station_id' in var.axes:
-              station_id = var.axes['station_id']
-              gridaxes = [('station_id',station_id)]
+            station_id = var.getaxis('station_id')
+            if station_id is not None:
+              gridaxes = [station_id]
               # Subset the lat/lon to the stations that are actually found.
               # Assuming the station id (ip3) starts at 1.
-              indices = np.array(station_id,dtype=int) - 1
-              latarray = latarray[indices]
-              lonarray = lonarray[indices]
+              if isinstance(station_id,_axis_type):
+                indices = np.array(station_id.array,dtype=int) - 1
+                latarray = latarray[indices]
+                lonarray = lonarray[indices]
             else:
-              gridaxes = [('i',var.axes['i'])]
-            lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-            lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+              gridaxes = [var.getaxis('i')]
+            lat = _var_type('lat',latatts,gridaxes,latarray)
+            lon = _var_type('lon',lonatts,gridaxes,lonarray)
 
           # Case 3: General 2D lat/lon fields on X/Y coordinate system.
           elif xaxis is not None and yaxis is not None:
-            gridaxes = [('y',tuple(yaxis.array)),('x',tuple(xaxis.array))]
+            gridaxes = [yaxis,xaxis]
             # Special case: have supergrid data, and the user wants to split it?
             if grtyp == 'U' and self._subgrid_axis:
               ngrids = ezget_nsubgrids(gdid)
               ny = len(yaxis.array)//ngrids
               yaxis.array = yaxis.array[:ny]
-              yaxis.axes['y'] = tuple(yaxis.array)
-              gridaxes = [('subgrid',tuple(range(ngrids))), ('y',tuple(yaxis.array)), ('x',tuple(xaxis.array))]
+              subgrid = _dim_type('subgrid',ngrids)
+              gridaxes = [subgrid,yaxis,xaxis]
               latarray = latarray.reshape(ngrids,ny,-1)
               lonarray = lonarray.reshape(ngrids,ny,-1)
-            lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-            lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+            lat = _var_type('lat',latatts,gridaxes,latarray)
+            lon = _var_type('lon',lonatts,gridaxes,lonarray)
 
           # Case 4: General 2D lat/lon fields with no coordinate system.
-          elif 'i' in var.axes and 'j' in var.axes:
-            gridaxes = [('j',var.axes['j']),('i',var.axes['i'])]
-            lat = _var_type('lat',latatts,OrderedDict(gridaxes),latarray)
-            lon = _var_type('lon',lonatts,OrderedDict(gridaxes),lonarray)
+          elif 'i' in var.dims and 'j' in var.dims:
+            gridaxes = [var.getaxis('j'),var.getaxis('i')]
+            lat = _var_type('lat',latatts,gridaxes,latarray)
+            lon = _var_type('lon',lonatts,gridaxes,lonarray)
 
         # --- End of lat/lon/xaxis/yaxis decoding.
 
         if lat is None or lon is None:
           warn(_("Unable to get lat/lon coordinates for '%s'")%var.name)
-          yield var
           continue
 
-        if yaxis is not None and tuple(yaxis.axes.items()) not in coords:
-          yield yaxis
-          coords.add(tuple(yaxis.axes.items()))
-        if xaxis is not None and tuple(xaxis.axes.items()) not in coords:
-          yield xaxis
-          coords.add(tuple(xaxis.axes.items()))
-
         # Sanity check on lat/lon - make sure we have something of the right size.
-        if lat.array.shape == tuple(map(len,lat.axes.values())) and lon.array.shape == tuple(map(len,lon.axes.values())):
-          yield lat
-          yield lon
+        if lat.array.shape == lat.shape and lon.array.shape == lon.shape:
           grids[key] = gridaxes
           lats[key] = lat
           lons[key] = lon
         else:
           warn(_("Wrong shape of lat/lon for '%s'")%var.name)
-          yield var
           continue
       
       # --- End of grid decoding.
@@ -561,18 +544,23 @@ class XYCoords (BufferBase):
       lon = lons[key]
 
       # Update the var's horizontal coordinates.
+      newaxes = []
       if len(gridaxes) == 1:
-        var.axes = _modify_axes(var.axes, i=gridaxes[0])
+        newaxes = [('i',gridaxes[0])]
       elif len(gridaxes) == 2:
-        var.axes = _modify_axes(var.axes, j=gridaxes[0], i=gridaxes[1])
+        newaxes = [('j',gridaxes[0]),('i',gridaxes[1])]
       elif len(gridaxes) == 3:
-        var.axes = _modify_axes(var.axes, k=gridaxes[0], j=gridaxes[1], i=gridaxes[2])
+        newaxes = [('k',gridaxes[0]),('j',gridaxes[1]),('i',gridaxes[2])]
       else:
         warn(_("Unusual grid axes for '%s' - ignoring.")%var.name)
+      dims = var.dims
+      for oldname,newaxis in newaxes:
+        if oldname in dims:
+          var.axes[dims.index(oldname)] = newaxis
 
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
-      if 'lat' not in var.axes or 'lon' not in var.axes:
+      if 'lat' not in var.dims or 'lon' not in var.dims:
         coordinates = var.atts.get('coordinates',[])
         coordinates.extend([lon,lat])
         var.atts['coordinates'] = coordinates
@@ -581,10 +569,11 @@ class XYCoords (BufferBase):
         var.atts['grid_mapping'] = gridmaps[key]
 
       # Throw out superfluous LA/LO variables, if lat/lon was already decoded.
-      if var.name == 'LA' and ('lat' in var.axes or lat in coordinates):
-        continue
-      if var.name == 'LO' and ('lon' in var.axes or lon in coordinates):
-        continue
+      if var.name == 'LA' and ('lat' in var.dims or lat in coordinates):
+        var.name = None
+      if var.name == 'LO' and ('lon' in var.dims or lon in coordinates):
+        var.name = None
 
-      yield var
+    self._varlist = [v for v in varlist if v.name is not None]
+
 

@@ -40,32 +40,26 @@ class Ensembles (BufferBase):
       kwargs['ignore_etiket'] = True
     super(Ensembles,self).__init__(*args,**kwargs)
 
-  def _iter (self):
-    from fstd2nc.mixins import _var_type, _modify_axes
-    from collections import OrderedDict
+  def _makevars (self):
+    from fstd2nc.mixins import _var_type, _dim_type
     import numpy as np
-    handled_etikets = dict()
-    for var in super(Ensembles,self)._iter():
-      if 'etiket' not in var.axes:
-        yield var
-        continue
-      etikets = var.axes['etiket']
-      coordinates = var.atts.get('coordinates',[])
-      if etikets not in handled_etikets:
-        array = np.array(var.axes['etiket'])
-        # Strip out trailing whitespace.
-        array[:] = map(str.rstrip,array)
-        #array = array.view('|S1').reshape(n,strlen)
-        # Encode it as 2D character array for netCDF file output.
-        n = len(array)
-        array = array.view('|S1').reshape(n,-1)
-        n, strlen = array.shape
-        axes = OrderedDict([('ensemble_id',etikets),('ensemble_strlen',tuple(range(strlen)))])
-        etiket_var = _var_type('ensemble',{},axes,array)
-        yield etiket_var
-        handled_etikets[etikets] = etiket_var
-      var.axes = _modify_axes(var.axes, etiket='ensemble_id')
-      coordinates.append(handled_etikets[etikets])
-      if len(coordinates) > 0:
+    super(Ensembles,self)._makevars()
+    for etikets, varlist in self._iter_axes(name='etiket',varlist=True):
+      # Convert from object array to string array
+      array = np.array(list(etikets.array))
+      # Strip out trailing whitespace.
+      array[:] = map(str.rstrip,array)
+      # Encode it as 2D character array for netCDF file output.
+      n = len(array)
+      array = array.view('|S1').reshape(n,-1)
+      n, strlen = array.shape
+      ensemble_id = _dim_type('ensemble_id', n)
+      ensemble_strlen = _dim_type('ensemble_strlen',strlen)
+      etiket_var = _var_type (name='ensemble', atts={}, axes=[ensemble_id, ensemble_strlen], array=array)
+      for var in varlist:
+        # Replace 'etiket' dimension of variable with ensemble_id dimension.
+        var.axes[var.dims.index('etiket')] = ensemble_id
+        # Add the etiket strings as a coordinate variable.
+        coordinates = var.atts.get('coordinates',[])
+        coordinates.append(etiket_var)
         var.atts['coordinates'] = coordinates
-      yield var

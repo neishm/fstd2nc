@@ -33,7 +33,7 @@ class _Array (object):
     self._buffer = buffer
     self._record_id = var.record_id
     # Expected shape and type of the array.
-    self.shape = tuple(map(len,var.axes.values()))
+    self.shape = tuple(var.shape)
     self.ndim = len(self.shape)
     self.size = reduce(int.__mul__, self.shape, 1)
     self.dtype = var.dtype
@@ -83,7 +83,8 @@ class Iter (BufferBase):
     from warnings import warn
     warn ("Iterating over a Buffer is deprecated.  Use .to_xarray() to access the multidimensional data.", stacklevel=2)
     from fstd2nc.mixins import _iter_type, _var_type
-    for var in self._iter():
+    self._makevars()
+    for var in self._iter_objects():
       if isinstance(var, _iter_type):
         array = _Array(self, var)
         var = _var_type (var.name, var.atts, var.axes, array)

@@ -74,43 +74,63 @@ def vectorize (f):
   return vectorized_f
 
 
-# The type of data returned by the Buffer iterator.
-class _var_type (object):
-  __slots__ = ('name','atts','axes','array')
-  def __init__ (self, name, atts, axes, array):
-    self.name = name
-    self.atts = atts
-    self.axes = axes
-    self.array = array
+class _base_type (object):
+  @property
+  def shape(self):
+    return tuple(map(len,self.axes))
+  @property
+  def dims(self):
+    return tuple(a.name for a in self.axes)
+  def getaxis(self,name):
+    for a in self.axes:
+      if a.name == name:
+        return a
+    return None
   def __iter__ (self):
     return (getattr(self,n) for n in self.__slots__)
 
-# An internal type used in _iter methods.
-class _iter_type (object):
-  __slots__ = ('name','atts','axes','dtype','record_id')
+# Data that's loaded in memory.
+class _var_type (_base_type):
+  __slots__ = ('name','atts','axes','array','deps')
+  def __init__ (self, name, atts, axes, array):
+    self.name = name
+    self.atts = atts
+    self.axes = list(axes)
+    self.array = array
+    self.deps = []
+
+# Axis data.
+class _axis_type (_base_type):
+  __slots__ = ('name','atts','axes','array','deps')
+  def __init__ (self, name, atts, array):
+    self.name = name
+    self.atts = atts
+    self.axes = [self]
+    self.array = array
+    self.deps = []
+  def __len__ (self):
+    return len(self.array)
+
+# Dimension (without coordinate values).
+class _dim_type (object):
+  __slots__ = ('name','length','deps')
+  def __init__ (self, name, length):
+    self.name = name
+    self.length = length
+    self.deps = []
+  def __len__ (self):
+    return self.length
+
+# Data that resides in FST records on disk.
+class _iter_type (_base_type):
+  __slots__ = ('name','atts','axes','dtype','record_id','deps')
   def __init__ (self, name, atts, axes, dtype, record_id):
     self.name = name
     self.atts = atts
     self.axes = axes
     self.dtype = dtype
     self.record_id = record_id
-  def __iter__ (self):
-    return (getattr(self,n) for n in self.__slots__)
-
-# Helper method - modify the axes of an array.
-def _modify_axes (axes, **kwargs):
-  from collections import OrderedDict
-  new_axes = OrderedDict()
-  for name,values in axes.items():
-    # Check if modifications requested.
-    if name in kwargs:
-      # Can either modify just the axis name, or the name and values too.
-      if isinstance(kwargs[name],str):
-        name = kwargs[name]
-      else:
-        name,values = kwargs[name]
-    new_axes[name] = values
-  return new_axes
+    self.deps = []
 
 # Fake progress bar - does nothing.
 class _FakeBar (object):
@@ -455,10 +475,10 @@ class BufferBase (object):
     self._meta_funit = fstopenall(filenames, FST_RO)
 
 
-  # Internal iterator.
+  # Generate structured variables from FST records.
 
   # Normal version (without use of pandas).
-  def _iter_slow (self):
+  def _makevars_slow (self):
     from collections import OrderedDict
     import numpy as np
     import warnings
@@ -497,10 +517,14 @@ class BufferBase (object):
     # Now, find the unique var_ids from this pruned list.
     var_ids = np.unique(var_ids)
 
+    # Keep track of axes that were generated
+    known_axes = dict()
+
     # Keep track of any auxiliary coordinates that were generated.
     known_coords = dict()
 
     # Loop over each variable and construct the data & metadata.
+    self._varlist = []
     for var_id in var_ids:
       selection = (all_var_ids == var_id)
       var_records = records[selection]
@@ -538,7 +562,10 @@ class BufferBase (object):
         if len(values) == 0: continue
         # Get all unique values (sorted).
         values = tuple(sorted(set(values)))
-        axes[n] = values
+        if (n,values) not in known_axes:
+          known_axes[(n,values)] = _axis_type(name = n, atts = OrderedDict(),
+                                              array = np.array(values))
+        axes[n] = known_axes[(n,values)]
 
       # Construct a multidimensional array to hold the record keys.
       record_id = np.empty(map(len,axes.values()), dtype='int32')
@@ -578,8 +605,7 @@ class BufferBase (object):
         values[indices] = all_coord_values
         if key not in known_coords:
           coord = _var_type (name = n, atts = OrderedDict(),
-                           axes = coordaxes, array = values )
-          yield coord
+                           axes = list(coordaxes.values()), array = values )
           known_coords[key] = coord
         coords.append(known_coords[key])
       if len(coords) > 0:
@@ -591,9 +617,9 @@ class BufferBase (object):
         warn (_("Missing some records for %s.")%nomvar)
 
       # Add dummy axes for the ni,nj,nk record dimensions.
-      axes['k'] = tuple(range(var_id['nk']))
-      axes['j'] = tuple(range(var_id['nj']))
-      axes['i'] = tuple(range(var_id['ni']))
+      axes['k'] = _dim_type(name='k', length = int(var_id['nk']))
+      axes['j'] = _dim_type(name='j', length = int(var_id['nj']))
+      axes['i'] = _dim_type(name='i', length = int(var_id['ni']))
 
       # Determine the optimal data type to use.
       # First, find unique combos of datyp, nbits
@@ -605,17 +631,17 @@ class BufferBase (object):
       dtype = np.result_type(*dtype_list)
 
       var = _iter_type( name = nomvar, atts = atts,
-                        axes = axes,
+                        axes = list(axes.values()),
                         dtype = dtype,
                         record_id = record_id )
-      yield var
+      self._varlist.append(var)
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
       # for other times).
 
   # Faster version of iterator (using pandas).
-  def _iter_pandas (self):
+  def _makevars_pandas (self):
     from collections import OrderedDict
     import numpy as np
     import pandas as pd
@@ -634,11 +660,15 @@ class BufferBase (object):
     # Ignore deleted / invalidated records.
     records = records[records['dltf']==0]
 
+    # Keep track of any axes that were generated.
+    known_axes = dict()
+
     # Keep track of any auxiliary coordinates that were generated.
     known_coords = dict()
 
     # Iterate over each variable.
     # Variables are defined by the entries in _var_id.
+    self._varlist = []
     for var_id, var_records in records.groupby(list(self._var_id)):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
@@ -664,7 +694,11 @@ class BufferBase (object):
         cat = pd.Categorical(column)
         # Is this column an outer axis?
         if n in self._outer_axes:
-          axes[n] = tuple(np.array(cat.categories,dtype=column.dtype))
+          values = tuple(cat.categories)
+          if (n,values) not in known_axes:
+            known_axes[(n,values)] = _axis_type(name = n, atts = OrderedDict(),
+                                   array = np.array(values,dtype=column.dtype))
+          axes[n] = known_axes[(n,values)]
           indices[n] = cat.codes
           # Is this also an axis for an auxiliary coordinate?
           for coordname,coordaxes in self._outer_coords.items():
@@ -718,8 +752,8 @@ class BufferBase (object):
         values[indices] = var_records[n]
         if key not in known_coords:
           coord = _var_type (name = n, atts = OrderedDict(),
-                           axes = coord_axes[n], array = values )
-          yield coord
+                           axes = list(coord_axes[n].values()),
+                           array = values )
           known_coords[key] = coord
         coords.append(known_coords[key])
       if len(coords) > 0:
@@ -733,9 +767,9 @@ class BufferBase (object):
         warn (_("Missing some records for %s.")%nomvar)
 
       # Add dummy axes for the ni,nj,nk record dimensions.
-      axes['k'] = tuple(range(var_id['nk']))
-      axes['j'] = tuple(range(var_id['nj']))
-      axes['i'] = tuple(range(var_id['ni']))
+      axes['k'] = _dim_type('k',int(var_id['nk']))
+      axes['j'] = _dim_type('j',int(var_id['nj']))
+      axes['i'] = _dim_type('i',int(var_id['ni']))
 
       # Determine the optimal data type to use.
       # First, find unique combos of datyp, nbits
@@ -747,10 +781,10 @@ class BufferBase (object):
       dtype = np.result_type(*dtype_list)
 
       var = _iter_type( name = nomvar, atts = atts,
-                        axes = axes,
+                        axes = list(axes.values()),
                         dtype = dtype,
                         record_id = record_id )
-      yield var
+      self._varlist.append(var)
 
       #TODO: Find a minimum set of partial coverages for the data.
       # (e.g., if we have surface-level output for some times, and 3D output
@@ -758,14 +792,89 @@ class BufferBase (object):
 
   # Choose which method to iterate over the data
   # (depending on if pandas is installed).
-  def _iter (self):
+  def _makevars (self):
     try:
       import pandas as pd
-      iterfunc = self._iter_pandas
+      self._makevars_pandas()
     except ImportError:
-      iterfunc = self._iter_slow
-    for var in iterfunc():
-      yield var
+      self._makevars_slow()
+
+  # Iterate over all unique axes found in the variables.
+  # Requires _makevars() to have already been called.
+  def _iter_axes (self, name=None, varlist=False):
+    from collections import OrderedDict
+    if not varlist:
+      handled = set()
+      for var in self._iter_objects():
+        if not hasattr(var,'axes'): continue
+        for axis in var.axes:
+          if name is not None and axis.name != name: continue
+          if id(axis) in handled: continue
+          yield axis
+          handled.add(id(axis))
+    else:
+      id_lookup = dict()
+      output = OrderedDict()
+      for var in self._iter_objects():
+        if not hasattr(var,'axes'): continue
+        for axis in var.axes:
+          if name is not None and axis.name != name: continue
+          if id(axis) not in id_lookup:
+            id_lookup[id(axis)] = axis
+          output.setdefault(id(axis),[]).append(var)
+      for axis_id,varlist in output.items():
+        yield id_lookup[axis_id],varlist
+
+
+  # Iterate over all unique coordinates found in the variables.
+  # Requires _makevars() to have already been called.
+  def _iter_coords (self):
+    handled = set()
+    for var in self._varlist:
+      for coord in var.atts.get('coordinates',[]):
+        if id(coord) in handled: continue
+        yield coord
+        handled.add(id(coord))
+
+  # Iterate over all data objects.
+  # Requires _makevars() to have already been called.
+  def _iter_objects (self, obj=None, handled=None):
+    if obj is None:
+      obj = self._varlist
+    if handled is None:
+      handled = set()
+
+    if id(obj) in handled:
+      return
+
+    if isinstance(obj,(_iter_type,_var_type,_axis_type,_dim_type)):
+      yield obj
+      handled.add(id(obj))
+
+    if isinstance(obj,list):
+      for var in obj:
+        for o in self._iter_objects(var,handled):
+          yield o
+      return
+
+    if isinstance(obj,dict):
+      for key,value in obj.items():
+        for o in self._iter_objects(key,handled):
+          yield o
+        for o in self._iter_objects(value,handled):
+          yield o
+      return
+
+    if hasattr(obj,'axes'):
+      for o in self._iter_objects(obj.axes,handled):
+        yield o
+    if hasattr(obj,'atts'):
+      for o in self._iter_objects(obj.atts,handled):
+        yield o
+    if hasattr(obj,'deps'):
+      for o in self._iter_objects(obj.deps,handled):
+        yield o
+
 
   # How to read the data.
   # Override fstluk so it takes a record index instead of a key/handle.

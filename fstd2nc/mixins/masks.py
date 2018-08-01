@@ -39,16 +39,15 @@ class Masks (BufferBase):
     self._headers['dltf'][is_mask] = 1
 
   # Apply the fill value to the data.
-  def _iter (self):
+  def _makevars (self):
     from fstd2nc.mixins import _iter_type
-    for var in super(Masks,self)._iter():
+    super(Masks,self)._makevars()
+    for var in self._varlist:
       if not isinstance(var,_iter_type):
-        yield var
         continue
       # Look for typvars such as 'P@'.
       if var.atts.get('typvar','').endswith('@'):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
-      yield var
 
   # Apply the mask data
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):

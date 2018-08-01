@@ -29,12 +29,11 @@ from fstd2nc.mixins import BufferBase
 # Remove extraneous dimensions from the output.
 
 class NoNK (BufferBase):
-  def _iter (self):
-    for var in super(NoNK,self)._iter():
-      if 'k' in var.axes and len(var.axes['k']) == 1:
-        del var.axes['k']
-      if 'j' in var.axes and len(var.axes['j']) == 1:
-        del var.axes['j']
-      yield var
-
+  def _makevars (self):
+    super(NoNK,self)._makevars()
+    for var in self._varlist:
+      if 'k' in var.dims and len(var.getaxis('k')) == 1:
+        var.axes.pop(var.dims.index('k'))
+      if 'j' in var.dims and len(var.getaxis('j')) == 1:
+        var.axes.pop(var.dims.index('j'))
 

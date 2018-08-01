@@ -25,7 +25,7 @@ Serve RPN standard files through a pydap server.
 # Helper method - construct a Dataset object from a buffer argument string.
 def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, dataset_cache={}, mtimes={}, known_infiles={}):
   from fstd2nc import Buffer
-  from fstd2nc.mixins import _var_type
+  from fstd2nc.mixins import _var_type, _axis_type, _dim_type
   from pydap.model import DatasetType, GridType, BaseType
   from os.path import basename, getmtime
   import numpy as np
@@ -81,31 +81,43 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
 
   # Split into vars / dims.
   buf = list(buf)
-  variables = OrderedDict((var.name,var) for var in buf if var.name not in var.axes)
-  dims = OrderedDict((var.name,var) for var in buf if var.name in var.axes)
-
-  # Add "dummy" dimensions (or they're not interpreted properly by some
-  # clients like Panoply).
-  for var in variables.values():
-    for axisname, axisvalues in var.axes.items():
-      if axisname not in dims:
-        dims[axisname] = _var_type(axisname,{},axisvalues,np.array(axisvalues))
+  variables = OrderedDict((var.name,var) for var in buf if not isinstance(var,(_axis_type,_dim_type)))
+  dims = OrderedDict((var.name,var) for var in buf if isinstance(var,(_axis_type,_dim_type)))
 
   # Based loosely on pydap's builtin netcdf handler.
   for var in variables.values():
     # Add grids.
     dataset[var.name] = GridType(var.name, var.atts)
     # Add array.
-    dataset[var.name][var.name] = BaseType(var.name, var.array, tuple(var.axes.keys()), var.atts)
+    dataset[var.name][var.name] = BaseType(var.name, var.array, var.dims, var.atts)
     # Add maps.
-    for dim in var.axes.keys():
+    for dim in var.dims:
       if dim in dims:
-        atts = dims[dim].atts
-        array = dims[dim].array
+        if hasattr(dims[dim],'array'):
+          array = dims[dim].array
+          atts = dims[dim].atts
+        else:
+          # Add "dummy" dimensions (or they're not interpreted properly by some
+          # clients like Panoply).
+          array = np.arange(len(dims[dim]))
+        if hasattr(dims[dim],'atts'):
+          atts = dims[dim].atts
+        else:
+          atts = {}
         dataset[var.name][dim] = BaseType(dim, array, None, atts)
 
   for dim in dims.values():
-    dataset[dim.name] = BaseType(dim.name, dim.array, None, dim.atts)
+    if hasattr(dim,'array'):
+      array = dim.array
+    else:
+      # Add "dummy" dimensions (or they're not interpreted properly by some
+      # clients like Panoply).
+      array = np.arange(len(dim))
+    if hasattr(dim,'atts'):
+      atts = dim.atts
+    else:
+      atts = {}
+    dataset[dim.name] = BaseType(dim.name, array, None, atts)
     # Handle unlimited dimension.
     if dim.name == 'time':
       dataset.attributes['DODS_EXTRA'] = {

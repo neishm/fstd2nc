@@ -81,8 +81,10 @@ class netCDF_Atts (BufferBase):
     for oldname, newname in rename.items():
       self._metadata.setdefault(oldname,OrderedDict())['rename'] = newname
     super(netCDF_Atts,self).__init__(*args,**kwargs)
-  def _iter (self):
-    from collections import OrderedDict
+
+  def _makevars (self):
+
+    super(netCDF_Atts,self)._makevars()
 
     # Extract variable rename requests from the user-supplied metadata.
     renames = {}
@@ -91,23 +93,16 @@ class netCDF_Atts (BufferBase):
         renames[varname] = atts.pop('rename')
 
     # Apply the user-supplied metadata.
-    for var in super(netCDF_Atts,self)._iter():
+    for var in self._varlist:
       # Add extra metadata provided by the user?
       if var.name in self._metadata:
         var.atts.update(self._metadata[var.name])
-        # Rename the field?
-        if var.name in renames:
-          var.name = renames[var.name]
 
-      # Check if any of the axes in this variable need to be renamed.
-      axis_names, axis_values = zip(*var.axes.items()) or ([],[])
-      axis_names = [renames.get(n,n) for n in axis_names]
-      var.axes = OrderedDict(zip(axis_names,axis_values))
+    # Apply renames.
+    for obj in self._iter_objects():
+      if obj.name in renames:
+        obj.name = renames[obj.name]
 
-      # Check if we need to update the variable's metadata for renames.
-      self._apply_renames_to_metadata(var.atts, renames)
-
-      yield var
 
 
 #################################################
@@ -137,115 +132,103 @@ class netCDF_IO (BufferBase):
     self._unique_names = kwargs.pop('unique_names',True)
     super(netCDF_IO,self).__init__(*args,**kwargs)
 
-  def _iter (self):
+  def _makevars (self):
     from fstd2nc.mixins import _var_type
     from datetime import datetime
     import numpy as np
     from netCDF4 import date2num
+
+    super(netCDF_IO,self)._makevars()
 
     if self._reference_date is None:
       reference_date = None
     else:
       reference_date = datetime.strptime(self._reference_date,'%Y-%m-%d')
 
-    # Pre-fetch all the variables.
-    varlist = list(super(netCDF_IO,self)._iter())
-
     # Check if time axis can be made an unlimited dimension.
     # Can only work if it only appears as the outermost dimension, otherwise
     # the netCDF4 module will crash (maybe a bug with netCDF4?)
     self._time_unlimited = True
-    for var in varlist:
-      if 'time' not in var.axes: continue
-      if list(var.axes.keys()).index('time') > 0:
+    for var in self._varlist:
+      if 'time' not in var.dims: continue
+      if var.dims.index('time') > 0:
         self._time_unlimited = False
 
     if self._unique_names:
-      self._fix_names(varlist)
+      self._fix_names()
 
-    for var in varlist:
+    for var in self._iter_objects():
       # Modify time axes to be relative units instead of datetime objects.
       # Also attach relevant metadata.
-      if isinstance(var,_var_type) and isinstance(var.array.reshape(-1)[0],np.datetime64):
+      if hasattr(var,'array') and isinstance(var.array.reshape(-1)[0],np.datetime64):
         # Convert from np.datetime64 to datetime.datetime
+        # .tolist() only returns a datetime object for datetime64[s], not
+        # for datetime64[ns].
+        var.array = np.asarray(var.array, dtype='datetime64[s]')
+        # https://stackoverflow.com/a/13703930/9947646
         var.array = np.array(var.array.tolist())
         units = '%s since %s'%(self._time_units, reference_date or var.array.reshape(-1)[0])
         var.atts.update(units=units, calendar='gregorian')
         var.array = np.asarray(date2num(var.array,units=units))
 
+    for obj in self._iter_objects():
       # Encode the attributes so they're ready for writing to netCDF.
       # Handles things like encoding coordinate objects to a string.
-      var.atts = self._encode_atts(var.atts)
+      if hasattr(obj,'atts'):
+        self._encode_atts(obj)
 
-      yield var
-
-  # Helper method - apply name changes to all the references found in the
-  # metadata.
-  def _apply_renames_to_metadata (self, atts, renames):
-    # List of metadata keys that are internal to the FSTD file.
-    internal_meta = self._headers.dtype.names
-    for oldname, newname in renames.items():
-      for key,val in list(atts.items()):
-        # Don't touch FSTD metadata.
-        if key in internal_meta: continue
-        # Can only modify string attributes.
-        if not isinstance(val,str): continue
-        val = val.split()
-        if oldname in val:
-          val[val.index(oldname)] = newname
-        atts[key] = ' '.join(val)
 
   # Helper method - prepare attributes for writing to netCDF.
   @staticmethod
-  def _encode_atts (atts):
+  def _encode_atts (obj):
     from collections import OrderedDict
-    from fstd2nc.mixins import _var_type
-    # Make a copy of the attributes (don't clobber the originals).
-    atts = OrderedDict(atts)
+    atts = obj.atts
     for attname, attval in list(atts.items()):
+      # Detect veriable reference, convert to string.
+      if hasattr(attval,'name'):
+        # Store the dependency for future use.
+        obj.deps.append(attval)
+        atts[attname] = attval.name
       # Detect list of objects, convert to space-separated string.
-      if isinstance(attval,list):
+      elif isinstance(attval,list):
         if len(attval) > 0:
+          # Store the dependencies for future use.
+          obj.deps.extend(attval)
+          # Convert attribute to string.
           atts[attname] = ' '.join(v.name for v in attval)
         # Remove the attribute if the list of objects is empty
         else:
           atts.pop(attname)
-    return atts
+      # Detect dictionaries, convert to "key1: value1 key2: value2"
+      elif isinstance(attval,OrderedDict):
+        if len(attval) > 0:
+          # Store the dependencies for future use.
+          obj.deps.extend([k for k in attval.keys() if hasattr(k,'name')])
+          obj.deps.extend([v for v in attval.values() if hasattr(v,'name')])
+          # Convert attribute to string.
+          attval = [getattr(k,'name',k)+': '+getattr(v,'name',v) for k,v in attval.items()]
+          atts[attname] = ' '.join(attval)
+        # Remove the attribute if the list of objects is empty
+        else:
+          atts.pop(attname)
 
-  def _fix_names (self, varlist):
-    from fstd2nc.mixins import _var_type
-    from collections import OrderedDict
+
+  def _fix_names (self):
 
     # List of metadata keys that are internal to the FSTD file.
     internal_meta = self._headers.dtype.names
 
     # Generate unique axis names.
     axis_table = dict()
-    for var in varlist:
-      for axisname, axisvalues in var.axes.items():
-        if axisname not in axis_table:
-          axis_table[axisname] = []
-        if axisvalues not in axis_table[axisname]:
-          axis_table[axisname].append(axisvalues)
-    axis_renames = dict()
-    for axisname, axisvalues_list in axis_table.items():
-      if len(axisvalues_list) == 1: continue
+    for axis in self._iter_axes():
+      if axis.name not in axis_table:
+        axis_table[axis.name] = []
+      axis_table[axis.name].append(axis)
+    for axisname, axis_list in axis_table.items():
+      if len(axis_list) == 1: continue
       warn (_("Multiple %s axes.  Appending integer suffixes to their names.")%axisname)
-      for i,axisvalues in enumerate(axisvalues_list):
-        axis_renames[(axisname,axisvalues)] = axisname+str(i+1)
-
-    # Apply axis renames.
-    def rename_axis ((axisname,axisvalues)):
-      key = (axisname,axisvalues)
-      if key in axis_renames:
-        return (axis_renames[key],axisvalues)
-      return (axisname,axisvalues)
-    for var in varlist:
-      # If this is a coordinate variable, use same renaming rules as the
-      # dimension name.
-      if isinstance(var,_var_type) and var.name in var.axes:
-        var.name, axisvalues = rename_axis((var.name,var.axes[var.name]))
-      var.axes = OrderedDict(map(rename_axis,var.axes.items()))
+      for i,axis in enumerate(axis_list):
+        axis.name = axis.name+str(i+1)
 
     # Generate a string-based variable id.
     # Only works for true variables from the FSTD source
@@ -258,20 +241,21 @@ class netCDF_IO (BufferBase):
 
     # Generate unique variable names.
     var_table = dict()
-    for i, var in enumerate(varlist):
+    for var in self._iter_objects():
       if var.name not in var_table:
         var_table[var.name] = []
       # Identify the variables by their index in the master list.
-      var_table[var.name].append(i)
-    for varname, var_indices in var_table.items():
+      var_table[var.name].append(var)
+
+    for varname, var_list in var_table.items():
       # Only need to rename variables that are non-unique.
-      if len(var_indices) == 1: continue
+      if len(var_list) == 1: continue
       try:
-        var_ids = [get_var_id(varlist[i]) for i in var_indices]
+        var_ids = [get_var_id(v) for v in var_list]
       except KeyError:
         # Some derived axes may not have enough metadata to generate an id,
         # so the best we can do is append an integer suffix.
-        var_ids = [(str(r),) for r in range(1,len(var_indices)+1)]
+        var_ids = [(str(r),) for r in range(1,len(var_list)+1)]
 
       var_ids = zip(*var_ids)
 
@@ -281,7 +265,7 @@ class netCDF_IO (BufferBase):
       # maintaining uniqueness.
       for j in reversed(range(len(var_ids))):
         test = var_ids[:j] + var_ids[j+1:]
-        if len(set(zip(*test))) == len(var_indices):
+        if len(set(zip(*test))) == len(var_list):
           var_ids = test
 
       var_ids = zip(*var_ids)
@@ -291,23 +275,17 @@ class netCDF_IO (BufferBase):
       warn (_("Multiple definitions of %s.  Adding unique suffixes %s.")%(varname, ', '.join(var_ids)))
 
       # Apply the name changes.
-      for i, var_id in zip(var_indices, var_ids):
-        var = varlist[i]
-        orig_varname = var.name
+      for var, var_id in zip(var_list, var_ids):
         var.name = var.name + '_' + var_id
-        # Apply the name changes to any metadata that references this variable.
-        for othervar in varlist:
-          # Must match axes.
-          if not set(var.axes.keys()) <= set(othervar.axes.keys()): continue
-          self._apply_renames_to_metadata(othervar.atts, {orig_varname:var.name})
 
-    for var in varlist:
+    for var in self._iter_objects():
       # Names must start with a letter or underscore.
       if not var.name[0].isalpha():
         warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
         var.name = '_'+var.name
 
       # Strip out FSTD-specific metadata?
+      if not hasattr(var,'atts'): continue
       if self._rpnstd_metadata_list is not None:
         for n in internal_meta:
           if n not in self._rpnstd_metadata_list:
@@ -336,35 +314,35 @@ class netCDF_IO (BufferBase):
     # immediately, bypassing this list.
     io = []
 
-    for var in self._iter():
+    self._makevars()
 
-      for axisname, axisvalues in var.axes.items():
-        # Only need to create each dimension once (even if it's in multiple
-        # variables).
-        if axisname not in f.dimensions:
-          # Special case: make the time dimension unlimited.
-          if axisname == 'time' and self._time_unlimited:
-            f.createDimension(axisname, None)
-          else:
-            f.createDimension(axisname, len(axisvalues))
+    # Define the dimensions.
+    for axis in self._iter_axes():
+      # Special case: make the time dimension unlimited.
+      if axis.name == 'time' and self._time_unlimited:
+        f.createDimension(axis.name, None)
+      else:
+        f.createDimension(axis.name, len(axis))
 
-      dimensions = list(var.axes.keys())
+    # Generate the variable structures.
+    for var in self._iter_objects():
 
       # Write the variable.
       # Easy case: already have the data.
-      if isinstance(var,_var_type):
-        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=dimensions, zlib=zlib)
+      if hasattr(var,'array'):
+        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=var.dims, zlib=zlib)
         # Write the metadata.
         v.setncatts(var.atts)
         v[()] = var.array
         continue
       # Hard case: only have the record indices, need to loop over the records.
       # Get the shape of a single record for the variable.
-      record_shape = tuple(map(len,var.axes.values()))[var.record_id.ndim:]
+      if not hasattr(var,'record_id'): continue
+      record_shape = var.shape[var.record_id.ndim:]
       # Use this as the "chunk size" for the netCDF file, to improve I/O
       # performance.
       chunksizes = (1,)*var.record_id.ndim + record_shape
-      v = f.createVariable(var.name, datatype=var.dtype, dimensions=dimensions, zlib=zlib, chunksizes=chunksizes, fill_value=getattr(self,'_fill_value',None))
+      v = f.createVariable(var.name, datatype=var.dtype, dimensions=var.dims, zlib=zlib, chunksizes=chunksizes, fill_value=getattr(self,'_fill_value',None))
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.

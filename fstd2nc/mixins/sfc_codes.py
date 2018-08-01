@@ -52,41 +52,43 @@ sfc_agg_nomvars = (
 
 class Sfc_Codes (BufferBase):
 
-  def _iter (self):
-    from fstd2nc.mixins import _var_type, _modify_axes
+  def _makevars (self):
+    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     import numpy as np
 
     handled_agg_codes = dict()
 
-    for var in super(Sfc_Codes,self)._iter():
+    super(Sfc_Codes,self)._makevars()
+    for var in self._varlist:
+
+      levels = var.getaxis('level')
 
       # Look for variables with surface codes.
-      if var.atts.get('kind',None) != 3 or 'level' not in var.axes:
-        yield var
+      if var.atts.get('kind',None) != 3 or levels is None:
         continue
 
-      codes = tuple(var.axes['level'])
+      codes = tuple(levels.array)
       coordinates = var.atts.get('coordinates',[])
 
       if var.name in sfc_agg_nomvars:
-        # Change the axis name so the vcoord mixin doesn't look at it.
-        var.axes = _modify_axes(var.axes, level='sfctype')
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
           codenames = tuple(sfc_agg_codes.get(code,"unknown") for code in codes)
           array = np.array(codenames).view('|S1').reshape(len(codes),-1)
           atts = OrderedDict([('standard_name','area_type')])
-          axes = OrderedDict([('sfctype',codes),('sfctype_strlen',tuple(range(array.shape[1])))])
-          surface_type = _var_type("surface_type",atts,axes,array)
-          yield surface_type
+          sfctype = _dim_type('sfctype',array.shape[0])
+          sfctype_strlen = _dim_type('sfctype_strlen',array.shape[1])
+          surface_type = _var_type("surface_type",atts,[sfctype,sfctype_strlen],array)
           handled_agg_codes[codes] = surface_type
+        surface_type = handled_agg_codes[codes]
+        # "Levels" are actually surface type ids.
+        var.axes[var.dims.index('level')] = surface_type.getaxis('sfctype')
         # Add the area type to the list of auxiliary coordinates.
-        coordinates.append(handled_agg_codes[codes])
+        coordinates.append(surface_type)
 
       if len(coordinates) > 0:
         var.atts['coordinates'] = coordinates
 
-      yield var
 
 

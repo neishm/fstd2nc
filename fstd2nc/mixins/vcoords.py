@@ -75,8 +75,8 @@ class VCoords (BufferBase):
     fields['level'] = decoded['level']
     fields['kind'] = decoded['kind']
   # Add vertical axis as another variable.
-  def _iter (self):
-    from fstd2nc.mixins import _var_type, _modify_axes
+  def _makevars (self):
+    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     import numpy as np
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
@@ -96,35 +96,41 @@ class VCoords (BufferBase):
         if key in vrecs: continue
         vrecs[key] = header
 
+    super(VCoords,self)._makevars()
+
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
-    prefs = set()  # Reference pressure scalar variables.
-    for var in super(VCoords,self)._iter():
+    prefs = dict()  # Reference pressure scalar variables.
+    for var in self._varlist:
+      level_axis = var.getaxis('level')
+      if level_axis is None: continue
       # Degenerate vertical axis?
       if 'ip1' in var.atts and var.atts['ip1'] == 0:
-        if 'level' in var.axes and len(var.axes['level']) == 1:
-          i = list(var.axes).index('level')
-          del var.axes['level']
+        if len(level_axis) == 1:
+          i = var.dims.index('level')
+          var.axes.pop(i)
           # Remove the axis if it's an "outer" axis (not along ni,nj,nk).
           if i < var.record_id.ndim:
             var.record_id = var.record_id.squeeze(axis=i)
-          yield var
           continue
       # No vertical axis?
-      if 'level' not in var.axes or 'kind' not in var.atts:
-        yield var
+      if 'kind' not in var.atts:
+        continue
+      # Dummy vertical dimension (no coordinate values?)
+      if isinstance(level_axis,_dim_type):
         continue
       # Decode the vertical coordinate.
-      levels = var.axes['level']
+      levels = tuple(level_axis.array)
       kind = var.atts['kind']
       # Only need to provide one copy of the vertical axis.
-      if (levels,kind) not in vaxes:
+      if (id(level_axis),kind) not in vaxes:
         # Keep track of any extra arrays needed for this axis.
         coordinates = []
         # Get metadata that's specific to this axis.
         name = 'level'
         atts = OrderedDict()
         atts['axis'] = 'Z'
+        new_axis = _axis_type(name, atts, level_axis.array)
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
         if kind == 0:
           if var.atts.get('typvar',None) == 'P@' :   # masked ocean variable
@@ -143,7 +149,7 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['units'] = 'sigma_level'   # units defined for compliancy with COARDS
           atts['positive'] = 'down'
-          atts['formula_terms'] = 'sigma: level ps: P0'
+          atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0')])
         elif kind == 2:
           # pressure [mb] (millibars)
           name = 'pres'
@@ -183,6 +189,10 @@ class VCoords (BufferBase):
             if header['nomvar'].strip() == '!!':
               # Get A and B info.
               vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              # Partial definition of a/b coordinates for formula_terms reference.
+              coordA = _var_type('a', {}, [new_axis], None)
+              coordB = _var_type('b', {}, [new_axis], None)
+
               if vgd_get (vgd_id,'LOGP'):
                 # Not really a "standard" name, but there's nothing in the
                 # CF convensions document on how to encode this.
@@ -193,18 +203,18 @@ class VCoords (BufferBase):
                 # Document the formula to follow, since it's not in the conventions.
                 #TODO: update this once there's an actual convention to follow!
                 atts['formula'] = "p = exp(a+b*log(ps/pref))"
-                atts['formula_terms'] = 'a: a b: b ps: P0 pref: pref'
+                atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
                 # Try getting reference pressure as a scalar.
                 try:
                   pref = vgd_get(vgd_id,'PREF')
                   if pref not in prefs:
-                    prefs.add(pref)
-                    yield _var_type('pref',{'units':'Pa'},{},np.array(pref))
+                    prefs[pref] = _var_type('pref',{'units':'Pa'},[],np.array(pref))
+                  atts['formula_terms']['pref'] = prefs[pref]
                 except (KeyError,VGDError):
                   pass # Don't have PREF available for some reason?
               else:
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
-                atts['formula_terms'] = 'ap: a b: b ps: P0'
+                atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
               # Add all parameters for this coordinate.
               internal_atts = OrderedDict()
               for key in VGD_KEYS:
@@ -230,8 +240,8 @@ class VCoords (BufferBase):
                   ind = all_z.index(z)
                   A.append(all_a[ind])
                   B.append(all_b[ind])
-                coordA = _var_type('a', {}, {name:levels}, np.asarray(A))
-                coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
+                coordA.array = np.asarray(A)
+                coordB.array = np.asarray(B)
                 coordinates.extend([coordA,coordB])
               except (KeyError,ValueError,VGDError):
                 warn (_("Unable to get A/B coefficients for %s.")%var.name)
@@ -241,7 +251,6 @@ class VCoords (BufferBase):
             # Not a '!!' coordinate, so must be 'HY'?
             else:
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
-              atts['formula_terms'] = 'ap: a b: b ps: P0'
               # Get A and B info.
               eta = np.asarray(levels)
               ptop = decode_ip1(header['ip1'])['level']
@@ -252,9 +261,10 @@ class VCoords (BufferBase):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
               A = pref * 100. * (eta - B)
-              coordA = _var_type('a', {}, {name:levels}, np.asarray(A))
-              coordB = _var_type('b', {}, {name:levels}, np.asarray(B))
+              coordA = _var_type('a', {}, [new_axis], np.asarray(A))
+              coordB = _var_type('b', {}, [new_axis], np.asarray(B))
               coordinates.extend([coordA,coordB])
+              atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
         elif kind == 6:
@@ -265,18 +275,13 @@ class VCoords (BufferBase):
           atts['positive'] = 'up'
 
         # Add this vertical axis.
-        axes = OrderedDict([(name,levels)])
         if len(coordinates) > 0:
           atts['coordinates'] = coordinates
-        array = np.asarray(levels)
-        vaxes[(levels,kind)] = _var_type(name,atts,axes,array)
-        yield vaxes[(levels,kind)]
-        # Add coordinates.
-        for coord in coordinates:
-          yield coord
-      # Get the vertical axis.
-      vaxis = vaxes[(levels,kind)]
-      # Modify the variable's dimension name to match the axis name.
-      var.axes = _modify_axes(var.axes, level=vaxis.name)
-      yield var
+        # Update axis name.
+        new_axis.name = name
+        # Now have a fully defined axis to use.
+        vaxes[(id(level_axis),kind)] = new_axis
+      # Set the vertical axis for this variable.
+      vaxis = vaxes[(id(level_axis),kind)]
+      var.axes[var.dims.index('level')] = vaxis
 
