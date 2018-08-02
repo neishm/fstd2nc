@@ -191,13 +191,13 @@ class netCDF_IO (BufferBase):
         atts[attname] = attval.name
       # Detect list of objects, convert to space-separated string.
       elif isinstance(attval,list):
-        if len(attval) > 0:
+        if any(hasattr(v,'name') for v in attval):
           # Store the dependencies for future use.
           obj.deps.extend(attval)
           # Convert attribute to string.
           atts[attname] = ' '.join(v.name for v in attval)
         # Remove the attribute if the list of objects is empty
-        else:
+        elif len(attval) == 0:
           atts.pop(attname)
       # Detect dictionaries, convert to "key1: value1 key2: value2"
       elif isinstance(attval,OrderedDict):
