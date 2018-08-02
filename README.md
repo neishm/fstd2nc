@@ -58,6 +58,15 @@ optional arguments:
                         field in order to be used. The default behaviour is to
                         use the vertical record anyway if it's the only one in
                         the file.
+  --diag-as-model-level
+                        Treat diagnostic (near-surface) data as model level
+                        '1.0'. Normally, this data goes in a separate variable
+                        because it has incompatible units for the vertical
+                        coordinate. Use this option if your variables are
+                        getting split with suffixes '_vgrid4' and '_vgrid5',
+                        and you'd rather keep both sets of levels together in
+                        one variable.
+  --ignore-diag-level   Ignore data on diagnostic (near-surface) height.
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids
                         stacked together as they are in the RPN file.

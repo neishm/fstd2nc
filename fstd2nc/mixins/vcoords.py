@@ -49,6 +49,9 @@ class VCoords (BufferBase):
   def _cmdline_args (cls, parser):
     super(VCoords,cls)._cmdline_args(parser)
     parser.add_argument('--strict-vcoord-match', action='store_true', help=_("Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the IG1/IG2/IG3 paramters of the field in order to be used.  The default behaviour is to use the vertical record anyway if it's the only one in the file."))
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--diag-as-model-level', action='store_true', help=_("Treat diagnostic (near-surface) data as model level '1.0'.  Normally, this data goes in a separate variable because it has incompatible units for the vertical coordinate.  Use this option if your variables are getting split with suffixes '_vgrid4' and '_vgrid5', and you'd rather keep both sets of levels together in one variable."))
+    group.add_argument('--ignore-diag-level', action='store_true', help=_("Ignore data on diagnostic (near-surface) height."))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
@@ -57,8 +60,15 @@ class VCoords (BufferBase):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    from collections import OrderedDict
     import numpy as np
+    from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
+    from rpnpy.vgd import VGDError
+    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
     self._strict_vcoord_match = kwargs.pop('strict_vcoord_match',False)
+    self._diag_as_model_level = kwargs.pop('diag_as_model_level',False)
+    self._ignore_diag_level = kwargs.pop('ignore_diag_level',False)
+
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
@@ -68,21 +78,7 @@ class VCoords (BufferBase):
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
     self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
-    fields = self._headers
-    # Provide 'level' and 'kind' information to the decoder.
-    decoded = np.concatenate(decode_ip1(fields['ip1']))
-    # Only use first set of levels (can't handle ranges yet).
-    fields['level'] = decoded['level']
-    fields['kind'] = decoded['kind']
-  # Add vertical axis as another variable.
-  def _makevars (self):
-    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
-    from collections import OrderedDict
-    import numpy as np
-    from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
-    from rpnpy.vgd.const import VGD_KEYS
-    from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
+
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
@@ -95,6 +91,44 @@ class VCoords (BufferBase):
         if header['nomvar'].strip() == 'HY': key = 'HY'
         if key in vrecs: continue
         vrecs[key] = header
+    self._vrecs = vrecs
+
+    # Pre-filter the diagnostic level data?
+    if self._diag_as_model_level or self._ignore_diag_level:
+      for key, header in self._vrecs.items():
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          ip1_t = vgd_get(vgd_id,'DIPT')
+          ip1_m = vgd_get(vgd_id,'DIPM')
+          mask = (self._headers['ip1'] == ip1_t) | (self._headers['ip1'] == ip1_m)
+          if len(self._vrecs) > 1 or self._strict_vcoord_match:
+            mask &= (self._headers['ig1'] == prm['ip1']) & (self._headers['ig2'] == prm['ip2'])
+          if self._diag_as_model_level:
+            self._headers['ip1'][mask] = 93423264
+          elif self._ignore_diag_level:
+            self._headers['dltf'] |= mask
+        except (KeyError,VGDError):
+          warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
+        vgd_free (vgd_id)
+
+    fields = self._headers
+    # Provide 'level' and 'kind' information to the decoder.
+    decoded = np.concatenate(decode_ip1(fields['ip1']))
+    # Only use first set of levels (can't handle ranges yet).
+    fields['level'] = decoded['level']
+    fields['kind'] = decoded['kind']
+
+  def _makevars (self):
+    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
+    from collections import OrderedDict
+    import numpy as np
+    from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
+    from rpnpy.vgd.const import VGD_KEYS
+    from rpnpy.vgd import VGDError
+    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
+
+    vrecs = self._vrecs
 
     super(VCoords,self)._makevars()
 
