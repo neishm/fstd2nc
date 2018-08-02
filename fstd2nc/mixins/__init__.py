@@ -323,7 +323,8 @@ class BufferBase (object):
     if minimal_metadata is True and rpnstd_metadata_list is None:
       rpnstd_metadata_list = ''
     if isinstance(rpnstd_metadata_list,str):
-      rpnstd_metadata_list = rpnstd_metadata_list.split(',')
+      rpnstd_metadata_list = rpnstd_metadata_list.replace(',',' ')
+      rpnstd_metadata_list = rpnstd_metadata_list.split()
     if hasattr(rpnstd_metadata_list,'__len__'):
       rpnstd_metadata_list = tuple(rpnstd_metadata_list)
     self._rpnstd_metadata_list = rpnstd_metadata_list

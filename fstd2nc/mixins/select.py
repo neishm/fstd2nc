@@ -39,7 +39,8 @@ class SelectVars (BufferBase):
       return
 
     if isinstance(vars,str):
-      vars = vars.split(',')
+      vars = vars.replace(',', ' ')
+      vars = vars.split()
     info (_('Will look for variables: ') + ' '.join(vars))
     select = np.zeros(len(self._headers),dtype='bool')
     missing = []

@@ -75,7 +75,9 @@ class netCDF_Atts (BufferBase):
     if rename is None:
       rename = {}
     if isinstance(rename,str):
-      rename = dict(r.split('=') for r in rename.split(','))
+      rename = [r.split('=') for r in rename.split(',')]
+      rename = [(k.strip(),v.strip()) for k,v in rename]
+      rename = dict(rename)
     for oldname, newname in rename.items():
       self._metadata.setdefault(oldname,OrderedDict())['rename'] = newname
     super(netCDF_Atts,self).__init__(*args,**kwargs)

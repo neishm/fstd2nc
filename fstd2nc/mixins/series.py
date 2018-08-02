@@ -71,12 +71,14 @@ class Series (BufferBase):
     if momentum_vars is None:
       momentum_vars = []
     if isinstance(momentum_vars,str):
-      momentum_vars = momentum_vars.split(',')
+      momentum_vars = momentum_vars.replace(',',' ')
+      momentum_vars = momentum_vars.split()
     thermo_vars = kwargs.pop('profile_thermodynamic_vars',None)
     if thermo_vars is None:
       thermo_vars = []
     if isinstance(thermo_vars,str):
-      thermo_vars = thermo_vars.split(',')
+      thermo_vars = thermo_vars.replace(',',' ')
+      thermo_vars = thermo_vars.split()
     self._momentum_vars = momentum_vars
     self._thermo_vars = thermo_vars
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)

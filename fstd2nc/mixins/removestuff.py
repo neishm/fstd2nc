@@ -38,7 +38,8 @@ class RemoveStuff (BufferBase):
     if exclude is None:
       exclude = []
     if isinstance(exclude,str):
-      exclude = exclude.split(',')
+      exclude = exclude.replace(',', ' ')
+      exclude = exclude.split()
     self._exclude = tuple(exclude)
     super(RemoveStuff,self).__init__(*args,**kwargs)
 
