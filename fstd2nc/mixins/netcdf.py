@@ -205,10 +205,10 @@ class netCDF_IO (BufferBase):
     for attname, attval in list(atts.items()):
       # Detect list of objects, convert to space-separated string.
       if isinstance(attval,list):
-        if len(attval) > 0:
+        if any(hasattr(v,'name') for v in attval):
           atts[attname] = ' '.join(v.name for v in attval)
         # Remove the attribute if the list of objects is empty
-        else:
+        elif len(attval) == 0:
           atts.pop(attname)
     return atts
 

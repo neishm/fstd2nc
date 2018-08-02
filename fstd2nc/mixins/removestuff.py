@@ -75,7 +75,7 @@ class RemoveStuff (BufferBase):
       for key,val in list(var.atts.items()):
         # Special case - list of object references
         if isinstance(val,list):
-          val = [v for v in val if v.name not in self._exclude]
+          val = [v for v in val if not hasattr(v,'name') or v.name not in self._exclude]
           var.atts[key] = val
 
       yield var
