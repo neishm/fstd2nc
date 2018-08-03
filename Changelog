@@ -1,3 +1,12 @@
+Version 0.20180706.1 (Aug 3, 2018)
+	* Fixed .to_pygeode() method, which was failing on xarray > 0.10.0.
+	* Added locks to thread-unsafe parts of the code.
+	* Fixed a float64 upcasting that was done on some record parameters
+	  when using pandas routines.
+	* Handle whitespace in list-based command-line arguments, e.g.
+	  --vars="VAR1, VAR2, VAR3".
+	* Fixed a crash when using --rpnstd-metadata on vertical levels.
+
 Version 0.20180706.0 (Jul 6, 2018)
 	* Added 'station' as a coordinate for 'Y' series data.
 	* Some incremental speedups in constructing Buffer objects.
