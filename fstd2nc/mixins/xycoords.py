@@ -383,7 +383,7 @@ class XYCoords (BufferBase):
       # Use a looser identifier for timeseries data (ni/nj have different
       # meanings here (not grid-related), and could have multiple grtyp
       # values ('+','Y') that should share the same lat/lon info.
-      if var.atts['typvar'].strip() == 'T':
+      if var.atts.get('typvar','').strip() == 'T':
         key = ('T',ig1,ig2)
       else:
         key = (grtyp,ni,nj,ig1,ig2,ig3,ig4)
