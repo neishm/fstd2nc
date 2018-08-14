@@ -21,10 +21,16 @@
 from setuptools import setup, find_packages
 from fstd2nc import __version__
 
+with open("README.md","r") as f:
+  long_description = f.read()
+
 setup (
   name="fstd2nc",
   version=__version__,
   description = 'Converts RPN standard files (from Environment Canada) to netCDF files.',
+  long_description = long_description,
+  # https://stackoverflow.com/a/26737258/9947646
+  long_description_content_type='text/markdown',
   url = 'https://github.com/neishm/fstd2nc',
   author="Mike Neish",
   license = 'LGPL-3',
