@@ -49,7 +49,7 @@ def dataset_from_str (name, buffer_str, mtime, directory='.', buffer_cache={}, d
   # Apply wildcard expansion to filenames.
   infiles = [f for filepattern in infiles for f in sorted(glob(filepattern)) or [filepattern]]
   # Make sure the filenames are strings (not unicode).
-  infiles = map(str,infiles)
+  infiles = list(map(str,infiles))
 
   # Look at modification times of individual files.
   mtime = max(map(getmtime,infiles))

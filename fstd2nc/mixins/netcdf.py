@@ -40,7 +40,10 @@ class netCDF_Atts (BufferBase):
       except ValueError:
         parser.error(_("Unable to parse the rename arguments."))
   def __init__ (self, *args, **kwargs):
-    import ConfigParser
+    try:
+      import ConfigParser
+    except ImportError:
+      import configparser as ConfigParser
     from collections import OrderedDict
     metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:

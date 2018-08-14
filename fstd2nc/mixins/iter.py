@@ -20,6 +20,7 @@
 
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
+from functools import reduce
 
 #################################################
 # A user-friendly iterator for using the Buffer in other Python scripts.

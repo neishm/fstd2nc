@@ -19,6 +19,7 @@
 ###############################################################################
 
 
+from __future__ import print_function
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc import Buffer
 
@@ -67,7 +68,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     overwrite = False
     if stdout.isatty():
       while True:
-        print (_("Warning: '%s' already exists!  Overwrite? (y/n):")%(outfile)),
+        print (_("Warning: '%s' already exists!  Overwrite? (y/n):")%(outfile), end=' ')
         try: ans = raw_input()
         except NameError: ans = input()
         if ans.lower() in ('y','yes','o','oui'):

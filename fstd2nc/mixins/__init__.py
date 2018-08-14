@@ -70,7 +70,7 @@ def vectorize (f):
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return cached_f(x)
-      return map(cached_f,x)
+      return list(map(cached_f,x))
   return vectorized_f
 
 
@@ -137,7 +137,7 @@ class _FakeBar (object):
   def __init__ (self, *args, **kwargs): pass
   def iter(self, it):
     for i in it: yield i
-  def next(self): pass
+  def __next__(self): pass
   def finish(self): pass
 
 # Try importing progress module.
@@ -272,6 +272,9 @@ class BufferBase (object):
   def _get_header_atts (self, header):
     for n,v in header.items():
       if n in self._ignore_atts: continue
+      # Python 3: convert bytes to str
+      if isinstance(v,bytes):
+        v = str(v.decode())
       if isinstance(v,str):
         v = v.strip()
       yield (n,v)
@@ -311,6 +314,11 @@ class BufferBase (object):
 
   ###############################################
   # Basic flow for reading data
+
+  # Filter out any Buffer arguments from object.__new__.
+  # Otherwise, get an error when running with Python3.
+  def __new__ (cls, *args, **kwargs):
+    return object.__new__(cls)
 
   def __init__ (self, filename, header_cache=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
     """
@@ -530,6 +538,7 @@ class BufferBase (object):
       var_records = records[selection]
       var_record_indices = np.where(selection)[0]
       nomvar = var_id['nomvar'].strip()
+      nomvar = str(nomvar.decode()) # Python3: convert bytes to str.
       # Ignore meta records.
       if nomvar in self._meta_records: continue
 
@@ -548,6 +557,8 @@ class BufferBase (object):
         # Use regular integers for numeric types.
         if np.can_cast(v.dtype,int):
           v = int(v)
+        # Python3: convert bytes to str.
+        if isinstance(v,bytes): v = str(v.decode())
         # Trim string attributes (remove whitespace padding).
         if isinstance(v,str): v = v.strip()
         atts[n] = v
@@ -568,7 +579,7 @@ class BufferBase (object):
         axes[n] = known_axes[(n,values)]
 
       # Construct a multidimensional array to hold the record keys.
-      record_id = np.empty(map(len,axes.values()), dtype='int32')
+      record_id = np.empty(list(map(len,axes.values())), dtype='int32')
 
       # Assume missing data (nan) unless filled in later.
       record_id[()] = -1
@@ -578,7 +589,7 @@ class BufferBase (object):
       for n in axes.keys():
         u, ind = np.unique(var_records[n], return_inverse=True)
         indices.append(ind)
-      record_id[indices] = header_indices[var_record_indices]
+      record_id[tuple(indices)] = header_indices[var_record_indices]
 
       # Get the auxiliary coordinates.
       coords = []
@@ -592,7 +603,7 @@ class BufferBase (object):
         # Unique key for this coordinate
         key = (n,tuple(coordaxes.items()))
         # Arrange the coordinate values in the appropriate location.
-        shape = map(len,coordaxes.values())
+        shape = list(map(len,list(coordaxes.values())))
         # Extract all values of the coordinate (including duplicates over
         # other axes).  Will determine which values to put in what order later.
         all_coord_values = np.ma.compressed(var_records[n])
@@ -602,7 +613,7 @@ class BufferBase (object):
         for k in coordaxes.keys():
           u, ind = np.unique(var_records[k], return_inverse=True)
           indices.append(ind)
-        values[indices] = all_coord_values
+        values[tuple(indices)] = all_coord_values
         if key not in known_coords:
           coord = _var_type (name = n, atts = OrderedDict(),
                            axes = list(coordaxes.values()), array = values )
@@ -672,6 +683,7 @@ class BufferBase (object):
     for var_id, var_records in records.groupby(list(self._var_id)):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
+      nomvar = str(nomvar.decode()) # Python3: convert bytes to str.
       # Ignore meta records.
       if nomvar in self._meta_records: continue
 
@@ -712,6 +724,8 @@ class BufferBase (object):
         elif len(cat.categories) == 1 and n not in self._outer_coords:
           try:
             v = cat[0]
+            # Python3: convert bytes to str.
+            if isinstance(v,bytes): v = str(v.decode())
             # Trim string attributes (remove whitespace padding).
             if isinstance(v,str): v = v.strip()
             # Use regular integers for numeric types.
@@ -724,13 +738,13 @@ class BufferBase (object):
       # Recover the proper order for the outer axes.
       # Not necessarily the order of the header table columns.
       axes = OrderedDict((n,axes[n]) for n in self._outer_axes if n in axes)
-      indices = [indices[n] for n in self._outer_axes if n in indices]
+      indices = tuple([indices[n] for n in self._outer_axes if n in indices])
       for coordname in coord_axes.keys():
         coord_axes[coordname] = OrderedDict((n,coord_axes[coordname][n]) for n in self._outer_axes if n in coord_axes[coordname])
         coord_indices[coordname] = [coord_indices[coordname][n] for n in self._outer_axes if n in coord_indices[coordname]]
 
       # Construct a multidimensional array to hold the record keys.
-      record_id = np.empty(map(len,axes.values()), dtype='int32')
+      record_id = np.empty(list(map(len,axes.values())), dtype='int32')
 
       # Assume missing data (nan) unless filled in later.
       record_id[()] = -1
@@ -746,9 +760,9 @@ class BufferBase (object):
         # Unique key for this coordinate
         key = (n,tuple(coord_axes[n].items()))
         # Arrange the coordinate values in the appropriate location.
-        shape = map(len,coord_axes[n].values())
+        shape = list(map(len,list(coord_axes[n].values())))
         values = np.zeros(shape,dtype=var_records[n].dtype)
-        indices = coord_indices[n]
+        indices = tuple(coord_indices[n])
         values[indices] = var_records[n]
         if key not in known_coords:
           coord = _var_type (name = n, atts = OrderedDict(),

@@ -69,7 +69,7 @@ class RemoveStuff (BufferBase):
         # Remove any meta variables that are to be excluded.
         newval = [v for v in val if v.name not in self._exclude]
         # Recursively process any meta variables.
-        newval = map(self._do_exclude,newval)
+        newval = list(map(self._do_exclude,newval))
         var.atts[key] = newval
       # Handle key/value entries for meta variables.
       # (E.g. for formula_terms).

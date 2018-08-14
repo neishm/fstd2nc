@@ -20,6 +20,7 @@
 
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
+import collections
 
 #################################################
 # Provide various external array interfaces for the FSTD data.
@@ -42,7 +43,7 @@ class _RecordOrder (object):
         new_work = []
         for w in work:
             typ = type(w)
-            if typ is tuple and w and callable(w[0]):  # istask(w)
+            if typ is tuple and w and isinstance(w[0], collections.Callable):  # istask(w)
                 if w[0] is _preferred_chunk_order:
                   return w[1], w[2]
                 else:
@@ -50,7 +51,7 @@ class _RecordOrder (object):
             elif typ is list:
                 new_work += w
             elif typ is dict:
-                new_work += w.values()
+                new_work += list(w.values())
             else:
                 try:
                     if w in dsk:
@@ -208,5 +209,5 @@ try:
     conventions.maybe_encode_datetime = times.CFDatetimeCoder().encode
   if not hasattr(conventions,'maybe_encode_timedelta'):
     conventions.maybe_encode_timedelta = times.CFTimedeltaCoder().encode
-except ImportError, AttributeError:
+except (ImportError,AttributeError):
   pass

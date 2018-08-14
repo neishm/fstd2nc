@@ -92,9 +92,9 @@ class Series (BufferBase):
     fields = self._headers
     nrecs = len(fields)
     # Identify timeseries records for further processing.
-    is_series = (fields['typvar'] == 'T ') & ((fields['grtyp'] == '+') | (fields['grtyp'] == 'Y') | (fields['grtyp'] == 'T'))
+    is_series = (fields['typvar'] == b'T ') & ((fields['grtyp'] == b'+') | (fields['grtyp'] == b'Y') | (fields['grtyp'] == b'T'))
     # More particular, data that has one station per record.
-    is_split_series = (fields['typvar'] == 'T ') & (fields['grtyp'] == '+')
+    is_split_series = (fields['typvar'] == b'T ') & (fields['grtyp'] == b'+')
 
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(np.array(fields['ip3']))
@@ -151,9 +151,10 @@ class Series (BufferBase):
         array -= 128
       array = array.view('|S1')
       nstations, strlen = array.shape
-      # Strip out trailing whitespace.
       array = array.flatten().view('|S%d'%strlen)
-      array[:] = map(str.rstrip,array)
+      # Strip out trailing whitespace.
+      # Python3: convert bytes to str
+      array[:] = [str(arr.decode()).rstrip() for arr in array]
       array = array.view('|S1').reshape(nstations,strlen)
       station_id = _dim_type('station_id',nstations)
       station_strlen = _dim_type('station_strlen',strlen)

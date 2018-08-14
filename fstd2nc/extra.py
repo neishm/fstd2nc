@@ -325,7 +325,7 @@ def all_params (funit, out=None):
   # Note: this dateo calculation is based on my assumption that
   # the raw stamps increase in 5-second intervals.
   # Doing it this way to avoid a gazillion calls to incdat.
-  date_stamp = date_stamp - (out['deet']*out['npas'])/5
+  date_stamp = date_stamp - (out['deet']*out['npas'])//5
   out['dateo'][:] = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
@@ -349,4 +349,4 @@ def maybeFST(filename):
     buf = f.read(16)
     if len(buf) < 16: return False
     # Same check as c_wkoffit in librmn
-    return buf[12:] == 'STDR'
+    return buf[12:] == b'STDR'

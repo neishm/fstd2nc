@@ -35,7 +35,7 @@ class Masks (BufferBase):
     super(Masks,self).__init__(*args,**kwargs)
     # Remove all mask records from the table, they should not become variables
     # themselves.
-    is_mask = (self._headers['typvar'] == '@@')
+    is_mask = (self._headers['typvar'] == b'@@')
     self._headers['dltf'][is_mask] = 1
 
   # Apply the fill value to the data.

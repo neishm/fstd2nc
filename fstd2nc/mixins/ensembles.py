@@ -45,10 +45,11 @@ class Ensembles (BufferBase):
     import numpy as np
     super(Ensembles,self)._makevars()
     for etikets, varlist in self._iter_axes(name='etiket',varlist=True):
-      # Convert from object array to string array
-      array = np.array(list(etikets.array))
+      # Python3: convert bytes to str.
+      array = [str(arr.decode()) for arr in etikets.array]
+      array = np.array(array,dtype=np.char.string_)
       # Strip out trailing whitespace.
-      array[:] = map(str.rstrip,array)
+      array[:] = [arr.rstrip() for arr in array]
       # Encode it as 2D character array for netCDF file output.
       n = len(array)
       array = array.view('|S1').reshape(n,-1)
