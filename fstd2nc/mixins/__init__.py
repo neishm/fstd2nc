@@ -702,7 +702,13 @@ class BufferBase (object):
         # Get the unique values, in order.
         # Coerce back to original dtype, since masked columns get upcasted to
         # float64 in pandas.DataFrame.from_records.
-        column = var_records[n].astype(original_dtypes[n])
+        try:
+          column = var_records[n].astype(original_dtypes[n])
+        except TypeError:
+          # Some types may not be re-castable.
+          # For instance, pandas < 0.23 can't convert between datetime64 with
+          # different increments ([ns] and [s]).
+          column = var_records[n]
         cat = pd.Categorical(column)
         # Is this column an outer axis?
         if n in self._outer_axes:
