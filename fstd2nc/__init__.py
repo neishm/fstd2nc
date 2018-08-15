@@ -59,7 +59,7 @@ class Buffer (Iter,Extern,netCDF_IO,netCDF_Atts,PruneAxes,RemoveStuff,FilterReco
   Contains logic for dealing with most of the common FSTD file conventions.
   """
   def __init__ (self, filename, *args, **kwargs):
-    super(Buffer,self).__init__(*args,**kwargs)
+    super(Buffer,self).__init__(filename, *args,**kwargs)
 
 # Dynamically generate final init docstring from the mixins.
 def _docstring ():
