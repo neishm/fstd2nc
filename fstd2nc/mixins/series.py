@@ -66,6 +66,14 @@ class Series (BufferBase):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    """
+    profile_momentum_vars : str or list, optional
+        List of variables that use momentum levels.
+    profile_thermodynamic_vars : str or list, optional
+        List of variables that use thermodynamic levels.
+    missing_bottom_profile_level : bool, optional
+        Assume the bottom level of the profile data is missing.
+    """
     import numpy as np
     momentum_vars = kwargs.pop('profile_momentum_vars',None)
     if momentum_vars is None:

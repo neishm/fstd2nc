@@ -324,6 +324,27 @@ class BufferBase (object):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
+
+    Parameters
+    ----------
+    filename : str or list
+        The RPN standard file(s) to convert.
+    progress : bool, optional
+        Display a progress bar during the conversion, if the "progress"
+        module is installed.
+    rpnstd_metadata : bool, optional
+        Include all RPN record attributes in the output metadata.
+    rpnstd_metadata_list : str or list, optional
+        Specify a minimal set of RPN record attributes to include in the
+        output file.
+    ignore_typvar : bool, optional
+        Tells the converter to ignore the typvar when deciding if two
+        records are part of the same field.  Default is to split the
+        variable on different typvars.
+    ignore_etiket : bool, optional
+        Tells the converter to ignore the etiket when deciding if two
+        records are part of the same field.  Default is to split the
+        variable on different etikets.
     """
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO

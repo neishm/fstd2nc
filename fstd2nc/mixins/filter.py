@@ -31,6 +31,11 @@ class FilterRecords (BufferBase):
     super(FilterRecords,cls)._cmdline_args(parser)
     parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
   def __init__ (self, *args, **kwargs):
+    """
+    filter : str or list, optional
+        Subset RPN file records using the given criteria.  For example, to
+        convert only 24-hour forecasts you could use filter="ip2==24"
+    """
     import numpy as np
     filter = kwargs.pop('filter',None)
     if filter is None:

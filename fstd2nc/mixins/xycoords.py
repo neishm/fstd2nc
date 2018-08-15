@@ -314,6 +314,12 @@ class XYCoords (BufferBase):
     parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
 
   def __init__ (self, *args, **kwargs):
+    """
+    subgrid_axis : bool, optional
+        For data on supergrids, split the subgrids along a "subgrid" axis.
+        The default is to leave the subgrids stacked together as they are in
+        the RPN file.
+    """
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars

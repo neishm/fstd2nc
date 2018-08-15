@@ -58,5 +58,22 @@ class Buffer (Iter,Extern,netCDF_IO,netCDF_Atts,PruneAxes,RemoveStuff,FilterReco
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
   """
+  def __init__ (self, filename, *args, **kwargs):
+    super(Buffer,self).__init__(*args,**kwargs)
 
-
+# Dynamically generate final init docstring from the mixins.
+def _docstring ():
+  from fstd2nc.mixins import BufferBase
+  base_doc = BufferBase.__init__.__doc__
+  docstring = [base_doc.rstrip().strip('\n')]
+  for cls in Buffer.__bases__[::-1]:
+    doc = cls.__init__.__doc__
+    if doc is None or doc == base_doc: continue
+    docstring.append(doc.rstrip().strip('\n'))
+  return '\n'.join(docstring)
+try:
+  # Python 2
+  Buffer.__init__.__func__.__doc__ = _docstring()
+except AttributeError:
+  # Python 3
+  Buffer.__init__.__doc__ = _docstring()

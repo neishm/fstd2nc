@@ -33,6 +33,11 @@ class RemoveStuff (BufferBase):
     parser.add_argument('--exclude', metavar='NAME,NAME,...', help=_("Exclude some axes or derived variables from the output.  Note that axes will only be excluded if they have a length of 1."))
 
   def __init__ (self, *args, **kwargs):
+    """
+    exclude : str or list, optional
+        Exclude some axes or derived variables from the output.  Note that
+        axes will only be excluded if they have a length of 1.
+    """
     import numpy as np
     exclude = kwargs.pop('exclude',None)
     if exclude is None:

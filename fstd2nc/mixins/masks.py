@@ -30,7 +30,13 @@ class Masks (BufferBase):
   def _cmdline_args (cls, parser):
     super(Masks,cls)._cmdline_args(parser)
     parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the metadata.  Default is '%(default)s'."))
+
   def __init__ (self, *args, **kwargs):
+    """
+    fill_value : scalar, optional
+        The fill value to use for masked (missing) data.  Gets stored as
+        '_FillValue' attribute in the metadata.  Default is 1e30.
+    """
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(Masks,self).__init__(*args,**kwargs)
     # Remove all mask records from the table, they should not become variables

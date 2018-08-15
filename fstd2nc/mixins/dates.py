@@ -53,6 +53,11 @@ class Dates (BufferBase):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    """
+    forecast_axis : bool, optional
+        Use the date of original analysis for the time axis, and put the
+        forecast times into a separate "forecast" axis.
+    """
     import numpy as np
     squash_forecasts = kwargs.pop('squash_forecasts',None)
     if squash_forecasts is None:

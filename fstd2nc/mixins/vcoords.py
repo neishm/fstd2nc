@@ -60,6 +60,22 @@ class VCoords (BufferBase):
     return obj
 
   def __init__ (self, *args, **kwargs):
+    """
+    strict_vcoord_match : bool, optional
+        Require the IP1/IP2/IP3 parameters of the vertical coordinate to
+        match the IG1/IG2/IG3 paramters of the field in order to be used.
+        The default behaviour is to use the vertical record anyway if it's
+        the only one in the file.
+    diag_as_model_level : bool, optional
+        Treat diagnostic (near-surface) data as model level '1.0'.
+        Normally, this data goes in a separate variable because it has
+        incompatible units for the vertical coordinate.  Use this option if
+        your variables are getting split with suffixes '_vgrid4' and
+        '_vgrid5', and you'd rather keep both sets of levels together in one
+        variable.
+    ignore_diag_level : bool, optional
+        Ignore data on diagnostic (near-surface) height.
+    """
     from collections import OrderedDict
     import numpy as np
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free

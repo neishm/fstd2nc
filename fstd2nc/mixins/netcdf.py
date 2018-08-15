@@ -39,7 +39,14 @@ class netCDF_Atts (BufferBase):
         dict(r.split('=') for r in args.rename.split(','))
       except ValueError:
         parser.error(_("Unable to parse the rename arguments."))
+
   def __init__ (self, *args, **kwargs):
+    """
+    metadata_file : str or list, optional
+        Use metadata from the specified file(s).
+    rename : str or dict, optional
+        Apply the specified name changes to the variables.
+    """
     try:
       import ConfigParser
     except ImportError:

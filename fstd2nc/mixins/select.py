@@ -30,7 +30,13 @@ class SelectVars (BufferBase):
   def _cmdline_args (cls, parser):
     super(SelectVars,cls)._cmdline_args(parser)
     parser.add_argument('--vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables to convert.  By default, all variables are converted.'))
+
   def __init__ (self, *args, **kwargs):
+    """
+    vars : str or list, optional
+        Comma-separated list of variables to convert.  By default, all
+        variables are converted.
+    """
     import numpy as np
     vars = kwargs.pop('vars',None)
     super(SelectVars,self).__init__(*args,**kwargs)

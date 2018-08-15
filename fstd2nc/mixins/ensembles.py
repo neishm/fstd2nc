@@ -33,6 +33,11 @@ class Ensembles (BufferBase):
     parser.add_argument('--ensembles', action='store_true', help=_('Collect different etikets for the same variable together into an "ensemble" axis.'))
 
   def __init__ (self, *args, **kwargs):
+    """
+    ensembles : bool, optional
+        Collect different etikets for the same variable together into an
+        "ensemble" axis.
+    """
     ensembles = kwargs.pop('ensembles',False)
     if ensembles:
       self._outer_axes = ('etiket',) + self._outer_axes
