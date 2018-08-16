@@ -51,7 +51,7 @@ class SelectVars (BufferBase):
     select = np.zeros(len(self._headers),dtype='bool')
     missing = []
     for v in vars:
-      f = self._headers['nomvar'] ==  v.ljust(4)
+      f = self._headers['nomvar'] ==  v.ljust(4).encode()
       if not np.any(f):
         missing.append(v)
       select |= f
