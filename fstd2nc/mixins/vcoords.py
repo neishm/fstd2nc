@@ -31,7 +31,7 @@ def decode_ip1 (ip1):
   out = np.empty(1,dtype=dtype)
   r1, r2, r3 = DecodeIp(ip1,0,0)
   out['kind'] = r1.kind
-  if int(r1.v1) == 0 and int(r1.v2) != 0 :
+  if r1.v1 == 0 and r1.v2 != 0 :
     out['level'] = r1.v2
   else:
     out['level'] = r1.v1
