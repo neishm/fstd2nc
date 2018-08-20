@@ -37,24 +37,27 @@ del gettext, path, environ
 # Module-level variable to control the amount of information printed.
 streams=('info','warn','error')
 
+from textwrap import TextWrapper
+w = TextWrapper(subsequent_indent='    ', break_on_hyphens=False)
+del TextWrapper
 
 # Information messages
 def info (msg):
   if 'info' in streams:
-    print (msg)
+    print (w.fill(msg))
 
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
 def warn (msg, _printed=set()):
   if msg not in _printed and 'warn' in streams:
-    print (_("Warning: %s")%msg)
+    print (_("Warning: %s")%w.fill(msg))
     _printed.add(msg)
 
 # Error messages
 def error (msg):
   from sys import exit
   if 'error' in streams:
-    print (_("Error: %s")%msg)
+    print (_("Error: %s")%w.fill(msg))
   exit(1)
 
 
