@@ -335,3 +335,16 @@ class VCoords (BufferBase):
       vaxis = vaxes[(id(level_axis),kind)]
       var.axes[var.dims.index('level')] = vaxis
 
+    # Detect mixture of diagnostic / model levels, and print a warning.
+    model_vars = set()
+    diag_vars = set()
+    for var in self._varlist:
+      dims = var.dims
+      if 'level' in var.dims:
+        model_vars.add(var.name)
+      if 'height' in var.dims:
+        diag_vars.add(var.name)
+    mixed_vars = model_vars & diag_vars
+    if len(mixed_vars) > 0:
+      warn (_("Mixture of model / height levels found.  This will cause multiple definitions of variables in the output.  You may be able to resolve this by using --ignore-diag-level or --diag-as-model-level."))
+
