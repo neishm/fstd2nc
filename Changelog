@@ -1,3 +1,18 @@
+Version 0.20180821.0 (Aug 21, 2018)
+	* Fixed the --ignore-typvar option, which was crashing.
+	* Fixed the encoding of depths shallower than 1m.  These were
+	  getting truncated to 0m.
+	* Fixed a bug in handling lists of values in attributes.  This was
+	  causing problems when using --rpnstd-metadata on files with a
+	  "!!" vertical coordinate.
+	* Added two new command-line arguments --diag-as-model-level and
+	  --ignore-diag-level, to deal with diagnostic-level data in the
+	  FSTD file.
+	* Detect mixture of diagnostic / model levels and inform the user
+	  of how to resolve this using the above commands.
+	* Package should now be fully compatible with Python 3.
+	* Added docstring to the fstd2nc.Buffer class.
+
 Version 0.20180706.1 (Aug 3, 2018)
 	* Fixed .to_pygeode() method, which was failing on xarray > 0.10.0.
 	* Added locks to thread-unsafe parts of the code.
