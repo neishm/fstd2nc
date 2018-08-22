@@ -43,10 +43,9 @@ from fstd2nc.mixins import BufferBase
 #   ig1/ig2 is set to zero in my sample - coincidentally matches ip1/ip2 of
 #   !! record.
 #   ig3/ig4 give some kind of horizontal coordinate info (?).
-#   ip1/ip2 seem to match ip1/ip2 of '^^', '>>' records.
 #   'HH' record gives forecast hours corresponding to nj.
 #   'SH' and 'SV' give some kind of vertical info corresponding to ni, but
-#   with one extra level?
+#   with one extra level sometimes (due to a bug in rpnphy).
 #   'STNS' gives the names of the stations (corresponding to ip3 numbers?)
 
 class Series (BufferBase):
@@ -119,12 +118,11 @@ class Series (BufferBase):
       fields['reftime'] = np.ma.asarray(fields['reftime'])
       fields['reftime'].mask = np.ma.getmaskarray(fields['reftime']) | is_series
 
-    # True grid identifier is in ip1/ip2?
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
     # station?)
-    fields['ig1'][is_split_series] = fields['ip1'][is_split_series]
-    fields['ig2'][is_split_series] = fields['ip2'][is_split_series]
+    fields['ig1'][is_split_series] = 0
+    fields['ig2'][is_split_series] = 0
     fields['ig3'][is_split_series] = 0
     fields['ig4'][is_split_series] = 0
     # Do not treat the ip1 value any further - it's not really vertical level.
