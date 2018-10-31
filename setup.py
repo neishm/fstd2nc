@@ -44,7 +44,7 @@ setup (
   ],
   packages = find_packages(),
   setup_requires = ['pip >= 8.1'],
-  install_requires = ['numpy >= 1.13.0','netcdf4','fstd2nc-deps >= 0.20180808.0'],
+  install_requires = ['numpy >= 1.13.0, != 1.15.3','netcdf4','fstd2nc-deps >= 0.20180808.0'],
   extras_require = {
     'dap': ['Pydap[server,functions]'],
     'manyfiles': ['progress','pandas'],
