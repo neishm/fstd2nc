@@ -121,10 +121,10 @@ class Series (BufferBase):
     # Overwrite the original ig1,ig2,ig3,ig4 values, which aren't actually grid
     # identifiers in this case (they're just the lat/lon coordinates of each
     # station?)
-    fields['ig1'][is_split_series] = 0
-    fields['ig2'][is_split_series] = 0
-    fields['ig3'][is_split_series] = 0
-    fields['ig4'][is_split_series] = 0
+    fields['ig1'][is_series] = 0
+    fields['ig2'][is_series] = 0
+    fields['ig3'][is_series] = 0
+    fields['ig4'][is_series] = 0
     # Do not treat the ip1 value any further - it's not really vertical level.
     # Set it to 0 to indicate a degenerate vertical axis.
     fields['ip1'][is_series] = 0

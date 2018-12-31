@@ -338,8 +338,12 @@ class XYCoords (BufferBase):
   def _find_coord (self, var, coordname):
     from fstd2nc.mixins import dtype_fst2numpy
     from rpnpy.librmn.fstd98 import fstlir
-    header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
-                           ip2=var.atts['ig2'], ip3=var.atts['ig3'], rank=3)
+    # Special case for series data - match any of the lat/lon grids.
+    if var.atts['grtyp'] in ('+','Y'):
+      header = fstlir (self._meta_funit, nomvar=coordname, rank=3)
+    else:
+      header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
+                             ip2=var.atts['ig2'], ip3=var.atts['ig3'], rank=3)
     if header is not None:
       # Override output dtype
       dtype = dtype_fst2numpy(header['datyp'],header['nbits'])

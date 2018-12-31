@@ -1,3 +1,7 @@
+Version 0.20180821.1 (Dec 31, 2018)
+	* Loosen horizontal coordinate matching criteria for series data.
+	* Blacklist numpy 1.15.3, which had a bug that caused a fatal crash.
+
 Version 0.20180821.0 (Aug 21, 2018)
 	* Fixed the --ignore-typvar option, which was crashing.
 	* Fixed the encoding of depths shallower than 1m.  These were
