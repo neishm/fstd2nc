@@ -143,6 +143,11 @@ class _FakeBar (object):
 # Try importing progress module.
 try:
   from progress.bar import IncrementalBar
+  # Handle environments that can't print unicode characters.
+  from os import environ
+  if environ.get('LANG','') == '':
+    from progress.bar import Bar as IncrementalBar
+  del environ
   class _ProgressBar(IncrementalBar):
     # Define a custom ETA, which prints the elapsed time at the end.
     @property
