@@ -143,7 +143,7 @@ class _FakeBar (object):
 # Try importing progress module.
 try:
   import sys
-  if sys.stdout.encoding.lower().startswith('utf'):
+  if sys.stdout.encoding is not None and sys.stdout.encoding.lower().startswith('utf'):
     from progress.bar import IncrementalBar
   # Handle environments that can't print unicode characters.
   else:
