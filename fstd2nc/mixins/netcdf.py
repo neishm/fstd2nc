@@ -302,7 +302,7 @@ class netCDF_IO (BufferBase):
             var.atts.pop(n,None)
 
 
-  def to_netcdf (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, progress=False):
+  def to_netcdf (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
@@ -340,7 +340,7 @@ class netCDF_IO (BufferBase):
       # Write the variable.
       # Easy case: already have the data.
       if hasattr(var,'array'):
-        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=var.dims, zlib=zlib)
+        v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=var.dims, zlib=zlib, complevel=compression)
         # Write the metadata.
         v.setncatts(var.atts)
         v[()] = var.array
@@ -352,7 +352,7 @@ class netCDF_IO (BufferBase):
       # Use this as the "chunk size" for the netCDF file, to improve I/O
       # performance.
       chunksizes = (1,)*var.record_id.ndim + record_shape
-      v = f.createVariable(var.name, datatype=var.dtype, dimensions=var.dims, zlib=zlib, chunksizes=chunksizes, fill_value=getattr(self,'_fill_value',None))
+      v = f.createVariable(var.name, datatype=var.dtype, dimensions=var.dims, zlib=zlib, complevel=compression, chunksizes=chunksizes, fill_value=getattr(self,'_fill_value',None))
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.
