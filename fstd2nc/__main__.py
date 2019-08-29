@@ -37,6 +37,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('--msglvl', choices=['0','DEBUG','2','INFORM','4','WARNIN','6','ERRORS','8','FATALE','10','SYSTEM','CATAST'], default='WARNIN', help=_('How much information to print to stdout during the conversion.  Default is %(default)s.'))
   parser.add_argument('--nc-format', choices=['NETCDF4','NETCDF4_CLASSIC','NETCDF3_CLASSIC','NETCDF3_64BIT_OFFSET','NETCDF3_64BIT_DATA'], default='NETCDF4', help=_('Which variant of netCDF to write.  Default is %(default)s.'))
   parser.add_argument('--zlib', action='store_true', help=_("Turn on compression for the netCDF file.  Only works for NETCDF4 and NETCDF4_CLASSIC formats."))
+  parser.add_argument('--compression', type=int, default=4, help=_("Compression level for the netCDF file. Only used if --zlib is set. Default: 4."))
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   args = parser.parse_args()
@@ -49,6 +50,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   zlib = args.pop('zlib')
   force = args.pop('force')
   no_history = args.pop('no_history')
+  compression = args.pop('compression')
   progress = args.get('progress',False)
 
   # Apply message level criteria.
@@ -96,7 +98,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.to_netcdf(outfile, nc_format=nc_format, global_metadata=global_metadata, zlib=zlib, progress=progress)
+  buf.to_netcdf(outfile, nc_format=nc_format, global_metadata=global_metadata, zlib=zlib, compression=compression, progress=progress)
 
 # Command-line invocation with error trapping.
 # Hides the Python stack trace when the user aborts the command.
