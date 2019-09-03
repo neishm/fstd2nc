@@ -95,7 +95,9 @@ optional arguments:
                         Which variant of netCDF to write. Default is NETCDF4.
   --zlib                Turn on compression for the netCDF file. Only works
                         for NETCDF4 and NETCDF4_CLASSIC formats.
-  --compression         Compression level for the zlib compression. Default: 4.
+  --compression COMPRESSION
+                        Compression level for the netCDF file. Only used if
+                        --zlib is set. Default: 4.
   -f, --force           Overwrite the output file if it already exists.
   --no-history          Don't put the command-line invocation in the netCDF
                         metadata.
