@@ -1,3 +1,10 @@
+Version 0.20190903.0 (Sep 3, 2019)
+	* New --compression parameter, to control the compression level for
+	  netCDF4.  Used in conjunction with --zlib parameter.  Thanks to
+	  David Landry for the patch.
+	* Fixed a crash when printing the progress bar in a locale that does
+	  not support unicode.
+
 Version 0.20180821.1 (Dec 31, 2018)
 	* Loosen horizontal coordinate matching criteria for series data.
 	* Blacklist numpy 1.15.3, which had a bug that caused a fatal crash.
