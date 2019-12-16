@@ -368,7 +368,8 @@ class netCDF_IO (BufferBase):
         if r >= 0:
           io.append((r,record_shape,v,ind))
 
-    if len(io) == 0:
+    # Check if no data records exist and no coordinates were converted.
+    if len(io) == 0 and len(f.variables) == 0:
       warn(_("No relevant FST records were found."))
 
     # Now, do the actual transcribing of the data.

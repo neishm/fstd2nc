@@ -591,4 +591,8 @@ class XYCoords (BufferBase):
 
     self._varlist = [v for v in varlist if v.name is not None]
 
+    # Special case - there are no data records, ONLY a pair of lat/lon
+    # coordinates.  In this case, include the lat/lon as variables.
+    if len(self._varlist) == 0 and len(lats) == 1 and len(lons) == 1:
+      self._varlist = [list(lats.values())[0], list(lons.values())[0]]
 
