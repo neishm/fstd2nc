@@ -368,6 +368,9 @@ class netCDF_IO (BufferBase):
         if r >= 0:
           io.append((r,record_shape,v,ind))
 
+    if len(io) == 0:
+      warn(_("No relevant FST records were found."))
+
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
