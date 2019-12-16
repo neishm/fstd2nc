@@ -70,6 +70,8 @@ optional arguments:
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids
                         stacked together as they are in the RPN file.
+  --keep-LA-LO          Include LA and LO records, even if they appear to be
+                        redundant.
   --filter CONDITION    Subset RPN file records using the given criteria. For
                         example, to convert only 24-hour forecasts you could
                         use --filter ip2==24

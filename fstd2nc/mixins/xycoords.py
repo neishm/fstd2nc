@@ -312,6 +312,7 @@ class XYCoords (BufferBase):
   def _cmdline_args (cls, parser):
     super(XYCoords,cls)._cmdline_args(parser)
     parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
+    parser.add_argument('--keep-LA-LO', action='store_true', help=_('Include LA and LO records, even if they appear to be redundant.'))
 
   def __init__ (self, *args, **kwargs):
     """
@@ -319,8 +320,11 @@ class XYCoords (BufferBase):
         For data on supergrids, split the subgrids along a "subgrid" axis.
         The default is to leave the subgrids stacked together as they are in
         the RPN file.
+    keep_LA_LO : bool, optional
+        Include LA and LO records, even if they appear to be redundant.
     """
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
+    self._keep_LA_LO = kwargs.pop('keep_LA_LO',False)
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
     super(XYCoords,self).__init__(*args,**kwargs)
@@ -579,10 +583,11 @@ class XYCoords (BufferBase):
         var.atts['grid_mapping'] = gridmaps[key]
 
       # Throw out superfluous LA/LO variables, if lat/lon was already decoded.
-      if var.name == 'LA' and ('lat' in var.dims or lat in coordinates):
-        var.name = None
-      if var.name == 'LO' and ('lon' in var.dims or lon in coordinates):
-        var.name = None
+      if not self._keep_LA_LO:
+        if var.name == 'LA' and ('lat' in var.dims or lat in coordinates):
+          var.name = None
+        if var.name == 'LO' and ('lon' in var.dims or lon in coordinates):
+          var.name = None
 
     self._varlist = [v for v in varlist if v.name is not None]
 
