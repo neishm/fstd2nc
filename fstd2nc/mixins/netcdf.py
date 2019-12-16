@@ -371,7 +371,7 @@ class netCDF_IO (BufferBase):
     # Now, do the actual transcribing of the data.
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
-    Bar = _ProgressBar if progress is True else _FakeBar
+    Bar = _ProgressBar if (progress is True and len(io) > 0) else _FakeBar
     bar = Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]")
     for r,shape,v,ind in bar.iter(sorted(io)):
       try:
