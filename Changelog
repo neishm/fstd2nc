@@ -1,3 +1,14 @@
+Version 0.20190903.1 (Dec 16, 2019)
+	* Fixed a crash in recent versions of "progress" module when there are
+	  no records to convert.
+	* Warn if no data was converted.
+	* Add an option to keep the 'LA' and 'LO' records instead of pruning
+	  them as redundant information (e.g. if ^^ and >> are also available).
+	* For special case were ONLY lat/lon information is in the FST file,
+	  produce a netCDF file with the lat/lon fields.  These coordinates
+	  were being stripped out (leaving an empty netCDF file) due to
+	  aggressive pruning.
+
 Version 0.20190903.0 (Sep 3, 2019)
 	* New --compression parameter, to control the compression level for
 	  netCDF4.  Used in conjunction with --zlib parameter.  Thanks to
