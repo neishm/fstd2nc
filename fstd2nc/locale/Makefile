@@ -19,7 +19,7 @@ $(LANGUAGE).po: fstd2nc.pot
 
 # Rule for generating a template file.
 # Also include strings from argparse.
-ARGPARSE_PYC = $(shell python -c "import argparse; print argparse.__file__")
+ARGPARSE_PYC = $(shell python -c "import argparse; print (argparse.__file__)")
 ARGPARSE_PY = $(basename $(ARGPARSE_PYC)).py
 fstd2nc.pot: ../*.py ../mixins/*.py
 	xgettext $^ $(ARGPARSE_PY) -d fstd2nc --package-name=fstd2nc --no-location
