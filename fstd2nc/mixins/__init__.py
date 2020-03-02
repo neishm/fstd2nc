@@ -204,6 +204,10 @@ class BufferBase (object):
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
   _meta_records = ()
+  # Other records that should also be kept separate, but only if they are
+  # 1-dimensional.  If they are 2D, then they should be processed as a normal
+  # variable.
+  _maybe_meta_records = ()
 
   # Attributes which could potentially be used as axes.
   _outer_axes = ()
@@ -484,7 +488,7 @@ class BufferBase (object):
     # that provide all unique metadata records.
     # This will make it easier to look up the meta records later.
     meta_mask = np.zeros(len(self._headers),dtype='bool')
-    for meta_name in self._meta_records:
+    for meta_name in self._meta_records + self._maybe_meta_records:
       meta_name = (meta_name+'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name)
     meta_recids = np.where(meta_mask)[0]
@@ -568,6 +572,8 @@ class BufferBase (object):
       nomvar = str(nomvar.decode()) # Python3: convert bytes to str.
       # Ignore meta records.
       if nomvar in self._meta_records: continue
+      if nomvar in self._maybe_meta_records and (var_id['ni'] == 1 or var_id['nj'] == 1):
+        continue
 
       # Get the metadata for each record.
       atts = OrderedDict()
@@ -713,6 +719,8 @@ class BufferBase (object):
       nomvar = str(nomvar.decode()) # Python3: convert bytes to str.
       # Ignore meta records.
       if nomvar in self._meta_records: continue
+      if nomvar in self._maybe_meta_records and (var_id['ni'] == 1 or var_id['nj'] == 1):
+        continue
 
       # Get the attributes, axes, and corresponding indices of each record.
       atts = OrderedDict()

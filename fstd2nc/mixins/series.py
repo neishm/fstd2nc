@@ -91,7 +91,8 @@ class Series (BufferBase):
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
 
     # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + ('HH','STNS','SV','SH')
+    self._meta_records = self._meta_records + ('STNS',)
+    self._maybe_meta_records = self._maybe_meta_records + ('HH','SV','SH')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
