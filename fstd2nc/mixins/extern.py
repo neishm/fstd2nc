@@ -113,6 +113,25 @@ class Extern (BufferBase):
         inner_zeros = (0,)*ndim_inner
         dsk = dict()
         chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
+        ###
+        # For science network installation, make sure the stack size of child
+        # threads is large enough to accomodate workspace for librmn.
+        from os.path import basename, splitext
+        from rpnpy.librmn import librmn
+        libname = basename(getattr(librmn,'_name',''))
+        # Skip this step for patched versions of librmn (ending in -rpnpy) that
+        # use the heap instead of the stack for workspace.
+        if not splitext(libname)[0].endswith('-rpnpy'):
+          import threading
+          # Use the size of the largest record, plus 1MB just in case.
+          # Use multiples of 4K for the size, as suggested in Python theading
+          # documentation.
+          # https://docs.python.org/3/library/threading.html#threading.stack_size
+          arraysize = np.dtype(var.dtype).itemsize * np.product(chunk_shape)
+          stacksize = arraysize//4096*4096 + (1<<20)
+          if stacksize > threading.stack_size():
+            threading.stack_size(stacksize)
+        ###
         for ind in product(*map(range,var.record_id.shape)):
           # Pad index with all dimensions (including inner ones).
           key = (name,) + ind + inner_zeros
