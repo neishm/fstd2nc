@@ -206,11 +206,6 @@ If you're processing many input files into a single netCDF file, you could get s
 pip install fstd2nc[manyfiles]
 ```
 
-Alternatively, you can install it in a [conda](https://conda.io/docs/index.html) environment:
-```
-conda install -c neishm fstd2nc
-```
-
 
 Using in a Pydap server
 =======================
@@ -247,4 +242,4 @@ The `.to_xarray()` Python method requires the [xarray](https://github.com/pydata
 
 The `.to_iris()` Python method requires the [iris](https://scitools.org.uk/iris/docs/latest/index.html) package, along with the `.to_xarray()` dependencies.
 
-The `.to_pygeode()` Python method requires the [pygeode](https://github.com/pygeode/pygeode) package, along ith the `.to_xarray()` dependencies.
+The `.to_pygeode()` Python method requires the [pygeode](https://github.com/pygeode/pygeode) package, along with the `.to_xarray()` dependencies.
