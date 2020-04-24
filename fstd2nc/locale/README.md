@@ -11,10 +11,10 @@ Once some translations are filled in or updated for this file, you can test them
 ```
   make
 ```
-This will compile the translations into ```fstd2nc_locale/fr_CA/LC_MESSAGES/fstd2nc.mo```.  You should now see your translations when running the ```fstd2nc.py``` script from your local directory, with either ```LANGUAGE=fr_CA``` or ```CMCLNG=francais```, e.g.
+This will compile the translations into ```fstd2nc/locale/fr_CA/LC_MESSAGES/fstd2nc.mo```.  You should now see your translations when running the ```fstd2nc.py``` script from your local directory, with either ```LANGUAGE=fr_CA``` or ```CMCLNG=francais```, e.g.
 ```
 export CMCLNG=francais
-python fstd2nc.py --help
+python -m fstd2nc --help
 ```
 
 To contribute your translations back to the project, please create a commit with your ```fr_CA.po``` file, and submit a pull request.
