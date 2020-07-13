@@ -90,6 +90,11 @@ class netCDF_Atts (BufferBase):
       rename = dict(rename)
     for oldname, newname in rename.items():
       self._metadata.setdefault(oldname,OrderedDict())['rename'] = newname
+    # Check for metadata entries under the new name.
+    # I.e., in conjunction with --rename used on command-line.
+    for oldname, newname in rename.items():
+      if newname in self._metadata:
+        self._metadata[oldname].update(self._metadata[newname])
     super(netCDF_Atts,self).__init__(*args,**kwargs)
 
   def _makevars (self):
