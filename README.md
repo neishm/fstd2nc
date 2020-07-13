@@ -60,12 +60,12 @@ optional arguments:
                         the file.
   --diag-as-model-level
                         Treat diagnostic (near-surface) data as model level
-                        '1.0'. Normally, this data goes in a separate variable
-                        because it has incompatible units for the vertical
-                        coordinate. Use this option if your variables are
-                        getting split with suffixes '_vgrid4' and '_vgrid5',
-                        and you'd rather keep both sets of levels together in
-                        one variable.
+                        '1.0'. This is the default behaviour.
+  --split-diag-level    Put the diagnostic (near-surface) data in a separate
+                        variable, away from the 3D model output. Suffices will
+                        be added to distinguish the different types of levels
+                        (e.g. _vgrid4 and _vgrid5 for diagnostic height and
+                        hybrid levels respectively).
   --ignore-diag-level   Ignore data on diagnostic (near-surface) height.
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids

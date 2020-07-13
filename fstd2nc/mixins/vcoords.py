@@ -49,7 +49,8 @@ class VCoords (BufferBase):
     super(VCoords,cls)._cmdline_args(parser)
     parser.add_argument('--strict-vcoord-match', action='store_true', help=_("Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the IG1/IG2/IG3 paramters of the field in order to be used.  The default behaviour is to use the vertical record anyway if it's the only one in the file."))
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--diag-as-model-level', action='store_true', help=_("Treat diagnostic (near-surface) data as model level '1.0'.  Normally, this data goes in a separate variable because it has incompatible units for the vertical coordinate.  Use this option if your variables are getting split with suffixes '_vgrid4' and '_vgrid5', and you'd rather keep both sets of levels together in one variable."))
+    group.add_argument('--diag-as-model-level', action='store_true', help=_("Treat diagnostic (near-surface) data as model level '1.0'.  This is the default behaviour."))
+    group.add_argument('--split-diag-level', action='store_true', help=_("Put the diagnostic (near-surface) data in a separate variable, away from the 3D model output.  Suffices will be added to distinguish the different types of levels (e.g. _vgrid4 and _vgrid5 for diagnostic height and hybrid levels respectively)."))
     group.add_argument('--ignore-diag-level', action='store_true', help=_("Ignore data on diagnostic (near-surface) height."))
 
   # Need to extend _headers_dtype before __init__.
@@ -67,11 +68,12 @@ class VCoords (BufferBase):
         the only one in the file.
     diag_as_model_level : bool, optional
         Treat diagnostic (near-surface) data as model level '1.0'.
-        Normally, this data goes in a separate variable because it has
-        incompatible units for the vertical coordinate.  Use this option if
-        your variables are getting split with suffixes '_vgrid4' and
-        '_vgrid5', and you'd rather keep both sets of levels together in one
-        variable.
+        This is the default behaviour.
+    split_diag_level : bool, optional
+        Put the diagnostic (near-surface) data in a separate variable, away
+        from the 3D model output.  Suffices will be added to distinguish
+        the different types of levels (e.g. _vgrid4 and _vgrid5 for
+        diagnostic height and hybrid levels respectively).
     ignore_diag_level : bool, optional
         Ignore data on diagnostic (near-surface) height.
     """
@@ -82,7 +84,11 @@ class VCoords (BufferBase):
     from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
     self._strict_vcoord_match = kwargs.pop('strict_vcoord_match',False)
     self._diag_as_model_level = kwargs.pop('diag_as_model_level',False)
+    self._split_diag_level = kwargs.pop('split_diag_level',False)
     self._ignore_diag_level = kwargs.pop('ignore_diag_level',False)
+    # Set default behaviour for diag level.
+    if not self._split_diag_level and not self._ignore_diag_level:
+      self._diag_as_model_level = True
 
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
@@ -346,5 +352,14 @@ class VCoords (BufferBase):
         diag_vars.add(var.name)
     mixed_vars = model_vars & diag_vars
     if len(mixed_vars) > 0:
-      warn (_("Mixture of model / height levels found.  This will cause multiple definitions of variables in the output.  You may be able to resolve this by using --ignore-diag-level or --diag-as-model-level."))
+      warn (_("Mixture of model / height levels found.  This will cause multiple definitions of variables in the output.  If this is undesired, you could try using --ignore-diag-level or --diag-as-model-level."))
 
+    # Detect different timesteps for diagnostic / model levels, and print a
+    # warning.
+    missing_levels = False
+    for var in self._varlist:
+      if hasattr(var,'record_id'):
+        if np.any(var.record_id < 0):
+          missing_levels = True
+    if missing_levels and self._diag_as_model_level:
+      warn (_("Incomplete set of records.  You could try --split-diag-level to see if it's an issue with a different output frequency for the diagnostic level."))
