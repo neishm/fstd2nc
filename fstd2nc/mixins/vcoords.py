@@ -86,9 +86,6 @@ class VCoords (BufferBase):
     self._diag_as_model_level = kwargs.pop('diag_as_model_level',False)
     self._split_diag_level = kwargs.pop('split_diag_level',False)
     self._ignore_diag_level = kwargs.pop('ignore_diag_level',False)
-    # Set default behaviour for diag level.
-    if not self._split_diag_level and not self._ignore_diag_level:
-      self._diag_as_model_level = True
 
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
@@ -115,31 +112,35 @@ class VCoords (BufferBase):
         vrecs[key] = header
     self._vrecs = vrecs
 
-    # Pre-filter the diagnostic level data?
-    if self._diag_as_model_level or self._ignore_diag_level:
-      for key, header in self._vrecs.items():
-        prm = fstluk(header,rank=3)
-        vgd_id = vgd_fromlist(prm['d'])
-        try:
-          ip1_t = vgd_get(vgd_id,'DIPT')
-          ip1_m = vgd_get(vgd_id,'DIPM')
-          mask = (self._headers['ip1'] == ip1_t) | (self._headers['ip1'] == ip1_m)
-          if len(self._vrecs) > 1 or self._strict_vcoord_match:
-            mask &= (self._headers['ig1'] == prm['ip1']) & (self._headers['ig2'] == prm['ip2'])
-          if self._diag_as_model_level:
-            self._headers['ip1'][mask] = 93423264
-          elif self._ignore_diag_level:
-            self._headers['dltf'] |= mask
-        except (KeyError,VGDError):
-          warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
-        vgd_free (vgd_id)
-
     fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
     decoded = np.concatenate(decode_ip1(fields['ip1']))
     # Only use first set of levels (can't handle ranges yet).
     fields['level'] = decoded['level']
     fields['kind'] = decoded['kind']
+
+    # Pre-filter the diagnostic level data?
+    # Start by treating diagnostic level as model level, then
+    # revert this later if it ends up not working.
+    if not self._split_diag_level:
+      for key, header in self._vrecs.items():
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          ip1_t = vgd_get(vgd_id,'DIPT')
+          ip1_m = vgd_get(vgd_id,'DIPM')
+          mask = (fields['ip1'] == ip1_t) | (fields['ip1'] == ip1_m)
+          if len(self._vrecs) > 1 or self._strict_vcoord_match:
+            mask &= (fields['ig1'] == prm['ip1']) & (fields['ig2'] == prm['ip2'])
+          if self._ignore_diag_level:
+            fields['dltf'] |= mask
+          else:
+            #fields['ip1'][mask] = 93423264
+            fields['level'][mask] = 1.0
+            fields['kind'][mask] = 5
+        except (KeyError,VGDError):
+          warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
+        vgd_free (vgd_id)
 
   def _makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
@@ -153,6 +154,10 @@ class VCoords (BufferBase):
     vrecs = self._vrecs
 
     super(VCoords,self)._makevars()
+
+    # If this becomes True by the end, then we need to rerun this routine
+    # again with updated information.
+    rerun = False
 
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
@@ -354,12 +359,29 @@ class VCoords (BufferBase):
     if len(mixed_vars) > 0:
       warn (_("Mixture of model / height levels found.  This will cause multiple definitions of variables in the output.  If this is undesired, you could try using --ignore-diag-level or --diag-as-model-level."))
 
-    # Detect different timesteps for diagnostic / model levels, and print a
-    # warning.
-    missing_levels = False
-    for var in self._varlist:
-      if hasattr(var,'record_id'):
-        if np.any(var.record_id < 0):
-          missing_levels = True
-    if missing_levels and self._diag_as_model_level:
-      warn (_("Incomplete set of records.  You could try --split-diag-level to see if it's an issue with a different output frequency for the diagnostic level."))
+    # Detect different timesteps for diagnostic / model levels, and split
+    # those fields.
+    # Also detect where *only* diagnostic level was found, and revert that
+    # back to the correct type.
+    if not self._diag_as_model_level:
+      for var in self._varlist:
+        if not hasattr(var,'record_id'): continue
+        valid_records = var.record_id[var.record_id>=0]
+        ip1 = self._headers['ip1'][valid_records]
+        decoded = np.concatenate(decode_ip1(ip1))
+        if not any(decoded['kind']==4): continue
+        if np.all(decoded['kind'] == self._headers['kind'][valid_records]): continue
+        if np.any(var.record_id<0):
+          warn (_("Having trouble treating %s diagnostic level as model level - splitting into a separate field.")%var.name)
+          self._headers['kind'][valid_records] = decoded['kind']
+          self._headers['level'][valid_records] = decoded['level']
+          rerun = True
+        # For single height level (no vertical structure), reset the level
+        # type.
+        if var.record_id.size == 1:
+          self._headers['kind'][valid_records] = decoded['kind']
+          self._headers['level'][valid_records] = decoded['level']
+          rerun = True
+
+    if rerun:
+      return self._makevars()
