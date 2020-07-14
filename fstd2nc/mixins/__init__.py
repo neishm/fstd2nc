@@ -550,8 +550,9 @@ class BufferBase (object):
     # can run more efficiently when there are relatively few unique elements.
     # (could get ~O(n) with a hash table).
     var_ids = all_var_ids
-    flag = np.concatenate(([True], var_ids[1:] != var_ids[:-1]))
-    var_ids = var_ids[flag]
+    if len(var_ids) > 0:
+      flag = np.concatenate(([True], var_ids[1:] != var_ids[:-1]))
+      var_ids = var_ids[flag]
 
     # Now, find the unique var_ids from this pruned list.
     var_ids = np.unique(var_ids)
