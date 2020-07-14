@@ -44,10 +44,10 @@ setup (
   ],
   packages = find_packages(),
   setup_requires = ['pip >= 8.1'],
-  install_requires = ['numpy >= 1.13.0, != 1.15.3','netcdf4','fstd2nc-deps >= 0.20200304.0'],
+  install_requires = ['numpy >= 1.13.0, != 1.15.3','netcdf4','fstd2nc-deps >= 0.20200304.0','progress'],
   extras_require = {
     'dap': ['Pydap[server,functions]'],
-    'manyfiles': ['progress','pandas'],
+    'manyfiles': ['pandas'],
     'array': ['xarray>=0.10.3','dask','toolz'],
     'iris': ['iris>=2.0','xarray>=0.10.3','dask','toolz'],
     'pygeode': ['pygeode>=1.2.2','xarray>=0.10.3','dask','toolz'],
