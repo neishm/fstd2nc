@@ -102,6 +102,26 @@ class Extern (BufferBase):
     # This speeds up access to their elements in the inner loop.
     all_file_ids = np.array(self._headers['file_id'],copy=True)
     all_keys = np.array(self._headers['key'],copy=True)
+    ###
+    # For science network installation, make sure the stack size of child
+    # threads is large enough to accomodate workspace for librmn.
+    from os.path import basename, splitext
+    from rpnpy.librmn import librmn
+    libname = basename(getattr(librmn,'_name',''))
+    # Skip this step for patched versions of librmn (ending in -rpnpy) that
+    # use the heap instead of the stack for workspace.
+    if not splitext(libname)[0].endswith('-rpnpy'):
+      import threading
+      # Use the size of the largest record, plus 1MB just in case.
+      # Use multiples of 4K for the size, as suggested in Python theading
+      # documentation.
+      # https://docs.python.org/3/library/threading.html#threading.stack_size
+      # Allow for possibility of double precision values (64-bit)
+      arraysize = np.max(8 * self._headers['ni'] * self._headers['nj'] * self._headers['nk'])
+      stacksize = arraysize//4096*4096 + (1<<20)
+      if stacksize > threading.stack_size():
+        threading.stack_size(stacksize)
+    ###
     self._makevars()
     for var in self._iter_objects():
       if isinstance(var,_iter_type):
@@ -113,25 +133,6 @@ class Extern (BufferBase):
         inner_zeros = (0,)*ndim_inner
         dsk = dict()
         chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
-        ###
-        # For science network installation, make sure the stack size of child
-        # threads is large enough to accomodate workspace for librmn.
-        from os.path import basename, splitext
-        from rpnpy.librmn import librmn
-        libname = basename(getattr(librmn,'_name',''))
-        # Skip this step for patched versions of librmn (ending in -rpnpy) that
-        # use the heap instead of the stack for workspace.
-        if not splitext(libname)[0].endswith('-rpnpy'):
-          import threading
-          # Use the size of the largest record, plus 1MB just in case.
-          # Use multiples of 4K for the size, as suggested in Python theading
-          # documentation.
-          # https://docs.python.org/3/library/threading.html#threading.stack_size
-          arraysize = np.dtype(var.dtype).itemsize * np.product(chunk_shape)
-          stacksize = arraysize//4096*4096 + (1<<20)
-          if stacksize > threading.stack_size():
-            threading.stack_size(stacksize)
-        ###
         for ind in product(*map(range,var.record_id.shape)):
           # Pad index with all dimensions (including inner ones).
           key = (name,) + ind + inner_zeros
