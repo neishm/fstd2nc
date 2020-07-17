@@ -124,6 +124,7 @@ class VCoords (BufferBase):
     # revert this later if it ends up not working.
     if not self._split_diag_level:
       for key, header in self._vrecs.items():
+        if key == 'HY': continue  # not applicable for HY coordinates.
         prm = fstluk(header,rank=3)
         vgd_id = vgd_fromlist(prm['d'])
         try:
