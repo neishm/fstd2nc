@@ -1,3 +1,15 @@
+Version 0.20200717.0 (Jul 17, 2020)
+	* Tweak the handling of metadata records to avoid erroneously treating
+	  data records as metadata (such as when "SV" is actually a 2D field).
+	* Fix stack space for threads (default too small on science network).
+	  Affects the xarray interface, not the command-line invocation.
+	* Metadata files now work better when using --rename argument.  Both
+	  the old and new names are valid section headers for the metadata.
+	* Treat diagnostic-level height (e.g. 1.5m) as a bottom model level
+	  when it appears in conjunction with 3D model levels.  The default
+	  was to split it into a separate variable.  The old behaviour can be
+	  restored by using new argument --split-diag-level.
+
 Version 0.20190903.1 (Dec 16, 2019)
 	* Fixed a crash in recent versions of "progress" module when there are
 	  no records to convert.
