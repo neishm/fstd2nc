@@ -76,17 +76,21 @@ except ImportError:
 
 class Extern (BufferBase):
 
+  _read_chunk_cache = None
+
   # The interface for getting chunks into dask.
-  def _read_chunk (self, rec_id, shape, dtype, cache={}):
+  def _read_chunk (self, rec_id, shape, dtype):
     with self._lock:
       # Cache the last record read from this interface, in case it is
       # immediately requested again.
       # Can happen, for instance, if the same data is sliced in multiple
       # different ways.
-      if rec_id not in cache:
-        cache.clear()
-        cache[rec_id] = self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
-      return cache[rec_id]
+      if self._read_chunk_cache is None:
+        self._read_chunk_cache = {}
+      if rec_id not in self._read_chunk_cache:
+        self._read_chunk_cache.clear()
+        self._read_chunk_cache[rec_id] = self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
+      return self._read_chunk_cache[rec_id]
 
   def _iter_dask (self):
     """
