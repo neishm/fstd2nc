@@ -1,3 +1,8 @@
+Version 0.20200717.1 (Jul 27, 2020)
+	* Fix a caching bug in dask wrapper.  The cache was being shared among
+	  all Buffer objects, so the wrong record may be returned under some
+	  circumstances.
+
 Version 0.20200717.0 (Jul 17, 2020)
 	* Tweak the handling of metadata records to avoid erroneously treating
 	  data records as metadata (such as when "SV" is actually a 2D field).
