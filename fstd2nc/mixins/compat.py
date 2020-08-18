@@ -193,9 +193,13 @@ class FSTD_Compat (BufferBase):
       # Use this as the "chunk size" for the netCDF file, to improve I/O
       # performance.
       chunksizes = (1,)*var.record_id.ndim + record_shape
+      if hasattr(self,'_fill_value') and var.dtype.name.startswith('float32'):
+        fill_value = self._fill_value
+      else:
+        fill_value = None
       # Tell netCDF4 to use big-endian encoding of data, where applicable.
       # FSTD requires big-endian encoding (and netCDF4 can work with either).
-      v = f.createVariable(var.name, datatype=var.dtype.newbyteorder('>'), endian='big', dimensions=var.dims, zlib=zlib, complevel=compression, chunksizes=chunksizes, fill_value=getattr(self,'_fill_value',None))
+      v = f.createVariable(var.name, datatype=var.dtype.newbyteorder('>'), endian='big', dimensions=var.dims, zlib=zlib, complevel=compression, chunksizes=chunksizes, fill_value=fill_value)
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.
