@@ -38,6 +38,7 @@ except ImportError:
 
 # Combine all the mixins to create a final interface for I/O.
 from fstd2nc.mixins.select import SelectVars
+from fstd2nc.mixins.ascii import ASCII
 from fstd2nc.mixins.masks import Masks
 from fstd2nc.mixins.dates import Dates
 from fstd2nc.mixins.ensembles import Ensembles
@@ -54,7 +55,7 @@ from fstd2nc.mixins.compat import FSTD_Compat
 from fstd2nc.mixins.extern import Extern
 from fstd2nc.mixins.iter import Iter
 
-class Buffer (Iter,Extern,FSTD_Compat,netCDF_IO,netCDF_Atts,PruneAxes,RemoveStuff,FilterRecords,NoNK,XYCoords,VCoords,Sfc_Codes,Series,Ensembles,Dates,Masks,SelectVars):
+class Buffer (Iter,Extern,FSTD_Compat,netCDF_IO,netCDF_Atts,PruneAxes,RemoveStuff,FilterRecords,NoNK,XYCoords,VCoords,Sfc_Codes,Series,Ensembles,Dates,Masks,ASCII,SelectVars):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
