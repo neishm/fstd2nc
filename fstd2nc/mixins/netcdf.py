@@ -361,7 +361,12 @@ class netCDF_IO (BufferBase):
         fill_value = self._fill_value
       else:
         fill_value = None
-      v = f.createVariable(var.name, datatype=var.dtype, dimensions=var.dims, zlib=zlib, complevel=compression, chunksizes=chunksizes, fill_value=fill_value)
+      # netCDF3 can't handle unsigned ints, so cast to signed.
+      dtype = var.dtype
+      if dtype.name.startswith('uint') and nc_format.startswith('NETCDF3'):
+        warn (_("netCDF3 does not support unsigned ints.  Converting %s to signed int.")%var.name)
+        dtype = np.dtype(dtype.name[1:])
+      v = f.createVariable(var.name, datatype=dtype, dimensions=var.dims, zlib=zlib, complevel=compression, chunksizes=chunksizes, fill_value=fill_value)
       # Turn off auto scaling of variables - want to encode the values as-is.
       # 'scale_factor' and 'add_offset' will only be applied when *reading* the
       # the file after it's created.
