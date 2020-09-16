@@ -201,11 +201,6 @@ The easiest way to install is using [pip](https://pip.pypa.io/en/stable):
 pip install fstd2nc
 ```
 
-If you're processing many input files into a single netCDF file, you could get some useful features (progress bar, quick file scans) by running:
-```
-pip install fstd2nc[manyfiles]
-```
-
 
 Using in a Pydap server
 =======================
@@ -235,8 +230,6 @@ Optional requirements
 ---------------------
 
 For reading large numbers of input files (>100), this utility can leverage [pandas](https://github.com/pandas-dev/pandas) to quickly process the FSTD record headers.
-
-The [progress](https://github.com/verigak/progress) module is required in order to use the `--progress` option.
 
 The `.to_xarray()` Python method requires the [xarray](https://github.com/pydata/xarray) and [dask](https://github.com/dask/dask) packages.
 
