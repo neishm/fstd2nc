@@ -2,6 +2,16 @@ Overview
 ========
 This module provides a mechanism for converting between FSTD and netCDF file formats, either through Python or the command-line.
 
+
+Installing
+==========
+
+The easiest way to install is using [pip](https://pip.pypa.io/en/stable):
+```
+pip install fstd2nc
+```
+
+
 Basic Usage
 ===========
 
@@ -190,15 +200,6 @@ data = fstd2nc.Buffer("myfile.fst")
 # Access the data as a pygeode.Dataset object.
 dataset = data.to_pygeode()
 print (dataset)
-```
-
-
-Installing
-==========
-
-The easiest way to install is using [pip](https://pip.pypa.io/en/stable):
-```
-pip install fstd2nc
 ```
 
 
