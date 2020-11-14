@@ -62,6 +62,10 @@ optional arguments:
   --missing-bottom-profile-level
                         Assume the bottom level of the profile data is
                         missing.
+  --vardict VARDICT     Use metadata from the specified variable dictionary
+                        (XML format).
+  --opdict              Similar to above, but use the standard CMC-RPN
+                        operational dictionary.
   --strict-vcoord-match
                         Require the IP1/IP2/IP3 parameters of the vertical
                         coordinate to match the IG1/IG2/IG3 paramters of the
