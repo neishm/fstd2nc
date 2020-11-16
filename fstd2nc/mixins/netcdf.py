@@ -76,7 +76,9 @@ class netCDF_Atts (BufferBase):
     if not kwargs.pop('no_conventions',False):
       metadata['global'] = OrderedDict(Conventions = conventions)
 
+    # Read the metadata files.
     configparser = ConfigParser.SafeConfigParser()
+    configparser.optionxform = str # Make the attribute names case sensitive.
     for metafile in metafiles:
       configparser.readfp(metafile)
     for varname in configparser.sections():
