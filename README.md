@@ -99,6 +99,12 @@ optional arguments:
                         different sources.
   --rename OLDNAME=NEWNAME,...
                         Apply the specified name changes to the variables.
+  --conventions CONVENTIONS
+                        Set the "Conventions" attribute for the netCDF file.
+                        Default is "CF-1.6". Note that this has no effect on
+                        the structure of the file.
+  --no-conventions      Omit the "Conventions" attribute from the netCDF file
+                        entirely.
   --time-units {seconds,minutes,hours,days}
                         The units for the output time axis. Default is hours.
   --reference-date YYYY-MM-DD

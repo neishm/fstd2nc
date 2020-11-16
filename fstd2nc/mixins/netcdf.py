@@ -31,6 +31,8 @@ class netCDF_Atts (BufferBase):
     super(netCDF_Atts,cls)._cmdline_args(parser)
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
     parser.add_argument('--rename', metavar="OLDNAME=NEWNAME,...", help=_('Apply the specified name changes to the variables.'))
+    parser.add_argument('--conventions', default='CF-1.6', help=_('Set the "Conventions" attribute for the netCDF file.  Default is "%(default)s".  Note that this has no effect on the structure of the file.'))
+    parser.add_argument('--no-conventions', action='store_true', help=_('Omit the "Conventions" attribute from the netCDF file entirely.'))
   @classmethod
   def _check_args (cls, parser, args):
     super(netCDF_Atts,cls)._check_args(parser,args)
@@ -46,6 +48,11 @@ class netCDF_Atts (BufferBase):
         Use metadata from the specified file(s).
     rename : str or dict, optional
         Apply the specified name changes to the variables.
+    conventions : str, optional
+       Set the "Conventions" attribute for the netCDF file.  Default is "CF-1.6".
+       Note that this has no effect on the structure of the file.
+    no_conventions : bool, optional
+       Omit the "Conventions" attribute from the netCDF file entirely.
     """
     try:
       import ConfigParser
@@ -65,7 +72,9 @@ class netCDF_Atts (BufferBase):
     # Set some global defaults.
     # We need to explicitly state that we're using CF conventions in our
     # output files, or some utilities (like IDV) won't accept the data.
-    metadata['global'] = OrderedDict(Conventions = "CF-1.6")
+    conventions = kwargs.pop('conventions',"CF-1.6")
+    if not kwargs.pop('no_conventions',False):
+      metadata['global'] = OrderedDict(Conventions = conventions)
 
     configparser = ConfigParser.SafeConfigParser()
     for metafile in metafiles:
