@@ -335,6 +335,11 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'air_potential_temperature'
           atts['units'] = 'K'
           atts['positive'] = 'up'
+        elif kind == 7:
+          name = 'depth'
+          atts['standard_name'] = 'depth'
+          atts['units'] = 'm'
+          atts['positive'] = 'down'
 
         # Add this vertical axis.
         if len(coordinates) > 0:
