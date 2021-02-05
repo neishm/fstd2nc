@@ -1,3 +1,29 @@
+Version 0.20210205.0 (Feb 5, 2021)
+	* Fix a bug when a fill value was trying to be applied to integer data.
+	* Fix a bug with negative integer values in netCDF3 encoding.
+	* Add support for "META" record from GenPhysX, which now gets converted
+	  to a string type.
+	* New --opdict option to extract useful metadata from the operational
+	  dictionary (on systems where $AFSISIO is available).
+	* New --vardict option for providing a custom CMC-RPN variable
+	  dictionary (in their XML format) to extract metadata from.
+	* Can now override the "Conventions" attribute by passing in a value
+	  with the new --conventions option.
+	* Can now easily disable "Conventions" attribute entirely by using the
+	  new --no-conventions option.
+	* The keys in the metadata file passed in by --metadata-file are now
+	  case sensitive, so can define attributes that use upper-case letters.
+	* Preliminary support for "underwater" levels defined by level type 7.
+	* New --thermodynamic-levels option to select only data on the
+	  thermodynamic levels of a staggered vertical coordinate.
+	* New --no-adjust-rlon option for rotated grids, which disables the
+	  value shift that's usually done to the rlon coordinate when it passes
+	  over the dateline.  Instead, the original (unshifted) coordinate is
+	  used.
+	* Experimental new --fstd-compat option which allows the output file to
+	  be used as both a netCDF and FSTD file (for compatibility with both
+	  sets of tools).
+
 Version 0.20200717.1 (Jul 27, 2020)
 	* Fix a caching bug in dask wrapper.  The cache was being shared among
 	  all Buffer objects, so the wrong record may be returned under some
