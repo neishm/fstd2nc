@@ -75,7 +75,7 @@ class GridMap(object):
     self._yaxisatts = OrderedDict()
 # Factory method that creates various types of grid mapping objects
   @classmethod
-  def gen_gmap(cls, grd):
+  def gen_gmap(cls, grd, no_adjust_rlon=False):
     import numpy as np
     grref = grd['grref'].upper() 
     if grref == 'E' :
@@ -83,7 +83,7 @@ class GridMap(object):
       if np.allclose(grd['lat0'],grd['rlat0']) and np.allclose(grd['lon0'],grd['rlon0']):
         return LatLon(grd)
       # Usual case: 'E' grid is rotated.
-      return RotLatLon(grd)
+      return RotLatLon(grd, no_adjust_rlon=no_adjust_rlon)
     elif grref in ('A','B','G','L') :
       return LatLon(grd)
     elif grref in ['N','S'] :
@@ -138,6 +138,7 @@ class LatLon(GridMap):
 class RotLatLon(GridMap):
   def __init__(self, *args, **kwargs):
     from rpnpy.librmn.all import egrid_rll2ll, egrid_ll2rll
+    adjust_rlon = not kwargs.pop('no_adjust_rlon')
     super(RotLatLon,self).__init__(*args,**kwargs)
     # Grid mapping variable name
     self._name = 'rotated_pole'
@@ -155,7 +156,7 @@ class RotLatLon(GridMap):
     # Offset applied to bring rotated longitude in range [-180,180]
     # Done to avoid crossing the dateline and representation problems 
     # in some software (e.g. IDV, Panoply, Iris)
-    if self._ax.max() > 180. :
+    if adjust_rlon and self._ax.max() > 180.:
       self._ax = self._ax - self._north_pole_grid_longitude 
     self._ay = self._grd['ay'][0,:]
   def gen_gmapvar(self):
@@ -313,6 +314,7 @@ class XYCoords (BufferBase):
     super(XYCoords,cls)._cmdline_args(parser)
     parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
     parser.add_argument('--keep-LA-LO', action='store_true', help=_('Include LA and LO records, even if they appear to be redundant.'))
+    parser.add_argument('--no-adjust-rlon', action='store_true', help=_('For rotated grids, do NOT adjust rlon coordinate to keep the range in -180..180.  Allow the rlon value to be whatever librmn says it should be.'))
 
   def __init__ (self, *args, **kwargs):
     """
@@ -322,9 +324,14 @@ class XYCoords (BufferBase):
         the RPN file.
     keep_LA_LO : bool, optional
         Include LA and LO records, even if they appear to be redundant.
+    no_adjust_rlon : bool, optional
+        For rotated grids, do NOT adjust rlon coordinate to keep the range
+        in -180..180.  Allow the rlon value to be whatever librmn says it
+        should be.
     """
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     self._keep_LA_LO = kwargs.pop('keep_LA_LO',False)
+    self._no_adjust_rlon = kwargs.pop('no_adjust_rlon',False)
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
     super(XYCoords,self).__init__(*args,**kwargs)
@@ -411,7 +418,7 @@ class XYCoords (BufferBase):
         if grtyp not in self._direct_grids:
           try:
             grd = readGrid(self._meta_funit, var.atts.copy())
-            gmap = GridMap.gen_gmap(grd)
+            gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon)
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar
             (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll()

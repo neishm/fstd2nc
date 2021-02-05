@@ -89,6 +89,9 @@ optional arguments:
                         stacked together as they are in the RPN file.
   --keep-LA-LO          Include LA and LO records, even if they appear to be
                         redundant.
+  --no-adjust-rlon      For rotated grids, do NOT adjust rlon coordinate to
+                        keep the range in -180..180. Allow the rlon value to
+                        be whatever librmn says it should be.
   --filter CONDITION    Subset RPN file records using the given criteria. For
                         example, to convert only 24-hour forecasts you could
                         use --filter ip2==24
