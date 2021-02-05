@@ -116,6 +116,9 @@ optional arguments:
   --reference-date YYYY-MM-DD
                         The reference date for the output time axis. The
                         default is the starting date in the RPN file.
+  --fstd-compat         Adds a compatibility layer to the netCDF output file,
+                        so it can also function as a valid FSTD file.
+                        EXPERIMENTAL.
   --msglvl {0,DEBUG,2,INFORM,4,WARNIN,6,ERRORS,8,FATALE,10,SYSTEM,CATAST}
                         How much information to print to stdout during the
                         conversion. Default is WARNIN.

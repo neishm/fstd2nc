@@ -31,14 +31,14 @@ class FSTD_Compat (BufferBase):
   def _cmdline_args (cls, parser):
     import argparse
     super(FSTD_Compat,cls)._cmdline_args(parser)
-    parser.add_argument('--fstd-compat', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--fstd-compat', action='store_true', help=_('Adds a compatibility layer to the netCDF output file, so it can also function as a valid FSTD file.  EXPERIMENTAL.'))
 
   def __init__ (self, *args, **kwargs):
-    #"""
-    #fstd_compat : bool, optional
-    #    Adds a compatibility layer to the netCDF output file, so it can
-    #    also function as a valid FSTD file.
-    #"""
+    """
+    fstd_compat : bool, optional
+        Adds a compatibility layer to the netCDF output file, so it can
+        also function as a valid FSTD file.  EXPERIMENTAL.
+    """
 
     # Check if compatibility interface should be activated.
     fstd_compat = kwargs.pop('fstd_compat', False)
