@@ -97,7 +97,7 @@ class VarDict (BufferBase):
         for desc in metvar.iterfind("description/long"):
           if desc.attrib.get('lang','') == 'en':
             if desc.text is not None:
-              d['comment'] = desc.text
+              d['definition_opdict'] = desc.text
         units = metvar.find("measure/real/units")
         if units is not None:
           d['units'] = units.text
@@ -107,13 +107,13 @@ class VarDict (BufferBase):
         n = max(len(desc) for desc in descs)
         while len(set(desc[:n] for desc in descs)) > 1: n = n - 1
         long_name = descs[0][:n].rstrip().rstrip('(').rstrip()
-        descs = [d['comment'] for d in metadata[nomvar].values() if 'comment' in d]
+        descs = [d['definition_opdict'] for d in metadata[nomvar].values() if 'definition_opdict' in d]
         if len(descs) > 0:
           n = max(len(desc) for desc in descs)
           while len(set(desc[:n] for desc in descs)) > 1: n = n - 1
-          comment = descs[0][:n].rstrip().rstrip('(').rstrip()
+          definition_opdict = descs[0][:n].rstrip().rstrip('(').rstrip()
         else:
-          comment = None
+          definition_opdict = None
         for (ip1,ip3), d in metadata[nomvar].items():
           if ip1 is not None:
             ip1 = int(ip1)
@@ -127,8 +127,8 @@ class VarDict (BufferBase):
               ip3_axis[nomvar][ip3] = d['long_name'][len(long_name):].strip().lstrip('(').rstrip(')')
         metadata[nomvar] = list(metadata[nomvar].values())[0]
         metadata[nomvar]['long_name'] = long_name
-        if comment is not None:
-          metadata[nomvar]['comment'] = comment
+        if definition_opdict is not None:
+          metadata[nomvar]['definition_opdict'] = definition_opdict
 
     self._vardict = metadata
     self._vardict_ip1_axis = ip1_axis
