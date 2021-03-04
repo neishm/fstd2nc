@@ -28,7 +28,7 @@ from fstd2nc.mixins import vectorize
 @vectorize
 def stamp2datetime (date):
   from rpnpy.rpndate import RPNDate
-  dummy_stamps = (0, 10101011)
+  dummy_stamps = (0, 10101011, 101010101)
   if date not in dummy_stamps:
     return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
   else:
