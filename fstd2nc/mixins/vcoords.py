@@ -231,7 +231,6 @@ class VCoords (BufferBase):
         elif kind == 1:
           # sigma [sg] (0.0->1.0)
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
-          atts['units'] = 'sigma_level'   # units defined for compliancy with COARDS
           atts['positive'] = 'down'
           atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0')])
         elif kind == 2:
@@ -244,7 +243,6 @@ class VCoords (BufferBase):
           # arbitrary code
           name = 'sfclevel'
           atts['standard_name'] = 'model_level_number'
-          atts['units'] = 'level'  # units defined for compliancy with COARDS
           atts['positive'] = 'down'
         elif kind == 4:
           # height [M] (metres) with respect to ground level
@@ -254,7 +252,6 @@ class VCoords (BufferBase):
           atts['positive'] = 'up'
         elif kind == 5:
           # hybrid coordinates [hy] (0.0->1.0)
-          atts['units'] = 'level'  # units defined for compliancy with COARDS
           atts['positive'] = 'down'
           key = (var.atts['ig1'],var.atts['ig2'])
           # If we're dealing with the old 'HY' records, then we don't match on
