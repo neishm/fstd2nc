@@ -38,7 +38,7 @@ sfc_agg_codes = {
   1: "ice_free_land",  # (soil)
   2: "land_ice",       # (glaciers, ice caps)
   3: "ice_free_sea",   # (lake water, sea water)
-  4: "sea_ice",        # (lake ice, sea ice))
+  4: "lake_ice_or_sea_ice", # (lake ice, sea ice))
   5: "all_area_types", # (aggregated)
   6: "urban",          # (urban)
 }
