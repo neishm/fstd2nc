@@ -47,7 +47,7 @@ sfc_agg_codes = {
 #  git grep 'ON=.*nagg' | sed 's/.*ON=//;s/ .*//'
 sfc_agg_nomvars = (
   'AL','BT','FC','B5','FT','FV','HF','H1','IO','J9','Z0',
-  'ZT','WT','SD','7A',
+  'ZT','WT','SD','7A','TRAF'
 )
 
 class Sfc_Codes (BufferBase):
