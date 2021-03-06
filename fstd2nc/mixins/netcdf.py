@@ -85,6 +85,9 @@ class netCDF_Atts (BufferBase):
       metadata.setdefault(varname,OrderedDict()).update(configparser.items(varname))
       # Detect numerical values
       for k,v in list(metadata[varname].items()):
+        # Skip things that should always be string values, even if they
+        # happen to contain numbers.
+        if k == 'units': continue
         try:
           metadata[varname][k] = float(v) # First, try converting to float.
           metadata[varname][k] = int(v) # Try further conversion to int.
