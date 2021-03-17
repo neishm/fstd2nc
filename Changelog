@@ -1,3 +1,20 @@
+Version 0.20210305.0 (Mar 5, 2021)
+	* Added "101010101" to list of known dummy dates, to avoid a crash in
+	  HRDLPS file conversion.
+	* Added "TRAF" to the list of known surface fields, so it gets
+	  annotated with the appropriate surface types.
+	* Renamed "sea_ice" to "lake_ice_or_sea_ice" in the list of surface
+	  types, which is a more accurate description for the model data.
+	* Removed the "units" attribute for unitless level types.  This was
+	  originally added for COARDS compatibility, but is causing issues with
+	  some netCDF utilities like Iris.
+	* When using --vardict or --opdict, put the definition string in an
+	  attribute named "definition_opdict" instead of "description".
+	  Suggested by Daniel Deacu.
+	* Fix a bug in metadata files which give units of "1" - it was getting
+	  encoded as a numeral 1 instead of a string, causing grief with some
+	  netCDF tools.
+
 Version 0.20210205.0 (Feb 5, 2021)
 	* Fix a bug when a fill value was trying to be applied to integer data.
 	* Fix a bug with negative integer values in netCDF3 encoding.
