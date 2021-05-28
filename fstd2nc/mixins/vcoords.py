@@ -117,6 +117,22 @@ class VCoords (BufferBase):
         vrecs[key] = header
     self._vrecs = vrecs
 
+    # Check if there are multiple '!!' records that all contain
+    # identical coordinates.
+    # In that case, only need to keep one copy in the lookup table.
+    # This enables us to use that one unique coordinate for unstrict matching.
+    if len(self._vrecs) > 1 and not self._strict_vcoord_match:
+      unique_vrecs = OrderedDict()
+      handled = set()
+      for key, header in self._vrecs.items():
+        coords = tuple(fstluk(header)['d'].flatten())
+        if coords in handled: continue
+        handled.add(coords)
+        unique_vrecs[key] = header
+      if len(unique_vrecs) == 1:
+        self._vrecs = unique_vrecs
+      del unique_vrecs, handled, coords
+
     fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
     decoded = np.concatenate(decode_ip1(fields['ip1']))
