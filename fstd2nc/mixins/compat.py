@@ -436,9 +436,11 @@ class FSTD_Compat (BufferBase):
           f.seek(-4,1)
           np.array([checksum],'>i4').tofile(f)
 
-      # Update file size info.
+      # Update file size info (FST header)
       f.seek(0,2)
       filesize = f.tell()
       f.seek(0x10,0)
       np.array([filesize//8],'>i4').tofile(f)
-
+      # Update file size info (netCDF header)
+      f.seek(0x8028,0)
+      np.array([filesize],'<i4').tofile(f)
