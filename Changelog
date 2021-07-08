@@ -1,3 +1,9 @@
+Version 0.20210305.1 (Jul 8, 2021)
+	* Detect when multiple '!!' records have identical coordinate systems.
+	  Allow unstrict matching to one of these records if there are no exact
+	  ig1/ig2/ig3 matches available.
+	* Fix filesize for netCDF4 header when using compatibility mode.
+
 Version 0.20210305.0 (Mar 5, 2021)
 	* Added "101010101" to list of known dummy dates, to avoid a crash in
 	  HRDLPS file conversion.
