@@ -96,9 +96,9 @@ optional arguments:
                         example, to convert only 24-hour forecasts you could
                         use --filter ip2==24
   --exclude NAME,NAME,...
-                        Exclude some axes or derived variables from the
-                        output. Note that axes will only be excluded if they
-                        have a length of 1.
+                        Exclude some axes, attributes, or derived variables
+                        from the output. Note that axes will only be excluded
+                        if they have a length of 1.
   --metadata-file METADATA_FILE
                         Use metadata from the specified file. You can repeat
                         this option multiple times to build metadata from

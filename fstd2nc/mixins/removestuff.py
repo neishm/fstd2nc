@@ -30,13 +30,13 @@ class RemoveStuff (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(RemoveStuff,cls)._cmdline_args(parser)
-    parser.add_argument('--exclude', metavar='NAME,NAME,...', help=_("Exclude some axes or derived variables from the output.  Note that axes will only be excluded if they have a length of 1."))
+    parser.add_argument('--exclude', metavar='NAME,NAME,...', help=_("Exclude some axes, attributes,  or derived variables from the output.  Note that axes will only be excluded if they have a length of 1."))
 
   def __init__ (self, *args, **kwargs):
     """
     exclude : str or list, optional
-        Exclude some axes or derived variables from the output.  Note that
-        axes will only be excluded if they have a length of 1.
+        Exclude some axes, attributes, or derived variables from the output.
+        Note that axes will only be excluded if they have a length of 1.
     """
     import numpy as np
     exclude = kwargs.pop('exclude',None)
@@ -93,6 +93,9 @@ class RemoveStuff (BufferBase):
             v = self._do_exclude(v)
           newval.append((k,v))
         var.atts[key] = OrderedDict(newval)
+      # Remove excluded attributes.
+      if key in self._exclude:
+        var.atts.pop(key)
 
     return var
 
