@@ -95,8 +95,8 @@ class VCoords (BufferBase):
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
-    self._meta_records = self._meta_records + ('!!',)
-    self._maybe_meta_records = self._maybe_meta_records + ('HY',)
+    self._meta_records = self._meta_records + (b'!!',)
+    self._maybe_meta_records = self._maybe_meta_records + (b'HY',)
     super(VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).

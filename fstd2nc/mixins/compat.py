@@ -255,10 +255,10 @@ class FSTD_Compat (BufferBase):
     ni = np.array(self._headers['ni'])
     nj = np.array(self._headers['nj'])
     for nomvar in self._meta_records:
-      nomvar = (nomvar+'    ')[:4]
+      nomvar = (nomvar+b'    ')[:4]
       used_rec_ids.update(np.where(nomvars==nomvar)[0])
     for nomvar in self._maybe_meta_records:
-      nomvar = (nomvar+'    ')[:4]
+      nomvar = (nomvar+b'    ')[:4]
       used_rec_ids.update(np.where((nomvars==nomvar)&((ni==1)|(nj==1)))[0])
 
     # Prepare the file for writing FSTD structures.

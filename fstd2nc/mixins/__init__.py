@@ -489,7 +489,7 @@ class BufferBase (object):
     # This will make it easier to look up the meta records later.
     meta_mask = np.zeros(len(self._headers),dtype='bool')
     for meta_name in self._meta_records + self._maybe_meta_records:
-      meta_name = (meta_name+'   ')[:4]
+      meta_name = (meta_name+b'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name)
     meta_recids = np.where(meta_mask)[0]
     # Use the same unique parameters as regular variables.

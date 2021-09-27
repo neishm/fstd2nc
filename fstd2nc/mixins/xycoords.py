@@ -103,7 +103,7 @@ class LatLon(GridMap):
     self._atts['grid_mapping_name'] = 'latitude_longitude'
     self._atts['earth_radius'] = self._earth_radius
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
+    self.gmap = _var_type(self._name,self._atts,[],np.array(0,'int32'))
     return self.gmap     
   # Generate true latitudes and longitudes
   def gen_ll(self):    
@@ -174,7 +174,7 @@ class RotLatLon(GridMap):
 #    self._atts['north_pole_grid_longitude'] = 0.
 #    self._atts['longitude_of_prime_meridian'] = 0.
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
+    self.gmap = _var_type(self._name,self._atts,[],np.array(0,'int32'))
     return self.gmap
   # Generate latitudes and longitudes in rotated pole grid 
   # and true latitudes and longitudes
@@ -252,7 +252,7 @@ class PolarStereo(GridMap):
     self._atts['false_easting'] = self._false_easting
     self._atts['false_northing'] = self._false_northing
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
+    self.gmap = _var_type(self._name,self._atts,[],np.array(0,'int32'))
     return self.gmap
   # Generate projection coordinates
   def _gen_xyll(self):  
@@ -310,10 +310,10 @@ class PolarStereo(GridMap):
 class XYCoords (BufferBase):
   # Special records that contain coordinate info.
   # We don't want to output these directly as variables, need to decode first.
-  _xycoord_nomvars = ('^^','>>','^>')
+  _xycoord_nomvars = (b'^^',b'>>',b'^>')
   # Grids that can be read directly from '^^','>>' records, instead of going
   # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
-  _direct_grids = ('X','Y','T','+')
+  _direct_grids = (b'X',b'Y',b'T',b'+')
 
   @classmethod
   def _cmdline_args (cls, parser):
