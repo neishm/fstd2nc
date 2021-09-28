@@ -198,7 +198,7 @@ class netCDF_IO (BufferBase):
         var.array = np.array(var.array.tolist())
         units = '%s since %s'%(self._time_units, reference_date or var.array.reshape(-1)[0])
         var.atts.update(units=units, calendar='gregorian')
-        var.array = np.asarray(date2num(var.array,units=units))
+        var.array = np.asarray(date2num(var.array,units=units), dtype='double')
 
     for obj in self._iter_objects():
       # Encode the attributes so they're ready for writing to netCDF.
