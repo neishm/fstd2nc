@@ -122,13 +122,11 @@ class netCDF_Atts (BufferBase):
         renames[varname] = atts.pop('rename')
 
     # Apply the user-supplied metadata.
-    for var in self._varlist:
-      # Add extra metadata provided by the user?
-      if var.name in self._metadata:
-        var.atts.update(self._metadata[var.name])
-
-    # Apply renames.
     for obj in self._iter_objects():
+      # Add extra metadata provided by the user?
+      if obj.name in self._metadata:
+        obj.atts.update(self._metadata[obj.name])
+      # Apply renames.
       if obj.name in renames:
         obj.name = renames[obj.name]
 
