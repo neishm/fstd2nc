@@ -610,4 +610,5 @@ class XYCoords (BufferBase):
     # coordinates.  In this case, include the lat/lon as variables.
     if len(self._varlist) == 0 and len(lats) == 1 and len(lons) == 1:
       self._varlist = [list(lats.values())[0], list(lons.values())[0]]
-
+      # Add grid mapping info.
+      self._varlist.extend(gridmaps.values())
