@@ -237,7 +237,7 @@ class BufferBase (object):
      ('typvar','|S2'),('nomvar','|S4'),('etiket','|S12'),('grtyp','|S1'),
      ('ig1','int32'),('ig2','int32'),('ig3','int32'),('ig4','int32'),
      ('swa','int32'),('lng','int32'),('dltf','int32'),('ubc','int32'),
-     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),
+     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),('ismeta','bool'),
   ]
 
   # Record parameters which should not be used as nc variable attributes.
@@ -491,6 +491,10 @@ class BufferBase (object):
     for meta_name in self._meta_records + self._maybe_meta_records:
       meta_name = (meta_name+b'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name)
+
+    # Store this metadata identification in case it's useful for some mixins.
+    self._headers['ismeta'][:] = meta_mask
+
     meta_recids = np.where(meta_mask)[0]
     # Use the same unique parameters as regular variables.
     # Plus, ig1,ig2,ig3,ig4.
@@ -529,11 +533,10 @@ class BufferBase (object):
 
     records = self._headers
 
-    # Ignore deleted / invalidated records.
-    deleted = (records['dltf'] == 1)
-    if np.any(deleted):
-      records = records[~deleted]
-    header_indices = np.where(~deleted)[0]
+    # Ignore deleted / invalidated records, and coordinate records.
+    valid = (records['dltf'] == 0) & (records['ismeta'] == 0)
+    records = records[valid]
+    header_indices = np.where(valid)[0]
 
     # Determine the variable identifiers.
     # First, extract the uniquely identifying information from the metadata.
@@ -571,10 +574,6 @@ class BufferBase (object):
       var_record_indices = np.where(selection)[0]
       nomvar = var_id['nomvar'].strip()
       nomvar = str(nomvar.decode()) # Python3: convert bytes to str.
-      # Ignore meta records.
-      if nomvar in self._meta_records: continue
-      if nomvar in self._maybe_meta_records and (var_id['ni'] == 1 or var_id['nj'] == 1):
-        continue
 
       # Get the metadata for each record.
       atts = OrderedDict()
@@ -705,6 +704,9 @@ class BufferBase (object):
     # Ignore deleted / invalidated records.
     records = records[records['dltf']==0]
 
+    # Ignore coordinate records.
+    records = records[records['ismeta']==0]
+
     # Keep track of any axes that were generated.
     known_axes = dict()
 
@@ -718,10 +720,6 @@ class BufferBase (object):
       var_id = OrderedDict(zip(self._var_id, var_id))
       nomvar = var_id['nomvar'].strip()
       nomvar = str(nomvar.decode()) # Python3: convert bytes to str.
-      # Ignore meta records.
-      if nomvar in self._meta_records: continue
-      if nomvar in self._maybe_meta_records and (var_id['ni'] == 1 or var_id['nj'] == 1):
-        continue
 
       # Get the attributes, axes, and corresponding indices of each record.
       atts = OrderedDict()

@@ -251,15 +251,8 @@ class FSTD_Compat (BufferBase):
     # Include all metadata records.  Difficult to know for certain which ones
     # were used, since librmn may have read them internally in some routines
     # like horizontal / vertical grid extraction.
-    nomvars = np.array(self._headers['nomvar'])
-    ni = np.array(self._headers['ni'])
-    nj = np.array(self._headers['nj'])
-    for nomvar in self._meta_records:
-      nomvar = (nomvar+b'    ')[:4]
-      used_rec_ids.update(np.where(nomvars==nomvar)[0])
-    for nomvar in self._maybe_meta_records:
-      nomvar = (nomvar+b'    ')[:4]
-      used_rec_ids.update(np.where((nomvars==nomvar)&((ni==1)|(nj==1)))[0])
+    ismeta = self._headers['ismeta']
+    used_rec_ids.update(np.where(ismeta==1)[0])
 
     # Prepare the file for writing FSTD structures.
     with open(filename,'r+b') as f:
