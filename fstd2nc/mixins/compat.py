@@ -41,17 +41,18 @@ class FSTD_Compat (BufferBase):
     """
 
     # Check if compatibility interface should be activated.
-    fstd_compat = kwargs.pop('fstd_compat', False)
-    if fstd_compat:
-      self._fstluk = self._fstluk_compat
+    self._fstd_compat = kwargs.pop('fstd_compat', False)
+    if self._fstd_compat:
       self.to_netcdf = self._to_netcdf_compat
     super(FSTD_Compat,self).__init__(*args,**kwargs)
 
   # Override fstluk to keep track of which FST records were used in the
   # conversion.  The header information for these records will be added to the
   # output file.
-  def _fstluk_compat (self, rec_id, dtype=None, rank=None, dataArray=None):
+  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     import numpy as np
+    if not self._fstd_compat:
+      return super(FSTD_Compat,self)._fstluk(rec_id, dtype, rank, dataArray)
     if not hasattr(self,'_used_rec_ids'):
       self._used_rec_ids = []
     # If rec_id is a dict from rpnpy, then convert it to an index.
