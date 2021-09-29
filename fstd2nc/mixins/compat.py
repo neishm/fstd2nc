@@ -182,7 +182,10 @@ class FSTD_Compat (BufferBase):
       if hasattr(var,'array'):
         # Tell netCDF4 to use big-endian encoding of data, where applicable.
         # FSTD requires big-endian encoding (and netCDF4 can work with either).
-        v = f.createVariable(var.name, datatype=var.array.dtype.newbyteorder('>'), endian='big', dimensions=var.dims, zlib=zlib, complevel=compression)
+        if var.array.dtype.itemsize > 1:
+          v = f.createVariable(var.name, datatype=var.array.dtype.newbyteorder('>'), endian='big', dimensions=var.dims, zlib=zlib, complevel=compression)
+        else:
+          v = f.createVariable(var.name, datatype=var.array.dtype, dimensions=var.dims, zlib=zlib, complevel=compression)
         # Write the metadata.
         v.setncatts(var.atts)
         direct_addresses[var.array.tobytes()] = write_data (v, (), var.array)
