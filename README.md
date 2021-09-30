@@ -97,8 +97,11 @@ optional arguments:
                         use --filter ip2==24
   --exclude NAME,NAME,...
                         Exclude some axes, attributes, or derived variables
-                        from the output. Note that axes will only be excluded
-                        if they have a length of 1.
+                        from the output. For instance, excluding
+                        'leadtime,reftime' can help for netCDF tools that
+                        don't recognize leadtime and reftime as valid
+                        coordinates. Note that axes will only be excluded if
+                        they have a length of 1.
   --metadata-file METADATA_FILE
                         Use metadata from the specified file. You can repeat
                         this option multiple times to build metadata from
@@ -110,7 +113,9 @@ optional arguments:
                         Default is "CF-1.6". Note that this has no effect on
                         the structure of the file.
   --no-conventions      Omit the "Conventions" attribute from the netCDF file
-                        entirely.
+                        entirely. This can help for netCDF tools that have
+                        trouble recognizing the CF conventions encoded in the
+                        file.
   --time-units {seconds,minutes,hours,days}
                         The units for the output time axis. Default is hours.
   --reference-date YYYY-MM-DD

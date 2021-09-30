@@ -32,7 +32,7 @@ class netCDF_Atts (BufferBase):
     parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
     parser.add_argument('--rename', metavar="OLDNAME=NEWNAME,...", help=_('Apply the specified name changes to the variables.'))
     parser.add_argument('--conventions', default='CF-1.6', help=_('Set the "Conventions" attribute for the netCDF file.  Default is "%(default)s".  Note that this has no effect on the structure of the file.'))
-    parser.add_argument('--no-conventions', action='store_true', help=_('Omit the "Conventions" attribute from the netCDF file entirely.'))
+    parser.add_argument('--no-conventions', action='store_true', help=_('Omit the "Conventions" attribute from the netCDF file entirely.  This can help for netCDF tools that have trouble recognizing the CF conventions encoded in the file.'))
   @classmethod
   def _check_args (cls, parser, args):
     super(netCDF_Atts,cls)._check_args(parser,args)
@@ -53,6 +53,8 @@ class netCDF_Atts (BufferBase):
        Note that this has no effect on the structure of the file.
     no_conventions : bool, optional
        Omit the "Conventions" attribute from the netCDF file entirely.
+       This can help for netCDF tools that have trouble recognizing the CF
+       conventions encoded in the file.
     """
     try:
       import ConfigParser
