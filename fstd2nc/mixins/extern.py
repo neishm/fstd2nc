@@ -74,7 +74,7 @@ except ImportError:
   pass
 
 
-class Extern (BufferBase):
+class ExternOutput (BufferBase):
 
   _read_chunk_cache = None
 
@@ -222,6 +222,42 @@ class Extern (BufferBase):
     from pygeode.ext_xarray import from_xarray
     data = self.to_xarray()
     return from_xarray(data)
+
+  def to_fstpy (self):
+    """
+    Create a table compatible with the fstpy module.
+    Requires pandas and dask.
+    """
+    import pandas as pd
+    import numpy as np
+    from fstpy.dataframe import add_grid_column
+    from fstpy.std_io import add_dask_column
+    # Put all the header info into a dictionary.
+    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
+    table = dict()
+    for field in fields:
+      col = self._headers[field]
+      # Convert byte arrays to strings, which is what fstpy expects.
+      if col.dtype.str.startswith('|S'):
+        col = np.asarray(col,dtype=col.dtype.str.replace('|S','<U'))
+      table[field] = col
+    # Convert to pandas table.
+    table = pd.DataFrame.from_dict(table)
+    # Add grid info.
+    add_grid_column (table)
+    # Temporarily insert some extra columns needed for the data.
+    table['shape'] = list(zip(table['ni'],table['nj']))
+    filenames = dict((i,f) for i,f in enumerate(self._files))
+    table['path'] = pd.Series(self._headers['file_id']).map(filenames)
+    table['key'] = (self._headers['key'] << 10)
+    # Generate dask objects
+    #TODO: use our own, in case we modified the data?
+    # (doesn't normally happen, but you never know...)
+    # For instance could happen if interp is used.
+    add_dask_column(table)
+    # Clean up temporary columns and return.
+    table.drop(columns=['shape','path','key'], inplace=True)
+    return table
 
 # Workaround for recent xarray (>0.10.0) which changed the methods in the
 # conventions module.
