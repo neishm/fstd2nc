@@ -148,7 +148,15 @@ class ExternOutput (BufferBase):
             file_id = all_file_ids[rec_id]
             filename = self._files[file_id]
             rec_key = all_keys[rec_id]
-            dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
+            # Special case: already have a dask object from external source.
+            # (E.g., from fstpy)
+            if hasattr(self, '_extern_table'):
+              nodes = list(self._extern_table['d'].iloc[rec_id].dask.values())
+            if hasattr(self, '_extern_table') and len(nodes) == 0:
+              dsk[key] = nodes[0]
+            # Otherwise, construct one with our own dask wrapper.
+            else:
+              dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
@@ -271,3 +279,65 @@ try:
     conventions.maybe_encode_timedelta = times.CFTimedeltaCoder().encode
 except (ImportError,AttributeError):
   pass
+
+
+class ExternInput (BufferBase):
+  @classmethod
+  def from_fstpy (cls, table, **kwargs):
+    import tempfile
+    from os import path
+    import rpnpy.librmn.all as rmn
+    import numpy as np
+    # Construct the record header info from the table.
+    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
+    headers = np.zeros(len(table), dtype=cls.__new__(cls,**kwargs)._headers_dtype)
+    for col in fields:
+      headers[col][:] = table[col]
+    # Pad out string variables with spaces.
+    headers['nomvar'] = np.char.ljust(headers['nomvar'], 4, ' ')
+    headers['typvar'] = np.char.ljust(headers['typvar'], 2, ' ')
+    headers['etiket'] = np.char.ljust(headers['etiket'], 12, ' ')
+    # Generate temporary file with target grid info.
+    try: # Python 3
+      grid_tmpdir = tempfile.TemporaryDirectory()
+      gridfile = path.join(grid_tmpdir.name,"grid.fst")
+    except AttributeError: # Python 2 (no auto cleanup)
+      grid_tmpdir = tempfile.mkdtemp()
+      gridfile = path.join(grid_tmpdir,"grid.fst")
+    # Write all grid records to a temporary file, so they are accessible to
+    # the vgrid / librmn helper functions.
+    iun = rmn.fstopenall(gridfile, rmn.FST_RW)
+    for nomvar in ('!!','>>','^^','^>','!!5F'):
+      for ind in np.where(table['nomvar'] == nomvar)[0]:
+        rec = table.iloc[ind].to_dict()
+        rec['d'] = np.asarray(rec['d'])
+        rmn.fstecr(iun, rec)
+    rmn.fstcloseall(iun)
+
+    # Initialize the Buffer object with this info.
+    b = cls(gridfile, header_cache={'__ROOT__'+gridfile:headers}, **kwargs)
+    b._grid_tmpdir = grid_tmpdir  # Save tmpdir until cleanup.
+
+    # Save the dataframe for reference.
+    # Will need the dask objects for getting the data.
+    b._extern_table = table
+
+    return b
+
+  # Handle external data sources.
+  # Overrides the usual reading of data from a file.
+  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
+    import numpy as np
+    # Check if there is custom data enabled for this Buffer.
+    if hasattr(self, '_extern_table'):
+      # Make sure we are looking for something in our list of records.
+      # (could be a key pointing into something else?)
+      if not isinstance(rec_id,dict):
+        # Extract the record info from the table.
+        rec = self._extern_table.iloc[rec_id].to_dict()
+        # Load the data (if delayed).
+        rec['d'] = np.asarray(rec['d'])
+        return rec
+    # Otherwise, continue as usual.
+    return super(ExternInput,self)._fstluk (rec_id, dtype, rank, dataArray)
+
