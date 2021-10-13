@@ -434,6 +434,14 @@ class VCoords (BufferBase):
       for var in self._varlist:
         if not hasattr(var,'record_id'): continue
         valid_records = var.record_id[var.record_id>=0]
+        # Ugly hack to find all related records.
+        # There may be duplicate records that aren't in this set, but would
+        # need to be transformed identically.
+        # E.g., if have multiple copies of the diagnostic level, then we want
+        # them all to stay equivalent or suddenly get multiple versions of the
+        # field showing up on the 'rerun' iteration.
+        nomvar = self._headers['nomvar'][valid_records][0]
+        valid_records = np.where(self._headers['nomvar'] == nomvar)[0]
         ip1 = self._headers['ip1'][valid_records]
         decoded = np.concatenate(decode_ip1(ip1))
         if not any(decoded['kind']==4): continue
