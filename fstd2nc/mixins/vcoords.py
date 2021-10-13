@@ -50,7 +50,7 @@ class VCoords (BufferBase):
     parser.add_argument('--strict-vcoord-match', action='store_true', help=_("Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the IG1/IG2/IG3 paramters of the field in order to be used.  The default behaviour is to use the vertical record anyway if it's the only one in the file."))
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--diag-as-model-level', action='store_true', help=_("Treat diagnostic (near-surface) data as model level '1.0'.  This is the default behaviour."))
-    group.add_argument('--split-diag-level', action='store_true', help=_("Put the diagnostic (near-surface) data in a separate variable, away from the 3D model output.  Suffices will be added to distinguish the different types of levels (e.g. _vgrid4 and _vgrid5 for diagnostic height and hybrid levels respectively)."))
+    group.add_argument('--split-diag-level', action='store_true', help=_("Put the diagnostic (near-surface) data in a separate variable, away from the 3D model output.  Suffices will be added to distinguish the different types of levels (i.e. _diag_level and _model_levels for diagnostic height and hybrid levels respectively)."))
     group.add_argument('--ignore-diag-level', action='store_true', help=_("Ignore data on diagnostic (near-surface) height."))
     parser.add_argument('--thermodynamic-levels', action='store_true', help=_("Only convert data that's on 'thermodynamic' vertical levels, ignoring data on 'momentum' levels."))
 
@@ -73,7 +73,7 @@ class VCoords (BufferBase):
     split_diag_level : bool, optional
         Put the diagnostic (near-surface) data in a separate variable, away
         from the 3D model output.  Suffices will be added to distinguish
-        the different types of levels (e.g. _vgrid4 and _vgrid5 for
+        the different types of levels (i.e. _diag_level and _model_levels for
         diagnostic height and hybrid levels respectively).
     ignore_diag_level : bool, optional
         Ignore data on diagnostic (near-surface) height.
@@ -107,6 +107,8 @@ class VCoords (BufferBase):
     # (these aren't available in the data stream, because we told the decoder
     # to ignore them).
     vrecs = OrderedDict()
+    # Keep track of any diagnostic levels, e.g. from GEM.
+    diag_ip1 = []
     for vcoord_nomvar in ('HY','!!'):
       for handle in fstinl(self._meta_funit, nomvar=vcoord_nomvar):
         header = fstprm(handle)
@@ -115,6 +117,18 @@ class VCoords (BufferBase):
         if header['nomvar'].strip() == 'HY': key = 'HY'
         if key in vrecs: continue
         vrecs[key] = header
+        # Extract diagnostic-level value from vertical coordinate.
+        if key == 'HY': continue  # not applicable for HY coordinates.
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          diag_ip1.append(vgd_get(vgd_id,'DIPT'))
+          diag_ip1.append(vgd_get(vgd_id,'DIPM'))
+        except (KeyError,VGDError):
+          warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
+        vgd_free (vgd_id)
+        # Done exracting diagnostic levels.
+
     self._vrecs = vrecs
 
     # Check if there are multiple '!!' records that all contain
@@ -144,25 +158,14 @@ class VCoords (BufferBase):
     # Start by treating diagnostic level as model level, then
     # revert this later if it ends up not working.
     if not self._split_diag_level:
-      for key, header in self._vrecs.items():
-        if key == 'HY': continue  # not applicable for HY coordinates.
-        prm = fstluk(header,rank=3)
-        vgd_id = vgd_fromlist(prm['d'])
-        try:
-          ip1_t = vgd_get(vgd_id,'DIPT')
-          ip1_m = vgd_get(vgd_id,'DIPM')
-          mask = (fields['ip1'] == ip1_t) | (fields['ip1'] == ip1_m)
-          if len(self._vrecs) > 1 or self._strict_vcoord_match:
-            mask &= (fields['ig1'] == prm['ip1']) & (fields['ig2'] == prm['ip2'])
+      for ip1_val in diag_ip1:
+          mask = (fields['ip1'] == ip1_val)
           if self._ignore_diag_level:
             fields['dltf'] |= mask
           else:
             #fields['ip1'][mask] = 93423264
             fields['level'][mask] = 1.0
             fields['kind'][mask] = 5
-        except (KeyError,VGDError):
-          warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
-        vgd_free (vgd_id)
 
     # Keep only "thermodynamic" levels?
     # (Discard any levels considered to be "momentum" levels).
@@ -194,6 +197,8 @@ class VCoords (BufferBase):
     fields['special_level'][fields['kind'] == 0] = 'depth_levels'
     fields['special_level'][(fields['kind'] == 1) & (fields['level'] == 1.0)] = 'bottom_level'
     # Discern atmospheric levels from diagnostic levels.
+    for ip1_val in diag_ip1:
+      fields['special_level'][fields['ip1'] == ip1_val] = 'diag_level'
 
   def _makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type

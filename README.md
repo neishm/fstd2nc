@@ -78,8 +78,8 @@ optional arguments:
   --split-diag-level    Put the diagnostic (near-surface) data in a separate
                         variable, away from the 3D model output. Suffices will
                         be added to distinguish the different types of levels
-                        (e.g. _vgrid4 and _vgrid5 for diagnostic height and
-                        hybrid levels respectively).
+                        (i.e. _diag_level and _model_levels for diagnostic
+                        height and hybrid levels respectively).
   --ignore-diag-level   Ignore data on diagnostic (near-surface) height.
   --thermodynamic-levels
                         Only convert data that's on 'thermodynamic' vertical
