@@ -57,7 +57,7 @@ class VCoords (BufferBase):
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
     obj = super(VCoords,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('level','float32'),('kind','int32')]
+    obj._headers_dtype = obj._headers_dtype + [('level','float32'),('kind','int32'),('level_descr','|S20'),('special_level','|S20')]
     return obj
 
   def __init__ (self, *args, **kwargs):
@@ -101,7 +101,7 @@ class VCoords (BufferBase):
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).
     self._var_id = self._var_id + ('kind',)
-    self._human_var_id = self._human_var_id + ('vgrid%(kind)s',)
+    self._human_var_id = self._human_var_id + ('%(special_level)s','%(level_descr)s','vgrid%(kind)s')
 
     # Pre-scan the raw headers for special vertical records.
     # (these aren't available in the data stream, because we told the decoder
@@ -180,6 +180,20 @@ class VCoords (BufferBase):
         except (KeyError,VGDError):
           warn(_("Unable to parse momentum levels from the vertical coordinate"))
         vgd_free (vgd_id)
+
+    # Apply special labels for some levels.
+    # Used to describe a variable when it's split into multiple coordinate types.
+    fields['level_descr'][fields['kind'] == 0] = 'depth_levels'
+    fields['level_descr'][fields['kind'] == 1] = 'model_levels'
+    fields['level_descr'][fields['kind'] == 2] = 'pressure_levels'
+    fields['level_descr'][fields['kind'] == 3] = 'generic_levels'
+    fields['level_descr'][fields['kind'] == 4] = 'height_levels'
+    fields['level_descr'][fields['kind'] == 5] = 'model_levels'
+    fields['special_level'][:] = fields['level_descr'][:]
+    # Discern ocean depths from ocean bottom.
+    fields['special_level'][fields['kind'] == 0] = 'depth_levels'
+    fields['special_level'][(fields['kind'] == 1) & (fields['level'] == 1.0)] = 'bottom_level'
+    # Discern atmospheric levels from diagnostic levels.
 
   def _makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
