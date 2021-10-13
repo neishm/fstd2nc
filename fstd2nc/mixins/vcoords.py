@@ -95,7 +95,7 @@ class VCoords (BufferBase):
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
     # Tell the decoder not to process vertical records as variables.
-    self._meta_records = self._meta_records + (b'!!',)
+    self._meta_records = self._meta_records + (b'!!',b'!!SF')
     self._maybe_meta_records = self._maybe_meta_records + (b'HY',)
     super(VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
@@ -120,12 +120,13 @@ class VCoords (BufferBase):
         # Extract diagnostic-level value from vertical coordinate.
         if key == 'HY': continue  # not applicable for HY coordinates.
         prm = fstluk(header,rank=3)
-        vgd_id = vgd_fromlist(prm['d'])
         try:
+          vgd_id = vgd_fromlist(prm['d'])
           diag_ip1.append(vgd_get(vgd_id,'DIPT'))
           diag_ip1.append(vgd_get(vgd_id,'DIPM'))
         except (KeyError,VGDError):
           warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
+          continue
         vgd_free (vgd_id)
         # Done exracting diagnostic levels.
 
@@ -304,7 +305,11 @@ class VCoords (BufferBase):
             # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
               # Get A and B info.
-              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              try:
+                vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              except VGDError:
+                warn (_("Problem decoding !! record."))
+                continue
               # Partial definition of a/b coordinates for formula_terms reference.
               coordA = _var_type('a', {}, [new_axis], None)
               coordB = _var_type('b', {}, [new_axis], None)
