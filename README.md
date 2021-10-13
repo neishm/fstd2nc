@@ -236,6 +236,11 @@ import fstpy
 table = fstpy.StandardFileReader('myfile.fst').to_pandas()
 data = fstd2nc.Buffer.from_fstpy(table)
 ```
+You can also export to an fstpy table using the `.to_fstpy()` method:
+```python
+import fstd2nc
+table = fstd2nc.Buffer('myfile.fst').to_fstpy()
+```
 
 
 Using in a Pydap server
@@ -272,3 +277,5 @@ The `.to_xarray()` Python method requires the [xarray](https://github.com/pydata
 The `.to_iris()` Python method requires the [iris](https://scitools.org.uk/iris/docs/latest/index.html) package, along with the `.to_xarray()` dependencies.
 
 The `.to_pygeode()` Python method requires the [pygeode](https://github.com/pygeode/pygeode) package, along with the `.to_xarray()` dependencies.
+
+The `.to_fstpy()` Python method requires the [fstpy](https://gitlab.science.gc.ca/CMDS/fstpy) package (*internal link*).
