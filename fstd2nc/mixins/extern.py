@@ -288,6 +288,8 @@ class ExternInput (BufferBase):
     from os import path
     import rpnpy.librmn.all as rmn
     import numpy as np
+    if hasattr(table,'to_pandas'):
+      table = table.to_pandas()
     # Construct the record header info from the table.
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     headers = np.zeros(len(table), dtype=cls.__new__(cls,**kwargs)._headers_dtype)
