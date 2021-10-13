@@ -1,3 +1,18 @@
+Version 0.20211013.0 (Oct 13, 2021)
+	* The --exclude option now works on attribute names.
+	* Add axis="X" and axis="Y" attributes for all projection types.
+	* More compatibility updates for Python 3.
+	* Add "grid_mapping" metadata to degenerate file (when no data records).
+	* Axis and coordinate attributes can now be controlled with the
+	  metadata-file structure.
+	* New functions .to_fstpy() and .from_fstpy() for interoperability with
+	  fstpy package.
+	* Fix warning message with 'O' grids.
+	* More user-friendly suffixes when splitting variables across different
+	  coordinate types (e.g. model_levels/diag_level and
+	  depth_levels/bottom_level).
+	* Better error handling for malformed / unsupported vertical !! records.
+
 Version 0.20210305.1 (Jul 8, 2021)
 	* Detect when multiple '!!' records have identical coordinate systems.
 	  Allow unstrict matching to one of these records if there are no exact
