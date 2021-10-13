@@ -187,12 +187,14 @@ class VCoords (BufferBase):
 
     # Apply special labels for some levels.
     # Used to describe a variable when it's split into multiple coordinate types.
+    fields['level_descr'][:] = 'unknown_levels'
     fields['level_descr'][fields['kind'] == 0] = 'depth_levels'
     fields['level_descr'][fields['kind'] == 1] = 'model_levels'
     fields['level_descr'][fields['kind'] == 2] = 'pressure_levels'
     fields['level_descr'][fields['kind'] == 3] = 'generic_levels'
     fields['level_descr'][fields['kind'] == 4] = 'height_levels'
     fields['level_descr'][fields['kind'] == 5] = 'model_levels'
+    fields['level_descr'][fields['kind'] == 21] = 'model_levels'
     fields['special_level'][:] = fields['level_descr'][:]
     # Discern ocean depths from ocean bottom.
     fields['special_level'][fields['kind'] == 0] = 'depth_levels'
