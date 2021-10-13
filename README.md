@@ -226,6 +226,17 @@ dataset = data.to_pygeode()
 print (dataset)
 ```
 
+Interfacing with fstpy
+---------------------------------------------------------------------------------
+
+You can load data from an [fstpy](https://gitlab.science.gc.ca/CMDS/fstpy) table using the `.from_fstpy()` method (requires fstpy version 2.1.9 or greater):
+```python
+import fstd2nc
+import fstpy
+table = fstpy.StandardFileReader('myfile.fst').to_pandas()
+data = fstd2nc.Buffer.from_fstpy(table)
+```
+
 
 Using in a Pydap server
 =======================
