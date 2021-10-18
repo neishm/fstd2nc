@@ -122,11 +122,15 @@ class VCoords (BufferBase):
         prm = fstluk(header,rank=3)
         try:
           vgd_id = vgd_fromlist(prm['d'])
+        except VGDError:
+          # Problems opening this vertical coordinate?
+          continue
+        try:
           diag_ip1.append(vgd_get(vgd_id,'DIPT'))
           diag_ip1.append(vgd_get(vgd_id,'DIPM'))
+          diag_ip1.append(vgd_get(vgd_id,'DIPW'))
         except (KeyError,VGDError):
           warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
-          continue
         vgd_free (vgd_id)
         # Done exracting diagnostic levels.
 
