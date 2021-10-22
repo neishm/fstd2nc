@@ -152,7 +152,8 @@ class ExternOutput (BufferBase):
             # (E.g., from fstpy)
             if hasattr(self, '_extern_table'):
               nodes = list(self._extern_table['d'].iloc[rec_id].dask.values())
-            if hasattr(self, '_extern_table') and len(nodes) == 0:
+              if len(nodes) != 1:
+                warn(_('Multiple dask objects found for a single record.  Using the first one.'))
               dsk[key] = nodes[0]
             # Otherwise, construct one with our own dask wrapper.
             else:
