@@ -604,6 +604,18 @@ class XYCoords (BufferBase):
         if var.name == 'LO' and ('lon' in var.dims or lon in coordinates):
           var.name = None
 
+    # Only create distinct grid_mappings when they're actually distinct.
+    # (may have duplicates because of different ni,nj from staggered grid.)
+    gridmaps = dict()
+    for var in varlist:
+      if 'grid_mapping' in var.atts:
+        gmapvar = var.atts['grid_mapping']
+        key = tuple(sorted(gmapvar.atts.items()))
+        if key not in gridmaps:
+          gridmaps[key] = gmapvar
+        gmapvar = gridmaps[key]
+        var.atts['grid_mapping'] = gmapvar
+
     self._varlist = [v for v in varlist if v.name is not None]
 
     # Special case - there are no data records, ONLY a pair of lat/lon
