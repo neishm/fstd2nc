@@ -209,6 +209,14 @@ class VCoords (BufferBase):
       fields['special_level'][fields['ip1'] == ip1_val] = 'diag_level'
 
   def _makevars (self):
+    super(VCoords,self)._makevars()
+    # Call this makevars routine from a separate wrapper, to make it easier
+    # to re-run just that one part without redoing the whole pipeline.
+    # I.e., for case where our initial attempt at fitting the diagnostic level
+    # into the model levels fails.
+    return self._vcoords_makevars()
+
+  def _vcoords_makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     import numpy as np
@@ -218,8 +226,6 @@ class VCoords (BufferBase):
     from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
 
     vrecs = self._vrecs
-
-    super(VCoords,self)._makevars()
 
     # If this becomes True by the end, then we need to rerun this routine
     # again with updated information.
@@ -464,4 +470,4 @@ class VCoords (BufferBase):
           rerun = True
 
     if rerun:
-      return self._makevars()
+      return self._vcoords_makevars()
