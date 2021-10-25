@@ -130,7 +130,8 @@ class VCoords (BufferBase):
           diag_ip1.append(vgd_get(vgd_id,'DIPM'))
           diag_ip1.append(vgd_get(vgd_id,'DIPW'))
         except (KeyError,VGDError):
-          warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
+          #warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
+          pass
         vgd_free (vgd_id)
         # Done exracting diagnostic levels.
 
