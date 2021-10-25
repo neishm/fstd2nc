@@ -245,6 +245,11 @@ class ExternOutput (BufferBase):
     import numpy as np
     from fstpy.dataframe import add_grid_column
     from fstpy.std_io import add_dask_column
+    # Special case: our data is already from an fstpy table, not from an FSTD
+    # file in our control.
+    # E.g., if some smartass does Buffer.from_fstpy(df).to_fstpy()
+    if hasattr(self, '_extern_table'):
+      return self._extern_table
     # Put all the header info into a dictionary.
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
