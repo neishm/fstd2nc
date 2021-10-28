@@ -1,3 +1,9 @@
+Version 0.20211013.1 (Oct 28, 2021)
+	* Various bug fixes for from_fstpy and to_fstpy methods.
+	* Fix duplicate grid_mappings when converting data from GEM LAM grids.
+	* Check for vertical velocity diagnostic level in addition to usual
+	  momentum / thermodynamic diagnostic levels.
+
 Version 0.20211013.0 (Oct 13, 2021)
 	* The --exclude option now works on attribute names.
 	* Add axis="X" and axis="Y" attributes for all projection types.
