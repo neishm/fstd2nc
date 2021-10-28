@@ -214,7 +214,11 @@ class VCoords (BufferBase):
     # to re-run just that one part without redoing the whole pipeline.
     # I.e., for case where our initial attempt at fitting the diagnostic level
     # into the model levels fails.
-    return self._vcoords_makevars()
+    try:
+      return self._vcoords_makevars()
+    except ValueError:
+      super(VCoords,self)._makevars()
+      return self._vcoords_makevars()
 
   def _vcoords_makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
@@ -470,4 +474,4 @@ class VCoords (BufferBase):
           rerun = True
 
     if rerun:
-      return self._vcoords_makevars()
+      raise ValueError
