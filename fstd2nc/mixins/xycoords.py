@@ -279,10 +279,14 @@ class PolarStereo(GridMap):
     self._ay = ( np.rint(xy['y'][0,:]) - 1) * self._res
     # Determine the false easting and northing from 
     # the coordinates of the pole and of grid point (1,1)
-    _pole_pi = self._grd['pi']
-    _pole_pj = self._grd['pj']
-    self._false_easting =  self._ax[int(round(_pole_pi)) - 1] - self._ax[0]
-    self._false_northing = self._ay[int(round(_pole_pj)) - 1] - self._ay[0]
+    if self._grd['north']:
+      pole = gdxyfll (self._grd['id'], 90, 0)
+    else:
+      pole = gdxyfll (self._grd['id'], -90, 0)
+    px = np.rint(pole['x'][0] - 1) * self._res
+    py = np.rint(pole['y'][0] - 1) * self._res
+    self._false_easting =  px - self._ax[0]
+    self._false_northing = py - self._ay[0]
     self._xaxisatts['long_name'] = 'x-coordinate of polar-stereographic projection'
     self._xaxisatts['standard_name'] = 'projection_x_coordinate'
     self._xaxisatts['units'] = 'm'
