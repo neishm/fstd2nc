@@ -512,9 +512,9 @@ class XYCoords (BufferBase):
             gridaxes = [lat,lon]
 
           # Case 2: lat/lon are series of points.
-          elif latarray.shape[0] == 1 and lonarray.shape[0] == 1 and ('i' in var.dims or 'station_id' in var.dims):
-            latarray = latarray[0,:]
-            lonarray = lonarray[0,:]
+          elif 1 in latarray.shape and 1 in lonarray.shape and ('i' in var.dims or 'station_id' in var.dims):
+            latarray = latarray.squeeze()
+            lonarray = lonarray.squeeze()
             # Special case for station data
             station_id = var.getaxis('station_id')
             if station_id is not None:
