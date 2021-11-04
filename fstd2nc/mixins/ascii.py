@@ -37,10 +37,10 @@ class ASCII (BufferBase):
     super(ASCII,self)._makevars()
     for i,var in enumerate(self._varlist):
 
-      # Decode GenPhysX META record.
-      if isinstance(var,_iter_type) and var.name == "META" and var.dtype == np.uint32 and var.record_id.size == 1 and var.atts['nj'] == 1:
+      # Decode GenPhysX META record and MLDPn INFO record.
+      if isinstance(var,_iter_type) and var.name in ("META","INFO") and var.dtype == np.uint32 and var.record_id.size == 1 and var.atts['nj'] == 1:
         array = self._fstluk(var.record_id.flatten()[0])['d'].flatten()
-        dim = _dim_type('META_strlen',array.size)
+        dim = _dim_type(var.name+'_strlen',array.size)
         array = np.asarray(array,'uint8').view('|S1')
-        self._varlist[i] = _var_type('META',{},[dim],array)
+        self._varlist[i] = _var_type(var.name,{},[dim],array)
 
