@@ -157,8 +157,12 @@ class ExternOutput (BufferBase):
                 if len(nodes) != 1:
                   warn(_('Multiple dask objects found for a single record.  Using the first one.'))
                 dsk[key] = nodes[0]
+                # Ensure the dask array includes the degenerate outer dimensions.
+                # Otherwise get a runtime error if slicing is done on this.
+                if d.shape != chunk_shape:
+                  dsk[key] = (np.reshape, dsk[key], chunk_shape)
               else:  # Special case: have a numpy array in memory.
-                dsk[key] = d
+                dsk[key] = d.reshape(chunk_shape)
             # Otherwise, construct one with our own dask wrapper.
             else:
               dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
