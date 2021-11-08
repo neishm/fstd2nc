@@ -152,11 +152,9 @@ class ExternOutput (BufferBase):
             # (E.g., from fstpy)
             if hasattr(self, '_extern_table'):
               d = self._extern_table['d'].iloc[rec_id]
-              if hasattr(d,'dask'):
-                nodes = list(d.dask.values())
-                if len(nodes) != 1:
-                  warn(_('Multiple dask objects found for a single record.  Using the first one.'))
-                dsk[key] = nodes[0]
+              if hasattr(d,'compute'):
+                # Start a dask graph using the external dask array as the source.
+                dsk[key] = (d.compute,)
                 # Ensure the dask array includes the degenerate outer dimensions.
                 # Otherwise get a runtime error if slicing is done on this.
                 dsk[key] = (np.ravel, dsk[key], 'K')
