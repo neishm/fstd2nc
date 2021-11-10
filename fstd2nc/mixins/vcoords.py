@@ -259,8 +259,20 @@ class VCoords (BufferBase):
       # Decode the vertical coordinate.
       levels = tuple(level_axis.array)
       kind = var.atts['kind']
+      # Get version info for coordinate.
+      ###
+      #TODO
+      key = (var.atts['ig1'],var.atts['ig2'])
+      version = None
+      if key in vrecs:
+        code = vrecs[key]['ig1']
+        if code // 1000 == kind:
+          version = code % 1000
+        else:
+          warn(_("Kind mismatch in vertical coordinate (%s != %s)")%(kind,code//1000))
+      ###
       # Only need to provide one copy of the vertical axis.
-      if (id(level_axis),kind) not in vaxes:
+      if (id(level_axis),kind,version) not in vaxes:
         # Keep track of any extra arrays needed for this axis.
         coordinates = []
         # Get metadata that's specific to this axis.
@@ -281,10 +293,11 @@ class VCoords (BufferBase):
             atts['standard_name'] = 'height'
             atts['units'] = 'm'
             atts['positive'] = 'up'
-        elif kind == 1:
+        elif kind == 1 and version in (1,None):
           # sigma [sg] (0.0->1.0)
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['positive'] = 'down'
+          atts['formula'] = 'p = sigma * ps'
           atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0')])
         elif kind == 2:
           # pressure [mb] (millibars)
@@ -303,9 +316,10 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'height'
           atts['units'] = 'm'
           atts['positive'] = 'up'
-        elif kind == 5:
+        elif kind == 5 or (kind, version) == (1,2):
           # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
+          ###
           key = (var.atts['ig1'],var.atts['ig2'])
           # If we're dealing with the old 'HY' records, then we don't match on
           # ig1/ig2.
@@ -352,6 +366,7 @@ class VCoords (BufferBase):
                   pass # Don't have PREF available for some reason?
               else:
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+                atts['formula'] = 'p = ap + b*ps'
                 atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
               # Add all parameters for this coordinate.
               internal_atts = OrderedDict()
@@ -402,6 +417,7 @@ class VCoords (BufferBase):
               coordA = _var_type('a', {}, [new_axis], np.asarray(A))
               coordB = _var_type('b', {}, [new_axis], np.asarray(B))
               coordinates.extend([coordA,coordB])
+              atts['formula'] = 'p = ap + b*ps'
               atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
@@ -423,9 +439,9 @@ class VCoords (BufferBase):
         # Update axis name.
         new_axis.name = name
         # Now have a fully defined axis to use.
-        vaxes[(id(level_axis),kind)] = new_axis
+        vaxes[(id(level_axis),kind,version)] = new_axis
       # Set the vertical axis for this variable.
-      vaxis = vaxes[(id(level_axis),kind)]
+      vaxis = vaxes[(id(level_axis),kind,version)]
       var.axes[var.dims.index('level')] = vaxis
 
     # Detect mixture of diagnostic / model levels, and print a warning.
