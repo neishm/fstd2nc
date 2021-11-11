@@ -260,8 +260,6 @@ class VCoords (BufferBase):
       levels = tuple(level_axis.array)
       kind = var.atts['kind']
       # Get version info for coordinate.
-      ###
-      #TODO
       key = (var.atts['ig1'],var.atts['ig2'])
       version = None
       if key in vrecs:
@@ -270,7 +268,10 @@ class VCoords (BufferBase):
           version = code % 1000
         else:
           warn(_("Kind mismatch in vertical coordinate (%s != %s)")%(kind,code//1000))
-      ###
+      # Special case - detect code 1002 (eta instead of sigma).
+      elif kind == 1 and 'HY' in vrecs:
+        version = 2
+
       # Only need to provide one copy of the vertical axis.
       if (id(level_axis),kind,version) not in vaxes:
         # Keep track of any extra arrays needed for this axis.
@@ -299,6 +300,12 @@ class VCoords (BufferBase):
           atts['positive'] = 'down'
           atts['formula'] = 'p = sigma * ps'
           atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0')])
+        elif kind == 1 and version == 2:
+          # eta levels
+          atts['standard_name'] = 'atmosphere_sigma_coordinate'
+          atts['positive'] = 'down'
+          atts['formula'] = 'p = sigma * (ps-ptop) + ptop'
+          atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0'),('ptop','PT')])
         elif kind == 2:
           # pressure [mb] (millibars)
           name = 'pres'
@@ -316,7 +323,7 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'height'
           atts['units'] = 'm'
           atts['positive'] = 'up'
-        elif kind == 5 or (kind, version) == (1,2):
+        elif kind == 5:
           # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
           ###
