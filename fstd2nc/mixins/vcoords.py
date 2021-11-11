@@ -361,13 +361,13 @@ class VCoords (BufferBase):
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
                 #TODO: update this once there's an actual convention to follow!
-                atts['formula'] = "p = exp(a+b*log(ps/pref))"
+                atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
                 atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
                 # Try getting reference pressure as a scalar.
                 try:
-                  pref = vgd_get(vgd_id,'PREF')
+                  pref = vgd_get(vgd_id,'PREF') / 100.0
                   if pref not in prefs:
-                    prefs[pref] = _var_type('pref',{'units':'Pa'},[],np.array(pref))
+                    prefs[pref] = _var_type('pref',{'units':'hPa'},[],np.array(pref))
                   atts['formula_terms']['pref'] = prefs[pref]
                 except (KeyError,VGDError):
                   pass # Don't have PREF available for some reason?
