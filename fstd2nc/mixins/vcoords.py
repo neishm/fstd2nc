@@ -420,7 +420,7 @@ class VCoords (BufferBase):
               # Apply the formula to compue A & B (from old fstd_core.c code):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
-              A = pref * 100. * (eta - B)
+              A = pref * (eta - B)
               coordA = _var_type('a', {}, [new_axis], np.asarray(A))
               coordB = _var_type('b', {}, [new_axis], np.asarray(B))
               coordinates.extend([coordA,coordB])
