@@ -391,6 +391,12 @@ class VCoords (BufferBase):
                   atts[k] = v
               # Attempt to fill in A/B coefficients (if available).
               try:
+                # Special case for "tlift" levels (code 5003)?
+                # Why do I need to do this???
+                if version == 3:
+                  internal_atts['CA_M'][-2] = (internal_atts['CA_T'][-1]+internal_atts['CA_T'][-2])/2
+                  internal_atts['CB_M'][-2] = (internal_atts['CB_T'][-1]+internal_atts['CB_T'][-2])/2
+
                 all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
                 all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
                 all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
