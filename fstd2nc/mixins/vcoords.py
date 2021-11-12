@@ -225,7 +225,7 @@ class VCoords (BufferBase):
     from collections import OrderedDict
     import numpy as np
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
-    from rpnpy.vgd.const import VGD_KEYS
+    from rpnpy.vgd.const import VGD_KEYS, VGD_OPR_KEYS
     from rpnpy.vgd import VGDError
     from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
 
@@ -271,6 +271,12 @@ class VCoords (BufferBase):
       # Special case - detect code 1002 (eta instead of sigma).
       elif kind == 1 and 'HY' in vrecs:
         version = 2
+
+      # Activate 'C' coefficient decoding for SLEVE-like coordinates.
+      if (kind,version) == (5,100):
+        sleve = True
+      else:
+        sleve = False
 
       # Only need to provide one copy of the vertical axis.
       if (id(level_axis),kind,version) not in vaxes:
@@ -351,6 +357,7 @@ class VCoords (BufferBase):
               # Partial definition of a/b coordinates for formula_terms reference.
               coordA = _var_type('a', {}, [new_axis], None)
               coordB = _var_type('b', {}, [new_axis], None)
+              coordC = _var_type('c', {}, [new_axis], None)
 
               if vgd_get (vgd_id,'LOGP'):
                 # Not really a "standard" name, but there's nothing in the
@@ -361,8 +368,12 @@ class VCoords (BufferBase):
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
                 #TODO: update this once there's an actual convention to follow!
-                atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
-                atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
+                if version < 100:
+                  atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
+                  atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
+                elif sleve:
+                  atts['formula'] = "p = exp(a+b*log(ps/pref)+c*log(psl/pref)) / 100.0"
+                  atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('c',coordC),('ps','P0'),('psl','P0LS'),('pref','pref')])
                 # Try getting reference pressure as a scalar.
                 try:
                   pref = vgd_get(vgd_id,'PREF') / 100.0
@@ -377,6 +388,11 @@ class VCoords (BufferBase):
                 atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
               # Add all parameters for this coordinate.
               internal_atts = OrderedDict()
+              if sleve:
+                # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
+                #TODO: remove this once rpnpy has full support for this.
+                VGD_OPR_KEYS['get_double_1d'].append('CC_M')
+                VGD_OPR_KEYS['get_double_1d'].append('CC_T')
               for key in VGD_KEYS:
                 try:
                   val = vgd_get(vgd_id,key)
@@ -400,15 +416,21 @@ class VCoords (BufferBase):
                 all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
                 all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
                 all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
+                if sleve:
+                  all_c = list(internal_atts['CC_M'])+list(internal_atts['CC_T'])
                 A = []
                 B = []
+                C = []
                 for z in levels:
                   ind = all_z.index(z)
                   A.append(all_a[ind])
                   B.append(all_b[ind])
+                  if sleve: C.append(all_c[ind])
                 coordA.array = np.asarray(A)
                 coordB.array = np.asarray(B)
+                coordC.array = np.asarray(C)
                 coordinates.extend([coordA,coordB])
+                if sleve: coordinates.extend([coordC])
               except (KeyError,ValueError,VGDError):
                 warn (_("Unable to get A/B coefficients for %s.")%var.name)
                 atts.pop('formula',None)
