@@ -391,8 +391,8 @@ class VCoords (BufferBase):
               if sleve:
                 # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
                 #TODO: remove this once rpnpy has full support for this.
-                VGD_OPR_KEYS['get_double_1d'].append('CC_M')
-                VGD_OPR_KEYS['get_double_1d'].append('CC_T')
+                original_opr_keys = list(VGD_OPR_KEYS['get_double_1d'])
+                VGD_OPR_KEYS['get_double_1d'].extend(['CC_M','CC_T'])
               for key in VGD_KEYS:
                 try:
                   val = vgd_get(vgd_id,key)
@@ -401,6 +401,12 @@ class VCoords (BufferBase):
                   internal_atts[key] = val
                 except (KeyError,VGDError):
                   pass  # Some keys not available in some vgrids?
+              # Restore the rpnpy tables after SLEVE "patch", or may get
+              # segmentation fault if a non-sleve coordinate is subsequently
+              # read.
+              if sleve:
+                VGD_OPR_KEYS['get_double_1d'] = original_opr_keys
+
               # Put this information in the final output file?
               for k,v in internal_atts.items():
                 if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
