@@ -259,6 +259,7 @@ class VCoords (BufferBase):
       # Decode the vertical coordinate.
       levels = tuple(level_axis.array)
       kind = var.atts['kind']
+
       # Get version info for coordinate.
       key = (var.atts['ig1'],var.atts['ig2'])
       version = None
@@ -280,13 +281,98 @@ class VCoords (BufferBase):
 
       # Only need to provide one copy of the vertical axis.
       if (id(level_axis),kind,version) not in vaxes:
+
         # Keep track of any extra arrays needed for this axis.
         coordinates = []
-        # Get metadata that's specific to this axis.
-        name = 'level'
+        internal_atts = OrderedDict()
         atts = OrderedDict()
-        atts['axis'] = 'Z'
+        name = 'level'
         new_axis = _axis_type(name, atts, level_axis.array)
+
+        # Get vertical coordinate info.
+        ###
+        key = (var.atts['ig1'],var.atts['ig2'])
+        # If we're dealing with the old 'HY' records, then we don't match on
+        # ig1/ig2.
+        if key not in vrecs and 'HY' in vrecs:
+          key = 'HY'
+        # If there's only a single vertical record, then match that regardless of keys.
+        if len(vrecs) == 1 and not self._strict_vcoord_match:
+          key = list(vrecs.keys())[0]
+        # Check if we have a vertical coordinate record to use.
+        if key in vrecs:
+          header = vrecs[key]
+          # Add in metadata from the coordinate.
+          atts.update(self._get_header_atts(header))
+          # Add type-specific metadata.
+          if header['nomvar'].strip() == '!!':
+            # Get A and B info.
+            try:
+              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+            except VGDError:
+              warn (_("Problem decoding !! record."))
+              continue
+            # Partial definition of a/b coordinates for formula_terms reference.
+            coordA = _var_type('a', {}, [new_axis], None)
+            coordB = _var_type('b', {}, [new_axis], None)
+            coordC = _var_type('c', {}, [new_axis], None)
+
+            # Add all parameters for this coordinate.
+            if sleve:
+              # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
+              #TODO: remove this once rpnpy has full support for this.
+              original_opr_keys = list(VGD_OPR_KEYS['get_double_1d'])
+              VGD_OPR_KEYS['get_double_1d'].extend(['CC_M','CC_T'])
+            for vgdkey in VGD_KEYS:
+              try:
+                val = vgd_get(vgd_id,vgdkey)
+                # Skip multidimensional arrays (can't be encoded as metadata).
+                if getattr(val,'ndim',1) > 1: continue
+                internal_atts[vgdkey] = val
+              except (KeyError,VGDError):
+                pass  # Some keys not available in some vgrids?
+            # Restore the rpnpy tables after SLEVE "patch", or may get
+            # segmentation fault if a non-sleve coordinate is subsequently
+            # read.
+            if sleve:
+              VGD_OPR_KEYS['get_double_1d'] = original_opr_keys
+
+            # Put this information in the final output file?
+            for k,v in internal_atts.items():
+              if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
+                atts[k] = v
+
+            # Attempt to fill in A/B coefficients (if available).
+            try:
+              # Special case for "tlift" levels (code 5003)?
+              # Why do I need to do this???
+              if (kind,version) == (5,3):
+                internal_atts['CA_M'][-2] = (internal_atts['CA_T'][-1]+internal_atts['CA_T'][-2])/2
+                internal_atts['CB_M'][-2] = (internal_atts['CB_T'][-1]+internal_atts['CB_T'][-2])/2
+
+              all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
+              all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
+              all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
+              if sleve:
+                all_c = list(internal_atts['CC_M'])+list(internal_atts['CC_T'])
+              A = []
+              B = []
+              C = []
+              for z in levels:
+                ind = all_z.index(z)
+                A.append(all_a[ind])
+                B.append(all_b[ind])
+                if sleve: C.append(all_c[ind])
+              coordA.array = np.asarray(A)
+              coordB.array = np.asarray(B)
+              coordC.array = np.asarray(C)
+            except (KeyError,ValueError,VGDError):
+              warn (_("Unable to get A/B coefficients for %s.")%var.name)
+            vgd_free (vgd_id)
+        ###
+
+        # Get metadata that's specific to this axis.
+        atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
         if kind == 0:
           if var.atts.get('typvar',None) == 'P@' :   # masked ocean variable
@@ -332,36 +418,11 @@ class VCoords (BufferBase):
         elif kind == 5:
           # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
-          ###
-          key = (var.atts['ig1'],var.atts['ig2'])
-          # If we're dealing with the old 'HY' records, then we don't match on
-          # ig1/ig2.
-          if key not in vrecs and 'HY' in vrecs:
-            key = 'HY'
-          # If there's only a single vertical record, then match that regardless of keys.
-          if len(vrecs) == 1 and not self._strict_vcoord_match:
-            key = list(vrecs.keys())[0]
-          # Check if we have a vertical coordinate record to use.
           if key in vrecs:
-            header = vrecs[key]
-            # Add in metadata from the coordinate.
-            atts.update(self._get_header_atts(header))
-            # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
-              # Get A and B info.
-              try:
-                vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
-              except VGDError:
-                warn (_("Problem decoding !! record."))
-                continue
-              # Partial definition of a/b coordinates for formula_terms reference.
-              coordA = _var_type('a', {}, [new_axis], None)
-              coordB = _var_type('b', {}, [new_axis], None)
-              coordC = _var_type('c', {}, [new_axis], None)
-
-              if vgd_get (vgd_id,'LOGP'):
+              if internal_atts['LOGP']:
                 # Not really a "standard" name, but there's nothing in the
-                # CF convensions document on how to encode this.
+                # CF conventions document on how to encode this.
                 # I just merged the atmosphere_ln_pressure_coordinate and
                 # atmosphere_hybrid_sigma_pressure_coordinate together.
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
@@ -371,12 +432,14 @@ class VCoords (BufferBase):
                 if version < 100:
                   atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
                   atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
+                  coordinates.extend([coordA,coordB])
                 elif sleve:
                   atts['formula'] = "p = exp(a+b*log(ps/pref)+c*log(psl/pref)) / 100.0"
                   atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('c',coordC),('ps','P0'),('psl','P0LS'),('pref','pref')])
+                  coordinates.extend([coordA,coordB,coordC])
                 # Try getting reference pressure as a scalar.
                 try:
-                  pref = vgd_get(vgd_id,'PREF') / 100.0
+                  pref = internal_atts['PREF'] / 100.0
                   if pref not in prefs:
                     prefs[pref] = _var_type('pref',{'units':'hPa'},[],np.array(pref))
                   atts['formula_terms']['pref'] = prefs[pref]
@@ -387,62 +450,8 @@ class VCoords (BufferBase):
                 coordA.array /= 100.0  # Use hPa for final units.
                 atts['formula'] = 'p = ap + b*ps'
                 atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
-              # Add all parameters for this coordinate.
-              internal_atts = OrderedDict()
-              if sleve:
-                # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
-                #TODO: remove this once rpnpy has full support for this.
-                original_opr_keys = list(VGD_OPR_KEYS['get_double_1d'])
-                VGD_OPR_KEYS['get_double_1d'].extend(['CC_M','CC_T'])
-              for key in VGD_KEYS:
-                try:
-                  val = vgd_get(vgd_id,key)
-                  # Skip multidimensional arrays (can't be encoded as metadata).
-                  if getattr(val,'ndim',1) > 1: continue
-                  internal_atts[key] = val
-                except (KeyError,VGDError):
-                  pass  # Some keys not available in some vgrids?
-              # Restore the rpnpy tables after SLEVE "patch", or may get
-              # segmentation fault if a non-sleve coordinate is subsequently
-              # read.
-              if sleve:
-                VGD_OPR_KEYS['get_double_1d'] = original_opr_keys
-
-              # Put this information in the final output file?
-              for k,v in internal_atts.items():
-                if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
-                  atts[k] = v
-              # Attempt to fill in A/B coefficients (if available).
-              try:
-                # Special case for "tlift" levels (code 5003)?
-                # Why do I need to do this???
-                if version == 3:
-                  internal_atts['CA_M'][-2] = (internal_atts['CA_T'][-1]+internal_atts['CA_T'][-2])/2
-                  internal_atts['CB_M'][-2] = (internal_atts['CB_T'][-1]+internal_atts['CB_T'][-2])/2
-
-                all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
-                all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
-                all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
-                if sleve:
-                  all_c = list(internal_atts['CC_M'])+list(internal_atts['CC_T'])
-                A = []
-                B = []
-                C = []
-                for z in levels:
-                  ind = all_z.index(z)
-                  A.append(all_a[ind])
-                  B.append(all_b[ind])
-                  if sleve: C.append(all_c[ind])
-                coordA.array = np.asarray(A)
-                coordB.array = np.asarray(B)
-                coordC.array = np.asarray(C)
                 coordinates.extend([coordA,coordB])
-                if sleve: coordinates.extend([coordC])
-              except (KeyError,ValueError,VGDError):
-                warn (_("Unable to get A/B coefficients for %s.")%var.name)
-                atts.pop('formula',None)
-                atts.pop('formula_terms',None)
-              vgd_free (vgd_id)
+
             # Not a '!!' coordinate, so must be 'HY'?
             else:
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
@@ -482,6 +491,7 @@ class VCoords (BufferBase):
         new_axis.name = name
         # Now have a fully defined axis to use.
         vaxes[(id(level_axis),kind,version)] = new_axis
+
       # Set the vertical axis for this variable.
       vaxis = vaxes[(id(level_axis),kind,version)]
       var.axes[var.dims.index('level')] = vaxis
