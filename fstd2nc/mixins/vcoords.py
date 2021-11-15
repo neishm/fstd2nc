@@ -273,12 +273,6 @@ class VCoords (BufferBase):
       elif kind == 1 and 'HY' in vrecs:
         version = 2
 
-      # Activate 'C' coefficient decoding for SLEVE-like coordinates.
-      if (kind,version) == (5,100):
-        sleve = True
-      else:
-        sleve = False
-
       # Only need to provide one copy of the vertical axis.
       if (id(level_axis),kind,version) not in vaxes:
 
@@ -309,6 +303,12 @@ class VCoords (BufferBase):
             # Get A and B info.
             try:
               vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              # Check if SLEVE coordinate.
+              try:
+                vgd_get(vgd_id, 'RFLS')
+                sleve = True
+              except VGDError:
+                sleve = False
             except VGDError:
               warn (_("Problem decoding !! record."))
               continue
@@ -484,12 +484,18 @@ class VCoords (BufferBase):
           atts['units'] = 'm'
           atts['positive'] = 'down'
         elif kind == 21:
-          if internal_atts['LOGP']:
-            atts['standard_name'] = 'atmosphere_hybrid_height_coordinate'
-            raise Exception
+          if sleve:
+            atts['standard_name'] = 'atmosphere_sleve_coordinate'
+            atts['positive'] = 'up'
+            atts['formula'] = 'z = az + b1*zsurf1 + b2*zsurf2'
+            coordA.name = 'az'
+            coordB.name = 'b2'
+            coordC.name = 'b1'
+            atts['formula_terms'] = OrderedDict([('az',coordA),('b1',coordC),('zsurf1','MELS'),('b2',coordB),('zsurf2','ME')])
+            coordinates.extend([coordA,coordB,coordC])
+
           else:
             atts['standard_name'] = 'atmosphere_hybrid_height_coordinate'
-            atts['units'] = 'm'
             atts['positive'] = 'up'
             atts['formula'] = 'z = a + b*orog'
             atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('orog','ME')])
