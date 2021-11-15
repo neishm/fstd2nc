@@ -449,6 +449,7 @@ class VCoords (BufferBase):
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
                 coordA.array /= 100.0  # Use hPa for final units.
                 atts['formula'] = 'p = ap + b*ps'
+                coordA.name = 'ap'
                 atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
                 coordinates.extend([coordA,coordB])
 
@@ -465,7 +466,7 @@ class VCoords (BufferBase):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
               A = pref * (eta - B)
-              coordA = _var_type('a', {}, [new_axis], np.asarray(A))
+              coordA = _var_type('ap', {}, [new_axis], np.asarray(A))
               coordB = _var_type('b', {}, [new_axis], np.asarray(B))
               coordinates.extend([coordA,coordB])
               atts['formula'] = 'p = ap + b*ps'
