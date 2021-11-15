@@ -483,6 +483,17 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'depth'
           atts['units'] = 'm'
           atts['positive'] = 'down'
+        elif kind == 21:
+          if internal_atts['LOGP']:
+            atts['standard_name'] = 'atmosphere_hybrid_height_coordinate'
+            raise Exception
+          else:
+            atts['standard_name'] = 'atmosphere_hybrid_height_coordinate'
+            atts['units'] = 'm'
+            atts['positive'] = 'up'
+            atts['formula'] = 'z = a + b*orog'
+            atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('orog','ME')])
+            coordinates.extend([coordA,coordB])
 
         # Add this vertical axis.
         if len(coordinates) > 0:
