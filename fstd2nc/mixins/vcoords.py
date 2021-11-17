@@ -267,8 +267,7 @@ class VCoords (BufferBase):
         code = vrecs[key]['ig1']
         if code // 1000 == kind:
           version = code % 1000
-        else:
-          warn(_("Kind mismatch in vertical coordinate (%s != %s)")%(kind,code//1000))
+
       # Special case - detect code 1002 (eta instead of sigma).
       elif kind == 1 and 'HY' in vrecs:
         version = 2
