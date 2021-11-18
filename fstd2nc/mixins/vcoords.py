@@ -316,12 +316,21 @@ class VCoords (BufferBase):
             coordB = _var_type('b', {}, [new_axis], None)
             coordC = _var_type('c', {}, [new_axis], None)
 
-            # Add all parameters for this coordinate.
+            # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
+            #TODO: remove this once rpnpy has full support for this.
+            original_opr_double_keys = list(VGD_OPR_KEYS['get_double_1d'])
+            original_opr_float_keys = list(VGD_OPR_KEYS['get_float_1d'])
             if sleve:
-              # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
-              #TODO: remove this once rpnpy has full support for this.
-              original_opr_keys = list(VGD_OPR_KEYS['get_double_1d'])
               VGD_OPR_KEYS['get_double_1d'].extend(['CC_M','CC_T'])
+            # Also, patch in support for vertical velocity levels?
+            #TODO: remove this once rpnpy has full support for this.
+            if (kind,version) == (21,2):
+              VGD_OPR_KEYS['get_float_1d'].extend(['VCDW'])
+              VGD_OPR_KEYS['get_double_1d'].extend(['CA_W','CB_W'])
+              if sleve:
+                VGD_OPR_KEYS['get_double_1d'].extend(['CC_W'])
+
+            # Add all parameters for this coordinate.
             for vgdkey in VGD_KEYS:
               try:
                 val = vgd_get(vgd_id,vgdkey)
@@ -333,8 +342,8 @@ class VCoords (BufferBase):
             # Restore the rpnpy tables after SLEVE "patch", or may get
             # segmentation fault if a non-sleve coordinate is subsequently
             # read.
-            if sleve:
-              VGD_OPR_KEYS['get_double_1d'] = original_opr_keys
+            VGD_OPR_KEYS['get_double_1d'] = original_opr_double_keys
+            VGD_OPR_KEYS['get_float_1d'] = original_opr_float_keys
 
             # Put this information in the final output file?
             for k,v in internal_atts.items():
@@ -354,6 +363,12 @@ class VCoords (BufferBase):
               all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
               if sleve:
                 all_c = list(internal_atts['CC_M'])+list(internal_atts['CC_T'])
+              if 'VCDW' in internal_atts:
+                all_z.extend(list(internal_atts['VCDW']))
+                all_a.extend(list(internal_atts['CA_W']))
+                all_b.extend(list(internal_atts['CB_W']))
+                if sleve:
+                  all_c.extend(list(internal_atts['CC_W']))
               A = []
               B = []
               C = []
