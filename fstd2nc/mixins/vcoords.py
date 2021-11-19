@@ -53,6 +53,8 @@ class VCoords (BufferBase):
     group.add_argument('--split-diag-level', action='store_true', help=_("Put the diagnostic (near-surface) data in a separate variable, away from the 3D model output.  Suffices will be added to distinguish the different types of levels (i.e. _diag_level and _model_levels for diagnostic height and hybrid levels respectively)."))
     group.add_argument('--ignore-diag-level', action='store_true', help=_("Ignore data on diagnostic (near-surface) height."))
     parser.add_argument('--thermodynamic-levels', '--tlev', action='store_true', help=_("Only convert data that's on 'thermodynamic' vertical levels."))
+    parser.add_argument('--momentum-levels', '--mlev', action='store_true', help=_("Only convert data that's on 'momentum' vertical levels."))
+    parser.add_argument('--vertical-velocity-levels', '--wlev', action='store_true', help=_("Only convert data that's on 'vertical velocity' levels."))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
@@ -79,6 +81,10 @@ class VCoords (BufferBase):
         Ignore data on diagnostic (near-surface) height.
     thermodynamic_levels : bool, optional
         Only convert data that's on 'thermodynamic' vertical levels.
+    momentum_levels : bool, optional
+        Only convert data that's on 'momentum' vertical levels.
+    vertical_velocity_levels : bool, optional
+        Only convert data that's on 'vertical velocity' levels.
     """
     from collections import OrderedDict
     import numpy as np
@@ -90,6 +96,8 @@ class VCoords (BufferBase):
     self._split_diag_level = kwargs.pop('split_diag_level',False)
     self._ignore_diag_level = kwargs.pop('ignore_diag_level',False)
     self._thermodynamic_levels = kwargs.pop('thermodynamic_levels',False) or kwargs.pop('tlev',False)
+    self._momentum_levels = kwargs.pop('momentum_levels',False) or kwargs.pop('mlev',False)
+    self._vertical_velocity_levels = kwargs.pop('vertical_velocity_levels',False) or kwargs.pop('wlev',False)
 
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
@@ -186,6 +194,36 @@ class VCoords (BufferBase):
           fields['dltf'] |= ~mask
         except (KeyError,VGDError):
           warn(_("Unable to parse thermodynamic levels from the vertical coordinate"))
+        vgd_free (vgd_id)
+    # Keep only "momentum" levels?
+    if self._momentum_levels:
+      for key, header in self._vrecs.items():
+        if key == 'HY': continue  # not applicable for HY coordinates.
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          # Don't touch non-model levels.
+          mask = (fields['kind'] != 5) & (fields['kind'] != 21)
+          for ip1_m in vgd_get(vgd_id,'VIPM'):
+            mask |= (fields['ip1'] == ip1_m)
+          fields['dltf'] |= ~mask
+        except (KeyError,VGDError):
+          warn(_("Unable to parse momentum levels from the vertical coordinate"))
+        vgd_free (vgd_id)
+    # Keep only "vertical velocity" levels?
+    if self._vertical_velocity_levels:
+      for key, header in self._vrecs.items():
+        if key == 'HY': continue  # not applicable for HY coordinates.
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          # Don't touch non-model levels.
+          mask = (fields['kind'] != 5) & (fields['kind'] != 21)
+          for ip1_w in vgd_get(vgd_id,'VIPW'):
+            mask |= (fields['ip1'] == ip1_w)
+          fields['dltf'] |= ~mask
+        except (KeyError,VGDError):
+          warn(_("Unable to parse vertical velocity levels from the vertical coordinate"))
         vgd_free (vgd_id)
 
     # Apply special labels for some levels.
