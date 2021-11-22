@@ -190,7 +190,8 @@ class VCoords (BufferBase):
           # Don't touch non-model levels.
           mask = (fields['kind'] != 5) & (fields['kind'] != 21)
           for ip1_t in vgd_get(vgd_id,'VIPT'):
-            mask |= (fields['ip1'] == ip1_t)
+            # Add this level to the mask (unless it's right at the surface).
+            mask |= (fields['ip1'] == ip1_t) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
           fields['dltf'] |= ~mask
         except (KeyError,VGDError):
           warn(_("Unable to parse thermodynamic levels from the vertical coordinate"))
@@ -205,7 +206,8 @@ class VCoords (BufferBase):
           # Don't touch non-model levels.
           mask = (fields['kind'] != 5) & (fields['kind'] != 21)
           for ip1_m in vgd_get(vgd_id,'VIPM'):
-            mask |= (fields['ip1'] == ip1_m)
+            # Add this level to the mask (unless it's right at the surface).
+            mask |= (fields['ip1'] == ip1_m) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
           fields['dltf'] |= ~mask
         except (KeyError,VGDError):
           warn(_("Unable to parse momentum levels from the vertical coordinate"))
@@ -220,7 +222,8 @@ class VCoords (BufferBase):
           # Don't touch non-model levels.
           mask = (fields['kind'] != 5) & (fields['kind'] != 21)
           for ip1_w in vgd_get(vgd_id,'VIPW'):
-            mask |= (fields['ip1'] == ip1_w)
+            # Add this level to the mask (unless it's right at the surface).
+            mask |= (fields['ip1'] == ip1_w) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
           fields['dltf'] |= ~mask
         except (KeyError,VGDError):
           warn(_("Unable to parse vertical velocity levels from the vertical coordinate"))
