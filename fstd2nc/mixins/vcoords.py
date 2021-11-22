@@ -424,6 +424,7 @@ class VCoords (BufferBase):
         # Get metadata that's specific to this axis.
         atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
+        # Also: https://wiki.cmc.ec.gc.ca/wiki/Vgrid/vcode
         if kind == 0:
           if var.atts.get('typvar',None) == 'P@' :   # masked ocean variable
             name = 'depth'
