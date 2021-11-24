@@ -81,9 +81,15 @@ optional arguments:
                         (i.e. _diag_level and _model_levels for diagnostic
                         height and hybrid levels respectively).
   --ignore-diag-level   Ignore data on diagnostic (near-surface) height.
-  --thermodynamic-levels
+  --thermodynamic-levels, --tlev
                         Only convert data that's on 'thermodynamic' vertical
-                        levels, ignoring data on 'momentum' levels.
+                        levels.
+  --momentum-levels, --mlev
+                        Only convert data that's on 'momentum' vertical
+                        levels.
+  --vertical-velocity-levels, --wlev
+                        Only convert data that's on 'vertical velocity'
+                        levels.
   --subgrid-axis        For data on supergrids, split the subgrids along a
                         "subgrid" axis. The default is to leave the subgrids
                         stacked together as they are in the RPN file.

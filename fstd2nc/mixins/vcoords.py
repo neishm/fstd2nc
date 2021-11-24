@@ -52,7 +52,9 @@ class VCoords (BufferBase):
     group.add_argument('--diag-as-model-level', action='store_true', help=_("Treat diagnostic (near-surface) data as model level '1.0'.  This is the default behaviour."))
     group.add_argument('--split-diag-level', action='store_true', help=_("Put the diagnostic (near-surface) data in a separate variable, away from the 3D model output.  Suffices will be added to distinguish the different types of levels (i.e. _diag_level and _model_levels for diagnostic height and hybrid levels respectively)."))
     group.add_argument('--ignore-diag-level', action='store_true', help=_("Ignore data on diagnostic (near-surface) height."))
-    parser.add_argument('--thermodynamic-levels', action='store_true', help=_("Only convert data that's on 'thermodynamic' vertical levels, ignoring data on 'momentum' levels."))
+    parser.add_argument('--thermodynamic-levels', '--tlev', action='store_true', help=_("Only convert data that's on 'thermodynamic' vertical levels."))
+    parser.add_argument('--momentum-levels', '--mlev', action='store_true', help=_("Only convert data that's on 'momentum' vertical levels."))
+    parser.add_argument('--vertical-velocity-levels', '--wlev', action='store_true', help=_("Only convert data that's on 'vertical velocity' levels."))
 
   # Need to extend _headers_dtype before __init__.
   def __new__ (cls, *args, **kwargs):
@@ -78,8 +80,11 @@ class VCoords (BufferBase):
     ignore_diag_level : bool, optional
         Ignore data on diagnostic (near-surface) height.
     thermodynamic_levels : bool, optional
-        Only convert data that's on 'thermodynamic' vertical levels,
-        ignoring data on 'momentum' levels.
+        Only convert data that's on 'thermodynamic' vertical levels.
+    momentum_levels : bool, optional
+        Only convert data that's on 'momentum' vertical levels.
+    vertical_velocity_levels : bool, optional
+        Only convert data that's on 'vertical velocity' levels.
     """
     from collections import OrderedDict
     import numpy as np
@@ -90,7 +95,9 @@ class VCoords (BufferBase):
     self._diag_as_model_level = kwargs.pop('diag_as_model_level',False)
     self._split_diag_level = kwargs.pop('split_diag_level',False)
     self._ignore_diag_level = kwargs.pop('ignore_diag_level',False)
-    self._thermodynamic_levels = kwargs.pop('thermodynamic_levels',False)
+    self._thermodynamic_levels = kwargs.pop('thermodynamic_levels',False) or kwargs.pop('tlev',False)
+    self._momentum_levels = kwargs.pop('momentum_levels',False) or kwargs.pop('mlev',False)
+    self._vertical_velocity_levels = kwargs.pop('vertical_velocity_levels',False) or kwargs.pop('wlev',False)
 
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
@@ -174,20 +181,52 @@ class VCoords (BufferBase):
             fields['kind'][mask] = 5
 
     # Keep only "thermodynamic" levels?
-    # (Discard any levels considered to be "momentum" levels).
     if self._thermodynamic_levels:
       for key, header in self._vrecs.items():
         if key == 'HY': continue  # not applicable for HY coordinates.
         prm = fstluk(header,rank=3)
         vgd_id = vgd_fromlist(prm['d'])
         try:
+          # Don't touch non-model levels.
+          mask = (fields['kind'] != 5) & (fields['kind'] != 21)
+          for ip1_t in vgd_get(vgd_id,'VIPT'):
+            # Add this level to the mask (unless it's right at the surface).
+            mask |= (fields['ip1'] == ip1_t) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
+          fields['dltf'] |= ~mask
+        except (KeyError,VGDError):
+          warn(_("Unable to parse thermodynamic levels from the vertical coordinate"))
+        vgd_free (vgd_id)
+    # Keep only "momentum" levels?
+    if self._momentum_levels:
+      for key, header in self._vrecs.items():
+        if key == 'HY': continue  # not applicable for HY coordinates.
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          # Don't touch non-model levels.
+          mask = (fields['kind'] != 5) & (fields['kind'] != 21)
           for ip1_m in vgd_get(vgd_id,'VIPM'):
-            mask = (fields['ip1'] == ip1_m)
-            if len(self._vrecs) > 1 or self._strict_vcoord_match:
-              mask &= (fields['ig1'] == prm['ip1']) & (fields['ig2'] == prm['ip2'])
-            fields['dltf'] |= mask
+            # Add this level to the mask (unless it's right at the surface).
+            mask |= (fields['ip1'] == ip1_m) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
+          fields['dltf'] |= ~mask
         except (KeyError,VGDError):
           warn(_("Unable to parse momentum levels from the vertical coordinate"))
+        vgd_free (vgd_id)
+    # Keep only "vertical velocity" levels?
+    if self._vertical_velocity_levels:
+      for key, header in self._vrecs.items():
+        if key == 'HY': continue  # not applicable for HY coordinates.
+        prm = fstluk(header,rank=3)
+        vgd_id = vgd_fromlist(prm['d'])
+        try:
+          # Don't touch non-model levels.
+          mask = (fields['kind'] != 5) & (fields['kind'] != 21)
+          for ip1_w in vgd_get(vgd_id,'VIPW'):
+            # Add this level to the mask (unless it's right at the surface).
+            mask |= (fields['ip1'] == ip1_w) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
+          fields['dltf'] |= ~mask
+        except (KeyError,VGDError):
+          warn(_("Unable to parse vertical velocity levels from the vertical coordinate"))
         vgd_free (vgd_id)
 
     # Apply special labels for some levels.
@@ -225,7 +264,7 @@ class VCoords (BufferBase):
     from collections import OrderedDict
     import numpy as np
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
-    from rpnpy.vgd.const import VGD_KEYS
+    from rpnpy.vgd.const import VGD_KEYS, VGD_OPR_KEYS
     from rpnpy.vgd import VGDError
     from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
 
@@ -259,16 +298,136 @@ class VCoords (BufferBase):
       # Decode the vertical coordinate.
       levels = tuple(level_axis.array)
       kind = var.atts['kind']
+
+      # Get version info for coordinate.
+      key = (var.atts['ig1'],var.atts['ig2'])
+      version = None
+      if key in vrecs:
+        code = vrecs[key]['ig1']
+        if code // 1000 == kind:
+          version = code % 1000
+
+      # Special case - detect code 1002 (eta instead of sigma).
+      elif kind == 1 and 'HY' in vrecs:
+        version = 2
+
       # Only need to provide one copy of the vertical axis.
-      if (id(level_axis),kind) not in vaxes:
+      if (id(level_axis),kind,version) not in vaxes:
+
         # Keep track of any extra arrays needed for this axis.
         coordinates = []
-        # Get metadata that's specific to this axis.
-        name = 'level'
+        internal_atts = OrderedDict()
         atts = OrderedDict()
-        atts['axis'] = 'Z'
+        name = 'level'
         new_axis = _axis_type(name, atts, level_axis.array)
+
+        # Get vertical coordinate info.
+        ###
+        key = (var.atts['ig1'],var.atts['ig2'])
+        # If we're dealing with the old 'HY' records, then we don't match on
+        # ig1/ig2.
+        if key not in vrecs and 'HY' in vrecs:
+          key = 'HY'
+        # If there's only a single vertical record, then match that regardless of keys.
+        if len(vrecs) == 1 and not self._strict_vcoord_match:
+          key = list(vrecs.keys())[0]
+        # Check if we have a vertical coordinate record to use.
+        if key in vrecs:
+          header = vrecs[key]
+          # Add in metadata from the coordinate.
+          atts.update(self._get_header_atts(header))
+          # Add type-specific metadata.
+          if header['nomvar'].strip() == '!!':
+            # Get A and B info.
+            try:
+              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              # Check if SLEVE coordinate.
+              try:
+                vgd_get(vgd_id, 'RFLS')
+                sleve = True
+              except VGDError:
+                sleve = False
+            except VGDError:
+              warn (_("Problem decoding !! record."))
+              continue
+            # Partial definition of a/b coordinates for formula_terms reference.
+            coordA = _var_type('a', {}, [new_axis], None)
+            coordB = _var_type('b', {}, [new_axis], None)
+            coordC = _var_type('c', {}, [new_axis], None)
+
+            # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
+            #TODO: remove this once rpnpy has full support for this.
+            original_opr_double_keys = list(VGD_OPR_KEYS['get_double_1d'])
+            original_opr_float_keys = list(VGD_OPR_KEYS['get_float_1d'])
+            if sleve:
+              VGD_OPR_KEYS['get_double_1d'].extend(['CC_M','CC_T'])
+            # Also, patch in support for vertical velocity levels?
+            #TODO: remove this once rpnpy has full support for this.
+            if (kind,version) == (21,2):
+              VGD_OPR_KEYS['get_float_1d'].extend(['VCDW'])
+              VGD_OPR_KEYS['get_double_1d'].extend(['CA_W','CB_W'])
+              if sleve:
+                VGD_OPR_KEYS['get_double_1d'].extend(['CC_W'])
+
+            # Add all parameters for this coordinate.
+            for vgdkey in VGD_KEYS:
+              try:
+                val = vgd_get(vgd_id,vgdkey)
+                # Skip multidimensional arrays (can't be encoded as metadata).
+                if getattr(val,'ndim',1) > 1: continue
+                internal_atts[vgdkey] = val
+              except (KeyError,VGDError):
+                pass  # Some keys not available in some vgrids?
+            # Restore the rpnpy tables after SLEVE "patch", or may get
+            # segmentation fault if a non-sleve coordinate is subsequently
+            # read.
+            VGD_OPR_KEYS['get_double_1d'] = original_opr_double_keys
+            VGD_OPR_KEYS['get_float_1d'] = original_opr_float_keys
+
+            # Put this information in the final output file?
+            for k,v in internal_atts.items():
+              if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
+                atts[k] = v
+
+            # Attempt to fill in A/B coefficients (if available).
+            try:
+              # Special case for "tlift" levels (code 5003)?
+              # Why do I need to do this???
+              if (kind,version) == (5,3):
+                internal_atts['CA_M'][-2] = (internal_atts['CA_T'][-1]+internal_atts['CA_T'][-2])/2
+                internal_atts['CB_M'][-2] = (internal_atts['CB_T'][-1]+internal_atts['CB_T'][-2])/2
+
+              all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
+              all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
+              all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
+              if sleve:
+                all_c = list(internal_atts['CC_M'])+list(internal_atts['CC_T'])
+              if 'VCDW' in internal_atts:
+                all_z.extend(list(internal_atts['VCDW']))
+                all_a.extend(list(internal_atts['CA_W']))
+                all_b.extend(list(internal_atts['CB_W']))
+                if sleve:
+                  all_c.extend(list(internal_atts['CC_W']))
+              A = []
+              B = []
+              C = []
+              for z in levels:
+                ind = all_z.index(z)
+                A.append(all_a[ind])
+                B.append(all_b[ind])
+                if sleve: C.append(all_c[ind])
+              coordA.array = np.asarray(A)
+              coordB.array = np.asarray(B)
+              coordC.array = np.asarray(C)
+            except (KeyError,ValueError,VGDError):
+              warn (_("Unable to get A/B coefficients for %s.")%var.name)
+            vgd_free (vgd_id)
+        ###
+
+        # Get metadata that's specific to this axis.
+        atts['axis'] = 'Z'
         # Reference: http://web-mrb.cmc.ec.gc.ca/science//si/eng/si/libraries/rmnlib/fstd/main.html#RTFToC11
+        # Also: https://wiki.cmc.ec.gc.ca/wiki/Vgrid/vcode
         if kind == 0:
           if var.atts.get('typvar',None) == 'P@' :   # masked ocean variable
             name = 'depth'
@@ -281,11 +440,18 @@ class VCoords (BufferBase):
             atts['standard_name'] = 'height'
             atts['units'] = 'm'
             atts['positive'] = 'up'
-        elif kind == 1:
+        elif kind == 1 and version in (1,None):
           # sigma [sg] (0.0->1.0)
           atts['standard_name'] = 'atmosphere_sigma_coordinate'
           atts['positive'] = 'down'
+          atts['formula'] = 'p = sigma * ps'
           atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0')])
+        elif kind == 1 and version == 2:
+          # eta levels
+          atts['standard_name'] = 'atmosphere_sigma_coordinate'
+          atts['positive'] = 'down'
+          atts['formula'] = 'p = sigma * (ps-ptop) + ptop'
+          atts['formula_terms'] = OrderedDict([('sigma',new_axis),('ps','P0'),('ptop','PT')])
         elif kind == 2:
           # pressure [mb] (millibars)
           name = 'pres'
@@ -306,86 +472,41 @@ class VCoords (BufferBase):
         elif kind == 5:
           # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
-          key = (var.atts['ig1'],var.atts['ig2'])
-          # If we're dealing with the old 'HY' records, then we don't match on
-          # ig1/ig2.
-          if key not in vrecs and 'HY' in vrecs:
-            key = 'HY'
-          # If there's only a single vertical record, then match that regardless of keys.
-          if len(vrecs) == 1 and not self._strict_vcoord_match:
-            key = list(vrecs.keys())[0]
-          # Check if we have a vertical coordinate record to use.
           if key in vrecs:
-            header = vrecs[key]
-            # Add in metadata from the coordinate.
-            atts.update(self._get_header_atts(header))
-            # Add type-specific metadata.
             if header['nomvar'].strip() == '!!':
-              # Get A and B info.
-              try:
-                vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
-              except VGDError:
-                warn (_("Problem decoding !! record."))
-                continue
-              # Partial definition of a/b coordinates for formula_terms reference.
-              coordA = _var_type('a', {}, [new_axis], None)
-              coordB = _var_type('b', {}, [new_axis], None)
-
-              if vgd_get (vgd_id,'LOGP'):
+              if internal_atts['LOGP']:
                 # Not really a "standard" name, but there's nothing in the
-                # CF convensions document on how to encode this.
+                # CF conventions document on how to encode this.
                 # I just merged the atmosphere_ln_pressure_coordinate and
                 # atmosphere_hybrid_sigma_pressure_coordinate together.
                 # http://cfconventions.org/cf-conventions/v1.6.0/cf-conventions.html#dimensionless-v-coord
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
                 #TODO: update this once there's an actual convention to follow!
-                atts['formula'] = "p = exp(a+b*log(ps/pref))"
-                atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
+                if version < 100:
+                  atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
+                  atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
+                  coordinates.extend([coordA,coordB])
+                elif sleve:
+                  atts['formula'] = "p = exp(a+b*log(ps/pref)+c*log(psl/pref)) / 100.0"
+                  atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('c',coordC),('ps','P0'),('psl','P0LS'),('pref','pref')])
+                  coordinates.extend([coordA,coordB,coordC])
                 # Try getting reference pressure as a scalar.
                 try:
-                  pref = vgd_get(vgd_id,'PREF')
+                  pref = internal_atts['PREF'] / 100.0
                   if pref not in prefs:
-                    prefs[pref] = _var_type('pref',{'units':'Pa'},[],np.array(pref))
+                    prefs[pref] = _var_type('pref',{'units':'hPa'},[],np.array(pref))
                   atts['formula_terms']['pref'] = prefs[pref]
                 except (KeyError,VGDError):
                   pass # Don't have PREF available for some reason?
               else:
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
+                coordA.array /= 100.0  # Use hPa for final units.
+                atts['formula'] = 'p = ap + b*ps'
+                coordA.name = 'ap'
                 atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
-              # Add all parameters for this coordinate.
-              internal_atts = OrderedDict()
-              for key in VGD_KEYS:
-                try:
-                  val = vgd_get(vgd_id,key)
-                  # Skip multidimensional arrays (can't be encoded as metadata).
-                  if getattr(val,'ndim',1) > 1: continue
-                  internal_atts[key] = val
-                except (KeyError,VGDError):
-                  pass  # Some keys not available in some vgrids?
-              # Put this information in the final output file?
-              for k,v in internal_atts.items():
-                if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
-                  atts[k] = v
-              # Attempt to fill in A/B coefficients (if available).
-              try:
-                all_z = list(internal_atts['VCDM'])+list(internal_atts['VCDT'])
-                all_a = list(internal_atts['CA_M'])+list(internal_atts['CA_T'])
-                all_b = list(internal_atts['CB_M'])+list(internal_atts['CB_T'])
-                A = []
-                B = []
-                for z in levels:
-                  ind = all_z.index(z)
-                  A.append(all_a[ind])
-                  B.append(all_b[ind])
-                coordA.array = np.asarray(A)
-                coordB.array = np.asarray(B)
                 coordinates.extend([coordA,coordB])
-              except (KeyError,ValueError,VGDError):
-                warn (_("Unable to get A/B coefficients for %s.")%var.name)
-                atts.pop('formula',None)
-                atts.pop('formula_terms',None)
-              vgd_free (vgd_id)
+
             # Not a '!!' coordinate, so must be 'HY'?
             else:
               atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
@@ -398,10 +519,11 @@ class VCoords (BufferBase):
               # Apply the formula to compue A & B (from old fstd_core.c code):
               etatop = ptop/pref
               B = ((eta - etatop) / (1 - etatop)) ** rcoef
-              A = pref * 100. * (eta - B)
-              coordA = _var_type('a', {}, [new_axis], np.asarray(A))
+              A = pref * (eta - B)
+              coordA = _var_type('ap', {}, [new_axis], np.asarray(A))
               coordB = _var_type('b', {}, [new_axis], np.asarray(B))
               coordinates.extend([coordA,coordB])
+              atts['formula'] = 'p = ap + b*ps'
               atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
               # Add extra HY record metadata.
               atts.update(ptop=ptop, rcoef=rcoef, pref=pref)
@@ -416,6 +538,23 @@ class VCoords (BufferBase):
           atts['standard_name'] = 'depth'
           atts['units'] = 'm'
           atts['positive'] = 'down'
+        elif kind == 21:
+          if sleve:
+            atts['standard_name'] = 'atmosphere_sleve_coordinate'
+            atts['positive'] = 'up'
+            atts['formula'] = 'z = az + b1*zsurf1 + b2*zsurf2'
+            coordA.name = 'az'
+            coordB.name = 'b2'
+            coordC.name = 'b1'
+            atts['formula_terms'] = OrderedDict([('az',coordA),('b1',coordC),('zsurf1','MELS'),('b2',coordB),('zsurf2','ME')])
+            coordinates.extend([coordA,coordB,coordC])
+
+          else:
+            atts['standard_name'] = 'atmosphere_hybrid_height_coordinate'
+            atts['positive'] = 'up'
+            atts['formula'] = 'z = a + b*orog'
+            atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('orog','ME')])
+            coordinates.extend([coordA,coordB])
 
         # Add this vertical axis.
         if len(coordinates) > 0:
@@ -423,9 +562,10 @@ class VCoords (BufferBase):
         # Update axis name.
         new_axis.name = name
         # Now have a fully defined axis to use.
-        vaxes[(id(level_axis),kind)] = new_axis
+        vaxes[(id(level_axis),kind,version)] = new_axis
+
       # Set the vertical axis for this variable.
-      vaxis = vaxes[(id(level_axis),kind)]
+      vaxis = vaxes[(id(level_axis),kind,version)]
       var.axes[var.dims.index('level')] = vaxis
 
     # Detect mixture of diagnostic / model levels, and print a warning.
