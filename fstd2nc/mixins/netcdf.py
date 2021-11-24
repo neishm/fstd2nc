@@ -127,7 +127,11 @@ class netCDF_Atts (BufferBase):
     for obj in self._iter_objects():
       # Add extra metadata provided by the user?
       if obj.name in self._metadata:
-        obj.atts.update(self._metadata[obj.name])
+        for attname, attval in self._metadata[obj.name].items():
+          # Check if attribute should be removed?
+          # (i.e., if value is intentionally left empty)
+          if attval == "": obj.atts.pop(attname,None)
+          else: obj.atts[attname] = attval
       # Apply renames.
       if obj.name in renames:
         obj.name = renames[obj.name]
