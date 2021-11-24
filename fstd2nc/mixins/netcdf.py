@@ -61,6 +61,7 @@ class netCDF_Atts (BufferBase):
     except ImportError:
       import configparser as ConfigParser
     from collections import OrderedDict
+    import numpy as np
     metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:
       metafiles = []
@@ -92,7 +93,7 @@ class netCDF_Atts (BufferBase):
         if k == 'units': continue
         try:
           metadata[varname][k] = float(v) # First, try converting to float.
-          metadata[varname][k] = int(v) # Try further conversion to int.
+          metadata[varname][k] = np.int32(v) # Try further conversion to int.
         except ValueError: pass
     self._metadata = metadata
     # Check for renames.
