@@ -483,7 +483,7 @@ class VCoords (BufferBase):
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
                 #TODO: update this once there's an actual convention to follow!
-                if version < 100:
+                if version in (1,2,3,4,5):
                   atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
                   atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
                   coordinates.extend([coordA,coordB])
