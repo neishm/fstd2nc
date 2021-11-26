@@ -301,6 +301,13 @@ class VCoords (BufferBase):
 
       # Get version info for coordinate.
       key = (var.atts['ig1'],var.atts['ig2'])
+      # If we're dealing with the old 'HY' records, then we don't match on
+      # ig1/ig2.
+      if key not in vrecs and 'HY' in vrecs:
+        key = 'HY'
+      # If there's only a single vertical record, then match that regardless of keys.
+      if len(vrecs) == 1 and not self._strict_vcoord_match:
+        key = list(vrecs.keys())[0]
       version = None
       if key in vrecs:
         code = vrecs[key]['ig1']
@@ -321,16 +328,6 @@ class VCoords (BufferBase):
         name = 'level'
         new_axis = _axis_type(name, atts, level_axis.array)
 
-        # Get vertical coordinate info.
-        ###
-        key = (var.atts['ig1'],var.atts['ig2'])
-        # If we're dealing with the old 'HY' records, then we don't match on
-        # ig1/ig2.
-        if key not in vrecs and 'HY' in vrecs:
-          key = 'HY'
-        # If there's only a single vertical record, then match that regardless of keys.
-        if len(vrecs) == 1 and not self._strict_vcoord_match:
-          key = list(vrecs.keys())[0]
         # Check if we have a vertical coordinate record to use.
         if key in vrecs:
           header = vrecs[key]
