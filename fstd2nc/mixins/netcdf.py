@@ -270,7 +270,12 @@ class netCDF_IO (BufferBase):
     def get_var_id (var):
       out = []
       for fmt in self._human_var_id:
-        out.append(fmt%var.atts)
+        try:
+          out.append(fmt%var.atts)
+        except KeyError:
+          out.append(None)
+      # Check if no useful information found to construct any part of the id.
+      if list(set(out)) == [None]: raise KeyError
       return tuple(out)
 
     # Generate unique variable names.
@@ -299,7 +304,12 @@ class netCDF_IO (BufferBase):
       # maintaining uniqueness.
       for j in reversed(range(len(var_ids))):
         test = var_ids[:j] + var_ids[j+1:]
-        if len(set(zip(*test))) == len(var_list):
+        # If variables are still unique without this part of the id, then it
+        # can be safely removed.
+        # Also, can remove this part if it's not consistently defined.
+        # (E.g. if one of the versions of the variable does not have a
+        # consistent version of an attribute to use).
+        if len(set(zip(*test))) == len(var_list) or None in var_ids[j]:
           var_ids = test
 
       var_ids = zip(*var_ids)
