@@ -257,8 +257,10 @@ class ExternOutput (BufferBase):
     # Put all the header info into a dictionary.
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
+    # Create a mask to exclude deleted / overwritten records.
+    mask = self._headers['dltf'] == 0
     for field in fields:
-      col = self._headers[field]
+      col = self._headers[field][mask]
       # Convert byte arrays to strings, which is what fstpy expects.
       if col.dtype.str.startswith('|S'):
         col = np.asarray(col,dtype=col.dtype.str.replace('|S','<U'))
@@ -270,8 +272,8 @@ class ExternOutput (BufferBase):
     # Temporarily insert some extra columns needed for the data.
     table['shape'] = list(zip(table['ni'],table['nj']))
     filenames = dict((i,f) for i,f in enumerate(self._files))
-    table['path'] = pd.Series(self._headers['file_id']).map(filenames)
-    table['key'] = (self._headers['key'] << 10)
+    table['path'] = pd.Series(self._headers['file_id'][mask]).map(filenames)
+    table['key'] = (self._headers['key'][mask] << 10)
     # Generate dask objects
     #TODO: use our own, in case we modified the data?
     # (doesn't normally happen, but you never know...)
