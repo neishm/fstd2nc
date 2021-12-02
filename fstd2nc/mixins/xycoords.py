@@ -63,8 +63,10 @@ def gdgaxes (gdid):
 # Base class for grid mapping classes
 class GridMap(object):
   # Mean radius of the Earth used in OGC CRS (coord. ref. system) descriptions
-  # Note that Earth's mean radius = 6371000. m in librmn!
-  _earth_radius = 6371229. 
+  # This is the value used in librmn, and also corresponds to the Normal
+  # Sphere approximation referenced in
+  # https://proj.org/usage/ellipsoids.html#built-in-ellipsoid-definitions
+  _earth_radius = 6370997.
   def __init__(self, grd):
 #   grd is a dictionary returned by readGrid containing grid parameters 
     from collections import OrderedDict
