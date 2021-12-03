@@ -315,7 +315,7 @@ class VCoords (BufferBase):
           version = code % 1000
 
       # Special case - detect code 1002 (eta instead of sigma).
-      elif kind == 1 and 'HY' in vrecs:
+      if kind == 1 and 'HY' in vrecs:
         version = 2
 
       # Only need to provide one copy of the vertical axis.
