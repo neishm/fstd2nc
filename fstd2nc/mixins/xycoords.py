@@ -364,6 +364,9 @@ class XYCoords (BufferBase):
     # Special case for series data - match any of the lat/lon grids.
     if var.atts['grtyp'] in ('+','Y'):
       header = fstlir (self._meta_funit, nomvar=coordname, rank=3)
+      # Make sure this actually matches a grid of the correct shape.
+      if header['ni'] != var.atts['ni'] or header['nj'] != var.atts['nj']:
+        header = None
     else:
       header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
                              ip2=var.atts['ig2'], ip3=var.atts['ig3'], rank=3)
