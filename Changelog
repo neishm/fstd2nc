@@ -1,3 +1,33 @@
+Version 0.20211202.0 (Dec 3, 2021)
+	* Changed the earth_radius grid attribute from 6371229 to 6370997, to
+	  be consistent with librmn.
+	* Modified the pressure parameterization to be defined in units of hPa,
+	  for consistency with the surface pressure (P0) field.
+	* Added 'formula' attribute to all vertical coordinates.  Note that
+	  this attribute is not part of the CF standard.
+	* Added support for more vertical coordinates (1002, 5100, 5999, 21001,
+	  21002).
+	* Support for SLEVE coordinates (and corresponding C coefficients).
+	* New command-line options --momentum-levels (--mlev) and
+	  --vertical-velocity-levels (--wlev) to subset the data on those
+	  levels.
+	* In metadata files, allow an attribute to be explicitly *removed*
+	  from a variable by omitting a value after the '=' delimiter.
+	  Useful for turning off attributes that were automagically added
+	  somewhere else in the code.
+	* Use 32-bit precision for integer values from the metadata files.
+	* Fix bug in from_fstpy, which was causing a crash if the resulting
+	  dask arrays were sliced.
+	* Also updated from_fstpy to handle fstpy dask arrays constructed from
+	  compound operations.
+	* Fix bug in to_fstpy - deleted records were being included in the
+	  final table by mistake.  This would cause problems if those records
+	  were ever accessed.
+	* Allow variable names that already start with an underscore.  Do not
+	  prepend a second underscore to them.
+	* Bug fix in detecting direct grids with 1D lat/lon coordinates.
+	* Buf fix in extracting lat/lon fields for some trajectory data.
+
 Version 0.20211013.2 (Nov 5, 2021)
 	* Handle case where series of points have the degenerate (length 1)
 	  dimension of ni,nj transposed between the data and lat/lon fields.
