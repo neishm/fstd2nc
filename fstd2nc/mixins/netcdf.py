@@ -324,7 +324,7 @@ class netCDF_IO (BufferBase):
 
     for var in self._iter_objects():
       # Names must start with a letter or underscore.
-      if not var.name[0].isalpha():
+      if not var.name[0].isalpha() and var.name[0] != '_':
         warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
         var.name = '_'+var.name
 
