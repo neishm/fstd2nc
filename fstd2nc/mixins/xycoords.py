@@ -319,7 +319,7 @@ class XYCoords (BufferBase):
   _xycoord_nomvars = (b'^^',b'>>',b'^>')
   # Grids that can be read directly from '^^','>>' records, instead of going
   # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
-  _direct_grids = ('X','Y','T','+','O')
+  _direct_grids = ('X','Y','T','+','O','M')
 
   @classmethod
   def _cmdline_args (cls, parser):

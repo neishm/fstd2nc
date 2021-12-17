@@ -47,6 +47,7 @@ from fstd2nc.mixins.sfc_codes import Sfc_Codes
 from fstd2nc.mixins.vardict import VarDict
 from fstd2nc.mixins.vcoords import VCoords
 from fstd2nc.mixins.xycoords import XYCoords
+from fstd2nc.mixins.mesh import Mesh
 from fstd2nc.mixins.misc import NoNK
 from fstd2nc.mixins.filter import FilterRecords
 from fstd2nc.mixins.removestuff import RemoveStuff
@@ -57,7 +58,7 @@ from fstd2nc.mixins.compat import FSTD_Compat
 from fstd2nc.mixins.extern import ExternInput, ExternOutput
 from fstd2nc.mixins.iter import Iter
 
-class Buffer (Iter,ExternOutput,FSTD_Compat,netCDF_IO,netCDF_Atts,PruneAxes,Interp,RemoveStuff,FilterRecords,NoNK,XYCoords,VCoords,Sfc_Codes,VarDict,Series,Ensembles,Dates,Masks,ASCII,SelectVars,ExternInput):
+class Buffer (Iter,ExternOutput,FSTD_Compat,netCDF_IO,netCDF_Atts,PruneAxes,Interp,RemoveStuff,FilterRecords,NoNK,Mesh,XYCoords,VCoords,Sfc_Codes,VarDict,Series,Ensembles,Dates,Masks,ASCII,SelectVars,ExternInput):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.
