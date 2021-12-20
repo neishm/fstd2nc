@@ -61,18 +61,19 @@ class _RecordOrder (object):
         work = new_work
 
 # Add a callback to dask to ensure FSTD records are read in a good order.
-try:
-  from dask.callbacks import Callback
-  class _FSTD_Callback (Callback):
-    def _start_state (self, dsk, state):
-      ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
-      state['ready'] = ready[::-1]
-  _FSTD_Callback().register()
-  del Callback
-
-except ImportError:
-  pass
-
+def _add_callback(added_callback=[False]):
+  if added_callback[0] is True: return
+  try:
+    from dask.callbacks import Callback
+    class _FSTD_Callback (Callback):
+      def _start_state (self, dsk, state):
+        ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
+        state['ready'] = ready[::-1]
+    _FSTD_Callback().register()
+    del Callback
+  except ImportError:
+    pass
+  added_callback[0] = True
 
 class ExternOutput (BufferBase):
 
@@ -101,6 +102,7 @@ class ExternOutput (BufferBase):
     from dask.base import tokenize
     import numpy as np
     from itertools import product
+    _add_callback()
     unique_token = tokenize(self._files,id(self))
     # Make a local copy of two columns from the header table.
     # This speeds up access to their elements in the inner loop.
@@ -236,6 +238,7 @@ class ExternOutput (BufferBase):
     Create a pygeode interface for the RPN data.
     Requires pygeode >= 1.2.0, and xarray/dask.
     """
+    _fix_to_pygeode()
     from pygeode.ext_xarray import from_xarray
     data = self.to_xarray()
     return from_xarray(data)
@@ -286,16 +289,18 @@ class ExternOutput (BufferBase):
 # Workaround for recent xarray (>0.10.0) which changed the methods in the
 # conventions module.
 # Fixes an AttributeError when using to_pygeode().
-try:
-  from xarray.coding import times
-  from xarray import conventions
-  if not hasattr(conventions,'maybe_encode_datetime'):
-    conventions.maybe_encode_datetime = times.CFDatetimeCoder().encode
-  if not hasattr(conventions,'maybe_encode_timedelta'):
-    conventions.maybe_encode_timedelta = times.CFTimedeltaCoder().encode
-except (ImportError,AttributeError):
-  pass
-
+def _fix_to_pygeode (fixed=[False]):
+  if fixed[0] is True: return
+  try:
+    from xarray.coding import times
+    from xarray import conventions
+    if not hasattr(conventions,'maybe_encode_datetime'):
+      conventions.maybe_encode_datetime = times.CFDatetimeCoder().encode
+    if not hasattr(conventions,'maybe_encode_timedelta'):
+      conventions.maybe_encode_timedelta = times.CFTimedeltaCoder().encode
+  except (ImportError,AttributeError):
+    pass
+  fixed[0] = True
 
 class ExternInput (BufferBase):
   @classmethod
