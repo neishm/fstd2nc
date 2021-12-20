@@ -30,9 +30,9 @@ from fstd2nc import Buffer
 def _fstdump (buffer_type=Buffer):
   import fstd2nc
   from argparse import ArgumentParser
-  from sys import stdout, argv
-  from os.path import exists
   from rpnpy.librmn.fstd98 import FSTDError, fstopt
+  from os.path import basename
+  import textwrap
   parser = ArgumentParser(description=_("Display RPN standard file (FSTD) metadata in a structured format."))
   parser.add_argument('infile', metavar='<fstd_file>', help=_('The RPN standard file to query.'))
   parser.add_argument('-v', nargs='*', metavar='NOMVAR,...', help=_('Display the values for the specified variable.'))
@@ -53,21 +53,63 @@ def _fstdump (buffer_type=Buffer):
     error (_("problem opening one or more input files."))
 
   # Get the metadata in a netCDF-like structure.
-  x = buf.to_xarray()
-
-  # Print header info.
-  x.info()
-  print ()
+  buf._makevars()
+  print ("fstd98 %s {"%basename(infile))
+  print ("dimensions:")
+  for axis in buf._iter_axes():
+    print ("\t%s = %d ;"%(axis.name,len(axis)))
+  print ("variables:")
+  for var in buf._iter_objects():
+    if not hasattr(var,'axes'): continue # Skip dimensions
+    if hasattr(var,'dtype'):
+      dtype = var.dtype
+    elif hasattr(var,'array'):
+      dtype = var.array.dtype
+    else:
+      dtype = '???'
+    if len(var.axes) == 0:
+      print ("\t%s %s ;"%(dtype,var.name))
+    else:
+      print ("\t%s %s(%s) ;"%(dtype,var.name,", ".join(var.dims)))
+    for att,val in var.atts.items():
+      # Skip fill value (not coming from the file on disk).
+      if att == "_FillValue": continue
+      if isinstance(val,str):
+        s = '"'+val+'"'
+      else:
+        s = str(val)
+      print ("\t\t%s:%s = %s ;"%(var.name,att,s))
 
   # Print variable data.
   if nomvars is not None:
+    print ("data:")
     nomvars = [n for nomvar in nomvars for n in nomvar.split(',')]
-    for nomvar in nomvars:
-      if nomvar in x:
-        values = x[nomvar].values
+    for var in buf._iter_objects():
+      if var.name in nomvars:
+        if hasattr(var,'array'):
+           values = var.array
+        else:
+           continue
+        # Build string values?
+        strlen = None
+        for idim,dimname in enumerate(var.dims):
+          if dimname.endswith('_strlen'):
+            strlen = len(var.axes[idim])
+        if strlen is not None:
+          values = values.view('|S%s'%strlen)
         if 'bytes' in values.dtype.name:
-          values = values.astype(str)
-        print ("\n%s = %s ;"%(nomvar,values))
+          values = values.astype(str).flatten()
+          values = '"' + '", "'.join(values) + '"'
+        else:
+          values = values.flatten()
+          values = map(str,values)
+          values = ', '.join(values)
+        lines = textwrap.wrap('%s = %s ;'%(var.name, values), initial_indent=' ', subsequent_indent='    ')
+        print ()
+        for line in lines:
+          print (line)
+
+  print ("}")
 
 
 #################################################
