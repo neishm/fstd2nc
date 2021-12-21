@@ -87,7 +87,10 @@ def _fstdump (buffer_type=Buffer):
     for var in buf._iter_objects():
       if var.name in nomvars:
         if hasattr(var,'array'):
-           values = var.array
+          values = var.array
+        elif hasattr(var,'record_id'):
+          import numpy as np
+          values = np.array([buf._fstluk(rec)['d'] for rec in var.record_id.flatten()])
         else:
            continue
         # Build string values?
