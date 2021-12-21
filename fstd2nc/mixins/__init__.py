@@ -41,15 +41,29 @@ def dtype_fst2numpy (datyp, nbits=None):
     datyp = 5
   return dtype_fst2numpy(datyp,nbits)
 
+# Indicate if pandas should be used or not.
+_pandas_needed = False
+def _use_pandas ():
+  if not _pandas_needed: return False
+  try:
+    import pandas
+    return True
+  except ImportError:
+    return False
+
 # Decorator for efficiently converting a scalar function to a vectorized
 # function.
 def vectorize (f):
   from functools import wraps
-  try:
-    from pandas import Series, unique
-    import numpy as np
-    @wraps(f)
-    def vectorized_f (x):
+  import numpy as np
+  def cached_f(x, cache={}):
+    if x not in cache:
+      cache[x] = f(x)
+    return cache[x]
+  @wraps(f)
+  def vectorized_f (x):
+    if _use_pandas():
+      from pandas import Series, unique
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return f(x)
@@ -60,13 +74,7 @@ def vectorize (f):
       table = dict(zip(inputs,outputs))
       result = Series(x).map(table)
       return result.values
-  except ImportError:
-    def cached_f(x, cache={}):
-      if x not in cache:
-        cache[x] = f(x)
-      return cache[x]
-    @wraps(f)
-    def vectorized_f (x):
+    else:
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return cached_f(x)
@@ -479,6 +487,9 @@ class BufferBase (object):
     nfiles = len(headers)
     if nfiles == 0:
       error(_("no input files found!"))
+    elif nfiles > 10:
+      global _pandas_needed
+      _pandas_needed = True
     info(_("Found %d RPN input file(s)"%nfiles))
 
     self._headers = np.ma.concatenate(headers)
@@ -847,10 +858,9 @@ class BufferBase (object):
   # Choose which method to iterate over the data
   # (depending on if pandas is installed).
   def _makevars (self):
-    try:
-      import pandas as pd
+    if _use_pandas():
       self._makevars_pandas()
-    except ImportError:
+    else:
       self._makevars_slow()
 
   # Iterate over all unique axes found in the variables.
