@@ -46,7 +46,6 @@ setup (
   setup_requires = ['pip >= 8.1'],
   install_requires = ['numpy >= 1.13.0, != 1.15.3','netcdf4','fstd2nc-deps >= 0.20200304.0','progress'],
   extras_require = {
-    'dap': ['Pydap[server,functions]'],
     'manyfiles': ['pandas'],
     'array': ['xarray>=0.10.3','dask','toolz'],
     'iris': ['iris>=2.0','xarray>=0.10.3','dask','toolz'],
@@ -59,9 +58,6 @@ setup (
     'console_scripts': [
       'fstd2nc = fstd2nc.__main__:_fstd2nc_cmdline_trapped',
       'fstdump = fstd2nc.__main__:_fstdump',
-    ],
-    'pydap.handler': [
-      'fstd = fstd2nc.dap:FST_Handler',
     ],
   },
 

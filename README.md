@@ -249,22 +249,6 @@ table = fstd2nc.Buffer('myfile.fst').to_fstpy()
 ```
 
 
-Using in a Pydap server
-=======================
-
-This package includes a handler for [Pydap](https://github.com/pydap/pydap), which enables you to serve your FSTD files via the OPeNDAP protocol.
-
-To install all the pre-requisites:
-```
-pip install pydap fstd2nc[dap]
-```
-
-You can then test it by running
-```
-pydap -d [your data directory]
-```
-
-
 Requirements
 ============
 
