@@ -381,11 +381,15 @@ class netCDF_IO (BufferBase):
         continue
       # Hard case: only have the record indices, need to loop over the records.
       # Get the shape of a single record for the variable.
-      if not hasattr(var,'record_id'): continue
-      record_shape = var.shape[var.record_id.ndim:]
+      if hasattr(var,'record_id'):
+        record_shape = var.shape[var.record_id.ndim:]
+      elif hasattr(var,'chunksize'):
+        record_shape = var.chunksize
+      else:
+        continue
       # Use this as the "chunk size" for the netCDF file, to improve I/O
       # performance.
-      chunksizes = (1,)*var.record_id.ndim + record_shape
+      chunksizes = (1,)*(len(var.axes)-len(record_shape)) + record_shape
       if hasattr(self,'_fill_value') and var.dtype.name.startswith('float32'):
         fill_value = self._fill_value
       else:
@@ -403,10 +407,13 @@ class netCDF_IO (BufferBase):
       # Write the metadata.
       v.setncatts(var.atts)
       # Write the data.
-      indices = list(np.ndindex(var.record_id.shape))
-      # Sort the indices by FSTD key, so we're reading the records in the same
-      # order as they're found on disk.
-      keys = map(int,var.record_id.flatten())
+      if hasattr(var,'record_id'):
+        indices = list(np.ndindex(var.record_id.shape))
+        keys = map(int,var.record_id.flatten())
+      else:
+        indices = list(var.keys())
+        keys = list(var.chunks.values())
+        record_shape = None  # Reshaping with chunked data not supported.
       for r, ind in zip(keys,indices):
         if r >= 0:
           io.append((r,record_shape,v,ind))

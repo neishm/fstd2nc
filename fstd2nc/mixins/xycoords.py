@@ -380,7 +380,7 @@ class XYCoords (BufferBase):
 
   # Add horizontal coordinate info to the data.
   def _makevars (self):
-    from fstd2nc.mixins import _iter_type, _var_type, _axis_type, _dim_type
+    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
     from rpnpy.librmn.all import readGrid, RMNError
@@ -421,6 +421,10 @@ class XYCoords (BufferBase):
       # values ('+','Y') that should share the same lat/lon info.
       if var.atts.get('typvar','').strip() == 'T':
         key = ('T',ig1,ig2)
+      # For '#' grid variables, ignore ni,nj,ig3,ig4
+      # (they are different for each tile).
+      elif grtyp == '#':
+        key = (grtyp,ig1,ig2)
       else:
         key = (grtyp,ni,nj,ig1,ig2,ig3,ig4)
       if grtyp in ('Y','+'): key = key[1:]
@@ -431,8 +435,19 @@ class XYCoords (BufferBase):
 
         # Check if GridMap recognizes this grid.
         if grtyp not in self._direct_grids:
+          atts = var.atts.copy()
+          # For '#' grid, extract full coordinates of parent grid.
+          if grtyp == '#':
+            match = (self._headers['ip1'] == atts['ig1']) & (self._headers['ip2'] == atts['ig2'])
+            match_nj = np.where(match & (self._headers['nomvar'] == b'^^  '))[0]
+            match_ni = np.where(match & (self._headers['nomvar'] == b'>>  '))[0]
+            if len(match_nj) >= 1 and len(match_ni) >= 1:
+              atts['nj'] = int(self._headers['nj'][match_nj[0]])
+              atts['ni'] = int(self._headers['ni'][match_ni[0]])
+              atts['ig3'] = 1
+              atts['ig4'] = 1
           try:
-            grd = readGrid(self._meta_funit, var.atts.copy())
+            grd = readGrid(self._meta_funit, atts)
             gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon)
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar
@@ -626,6 +641,26 @@ class XYCoords (BufferBase):
         var.atts['grid_mapping'] = gmapvar
 
     self._varlist = [v for v in varlist if v.name is not None]
+
+    # Reassemble '#' grids
+    tiles = OrderedDict()
+    for var in self._varlist:
+      if var.atts.get('grtyp',None) == '#':
+        key = tuple([var.atts.get(n,None) for n in self._var_id if n not in ('ni','nj','ig3','ig4')])
+        tiles.setdefault(key,[]).append(var)
+    self._varlist = [v for v in varlist if v.atts.get('grtyp',None) != '#']
+    for key, vars in tiles.items():
+      # Get dimensions of a single (untruncated) chunk.
+      chunk_i = max(v.atts['ni'] for v in vars)
+      chunk_j = max(v.atts['nj'] for v in vars)
+      chunks = OrderedDict()
+      for var in vars:
+        for sl in np.ndindex(var.record_id.shape):
+          i = var.atts['ig3'] - 1
+          j = var.atts['ig4'] - 1
+          chunks[sl+((j,j+chunk_j),(i,i+chunk_i))] = var.record_id[sl]
+      var = _chunk_type (vars[0].name, vars[0].atts, vars[0].axes, vars[0].dtype, chunks, (chunk_j,chunk_i))
+      self._varlist.append(var)
 
     # Special case - there are no data records, ONLY a pair of lat/lon
     # coordinates.  In this case, include the lat/lon as variables.
