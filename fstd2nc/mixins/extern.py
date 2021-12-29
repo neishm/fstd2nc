@@ -59,6 +59,7 @@ class _RecordOrder (object):
                 except TypeError:  # not hashable
                     pass
         work = new_work
+    return ('unknown','unknown')
 
 # Add a callback to dask to ensure FSTD records are read in a good order.
 def _add_callback(added_callback=[False]):
