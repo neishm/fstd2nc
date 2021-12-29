@@ -97,7 +97,7 @@ class ExternOutput (BufferBase):
     """
     Iterate over all the variables, and convert to dask arrays.
     """
-    from fstd2nc.mixins import _iter_type, _var_type
+    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type
     from dask import array as da
     from dask.base import tokenize
     import numpy as np
@@ -130,19 +130,46 @@ class ExternOutput (BufferBase):
     ###
     self._makevars()
     for var in self._iter_objects():
+      name = var.name+"-"+unique_token
+      ndim = len(var.axes)
+      shape = var.shape
+      # Convert _iter_type to more generic _chunk_type.
       if isinstance(var,_iter_type):
-        name = var.name+"-"+unique_token
-        ndim = len(var.axes)
-        shape = var.shape
+        chunks = {}
         ndim_outer = var.record_id.ndim
         ndim_inner = ndim - ndim_outer
-        inner_zeros = (0,)*ndim_inner
-        dsk = dict()
-        chunk_shape = (1,)*ndim_outer+shape[ndim_outer:]
+        chunk_shape = shape[ndim_outer:]
         for ind in product(*map(range,var.record_id.shape)):
-          # Pad index with all dimensions (including inner ones).
-          key = (name,) + ind + inner_zeros
-          rec_id = int(var.record_id[ind])
+          rec_id = var.record_id[ind]
+          ind = ind + tuple((0,dx) for dx in shape[ndim_outer:])
+          chunks[ind] = rec_id
+        var = _chunk_type (var.name, var.atts, var.axes, var.dtype, chunks, chunk_shape)
+      # Convert _chunk_type to dask Array objects.
+      if isinstance(var,_chunk_type):
+        ndim_inner = len(var.chunksize)
+        ndim_outer = ndim - ndim_inner
+        # Get chunk dimensions.
+        # First, size of single (untruncated) chunk, full indices.
+        untruncated_chunksize = (1,)*(ndim-len(var.chunksize)) + var.chunksize
+        # Next, breakdown of chunks along all variable dimensions.
+        chunks = []
+        chunk_indices = []
+        for i in range(ndim):
+          dx = untruncated_chunksize[i]
+          ch = tuple(dx for j in range(dx,shape[i]+1,dx))
+          if shape[i] % dx > 0:
+            ch = ch + (shape[i] % dx, )
+          chunks.append(ch)
+          chunk_indices.append(range(len(ch)))
+        # Loop over all indices, generate dask graph.
+        dsk = dict()
+        for ind, chunk_shape in zip(product(*chunk_indices), product(*chunks)):
+          # Unique key for this graph member.
+          key = (name,) + ind
+          # Get record id.
+          slices = [(i*dx,i*dx+res) for i,dx,res in zip(ind,untruncated_chunksize,chunk_shape)]
+          slices[:ndim_outer] = ind[:ndim_outer]
+          rec_id = var.chunks.get(tuple(slices),-1)
           # Add this record as a chunk in the dask Array.
           # Also, specify the preferred order of reading the chunks within the
           # file.
@@ -175,11 +202,6 @@ class ExternOutput (BufferBase):
               dsk[key] = (np.full, chunk_shape, self._fill_value, var.dtype)
             else:
               dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
-        chunks = []
-        for i in range(ndim_outer):
-          chunks.append((1,)*shape[i])
-        for i in range(ndim_outer,ndim):
-          chunks.append((shape[i],))
         array = da.Array(dsk, name, chunks, var.dtype)
         var = _var_type(var.name,var.atts,var.axes,array)
       yield var

@@ -653,12 +653,15 @@ class XYCoords (BufferBase):
       # Get dimensions of a single (untruncated) chunk.
       chunk_i = max(v.atts['ni'] for v in vars)
       chunk_j = max(v.atts['nj'] for v in vars)
+      nj, ni = var.shape[-2:]
       chunks = OrderedDict()
       for var in vars:
         for sl in np.ndindex(var.record_id.shape):
-          i = var.atts['ig3'] - 1
-          j = var.atts['ig4'] - 1
-          chunks[sl+((j,j+chunk_j),(i,i+chunk_i))] = var.record_id[sl]
+          i1 = var.atts['ig3'] - 1
+          j1 = var.atts['ig4'] - 1
+          i2 = min(i1+chunk_i,ni)
+          j2 = min(j1+chunk_j,nj)
+          chunks[sl+((j1,j2),(i1,i2))] = var.record_id[sl]
       var = _chunk_type (vars[0].name, vars[0].atts, vars[0].axes, vars[0].dtype, chunks, (chunk_j,chunk_i))
       self._varlist.append(var)
 
