@@ -648,7 +648,7 @@ class XYCoords (BufferBase):
       if var.atts.get('grtyp',None) == '#':
         key = tuple([var.atts.get(n,None) for n in self._var_id if n not in ('ni','nj','ig3','ig4')])
         tiles.setdefault(key,[]).append(var)
-    self._varlist = [v for v in varlist if v.atts.get('grtyp',None) != '#']
+    self._varlist = [v for v in self._varlist if v.atts.get('grtyp',None) != '#']
     for key, vars in tiles.items():
       # Get dimensions of a single (untruncated) chunk.
       chunk_i = max(v.atts['ni'] for v in vars)
