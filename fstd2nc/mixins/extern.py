@@ -131,6 +131,9 @@ class ExternOutput (BufferBase):
     ###
     self._makevars()
     for var in self._iter_objects():
+      if not isinstance(var,(_iter_type,_chunk_type)):
+        yield var
+        continue
       name = var.name+"-"+unique_token
       ndim = len(var.axes)
       shape = var.shape
