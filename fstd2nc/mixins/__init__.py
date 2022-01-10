@@ -324,7 +324,7 @@ class BufferBase (object):
     from rpnpy.librmn.base import fnom
     from rpnpy.librmn.fstd98 import fstouv
     from rpnpy.librmn.const import FST_RO
-    from fstd2nc.extra import librmn
+    from rpnpy.librmn import librmn
     opened_file_id = getattr(self,'_opened_file_id',-1)
     # Check if this file already opened.
     if opened_file_id == file_id:
@@ -466,21 +466,23 @@ class BufferBase (object):
       filenum = len(self._files)
       self._files.append(f)
       if fkey not in header_cache:
-        funit = self._open(filenum)
-        nrecs = fstnbr(funit)
-        h = np.zeros(nrecs, dtype=self._headers_dtype)
 
         if no_quick_scan:
+          funit = self._open(filenum)
+          nrecs = fstnbr(funit)
           keys = fstinl(funit)
           params = map(fstprm, keys)
+          h = np.zeros(nrecs, dtype=self._headers_dtype)
           for i,prm in enumerate(params):
             for n,v in prm.items():
               if n in h.dtype.names:
                 h[n][i] = v
         else:
-          from fstd2nc.extra import all_params
-          params = all_params(funit,out=h)
-          keys = params['key']
+          from fstd2nc.extra import all_params, nrecs
+          with open(f,'rb') as funit:
+            h = np.zeros(nrecs(funit), dtype=self._headers_dtype)
+            params = all_params(funit,out=h)
+            keys = params['key']
 
         # Encode the keys without the file index info.
         h['key'] = keys

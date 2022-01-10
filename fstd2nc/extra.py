@@ -20,219 +20,57 @@
 
 """
 Optional helper functions.
-Note: These rely on some assumptions about the internal structures of librmn,
-      and may fail for future libray verisons.
-      These have been tested for librmn 15.2 and 16.2.
+These functions provide information about the FST files using alternative
+approaches (not the standard librmn/rpnpy functions).
+This is solely for performance considerations.
 """
 
-from ctypes import Structure, POINTER, c_void_p, c_uint32, c_int32, c_int, c_uint, c_byte, c_char_p
-from rpnpy.librmn import librmn
 
-
-# From fnom.h
-MAXFILES = 1024
-class attributs(Structure):
-  _fields_ = [
-     ('stream',c_uint,1), ('std',c_uint,1), ('burp',c_uint,1), ('rnd',c_uint,1), ('wa',c_uint,1), ('ftn',c_uint,1),
-     ('unf',c_uint,1), ('read_only',c_uint,1), ('old',c_uint,1), ('scratch',c_uint,1), ('notpaged',c_uint,1),
-     ('pipe',c_uint,1), ('write_mode',c_uint,1), ('remote',c_uint,1), ('padding',c_uint,18),
-  ]
-
-class general_file_info(Structure):
-  _fields_ = [
-    ('file_name',c_char_p),            # complete file name
-    ('subname',c_char_p),              # sub file name for cmcarc files
-    ('file_type',c_char_p),            # file type and options
-    ('iun',c_int),                    # fnom unit number
-    ('fd',c_int),                     # file descriptor
-    ('file_size',c_int),              # file size in words
-    ('eff_file_size',c_int),          # effective file size in words
-    ('lrec',c_int),                   # record length when appliable
-    ('open_flag',c_int),              # open/close flag
-    ('attr',attributs),
-  ]
-
-
-Fnom_General_File_Desc_Table = (general_file_info*MAXFILES).in_dll(librmn,'Fnom_General_File_Desc_Table')
-
-# From rpnmacros.h
-word = c_uint32
-
-# From qstdir.h
-MAX_XDF_FILES = 1024
-ENTRIES_PER_PAGE = 256
-MAX_DIR_PAGES = 1024
-MAX_PRIMARY_LNG = 16
-MAX_SECONDARY_LNG = 8
-max_dir_keys = word*MAX_PRIMARY_LNG
-max_info_keys = word*MAX_SECONDARY_LNG
-
-class stdf_dir_keys(Structure): pass  #defined further below
-
-class xdf_dir_page(Structure):
-  _fields_ = [
-        ('lng',word,24), ('idtyp',word,8), ('addr',word,32), # XDF record header
-        ('reserved1',word,32), ('reserved2',word,32),
-        ('nxt_addr',word,32), ('nent',word,32),
-        ('chksum',word,32), ('reserved3',word,32),
-        ('entry',stdf_dir_keys*ENTRIES_PER_PAGE),
-  ]
-# idtyp:     id type (usualy 0)
-# lng:       header length (in 64 bit units)
-# addr:      address of directory page (origin 1, 64 bit units)
-# reserved1: idrep (4 ascii char 'DIR0')
-# reserved2: reserved (0)
-# nxt_addr:  address of next directory page (origin 1, 64 bit units)
-# nent:      number of entries in page
-# chksum:    checksum (not valid when in core)
-# page_no, record_no, file_index: handle templage
-# entry:     (real allocated dimension will be ENTRIES_PER_PAGE * primary_len)
-
-class full_dir_page(Structure):
-  pass
-page_ptr = POINTER(full_dir_page)
-full_dir_page._fields_ = [
-        ('next_page',page_ptr),
-        ('prev_page',page_ptr),
-        ('modified',c_int),
-        ('true_file_index',c_int),
-        ('dir',xdf_dir_page),
-]
-
-class file_record(Structure):
-  _fields_ = [
-        ('lng',word,24), ('idtyp',word,8), ('addr',word,32),        #XDF record header
-        ('data',word*2),                        # primary keys, info keys, data
-  ]
-
-
-stdf_dir_keys._fields_ = [
-        ('lng',word,24), ('select',word,7), ('deleted',word,1), ('addr',word,32),
-        ('nbits',word,8), ('deet',word,24), ('gtyp',word,8), ('ni',word,24),
-        ('datyp',word,8), ('nj',word,24), ('ubc',word,12), ('nk',word,20),
-        ('pad7',word,6), ('npas',word,26), ('ig2a',word,8), ('ig4',word,24),
-        ('ig2b',word,8), ('ig1',word,24), ('ig2c',word,8), ('ig3',word,24),
-        ('pad1',word,2), ('etik15',word,30), ('pad2',word,2), ('etik6a',word,30),
-        ('pad3',word,8), ('typvar',word,12), ('etikbc',word,12), ('pad4',word,8), ('nomvar',word,24),
-        ('levtyp',word,4), ('ip1',word,28), ('pad5',word,4), ('ip2',word,28),
-        ('pad6',word,4), ('ip3',word,28), ('date_stamp',word,32),
-  ]
-
-
-class key_descriptor(Structure):
-  _fields_ = [
-        ('ncle',word,32), ('reserved',word,8), ('tcle',word,6), ('lcle',word,5), ('bit1',word,13),
-  ]
-
-
-class file_header(Structure):
-  _fields_ = [
-        ('lng',word,24), ('idtyp',word,8), ('addr',word,32),  # standard XDF record header
-        ('vrsn',word),     ('sign',word),               #char[4]
-        ('fsiz',word,32), ('nrwr',word,32),
-        ('nxtn',word,32), ('nbd',word,32),
-        ('plst',word,32), ('nbig',word,32),
-        ('lprm',word,16), ('nprm',word,16), ('laux',word,16), ('naux',word,16),
-        ('neff',word,32), ('nrec',word,32),
-        ('rwflg',word,32), ('reserved',word,32),
-        ('keys',key_descriptor*1024),
-  ]
-# idtyp:     id type (usualy 0)
-# lng:       header length (in 64 bit units)
-# addr:      address (exception: 0 for a file header)
-# vrsn:      XDF version
-# sign:      application signature
-# fsiz:      file size (in 64 bit units)
-# nrwr:      number of rewrites
-# nxtn:      number of extensions
-# nbd:       number of directory pages
-# plst:      address of last directory page (origin 1, 64 bit units)
-# nbig:      size of biggest record
-# nprm:      number of primary keys
-# lprm:      length of primary keys (in 64 bit units)
-# naux:      number of auxiliary keys
-# laux:      length of auxiliary keys
-# neff:      number of erasures
-# nrec:      number of valid records
-# rwflg:     read/write flag
-# reserved:  reserved
-# keys:      key descriptor table
-
-
-class file_table_entry(Structure):
-  _fields_ = [
-        ('dir_page',page_ptr*MAX_DIR_PAGES), # pointer to directory pages
-        ('cur_dir_page',page_ptr),           # pointer to current directory page
-        ('build_primary',c_void_p),       # pointer to primary key building function
-        ('build_info',c_void_p),           # pointer to info building function
-        ('scan_file',c_void_p),            # pointer to file scan function
-        ('file_filter',c_void_p),          # pointer to record filter function
-        ('cur_entry',POINTER(word)),              # pointer to current directory entry
-        ('header',POINTER(file_header)),          # pointer to file header
-        ('nxtadr',c_int32),                # next write address (in word units)
-        ('primary_len',c_int),
-        # length in 64 bit units of primary keys (including 64 bit header)
-        ('info_len',c_int),                 #length in 64 bit units of info keys
-        ('link',c_int),                     # file index to next linked file,-1 if none
-        ('cur_info',POINTER(general_file_info)),
-                                      # pointer to current general file desc entry
-        ('iun',c_int),                      # FORTRAN unit number, -1 if not open, 0 if C file
-        ('file_index',c_int),               # index into file table, -1 if not open
-        ('modified',c_int),                 # modified flag
-        ('npages',c_int),                   # number of allocated directory pages
-        ('nrecords',c_int),                 # number of records in file
-        ('cur_pageno',c_int),               # current page number
-        ('page_record',c_int),              # record number within current page
-        ('page_nrecords',c_int),            # number of records in current page
-        ('file_version',c_int),             # version number
-        ('valid_target',c_int),             # last search target valid flag
-        ('xdf_seq',c_int),                  # file is sequential xdf
-        ('valid_pos',c_int),                # last position valid flag (seq only)
-        ('cur_addr',c_int),                 # current address (WA, sequential xdf)
-        ('seq_bof',c_int),                  # address (WA) of first record (seq xdf)
-        ('fstd_vintage_89',c_int),          # old standard file flag
-        ('head_keys',max_dir_keys),       # header & primary keys for last record
-        ('info_keys',max_info_keys),      # info for last read/written record
-        ('cur_keys',max_dir_keys),        # keys for current operation
-        ('target',max_dir_keys),          # current search target
-        ('srch_mask',max_dir_keys),       # permanent search mask for this file
-        ('cur_mask',max_dir_keys),        # current search mask for this file
-  ]
-file_table_entry_ptr = POINTER(file_table_entry)
-
-librmn.file_index.argtypes = (c_int,)
-librmn.file_index.restype = c_int
-file_table = (file_table_entry_ptr*MAX_XDF_FILES).in_dll(librmn,'file_table')
-
-
-def all_params (funit, out=None):
+def nrecs (f):
   '''
-  Extract parameters for *all* records.
+  Get the total number of records for the specified file.
+  Same value as librmn function fstnbr.
+
+  Parameters
+  ----------
+  f : file object
+      The Python file object to scan for headers.
+  '''
+  import numpy as np
+  f.seek(0x34, 0)
+  return int(np.fromfile(f, '>i4', 1)[0].astype('uint32'))
+
+
+def all_params (f, out=None):
+  '''
+  Extract record headers from the specified file.
   Returns a dictionary similar to fstprm, only the entries are
   vectorized over all records instead of 1 record at a time.
   NOTE: This includes deleted records as well.  You can filter them out using
         the 'dltf' flag.
+
+  Parameters
+  ----------
+  f : file object
+      The Python file object to scan for headers.
+  out : dict or pandas DataFrame, optional
+      Object to store the headers.  By default a dictionary will be created.
   '''
-  from ctypes import cast
   import numpy as np
   # Get the raw (packed) parameters.
-  index = librmn.file_index(funit)
+  pageaddr = 27; pageno = 0
   raw = []
-  file_index_list = []
   pageno_list = []
   recno_list = []
-  while index >= 0:
-    f = file_table[index].contents
-    for pageno in range(f.npages):
-      page = f.dir_page[pageno].contents
-      params = cast(page.dir.entry,POINTER(c_uint32))
-      params = np.ctypeslib.as_array(params,shape=(ENTRIES_PER_PAGE,9,2))
-      nent = page.dir.nent
-      raw.append(params[:nent])
-      recno_list.extend(list(range(nent)))
-      pageno_list.extend([pageno]*nent)
-      file_index_list.extend([index]*nent)
-    index = f.link
+  while pageaddr > 0:
+    f.seek(pageaddr*8-8, 0)
+    page = np.fromfile(f, '>i4', 8+256*18).astype('uint32')
+    params = page[8:].reshape(256,9,2)
+    nent = page[5]
+    raw.append(params[:nent])
+    recno_list.extend(list(range(nent)))
+    pageno_list.extend([pageno]*nent)
+    pageaddr = page[4]; pageno += 1
   raw = np.concatenate(raw)
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
@@ -332,10 +170,9 @@ def all_params (funit, out=None):
   out['xtra3'][:] = 0
   # Calculate the handles (keys)
   # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
-  out['key'][:] = (np.array(file_index_list)&0x3FF) | ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
+  out['key'][:] = ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
 
   return out
-
 
 # Lightweight test for FST files.
 # Uses the same test for fstd98 random files from wkoffit.c (librmn 16.2).
