@@ -25,6 +25,117 @@ approaches (not the standard librmn/rpnpy functions).
 This is solely for performance considerations.
 """
 
+from rpnpy.librmn import librmn
+import ctypes as ct
+import numpy as np
+import numpy.ctypeslib as npc
+librmn.compact_float.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
+librmn.compact_double.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
+librmn.compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+librmn.ieeepak_.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
+librmn.compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+librmn.c_armn_uncompress32.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+librmn.c_armn_compress_setswap.argtypes = (ct.c_int,)
+librmn.armn_compress.argtypes = (npc.ndpointer(dtype='int32'),ct.c_int,ct.c_int,ct.c_int,ct.c_int,ct.c_int)
+librmn.c_float_unpacker.argtypes = (npc.ndpointer(dtype='int32'),npc.ndpointer(dtype='int32'),npc.ndpointer(dtype='int32'),ct.c_int,ct.POINTER(ct.c_int))
+
+def decode (data):
+  '''
+  Decodes the raw FSTD data into the final 2D array of values.
+  Similar to fstluk, but here the data is already loaded in memory.
+  The data should also include the 96 bytes of header information at the
+  beginning of the array.
+
+  Parameters
+  ----------
+  data : array
+      The encoded data
+  '''
+  import rpnpy.librmn.all as rmn
+  import numpy as np
+  data = data.view('>i4').astype('i4')
+  ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
+  nelm = ni*nj*nk
+  datyp = data[4]%256 
+  nbits = data[2]%256
+  if nbits <= 32:
+    dtype = rmn.FST_DATYP2NUMPY_LIST[datyp%128]
+    if datyp == 0: dtype = 'float32'
+    work = np.zeros(nelm,'int32')
+  else:
+    dtype = rmn.FST_DATYP2NUMPY_LIST64[datyp%128]
+    if datyp == 0: dtype = 'float64'
+    work = np.zeros(nelm,'int64')
+  work[:] = 999
+  # Strip header
+  data = data[20:]
+  out = np.empty((nj,ni),dtype=dtype)
+  out[()] = 888
+  ni = ct.c_int(ni)
+  nj = ct.c_int(nj)
+  nk = ct.c_int(nk)
+  nelm = ct.c_int(nelm)
+  npak = ct.c_int(-nbits)
+  nbits = ct.c_int(nbits)
+  zero = ct.c_int(0)
+  one = ct.c_int(1)
+  two = ct.c_int(2)
+  tempfloat = ct.c_double(99999.0)
+
+  print (ni, nj, nk, nbits, datyp, dtype)
+  if datyp == 0:
+    out[()] = data.view(out.dtype)[:nelm.value].reshape(out.shape)
+  if datyp == 1:
+    if nbits.value <= 32:
+      librmn.compact_float(work.view('int32'), data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
+    else:
+      raise Exception
+      librmn.compact_double(work.view('int32'), data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 2:
+    librmn.compact_integer(work.view('int32'), None, data, nelm, nbits, 0, 1, 2)
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 3:
+    raise Exception
+  if datyp == 4:
+    librmn.compact_integer(work.view('int32'), None, data, nelm, nbits, 0, 1, 4)
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 5:
+    librmn.ieeepak_(work.view('int32'), data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 6:
+    librmn.c_float_unpacker(work.view('int32'), data, data[3:], nelm, ct.byref(nbits));
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 7:
+    ier = librmn.compact_char(work.view('int32'), None, data, nelm, 8, 0, 1, 10)
+    work = work.view('B')[:len(work)] & 127
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 8:
+    raise Exception
+  if datyp == 129:
+    d = np.zeros(nelm.value + 1000,dtype='int32')
+    d[:len(data)] = data
+    librmn.armn_compress(d[5:],ni,nj,nk,nbits,2)
+    librmn.compact_float(work.view('int32'),d[1:],d[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 130:
+    d = np.zeros(nelm.value + 1000,dtype='int32')
+    d[:len(data)] = data
+    #librmn.c_armn_compress_setswap(0)
+    librmn.armn_compress(d[1:],ni,nj,nk,nbits,2)
+    #librmn.c_armn_compress_setswap(1)
+    work[:] = d[1:].astype('>i4').view('>H')[:nelm.value]
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 133:
+    librmn.c_armn_uncompress32(work.view('int32'), data[1:], ni, nj, nk, nbits)
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  if datyp == 134:
+    d = np.zeros(nelm.value + 1000,dtype='int32')
+    d[:len(data)] = data
+    librmn.armn_compress(d[4:],ni,nj,nk,nbits,2);
+    librmn.c_float_unpacker(work.view('int32'),d[1:],d[4:],nelm,ct.byref(nbits))
+    out[()] = work.view(out.dtype).reshape(out.shape)
+  return out
 
 def nrecs (f):
   '''
