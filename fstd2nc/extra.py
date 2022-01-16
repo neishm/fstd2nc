@@ -122,7 +122,7 @@ def decode (data):
   if datyp == 134:
     librmn.armn_compress(data[4:],ni,nj,nk,nbits,2);
     librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
-  return work.view(dtype)[:nelm.value].reshape(shape)
+  return work.view(dtype)[:nelm.value].reshape(shape).T
 
 def nrecs (f):
   '''
@@ -271,6 +271,22 @@ def all_params (f, out=None):
   out['key'][:] = ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
 
   return out
+
+
+# Get the block size for the filesystem where the given file resides.
+# May be useful for determining the best way to read chunks of data from
+# FSTD files.
+def blocksize (filename):
+  import subprocess
+  try:
+    # Use the command-line "stat" program instead of os.stat, because the
+    # latter is giving incorrect results for some filesystems.
+    # E.g., on a GPFS filesystem with 16MB block size, os.stat is giving a size
+    # of 256KB.
+    return int(subprocess.check_output(['stat', '-c', '%s', '-f', filename]))
+  except OSError:
+    return 4096  # Give some default value if 'stat' not available.
+
 
 # Lightweight test for FST files.
 # Uses the same test for fstd98 random files from wkoffit.c (librmn 16.2).

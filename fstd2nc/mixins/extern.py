@@ -25,56 +25,61 @@ import collections
 #################################################
 # Provide various external array interfaces for the FSTD data.
 
-# Helper function to embed information about the preferred chunk order.
-# Use as a wrapper when constructing dask Array objects.
-def _preferred_chunk_order (group, index, array):
+# Method for reading a block from a file.
+def _read_block (filename, offset, length):
+  import numpy as np
+  print ("READ OFFSET %X"%offset)
+  with open(filename,'rb') as f:
+    f.seek (offset,0)
+    return np.fromfile(f,'B',length)
+
+# Open a file for raw binary access using dask.
+def _open_binary (filename):
+  from fstd2nc.extra import blocksize
+  from os.path import getsize
+  from dask import array as da
+  # Get a good chunk size for splitting the binary file into dask chunks.
+  # Use the filesystem block size unless it's too small.
+  chunksize = max(blocksize(filename), 2**20)
+  filesize = getsize(filename)
+  dsk = dict()
+  chunks = []
+  for n, offset in enumerate(range(0,filesize,chunksize)):
+    end = min(offset+chunksize,filesize)
+    length = end - offset
+    chunks.append(length)
+    key = (filename,n)
+    dsk[key] = (_read_block, filename, offset, length)
+  array = da.Array(dsk, filename, [chunks], 'B')
   return array
 
-# Helper interface for ordering dask tasks based on FSTD record order.
-# Might provide a small speed boost when the OS employs a read-ahead buffer.
-# Based on dask.core.get_dependencies
-class _RecordOrder (object):
-  def __init__(self, dsk):
-    self.dask = dsk
-  def __call__ (self, arg):
-    dsk = self.dask
-    work = [arg]
-    while work:
-        new_work = []
-        for w in work:
-            typ = type(w)
-            if typ is tuple and w and isinstance(w[0], collections.Callable):  # istask(w)
-                if w[0] is _preferred_chunk_order:
-                  return w[1], w[2]
-                else:
-                  new_work += w[1:]
-            elif typ is list:
-                new_work += w
-            elif typ is dict:
-                new_work += list(w.values())
-            else:
-                try:
-                    if w in dsk:
-                        new_work.append(dsk[w])
-                except TypeError:  # not hashable
-                    pass
-        work = new_work
-    return ('unknown','unknown')
-
-# Add a callback to dask to ensure FSTD records are read in a good order.
-def _add_callback(added_callback=[False]):
-  if added_callback[0] is True: return
-  try:
-    from dask.callbacks import Callback
-    class _FSTD_Callback (Callback):
-      def _start_state (self, dsk, state):
-        ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
-        state['ready'] = ready[::-1]
-    _FSTD_Callback().register()
-    del Callback
-  except ImportError:
-    pass
-  added_callback[0] = True
+# Open an FSTD file, return a table with delayed access to the data.
+def _open_fstd (filename, table=None):
+  from fstd2nc.extra import all_params, decode
+  from fstd2nc.mixins import dtype_fst2numpy
+  import pandas as pd
+  from dask import delayed
+  from dask import array as da
+  import numpy as np
+  decode = delayed(decode)
+  if table is None:
+    with open(filename) as f:
+      table = all_params(f)
+  table = pd.DataFrame(table)
+  b = _open_binary(filename)
+  dlist = np.zeros(table.shape[0], dtype='object')
+  for i, swa, lng, ni, nj, datyp, nbits in table[['swa','lng','ni','nj','datyp','nbits']].itertuples():
+    offset = swa*8-8
+    length = lng*8
+    raw = b[offset:offset+length]
+    data = decode(raw)
+    #TODO: speedup
+    dtype = dtype_fst2numpy (datyp, nbits)
+    shape = (ni, nj)
+    d = da.from_delayed (data, shape, dtype)
+    dlist[i] = d
+  table['d'] = dlist
+  return table
 
 class ExternOutput (BufferBase):
 
