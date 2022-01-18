@@ -33,6 +33,15 @@ def _read_block (filename, offset, length):
     f.seek (offset,0)
     return np.fromfile(f,'B',length)
 
+# Method for selecting a subset of data from a block of data.
+def _subset (block, start, end):
+  return block[start:end]
+
+# Method for merging arrays together.
+def _concat (*data):
+  import numpy as np
+  return np.concatenate(data)
+
 # Open a file for raw binary access using dask.
 def _open_binary (filename):
   from fstd2nc.extra import blocksize
@@ -53,35 +62,45 @@ def _open_binary (filename):
   array = da.Array(dsk, filename, [chunks], 'B')
   return array
 
-# Open an FSTD file, return a table with delayed access to the data.
-def _open_fstd (filename, table=None):
-  from fstd2nc.extra import all_params, decode
-  from fstd2nc.mixins import dtype_fst2numpy
-  import pandas as pd
-  from dask import delayed
-  from dask import array as da
-  import numpy as np
-  decode = delayed(decode)
-  if table is None:
-    with open(filename) as f:
-      table = all_params(f)
-  table = pd.DataFrame(table)
-  b = _open_binary(filename)
-  dlist = np.zeros(table.shape[0], dtype='object')
-  for i, swa, lng, ni, nj, datyp, nbits in table[['swa','lng','ni','nj','datyp','nbits']].itertuples():
-    offset = swa*8-8
-    length = lng*8
-    raw = b[offset:offset+length]
-    data = decode(raw)
-    #TODO: speedup
-    dtype = dtype_fst2numpy (datyp, nbits)
-    shape = (ni, nj)
-    d = da.from_delayed (data, shape, dtype)
-    dlist[i] = d
-  table['d'] = dlist
-  return table
 
 class ExternOutput (BufferBase):
+
+  # Helper method to get graph for raw input data.
+  def _graphs (self):
+    from fstd2nc.extra import blocksize
+    from os.path import getsize
+    import numpy as np
+    graphs = [None] * len(self._headers)
+    blocksizes = dict()
+    fs_blocks = dict()
+    all_file_ids = np.array(self._headers['file_id'],copy=True)
+    all_swa = np.array(self._headers['swa'],copy=True)
+    all_lng = np.array(self._headers['lng'],copy=True)
+    for rec_id in range(len(self._headers)):
+      file_id = all_file_ids[rec_id]
+      filename = self._files[file_id]
+      if filename not in blocksizes:
+        blocksizes[filename] = max(blocksize(filename), 2**20)
+      bs = blocksizes[filename]
+      offset = all_swa[rec_id] * 8 - 8
+      length = all_lng[rec_id] * 8
+      current_block = offset // bs
+      pieces = []
+      while current_block * bs < offset + length:
+        s1 = max(current_block*bs, offset) - current_block*bs
+        s2 = min(current_block*bs+bs, offset+length) - current_block*bs
+        if (filename,current_block) not in fs_blocks:
+          fs_blocks[(filename,current_block)] = (_read_block, filename, current_block*bs, bs)
+        pieces.append( (_subset, fs_blocks[(filename,current_block)], s1, s2) )
+        current_block = current_block + 1
+      if len(pieces) > 1:
+        graph = (_concat,) + tuple(pieces)
+      else:
+        graph = pieces[0]
+      graph = (self._decode, graph)
+      graph = (np.transpose, graph)
+      graphs[rec_id] = graph
+    return graphs
 
   def _iter_dask (self):
     """
@@ -94,19 +113,9 @@ class ExternOutput (BufferBase):
     from itertools import product
     from dask import delayed
     from fstd2nc.extra import decode
-    # Defined a delayed function for decoding a record and putting it into
-    # the expected shape and type.
-    @delayed
-    def decode_and_reshape (data, shape, dtype):
-      return self._decode(data).transpose().reshape(shape).astype(dtype)
     unique_token = tokenize(self._files,id(self))
-    # Make a local copy of some columns from the header table.
-    # This speeds up access to their elements in the inner loop.
-    all_file_ids = np.array(self._headers['file_id'],copy=True)
-    all_swa = np.array(self._headers['swa'],copy=True)
-    all_lng = np.array(self._headers['lng'],copy=True)
+    graphs = self._graphs()
     self._makevars()
-    file_arrays = dict()
     for var in self._iter_objects():
       if not isinstance(var,(_iter_type,_chunk_type)):
         yield var
@@ -172,19 +181,7 @@ class ExternOutput (BufferBase):
                 dsk[key] = np.reshape(dsk[key], chunk_shape)
             # Otherwise, construct one with our own dask wrapper.
             else:
-              file_id = all_file_ids[rec_id]
-              filename = self._files[file_id]
-              # Get dask array for accessing the raw data of the file.
-              if filename not in file_arrays:
-                file_arrays[filename] = _open_binary(filename)
-              file_array = file_arrays[filename]
-              # Now, select and decode the data needed for this chunk (delayed operation).
-              offset = all_swa[rec_id]*8-8
-              length = all_lng[rec_id]*8
-              raw = file_array[offset:offset+length]
-              data = decode_and_reshape(raw, chunk_shape, var.dtype)
-              dsk[key] = da.from_delayed (data, chunk_shape, var.dtype)
-              #dsk[key] = (decode_and_reshape, raw, chunk_shape, var.dtype)
+                dsk[key] = (np.reshape, graphs[rec_id], chunk_shape)
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
