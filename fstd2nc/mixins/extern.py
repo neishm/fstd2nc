@@ -83,22 +83,6 @@ def _open_fstd (filename, table=None):
 
 class ExternOutput (BufferBase):
 
-  _read_chunk_cache = None
-
-  # The interface for getting chunks into dask.
-  def _read_chunk (self, rec_id, shape, dtype):
-    with self._lock:
-      # Cache the last record read from this interface, in case it is
-      # immediately requested again.
-      # Can happen, for instance, if the same data is sliced in multiple
-      # different ways.
-      if self._read_chunk_cache is None:
-        self._read_chunk_cache = {}
-      if rec_id not in self._read_chunk_cache:
-        self._read_chunk_cache.clear()
-        self._read_chunk_cache[rec_id] = self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
-      return self._read_chunk_cache[rec_id]
-
   def _iter_dask (self):
     """
     Iterate over all the variables, and convert to dask arrays.
@@ -108,33 +92,21 @@ class ExternOutput (BufferBase):
     from dask.base import tokenize
     import numpy as np
     from itertools import product
-    _add_callback()
+    from dask import delayed
+    from fstd2nc.extra import decode
+    # Defined a delayed function for decoding a record and putting it into
+    # the expected shape and type.
+    @delayed
+    def decode_and_reshape (data, shape, dtype):
+      return self._decode(data).transpose().reshape(shape).astype(dtype)
     unique_token = tokenize(self._files,id(self))
-    # Make a local copy of two columns from the header table.
+    # Make a local copy of some columns from the header table.
     # This speeds up access to their elements in the inner loop.
     all_file_ids = np.array(self._headers['file_id'],copy=True)
-    all_keys = np.array(self._headers['key'],copy=True)
-    ###
-    # For science network installation, make sure the stack size of child
-    # threads is large enough to accomodate workspace for librmn.
-    from os.path import basename, splitext
-    from rpnpy.librmn import librmn
-    libname = basename(getattr(librmn,'_name',''))
-    # Skip this step for patched versions of librmn (ending in -rpnpy) that
-    # use the heap instead of the stack for workspace.
-    if not splitext(libname)[0].endswith('-rpnpy'):
-      import threading
-      # Use the size of the largest record, plus 1MB just in case.
-      # Use multiples of 4K for the size, as suggested in Python theading
-      # documentation.
-      # https://docs.python.org/3/library/threading.html#threading.stack_size
-      # Allow for possibility of double precision values (64-bit)
-      arraysize = np.max(8 * self._headers['ni'] * self._headers['nj'] * self._headers['nk'])
-      stacksize = arraysize//4096*4096 + (1<<20)
-      if stacksize > threading.stack_size():
-        threading.stack_size(stacksize)
-    ###
+    all_swa = np.array(self._headers['swa'],copy=True)
+    all_lng = np.array(self._headers['lng'],copy=True)
     self._makevars()
+    file_arrays = dict()
     for var in self._iter_objects():
       if not isinstance(var,(_iter_type,_chunk_type)):
         yield var
@@ -183,9 +155,6 @@ class ExternOutput (BufferBase):
           # Also, specify the preferred order of reading the chunks within the
           # file.
           if rec_id >= 0:
-            file_id = all_file_ids[rec_id]
-            filename = self._files[file_id]
-            rec_key = all_keys[rec_id]
             # Special case: already have a dask object from external source.
             # (E.g., from fstpy)
             if hasattr(self, '_extern_table'):
@@ -203,7 +172,19 @@ class ExternOutput (BufferBase):
                 dsk[key] = np.reshape(dsk[key], chunk_shape)
             # Otherwise, construct one with our own dask wrapper.
             else:
-              dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
+              file_id = all_file_ids[rec_id]
+              filename = self._files[file_id]
+              # Get dask array for accessing the raw data of the file.
+              if filename not in file_arrays:
+                file_arrays[filename] = _open_binary(filename)
+              file_array = file_arrays[filename]
+              # Now, select and decode the data needed for this chunk (delayed operation).
+              offset = all_swa[rec_id]*8-8
+              length = all_lng[rec_id]*8
+              raw = file_array[offset:offset+length]
+              data = decode_and_reshape(raw, chunk_shape, var.dtype)
+              dsk[key] = da.from_delayed (data, chunk_shape, var.dtype)
+              #dsk[key] = (decode_and_reshape, raw, chunk_shape, var.dtype)
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):

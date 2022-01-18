@@ -74,3 +74,8 @@ class Masks (BufferBase):
       prm['d'] += self._fill_value * (1-mask)
     return prm
 
+  # Apply the mask data from raw binary array.
+  def _decode (self, data):
+    unmasked = super(Masks,self)._decode(data)
+    return unmasked
+    #raise Exception #TODO

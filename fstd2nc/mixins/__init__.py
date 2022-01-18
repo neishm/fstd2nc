@@ -986,6 +986,12 @@ class BufferBase (object):
 
       return fstluk (key, dtype, rank, dataArray)
 
+  # How to decode the data from a raw binary array.
+  def _decode (self, data):
+    from fstd2nc.extra import decode
+    return decode(data)
+
+
   #
   ###############################################
 
