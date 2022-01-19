@@ -77,6 +77,7 @@ class ExternOutput (BufferBase):
     all_swa = np.array(self._headers['swa'],copy=True)
     all_lng = np.array(self._headers['lng'],copy=True)
     for rec_id in range(len(self._headers)):
+      graph = dict()
       file_id = all_file_ids[rec_id]
       filename = self._files[file_id]
       if filename not in blocksizes:
@@ -91,14 +92,15 @@ class ExternOutput (BufferBase):
         s2 = min(current_block*bs+bs, offset+length) - current_block*bs
         if (filename,current_block) not in fs_blocks:
           fs_blocks[(filename,current_block)] = (_read_block, filename, current_block*bs, bs)
-        pieces.append( (_subset, fs_blocks[(filename,current_block)], s1, s2) )
+        graph[filename+'-block-'+str(current_block)] = fs_blocks[(filename,current_block)]
+        pieces.append( (_subset, filename+'-block-'+str(current_block), s1, s2) )
         current_block = current_block + 1
       if len(pieces) > 1:
-        graph = (_concat,) + tuple(pieces)
+        graph[filename+'-raw-'+str(offset)] = (_concat,) + tuple(pieces)
       else:
-        graph = pieces[0]
-      graph = (self._decode, graph)
-      graph = (np.transpose, graph)
+        graph[filename+'-raw-'+str(offset)] = pieces[0]
+      graph[filename+'-decode-'+str(offset)] = (np.transpose, (self._decode, filename+'-raw-'+str(offset)))
+      graph[None] = filename+'-decode-'+str(offset)
       graphs[rec_id] = graph
     return graphs
 
@@ -181,7 +183,10 @@ class ExternOutput (BufferBase):
                 dsk[key] = np.reshape(dsk[key], chunk_shape)
             # Otherwise, construct one with our own dask wrapper.
             else:
-                dsk[key] = (np.reshape, graphs[rec_id], chunk_shape)
+                graph = graphs[rec_id][None]
+                dsk.update(graphs[rec_id])
+                del dsk[None]
+                dsk[key] = (np.reshape, graph, chunk_shape)
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
