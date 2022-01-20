@@ -67,6 +67,11 @@ class Interp (BufferBase):
       iun = rmn.fstopenall(gridfile, rmn.FST_RW)
       rmn.writeGrid (iun, self._interp_grid)
       rmn.fstcloseall (iun)
+      # Handle case where a single file was passed from the Python interface.
+      if isinstance(args[0],str):
+        args = list(args)
+        args[0] = [args[0]]
+        args = tuple(args)
       # Add this grid file to the inputs.
       args[0].append(gridfile)
       super(Interp,self).__init__(*args,**kwargs)
