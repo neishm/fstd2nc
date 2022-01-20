@@ -142,37 +142,24 @@ def nrecs (f):
   return int(valid_records + rewrites)
 
 
-def all_params (f, out=None):
+def decode_headers (raw, out=None):
   '''
-  Extract record headers from the specified file.
+  Decode record headers from a raw byte array.
   Returns a dictionary similar to fstprm, only the entries are
   vectorized over all records instead of 1 record at a time.
   NOTE: This includes deleted records as well.  You can filter them out using
         the 'dltf' flag.
+  See also 'all_params', which decodes headers from a file object.
 
   Parameters
   ----------
-  f : file object
-      The Python file object to scan for headers.
+  raw : numpy array (dtype='B')
+      The raw array of headers to decode.
   out : dict or pandas DataFrame, optional
       Object to store the headers.  By default a dictionary will be created.
   '''
   import numpy as np
-  # Get the raw (packed) parameters.
-  pageaddr = 27; pageno = 0
-  raw = []
-  pageno_list = []
-  recno_list = []
-  while pageaddr > 0:
-    f.seek(pageaddr*8-8, 0)
-    page = np.fromfile(f, '>i4', 8+256*18).astype('uint32')
-    params = page[8:].reshape(256,9,2)
-    nent = page[5]
-    raw.append(params[:nent])
-    recno_list.extend(list(range(nent)))
-    pageno_list.extend([pageno]*nent)
-    pageaddr = page[4]; pageno += 1
-  raw = np.concatenate(raw)
+  raw = raw.view('>i4').astype('uint32').reshape(-1,9,2)
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
   # 0      word deleted:1, select:7, lng:24, addr:32;
@@ -269,12 +256,46 @@ def all_params (f, out=None):
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0
-  # Calculate the handles (keys)
-  # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
-  out['key'][:] = ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
 
   return out
 
+
+def all_params (f, out=None):
+  '''
+  Extract record headers from the specified file.
+  Returns a dictionary similar to fstprm, only the entries are
+  vectorized over all records instead of 1 record at a time.
+  NOTE: This includes deleted records as well.  You can filter them out using
+        the 'dltf' flag.
+
+  Parameters
+  ----------
+  f : file object
+      The Python file object to scan for headers.
+  out : dict or pandas DataFrame, optional
+      Object to store the headers.  By default a dictionary will be created.
+  '''
+  import numpy as np
+  # Get the raw (packed) parameters.
+  pageaddr = 27; pageno = 0
+  raw = []
+  pageno_list = []
+  recno_list = []
+  while pageaddr > 0:
+    f.seek(pageaddr*8-8, 0)
+    page = np.fromfile(f, '>i4', 8+256*18)
+    params = page[8:].reshape(256,9,2)
+    nent = page[5]
+    raw.append(params[:nent].view('B').flatten())
+    recno_list.extend(list(range(nent)))
+    pageno_list.extend([pageno]*nent)
+    pageaddr = page[4]; pageno += 1
+  raw = np.concatenate(raw)
+  out = decode_headers (raw, out=out)
+  # Calculate the handles (keys)
+  # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
+  out['key'][:] = ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
+  return out
 
 # Get the block size for the filesystem where the given file resides.
 # May be useful for determining the best way to read chunks of data from
