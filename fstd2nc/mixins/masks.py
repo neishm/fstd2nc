@@ -37,12 +37,31 @@ class Masks (BufferBase):
         The fill value to use for masked (missing) data.  Gets stored as
         '_FillValue' attribute in the metadata.  Default is 1e30.
     """
+    import numpy as np
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(Masks,self).__init__(*args,**kwargs)
     # Remove all mask records from the table, they should not become variables
     # themselves.
     is_mask = (self._headers['typvar'] == b'@@')
     self._headers['dltf'][is_mask] = 1
+    # Modify 'lng' to overlap the data and mask fields (where they are stored
+    # consecutively).
+    # This will allow the _decode method to apply the mask directly.
+    nomvar = self._headers['nomvar']
+    typvar = self._headers['typvar']
+    etiket = self._headers['etiket']
+    datev = self._headers['datev']
+    ip1 = self._headers['ip1']
+    ip2 = self._headers['ip2']
+    ip3 = self._headers['ip3']
+    swa = self._headers['swa']
+    lng = self._headers['lng'].copy()
+    uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
+    if np.sum(uses_mask) > 0:
+      overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:]
+      overlap = np.where(overlap)[0]
+      lng[overlap] = swa[overlap+1] + lng[overlap+1] - swa[overlap]
+      self._headers['lng'] = lng
 
   # Apply the fill value to the data.
   def _makevars (self):
@@ -76,6 +95,29 @@ class Masks (BufferBase):
 
   # Apply the mask data from raw binary array.
   def _decode (self, data):
-    unmasked = super(Masks,self)._decode(data)
-    return unmasked
-    #raise Exception #TODO
+    d = data.view('>i4')
+    # Get first field.
+    code1 = (d[12]&0x000FFF00)>>8
+    field1 = super(Masks,self)._decode(data)
+    # Find out where the next field should be.
+    swa = d[1]
+    offset = d[0]&(0x00FFFFFF)
+    while offset < len(d)//2 and swa+offset != d[offset*2+1]:
+      offset += 1
+    else:
+      # No extra fields found?
+      if offset >= len(d)//2:
+        return field1
+    data = data.view('>i4')[offset*2:].view(data.dtype)
+    d = data.view('>i4')
+    # Get second field.
+    code2 = (d[12]&0x000FFF00)>>8
+    field2 = super(Masks,self)._decode(data)
+    # Apply the mask.
+    if code1 == 2080:
+      return (field1*field2) + self._fill_value * (1-field1)
+    elif code2 == 2080:
+      return (field1*field2) + self._fill_value * (1-field2)
+    else:
+      # Don't know how to apply this typvar for masking purposes.
+      return field1
