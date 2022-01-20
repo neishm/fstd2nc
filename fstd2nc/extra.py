@@ -37,8 +37,11 @@ def nrecs (f):
       The Python file object to scan for headers.
   '''
   import numpy as np
+  f.seek(0x14, 0)
+  rewrites = np.fromfile(f, '>i4', 1)[0]
   f.seek(0x34, 0)
-  return int(np.fromfile(f, '>i4', 1)[0].astype('uint32'))
+  valid_records = np.fromfile(f, '>i4', 1)[0]
+  return int(valid_records + rewrites)
 
 
 def all_params (f, out=None):
