@@ -186,7 +186,7 @@ class ExternOutput (BufferBase):
                 graph = graphs[rec_id][None]
                 dsk.update(graphs[rec_id])
                 del dsk[None]
-                dsk[key] = (np.ndarray.view, (np.reshape, graph, chunk_shape), var.dtype)
+                dsk[key] = (np.reshape, graph, chunk_shape)
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
