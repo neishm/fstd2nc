@@ -43,7 +43,7 @@ def decode (data):
   '''
   Decodes the raw FSTD data into the final 2D array of values.
   Similar to fstluk, but here the data is already loaded in memory.
-  The data should also include the 96 bytes of header information at the
+  The data should also include the header information at the
   beginning of the array.
 
   Parameters

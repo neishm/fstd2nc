@@ -28,7 +28,6 @@ import collections
 # Method for reading a block from a file.
 def _read_block (filename, offset, length):
   import numpy as np
-  print ("READ OFFSET %X"%offset)
   with open(filename,'rb') as f:
     f.seek (offset,0)
     return np.fromfile(f,'B',length)
@@ -41,26 +40,6 @@ def _subset (block, start, end):
 def _concat (*data):
   import numpy as np
   return np.concatenate(data)
-
-# Open a file for raw binary access using dask.
-def _open_binary (filename):
-  from fstd2nc.extra import blocksize
-  from os.path import getsize
-  from dask import array as da
-  # Get a good chunk size for splitting the binary file into dask chunks.
-  # Use the filesystem block size unless it's too small.
-  chunksize = max(blocksize(filename), 2**20)
-  filesize = getsize(filename)
-  dsk = dict()
-  chunks = []
-  for n, offset in enumerate(range(0,filesize,chunksize)):
-    end = min(offset+chunksize,filesize)
-    length = end - offset
-    chunks.append(length)
-    key = (filename,n)
-    dsk[key] = (_read_block, filename, offset, length)
-  array = da.Array(dsk, filename, [chunks], 'B')
-  return array
 
 
 class ExternOutput (BufferBase):
