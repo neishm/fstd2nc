@@ -85,6 +85,18 @@ class Interp (BufferBase):
     else:
       super(Interp,self).__init__(*args,**kwargs)
 
+  # Add fill value to the data.
+  # Modified from code in from mask mixin.
+  # Set this fill value for any interpolated data, since it may contain
+  # points outside the original boundary.
+  def _makevars (self):
+    from fstd2nc.mixins import _iter_type
+    super(Interp,self)._makevars()
+    if hasattr(self,'_interp_grid'):
+      for var in self._varlist:
+        if isinstance(var,_iter_type):
+          var.atts['_FillValue'] = var.dtype.type(self._fill_value)
+
   # Handle grid interpolation
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None, _grid_cache={}):
     import rpnpy.librmn.all as rmn
