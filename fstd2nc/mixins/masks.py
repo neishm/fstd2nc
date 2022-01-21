@@ -115,9 +115,9 @@ class Masks (BufferBase):
     field2 = super(Masks,self)._decode(data)
     # Apply the mask.
     if code1 == 2080:
-      return (field1*field2) + self._fill_value * (1-field1)
+      return ((field1*field2) + self._fill_value * (1-field1)).astype(field2.dtypee)
     elif code2 == 2080:
-      return (field1*field2) + self._fill_value * (1-field2)
+      return ((field1*field2) + self._fill_value * (1-field2)).astype(field1.dtype)
     else:
       # Don't know how to apply this typvar for masking purposes.
       return field1
