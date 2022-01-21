@@ -61,6 +61,6 @@ class FilterRecords (BufferBase):
     except SyntaxError:
       error (_("unable to parse the filter: %s")%cmd)
     except NameError as e:
-      error (e.message)
+      error (str(e))
 
 
