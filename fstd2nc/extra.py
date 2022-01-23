@@ -134,6 +134,14 @@ def nrecs (f):
   f : file object
       The Python file object to scan for headers.
   '''
+  # Note: having trouble using number of rewrites / erasures to get the
+  # true number of records.  The way librmn computes the total number of
+  # records is to count them over all the directory pages, so we can get that
+  # same count from "all_params".
+  #TODO: more efficient solution.
+  x = all_params (f)
+  return len(x['swa'])
+  # This code ended up not working in some cases, so no longer used.
   import numpy as np
   f.seek(0x14, 0)
   rewrites = np.fromfile(f, '>i4', 1)[0]
