@@ -988,7 +988,7 @@ class BufferBase (object):
 
   # How to decode the data from a raw binary array.
   def _decode (self, data):
-    from fstd2nc.extra import decode_headers, decode
+    from fstd2nc.extra import decode
     nbits = int(data[0x0b])
     datyp = int(data[0x13])
     dtype = dtype_fst2numpy(datyp, nbits)
