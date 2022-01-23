@@ -25,74 +25,63 @@ import collections
 #################################################
 # Provide various external array interfaces for the FSTD data.
 
-# Helper function to embed information about the preferred chunk order.
-# Use as a wrapper when constructing dask Array objects.
-def _preferred_chunk_order (group, index, array):
-  return array
+# Method for reading a block from a file.
+def _read_block (filename, offset, length):
+  import numpy as np
+  with open(filename,'rb') as f:
+    f.seek (offset,0)
+    return np.fromfile(f,'B',length)
 
-# Helper interface for ordering dask tasks based on FSTD record order.
-# Might provide a small speed boost when the OS employs a read-ahead buffer.
-# Based on dask.core.get_dependencies
-class _RecordOrder (object):
-  def __init__(self, dsk):
-    self.dask = dsk
-  def __call__ (self, arg):
-    dsk = self.dask
-    work = [arg]
-    while work:
-        new_work = []
-        for w in work:
-            typ = type(w)
-            if typ is tuple and w and isinstance(w[0], collections.Callable):  # istask(w)
-                if w[0] is _preferred_chunk_order:
-                  return w[1], w[2]
-                else:
-                  new_work += w[1:]
-            elif typ is list:
-                new_work += w
-            elif typ is dict:
-                new_work += list(w.values())
-            else:
-                try:
-                    if w in dsk:
-                        new_work.append(dsk[w])
-                except TypeError:  # not hashable
-                    pass
-        work = new_work
-    return ('unknown','unknown')
+# Method for selecting a subset of data from a block of data.
+def _subset (block, start, end):
+  return block[start:end]
 
-# Add a callback to dask to ensure FSTD records are read in a good order.
-def _add_callback(added_callback=[False]):
-  if added_callback[0] is True: return
-  try:
-    from dask.callbacks import Callback
-    class _FSTD_Callback (Callback):
-      def _start_state (self, dsk, state):
-        ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
-        state['ready'] = ready[::-1]
-    _FSTD_Callback().register()
-    del Callback
-  except ImportError:
-    pass
-  added_callback[0] = True
+# Method for merging arrays together.
+def _concat (*data):
+  import numpy as np
+  return np.concatenate(data)
+
 
 class ExternOutput (BufferBase):
 
-  _read_chunk_cache = None
-
-  # The interface for getting chunks into dask.
-  def _read_chunk (self, rec_id, shape, dtype):
-    with self._lock:
-      # Cache the last record read from this interface, in case it is
-      # immediately requested again.
-      # Can happen, for instance, if the same data is sliced in multiple
-      # different ways.
-      if self._read_chunk_cache is None:
-        self._read_chunk_cache = {}
-      if rec_id not in self._read_chunk_cache:
-        self._read_chunk_cache.clear()
-        self._read_chunk_cache[rec_id] = self._fstluk(rec_id,dtype=dtype)['d'].transpose().reshape(shape)
-      return self._read_chunk_cache[rec_id]
+  # Helper method to get graph for raw input data.
+  def _graphs (self):
+    from fstd2nc.extra import blocksize
+    from os.path import getsize
+    import numpy as np
+    graphs = [None] * len(self._headers)
+    blocksizes = dict()
+    fs_blocks = dict()
+    all_file_ids = np.array(self._headers['file_id'],copy=True)
+    all_swa = np.array(self._headers['swa'],copy=True)
+    all_lng = np.array(self._headers['lng'],copy=True)
+    for rec_id in range(len(self._headers)):
+      graph = dict()
+      file_id = all_file_ids[rec_id]
+      filename = self._files[file_id]
+      if filename not in blocksizes:
+        blocksizes[filename] = max(blocksize(filename), 2**20)
+      bs = blocksizes[filename]
+      offset = all_swa[rec_id] * 8 - 8
+      length = all_lng[rec_id] * 8
+      current_block = offset // bs
+      pieces = []
+      while current_block * bs < offset + length:
+        s1 = max(current_block*bs, offset) - current_block*bs
+        s2 = min(current_block*bs+bs, offset+length) - current_block*bs
+        if (filename,current_block) not in fs_blocks:
+          fs_blocks[(filename,current_block)] = (_read_block, filename, current_block*bs, bs)
+        graph[filename+'-block-'+str(current_block)] = fs_blocks[(filename,current_block)]
+        pieces.append( (_subset, filename+'-block-'+str(current_block), s1, s2) )
+        current_block = current_block + 1
+      if len(pieces) > 1:
+        graph[filename+'-raw-'+str(offset)] = (_concat,) + tuple(pieces)
+      else:
+        graph[filename+'-raw-'+str(offset)] = pieces[0]
+      graph[filename+'-decode-'+str(offset)] = (np.transpose, (self._decode, filename+'-raw-'+str(offset)))
+      graph[None] = filename+'-decode-'+str(offset)
+      graphs[rec_id] = graph
+    return graphs
 
   def _iter_dask (self):
     """
@@ -103,32 +92,10 @@ class ExternOutput (BufferBase):
     from dask.base import tokenize
     import numpy as np
     from itertools import product
-    _add_callback()
+    from dask import delayed
+    from fstd2nc.extra import decode
     unique_token = tokenize(self._files,id(self))
-    # Make a local copy of two columns from the header table.
-    # This speeds up access to their elements in the inner loop.
-    all_file_ids = np.array(self._headers['file_id'],copy=True)
-    all_keys = np.array(self._headers['key'],copy=True)
-    ###
-    # For science network installation, make sure the stack size of child
-    # threads is large enough to accomodate workspace for librmn.
-    from os.path import basename, splitext
-    from rpnpy.librmn import librmn
-    libname = basename(getattr(librmn,'_name',''))
-    # Skip this step for patched versions of librmn (ending in -rpnpy) that
-    # use the heap instead of the stack for workspace.
-    if not splitext(libname)[0].endswith('-rpnpy'):
-      import threading
-      # Use the size of the largest record, plus 1MB just in case.
-      # Use multiples of 4K for the size, as suggested in Python theading
-      # documentation.
-      # https://docs.python.org/3/library/threading.html#threading.stack_size
-      # Allow for possibility of double precision values (64-bit)
-      arraysize = np.max(8 * self._headers['ni'] * self._headers['nj'] * self._headers['nk'])
-      stacksize = arraysize//4096*4096 + (1<<20)
-      if stacksize > threading.stack_size():
-        threading.stack_size(stacksize)
-    ###
+    graphs = self._graphs()
     self._makevars()
     for var in self._iter_objects():
       if not isinstance(var,(_iter_type,_chunk_type)):
@@ -178,9 +145,6 @@ class ExternOutput (BufferBase):
           # Also, specify the preferred order of reading the chunks within the
           # file.
           if rec_id >= 0:
-            file_id = all_file_ids[rec_id]
-            filename = self._files[file_id]
-            rec_key = all_keys[rec_id]
             # Special case: already have a dask object from external source.
             # (E.g., from fstpy)
             if hasattr(self, '_extern_table'):
@@ -198,7 +162,10 @@ class ExternOutput (BufferBase):
                 dsk[key] = np.reshape(dsk[key], chunk_shape)
             # Otherwise, construct one with our own dask wrapper.
             else:
-              dsk[key] = (_preferred_chunk_order,filename,rec_key,(self._read_chunk, rec_id, chunk_shape, var.dtype))
+                graph = graphs[rec_id][None]
+                dsk.update(graphs[rec_id])
+                del dsk[None]
+                dsk[key] = (np.reshape, graph, chunk_shape)
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):

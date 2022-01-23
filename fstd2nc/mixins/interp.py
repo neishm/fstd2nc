@@ -126,3 +126,34 @@ class Interp (BufferBase):
     prm['d'] = d
     return prm
 
+  # Handle grid interpolations from raw binary array.
+  def _decode (self, data, _grid_cache={}):
+    import rpnpy.librmn.all as rmn
+    import numpy as np
+    from fstd2nc.extra import decode_headers, decode
+    if not hasattr(self,'_interp_grid'):
+      return super(Interp,self)._decode (data)
+    grid_params = ('ni','nj','grtyp','ig1','ig2','ig3','ig4')
+    prm = decode_headers(data[:72])
+    prm = dict((k,v[0]) for k,v in prm.items())
+    prm['d'] = super(Interp,self)._decode (data)
+    with self._lock:
+      cache_key = tuple(prm[k] for k in grid_params)
+      # Check if we've already defined the input grid in a previous call.
+      if cache_key in _grid_cache:
+        ingrid = _grid_cache[cache_key]
+      else:
+        ingrid = dict((k,(str(prm[k].decode()) if k=='grtyp' else int(prm[k]))) for k in grid_params)
+        ingrid['iunit'] = self._meta_funit
+        ingrid = rmn.ezqkdef (**ingrid)
+        _grid_cache[cache_key] = ingrid
+
+    # Propogate any fill values to the interpolated grid.
+    in_mask = np.zeros(prm['d'].shape, order='F', dtype='float32')
+    in_mask[prm['d']==self._fill_value] = 1.0
+    d = rmn.ezsint (self._interp_grid, ingrid, prm['d'])
+    out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
+    d[out_mask!=0] = self._fill_value
+    # Return the data for the interpolated field.
+    return d
+

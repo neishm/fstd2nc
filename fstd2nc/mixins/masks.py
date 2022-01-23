@@ -37,8 +37,28 @@ class Masks (BufferBase):
         The fill value to use for masked (missing) data.  Gets stored as
         '_FillValue' attribute in the metadata.  Default is 1e30.
     """
+    import numpy as np
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(Masks,self).__init__(*args,**kwargs)
+    # Modify 'lng' to overlap the data and mask fields (where they are stored
+    # consecutively).
+    # This will allow the _decode method to apply the mask directly.
+    nomvar = self._headers['nomvar']
+    typvar = self._headers['typvar']
+    etiket = self._headers['etiket']
+    datev = self._headers['datev']
+    ip1 = self._headers['ip1']
+    ip2 = self._headers['ip2']
+    ip3 = self._headers['ip3']
+    swa = self._headers['swa']
+    lng = self._headers['lng'].copy()
+    dltf = self._headers['dltf']
+    uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
+    if np.sum(uses_mask) > 0:
+      overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
+      overlap = np.where(overlap)[0]
+      lng[overlap] = swa[overlap+1] + lng[overlap+1] - swa[overlap]
+      self._headers['lng'] = lng
     # Remove all mask records from the table, they should not become variables
     # themselves.
     is_mask = (self._headers['typvar'] == b'@@')
@@ -74,3 +94,59 @@ class Masks (BufferBase):
       prm['d'] += self._fill_value * (1-mask)
     return prm
 
+  # Apply the mask data from raw binary array.
+  def _decode (self, data):
+    from fstd2nc.extra import decode_headers
+    import numpy as np
+    d = data.view('>i4')
+    # Get first field.
+    code1 = (d[12]&0x000FFF00)>>8
+    field1 = super(Masks,self)._decode(data)
+    # If typvar doesn't end in '@', then nothing to do here.
+    if (code1 & 0x3F) != 32:
+      return field1
+    # Find out where the next field should be.
+    swa = d[1]
+    offset = d[0]&(0x00FFFFFF)
+    while offset < len(d)//2 and swa+offset != d[offset*2+1]:
+      offset += 1
+    else:
+      # No extra fields found?
+      if offset >= len(d)//2:
+        # Since the mask wasn't conveniently located right after the data
+        # record, need to go hunting for it.
+        # TODO: search for it ahead of time (in __init__ stage) if an efficient
+        # way of matching masks is found.
+        prm = decode_headers(data[:72])
+        criteria = True
+        for name in ('nomvar', 'datev', 'etiket', 'ip1', 'ip2', 'ip3'):
+          criteria = criteria & (self._headers[name] == prm[name][0])
+        # Note: with this approach, can't check if the mask was truly deleted
+        # or just ignored.  Hope for the best, until 'dltf' logic is revisited.
+        criteria &= (self._headers['typvar'] == b'@@')
+        ind = np.where(criteria)[0]
+        # If still no mask found, then give up.
+        if len(ind) == 0:
+          return field1
+        rec_id = ind[0]
+        filename = self._files[self._headers['file_id'][rec_id]]
+        with open (filename, 'rb') as f:
+          f.seek(self._headers['swa'][rec_id]*8-8)
+          mask = np.fromfile(f,'B',self._headers['lng'][rec_id]*8)
+        mask = super(Masks,self)._decode(mask)
+        return ((field1*mask) + self._fill_value * (1-mask)).astype(field1.dtype)
+    # Ok, back to the case where the other field is available conveniently
+    # after the first.
+    data = data.view('>i4')[offset*2:].view(data.dtype)
+    d = data.view('>i4')
+    # Get second field.
+    code2 = (d[12]&0x000FFF00)>>8
+    field2 = super(Masks,self)._decode(data)
+    # Apply the mask.
+    if code1 == 2080:
+      return ((field1*field2) + self._fill_value * (1-field1)).astype(field2.dtypee)
+    elif code2 == 2080:
+      return ((field1*field2) + self._fill_value * (1-field2)).astype(field1.dtype)
+    else:
+      # Don't know how to apply this typvar for masking purposes.
+      return field1

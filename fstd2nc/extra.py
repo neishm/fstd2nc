@@ -25,6 +25,104 @@ approaches (not the standard librmn/rpnpy functions).
 This is solely for performance considerations.
 """
 
+from rpnpy.librmn import librmn
+import ctypes as ct
+import numpy as np
+import numpy.ctypeslib as npc
+librmn.compact_float.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
+librmn.compact_double.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
+librmn.compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+librmn.ieeepak_.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
+librmn.compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+librmn.c_armn_uncompress32.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+librmn.c_armn_compress_setswap.argtypes = (ct.c_int,)
+librmn.armn_compress.argtypes = (npc.ndpointer(dtype='int32'),ct.c_int,ct.c_int,ct.c_int,ct.c_int,ct.c_int)
+librmn.c_float_unpacker.argtypes = (npc.ndpointer(dtype='int32'),npc.ndpointer(dtype='int32'),npc.ndpointer(dtype='int32'),ct.c_int,ct.POINTER(ct.c_int))
+
+def decode (data):
+  '''
+  Decodes the raw FSTD data into the final 2D array of values.
+  Similar to fstluk, but here the data is already loaded in memory.
+  The data should also include the header information at the
+  beginning of the array.
+
+  Parameters
+  ----------
+  data : array
+      The encoded data
+  '''
+  import rpnpy.librmn.all as rmn
+  import numpy as np
+  data = data.view('>i4').astype('i4')
+  ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
+  nelm = ni*nj*nk
+  datyp = data[4]%256 
+  nbits = data[2]%256
+  if nbits <= 32:
+    dtype = rmn.FST_DATYP2NUMPY_LIST[datyp%128]
+    #if datyp == 0: dtype = 'float32'
+    work = np.empty(nelm,'int32')
+  else:
+    dtype = rmn.FST_DATYP2NUMPY_LIST64[datyp%128]
+    #if datyp == 0: dtype = 'float64'
+    work = np.empty(nelm,'int64').view('int32')
+  # Strip header
+  data = data[20:]
+  # Extend data buffer for in-place decompression.
+  if datyp in (129,130,134):
+    d = np.empty(nelm + 100, dtype='int32')
+    d[:len(data)] = data
+    data = d
+  shape = (nj,ni)
+  ni = ct.c_int(ni)
+  nj = ct.c_int(nj)
+  nk = ct.c_int(nk)
+  nelm = ct.c_int(nelm)
+  npak = ct.c_int(-nbits)
+  nbits = ct.c_int(nbits)
+  zero = ct.c_int(0)
+  one = ct.c_int(1)
+  two = ct.c_int(2)
+  tempfloat = ct.c_double(99999.0)
+
+  #print (ni, nj, nk, nbits, datyp, dtype)
+  if datyp == 0:
+    work = data
+  if datyp == 1:
+    if nbits.value <= 32:
+      librmn.compact_float(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
+    else:
+      raise Exception
+      librmn.compact_double(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
+  if datyp == 2:
+    librmn.compact_integer(work, None, data, nelm, nbits, 0, 1, 2)
+  if datyp == 3:
+    raise Exception
+  if datyp == 4:
+    librmn.compact_integer(work, None, data, nelm, nbits, 0, 1, 4)
+  if datyp == 5:
+    librmn.ieeepak_(work, data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
+  if datyp == 6:
+    librmn.c_float_unpacker(work, data, data[3:], nelm, ct.byref(nbits));
+  if datyp == 7:
+    ier = librmn.compact_char(work, None, data, nelm, 8, 0, 1, 10)
+    work = work.view('B')[:len(work)] #& 127
+  if datyp == 8:
+    raise Exception
+  if datyp == 129:
+    librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
+    librmn.compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
+  if datyp == 130:
+    #librmn.c_armn_compress_setswap(0)
+    librmn.armn_compress(data[1:],ni,nj,nk,nbits,2)
+    #librmn.c_armn_compress_setswap(1)
+    work[:] = data[1:].astype('>i4').view('>H')[:nelm.value]
+  if datyp == 133:
+    librmn.c_armn_uncompress32(work, data[1:], ni, nj, nk, nbits)
+  if datyp == 134:
+    librmn.armn_compress(data[4:],ni,nj,nk,nbits,2);
+    librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
+  return work.view(dtype)[:nelm.value].reshape(shape).T
 
 def nrecs (f):
   '''
@@ -36,6 +134,14 @@ def nrecs (f):
   f : file object
       The Python file object to scan for headers.
   '''
+  # Note: having trouble using number of rewrites / erasures to get the
+  # true number of records.  The way librmn computes the total number of
+  # records is to count them over all the directory pages, so we can get that
+  # same count from "all_params".
+  #TODO: more efficient solution.
+  x = all_params (f)
+  return len(x['swa'])
+  # This code ended up not working in some cases, so no longer used.
   import numpy as np
   f.seek(0x14, 0)
   rewrites = np.fromfile(f, '>i4', 1)[0]
@@ -44,37 +150,24 @@ def nrecs (f):
   return int(valid_records + rewrites)
 
 
-def all_params (f, out=None):
+def decode_headers (raw, out=None):
   '''
-  Extract record headers from the specified file.
+  Decode record headers from a raw byte array.
   Returns a dictionary similar to fstprm, only the entries are
   vectorized over all records instead of 1 record at a time.
   NOTE: This includes deleted records as well.  You can filter them out using
         the 'dltf' flag.
+  See also 'all_params', which decodes headers from a file object.
 
   Parameters
   ----------
-  f : file object
-      The Python file object to scan for headers.
+  raw : numpy array (dtype='B')
+      The raw array of headers to decode.
   out : dict or pandas DataFrame, optional
       Object to store the headers.  By default a dictionary will be created.
   '''
   import numpy as np
-  # Get the raw (packed) parameters.
-  pageaddr = 27; pageno = 0
-  raw = []
-  pageno_list = []
-  recno_list = []
-  while pageaddr > 0:
-    f.seek(pageaddr*8-8, 0)
-    page = np.fromfile(f, '>i4', 8+256*18).astype('uint32')
-    params = page[8:].reshape(256,9,2)
-    nent = page[5]
-    raw.append(params[:nent])
-    recno_list.extend(list(range(nent)))
-    pageno_list.extend([pageno]*nent)
-    pageaddr = page[4]; pageno += 1
-  raw = np.concatenate(raw)
+  raw = raw.view('>i4').astype('uint32').reshape(-1,9,2)
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
   # 0      word deleted:1, select:7, lng:24, addr:32;
@@ -171,11 +264,61 @@ def all_params (f, out=None):
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0
+
+  return out
+
+
+def all_params (f, out=None):
+  '''
+  Extract record headers from the specified file.
+  Returns a dictionary similar to fstprm, only the entries are
+  vectorized over all records instead of 1 record at a time.
+  NOTE: This includes deleted records as well.  You can filter them out using
+        the 'dltf' flag.
+
+  Parameters
+  ----------
+  f : file object
+      The Python file object to scan for headers.
+  out : dict or pandas DataFrame, optional
+      Object to store the headers.  By default a dictionary will be created.
+  '''
+  import numpy as np
+  # Get the raw (packed) parameters.
+  pageaddr = 27; pageno = 0
+  raw = []
+  pageno_list = []
+  recno_list = []
+  while pageaddr > 0:
+    f.seek(pageaddr*8-8, 0)
+    page = np.fromfile(f, '>i4', 8+256*18)
+    params = page[8:].reshape(256,9,2)
+    nent = page[5]
+    raw.append(params[:nent].view('B').flatten())
+    recno_list.extend(list(range(nent)))
+    pageno_list.extend([pageno]*nent)
+    pageaddr = page[4]; pageno += 1
+  raw = np.concatenate(raw)
+  out = decode_headers (raw, out=out)
   # Calculate the handles (keys)
   # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
   out['key'][:] = ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
-
   return out
+
+# Get the block size for the filesystem where the given file resides.
+# May be useful for determining the best way to read chunks of data from
+# FSTD files.
+def blocksize (filename):
+  import subprocess
+  try:
+    # Use the command-line "stat" program instead of os.stat, because the
+    # latter is giving incorrect results for some filesystems.
+    # E.g., on a GPFS filesystem with 16MB block size, os.stat is giving a size
+    # of 256KB.
+    return int(subprocess.check_output(['stat', '-c', '%s', '-f', filename]))
+  except OSError:
+    return 4096  # Give some default value if 'stat' not available.
+
 
 # Lightweight test for FST files.
 # Uses the same test for fstd98 random files from wkoffit.c (librmn 16.2).
