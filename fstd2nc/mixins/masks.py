@@ -96,10 +96,15 @@ class Masks (BufferBase):
 
   # Apply the mask data from raw binary array.
   def _decode (self, data):
+    from fstd2nc.extra import decode_headers
+    import numpy as np
     d = data.view('>i4')
     # Get first field.
     code1 = (d[12]&0x000FFF00)>>8
     field1 = super(Masks,self)._decode(data)
+    # If typvar doesn't end in '@', then nothing to do here.
+    if (code1 & 0x3F) != 32:
+      return field1
     # Find out where the next field should be.
     swa = d[1]
     offset = d[0]&(0x00FFFFFF)
@@ -108,7 +113,30 @@ class Masks (BufferBase):
     else:
       # No extra fields found?
       if offset >= len(d)//2:
-        return field1
+        # Since the mask wasn't conveniently located right after the data
+        # record, need to go hunting for it.
+        # TODO: search for it ahead of time (in __init__ stage) if an efficient
+        # way of matching masks is found.
+        prm = decode_headers(data[:72])
+        criteria = True
+        for name in ('nomvar', 'datev', 'etiket', 'ip1', 'ip2', 'ip3'):
+          criteria = criteria & (self._headers[name] == prm[name][0])
+        # Note: with this approach, can't check if the mask was truly deleted
+        # or just ignored.  Hope for the best, until 'dltf' logic is revisited.
+        criteria &= (self._headers['typvar'] == b'@@')
+        ind = np.where(criteria)[0]
+        # If still no mask found, then give up.
+        if len(ind) == 0:
+          return field1
+        rec_id = ind[0]
+        filename = self._files[self._headers['file_id'][rec_id]]
+        with open (filename, 'rb') as f:
+          f.seek(self._headers['swa'][rec_id]*8-8)
+          mask = np.fromfile(f,'B',self._headers['lng'][rec_id]*8)
+        mask = super(Masks,self)._decode(mask)
+        return ((field1*mask) + self._fill_value * (1-mask)).astype(field1.dtype)
+    # Ok, back to the case where the other field is available conveniently
+    # after the first.
     data = data.view('>i4')[offset*2:].view(data.dtype)
     d = data.view('>i4')
     # Get second field.
