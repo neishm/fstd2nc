@@ -40,10 +40,6 @@ class Masks (BufferBase):
     import numpy as np
     self._fill_value = kwargs.pop('fill_value',1e30)
     super(Masks,self).__init__(*args,**kwargs)
-    # Remove all mask records from the table, they should not become variables
-    # themselves.
-    is_mask = (self._headers['typvar'] == b'@@')
-    self._headers['dltf'][is_mask] = 1
     # Modify 'lng' to overlap the data and mask fields (where they are stored
     # consecutively).
     # This will allow the _decode method to apply the mask directly.
@@ -56,12 +52,17 @@ class Masks (BufferBase):
     ip3 = self._headers['ip3']
     swa = self._headers['swa']
     lng = self._headers['lng'].copy()
+    dltf = self._headers['dltf']
     uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
     if np.sum(uses_mask) > 0:
-      overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:]
+      overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
       overlap = np.where(overlap)[0]
       lng[overlap] = swa[overlap+1] + lng[overlap+1] - swa[overlap]
       self._headers['lng'] = lng
+    # Remove all mask records from the table, they should not become variables
+    # themselves.
+    is_mask = (self._headers['typvar'] == b'@@')
+    self._headers['dltf'][is_mask] = 1
 
   # Apply the fill value to the data.
   def _makevars (self):
