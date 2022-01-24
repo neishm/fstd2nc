@@ -50,6 +50,23 @@ class ExternOutput (BufferBase):
     from os.path import getsize
     import numpy as np
     graphs = [None] * self._nrecs
+    ###
+    # Special case: already have a dask object from external source.
+    # (E.g., from fstpy)
+    if hasattr(self, '_extern_table'):
+      for rec_id in range(self._nrecs):
+        d = self._extern_table['d'].iloc[rec_id]
+        if hasattr(d,'compute'):
+          # Start a dask graph using the external dask array as the source.
+          graph = (d.compute,)
+          graph = (np.ravel, graph, 'K')
+        else:  # Special case: have a numpy array in memory.
+          graph = d
+          graph = np.ravel(graph, 'K')
+        graphs[rec_id] = {None:graph}
+      return graphs
+    ###
+    # Otherwise, construct graphs with our own dask wrapper.
     blocksizes = dict()
     fs_blocks = dict()
     all_file_ids = np.array(self._headers['file_id'],copy=True)
@@ -145,27 +162,10 @@ class ExternOutput (BufferBase):
           # Also, specify the preferred order of reading the chunks within the
           # file.
           if rec_id >= 0:
-            # Special case: already have a dask object from external source.
-            # (E.g., from fstpy)
-            if hasattr(self, '_extern_table'):
-              d = self._extern_table['d'].iloc[rec_id]
-              if hasattr(d,'compute'):
-                # Start a dask graph using the external dask array as the source.
-                dsk[key] = (d.compute,)
-                # Ensure the dask array includes the degenerate outer dimensions.
-                # Otherwise get a runtime error if slicing is done on this.
-                dsk[key] = (np.ravel, dsk[key], 'K')
-                dsk[key] = (np.reshape, dsk[key], chunk_shape)
-              else:  # Special case: have a numpy array in memory.
-                dsk[key] = d
-                dsk[key] = np.ravel(dsk[key], 'K')
-                dsk[key] = np.reshape(dsk[key], chunk_shape)
-            # Otherwise, construct one with our own dask wrapper.
-            else:
-                graph = graphs[rec_id][None]
-                dsk.update(graphs[rec_id])
-                del dsk[None]
-                dsk[key] = (np.reshape, graph, chunk_shape)
+            graph = graphs[rec_id][None]
+            dsk.update(graphs[rec_id])
+            del dsk[None]
+            dsk[key] = (np.reshape, graph, chunk_shape)
           else:
             # Fill missing chunks with fill value or NaN.
             if hasattr(self,'_fill_value'):
