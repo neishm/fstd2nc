@@ -473,7 +473,7 @@ class BufferBase (object):
         header_cache[fkey] = h
       h = header_cache[fkey]
       # The file info will be an index into a separate file list.
-      h['file_id'] = np.empty(len(h['swa']), dtype='int32')
+      h['file_id'] = np.empty(len(h['nomvar']), dtype='int32')
       h['file_id'][:] = filenum
 
       headers.append(h)

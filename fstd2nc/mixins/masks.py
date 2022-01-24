@@ -50,15 +50,21 @@ class Masks (BufferBase):
     ip1 = self._headers['ip1']
     ip2 = self._headers['ip2']
     ip3 = self._headers['ip3']
-    swa = self._headers['swa']
-    lng = self._headers['lng'].copy()
-    dltf = self._headers['dltf']
     uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
-    if np.sum(uses_mask) > 0:
-      overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
-      overlap = np.where(overlap)[0]
-      lng[overlap] = swa[overlap+1] + lng[overlap+1] - swa[overlap]
-      self._headers['lng'] = lng
+
+    # If data is from an FSTD file on disk, then try overlapping the read of
+    # the data and mask.
+    try:
+      swa = self._headers['swa']
+      lng = self._headers['lng'].copy()
+      dltf = self._headers['dltf']
+      if np.sum(uses_mask) > 0:
+        overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
+        overlap = np.where(overlap)[0]
+        lng[overlap] = swa[overlap+1] + lng[overlap+1] - swa[overlap]
+        self._headers['lng'] = lng
+    except KeyError:
+      pass  # Not our data from disk (maybe from fstpy?) so can't do that.
     # Remove all mask records from the table, they should not become variables
     # themselves.
     is_mask = (self._headers['typvar'] == b'@@')

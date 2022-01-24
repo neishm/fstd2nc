@@ -306,13 +306,20 @@ class ExternInput (BufferBase):
       table = table.to_pandas()
     # Construct the record header info from the table.
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
-    headers = np.zeros(len(table), dtype=cls.__new__(cls,**kwargs)._headers_dtype)
+    headers = {}
     for col in fields:
-      headers[col][:] = table[col]
+      headers[col] = table[col].values.copy()
     # Pad out string variables with spaces.
+    headers['nomvar'] = np.asarray(headers['nomvar'], dtype='|S4')
+    headers['typvar'] = np.asarray(headers['nomvar'], dtype='|S2')
+    headers['etiket'] = np.asarray(headers['etiket'], dtype='|S12')
+    headers['grtyp'] = np.asarray(headers['grtyp'], dtype='|S1')
     headers['nomvar'] = np.char.ljust(headers['nomvar'], 4, ' ')
     headers['typvar'] = np.char.ljust(headers['typvar'], 2, ' ')
     headers['etiket'] = np.char.ljust(headers['etiket'], 12, ' ')
+    # Add other fields that may be needed.
+    if 'dltf' not in headers:
+      headers['dltf'] = np.zeros(len(headers['nomvar']), dtype='int32')
     # Generate temporary file with target grid info.
     try: # Python 3
       grid_tmpdir = tempfile.TemporaryDirectory()
@@ -323,8 +330,8 @@ class ExternInput (BufferBase):
     # Write all grid records to a temporary file, so they are accessible to
     # the vgrid / librmn helper functions.
     iun = rmn.fstopenall(gridfile, rmn.FST_RW)
-    for nomvar in ('!!','>>','^^','^>','!!5F'):
-      for ind in np.where(table['nomvar'] == nomvar)[0]:
+    for nomvar in (b'!!  ',b'>>  ',b'^^  ',b'^>  ',b'!!SF'):
+      for ind in np.where(headers['nomvar'] == nomvar)[0]:
         rec = table.iloc[ind].to_dict()
         rec['d'] = np.asarray(rec['d'])
         rmn.fstecr(iun, rec)
