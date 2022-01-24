@@ -72,8 +72,6 @@ class FSTD_Compat (BufferBase):
     import numpy as np
     import os
     import rpnpy.librmn.all as rmn
-    from fstd2nc.extra import librmn, file_table, stdf_dir_keys
-    from ctypes import cast, POINTER
 
     # This only works with an uncompressed netCDF4 file.
     nc_format = 'NETCDF4'
@@ -296,8 +294,6 @@ class FSTD_Compat (BufferBase):
 
     # Write anything which isn't already in the file.
     iun = rmn.fstopenall(filename,rmn.FST_RW)
-    index = librmn.file_index(iun)
-    f = file_table[index].contents
     for rec_id in unwritten_rec_ids:
       d = self._fstluk(rec_id)
       # This data might have already been written as a netCDF coordinate array.
@@ -312,11 +308,9 @@ class FSTD_Compat (BufferBase):
       # This data wasn't used for the netCDF4 interface, so don't have to worry
       # about making it netCDF-compatible.
       rmn.fstecr(iun,d)
-      # Keep track of where the data was written.  This information is
-      # available in the low-level librmn structures.
-      p = f.cur_dir_page.contents.dir
-      entry = cast(p.entry,POINTER(stdf_dir_keys))[p.nent-1]
-      chunk_addresses[rec_id] = (entry.addr-1)*8+72, (entry.lng*8)-96, d['datyp'], d['nbits']
+      # Keep track of where the data was written.
+      prm = rmn.fstprm(rmn.fstinl(iun)[-1])
+      chunk_addresses[rec_id] = (prm['swa']-1)*8+72, (prm['lng']*8)-96, d['datyp'], d['nbits']
     rmn.fstcloseall(iun)
 
     # By this point, all data is in the file.  This includes netCDF-only data,
@@ -420,6 +414,10 @@ class FSTD_Compat (BufferBase):
           checksum ^= b
         np.array([checksum,0],'>i4').tofile(f)  # checksum, reserved
         buf[rec0:rec0+256].tofile(f)
+        # Pad last page to 256 entries.
+        nrecs_written = buf[rec0:rec0+256].shape[0]
+        if nrecs_written < 256:
+          np.zeros((256-nrecs_written,18),'>i4').tofile(f)
 
         if rec0 != 0:
           # Update total number of pages.
