@@ -35,7 +35,7 @@ def _fstdump (buffer_type=Buffer):
   import textwrap
   parser = ArgumentParser(description=_("Display RPN standard file (FSTD) metadata in a structured format."))
   parser.add_argument('infile', metavar='<fstd_file>', help=_('The RPN standard file to query.'))
-  parser.add_argument('-v', nargs='*', metavar='NOMVAR,...', help=_('Display the values for the specified variable.'))
+  parser.add_argument('-v', metavar='NOMVAR,...', help=_('Display the values for the specified variable.'))
   buffer_type._cmdline_args(parser)
   args = parser.parse_args()
   buffer_type._check_args(parser, args)
@@ -83,7 +83,7 @@ def _fstdump (buffer_type=Buffer):
   # Print variable data.
   if nomvars is not None:
     print ("data:")
-    nomvars = [n for nomvar in nomvars for n in nomvar.split(',')]
+    nomvars = nomvars.split(',')
     for var in buf._iter_objects():
       if var.name in nomvars:
         if hasattr(var,'array'):
