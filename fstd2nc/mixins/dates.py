@@ -46,12 +46,6 @@ class Dates (BufferBase):
     group.add_argument('--datev', '--squash-forecasts', action='store_true', default=True, dest='squash_forecasts', help=_('Use the date of validity for the "time" axis.  This is the default.'))
     group.add_argument('--dateo', '--forecast-axis', action='store_false', dest='squash_forecasts', help=_('Use the date of original analysis for the time axis, and put the forecast times into a separate "forecast" axis.'))
 
-  # Need to extend _headers_dtype before __init__.
-  def __new__ (cls, *args, **kwargs):
-    obj = super(Dates,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('time','datetime64[s]'),('leadtime','float32'),('reftime','datetime64[s]')]
-    return obj
-
   def __init__ (self, *args, **kwargs):
     """
     forecast_axis : bool, optional

@@ -258,18 +258,6 @@ class BufferBase (object):
   # Uses string formatting operations on the variable metadata.
   _human_var_id = ('%(nomvar)s', '%(ni)sx%(nj)s', '%(nk)sL')
 
-  # Field names and types for storing record headers in a structured array.
-  _headers_dtype = [
-     ('file_id','int32'),('key','int32'),
-     ('dateo','int32'),('datev','int32'),('deet','int32'),('npas','int32'),
-     ('ni','int32'),('nj','int32'),('nk','int32'),('nbits','int32'),
-     ('datyp','int32'),('ip1','int32'),('ip2','int32'),('ip3','int32'),
-     ('typvar','|S2'),('nomvar','|S4'),('etiket','|S12'),('grtyp','|S1'),
-     ('ig1','int32'),('ig2','int32'),('ig3','int32'),('ig4','int32'),
-     ('swa','int32'),('lng','int32'),('dltf','int32'),('ubc','int32'),
-     ('xtra1','int32'),('xtra2','int32'),('xtra3','int32'),('ismeta','bool'),
-  ]
-
   # Record parameters which should not be used as nc variable attributes.
   # (They're either internal to the file, or part of the data, not metadata).
   _ignore_atts = ('file_id','swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d')
@@ -352,11 +340,6 @@ class BufferBase (object):
 
   ###############################################
   # Basic flow for reading data
-
-  # Filter out any Buffer arguments from object.__new__.
-  # Otherwise, get an error when running with Python3.
-  def __new__ (cls, *args, **kwargs):
-    return object.__new__(cls)
 
   def __init__ (self, filename, header_cache=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False):
     """

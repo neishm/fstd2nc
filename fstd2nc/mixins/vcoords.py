@@ -56,12 +56,6 @@ class VCoords (BufferBase):
     parser.add_argument('--momentum-levels', '--mlev', action='store_true', help=_("Only convert data that's on 'momentum' vertical levels."))
     parser.add_argument('--vertical-velocity-levels', '--wlev', action='store_true', help=_("Only convert data that's on 'vertical velocity' levels."))
 
-  # Need to extend _headers_dtype before __init__.
-  def __new__ (cls, *args, **kwargs):
-    obj = super(VCoords,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('level','float32'),('kind','int32'),('level_descr','|S20'),('special_level','|S20')]
-    return obj
-
   def __init__ (self, *args, **kwargs):
     """
     strict_vcoord_match : bool, optional

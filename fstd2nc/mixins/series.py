@@ -58,12 +58,6 @@ class Series (BufferBase):
     group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
     group.add_argument('--missing-bottom-profile-level', action='store_true', help=_('Assume the bottom level of the profile data is missing.'))
 
-  # Need to extend _headers_dtype before __init__.
-  def __new__ (cls, *args, **kwargs):
-    obj = super(Series,cls).__new__(cls, *args, **kwargs)
-    obj._headers_dtype = obj._headers_dtype + [('station_id','int32')]
-    return obj
-
   def __init__ (self, *args, **kwargs):
     """
     profile_momentum_vars : str or list, optional
