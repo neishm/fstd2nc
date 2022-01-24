@@ -336,7 +336,9 @@ class FSTD_Compat (BufferBase):
     datyps = np.asarray(datyps)
     nbits = np.asarray(nbits)
     # Encode the record headers.
-    headers = self._headers[list(rec_ids)]
+    from fstd2nc.extra import structured_array
+    headers = structured_array(self._headers)
+    headers = headers[list(rec_ids)]
     nrecs = len(headers)
     buf = np.zeros((nrecs,18),'>i4')
     # deleted, select, size

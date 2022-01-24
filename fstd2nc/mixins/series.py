@@ -98,24 +98,24 @@ class Series (BufferBase):
     super(Series,self).__init__(*args,**kwargs)
 
     fields = self._headers
-    nrecs = len(fields)
+    nrecs = self._nrecs
     # Identify timeseries records for further processing.
     is_series = (fields['typvar'] == b'T ') & ((fields['grtyp'] == b'+') | (fields['grtyp'] == b'Y') | (fields['grtyp'] == b'T'))
     # More particular, data that has one station per record.
     is_split_series = (fields['typvar'] == b'T ') & (fields['grtyp'] == b'+')
 
     # For timeseries data, station # is provided by 'ip3'.
-    station_id = np.ma.array(np.array(fields['ip3']))
+    station_id = np.ma.array(np.array(fields['ip3']), dtype='int32')
     # For non-timeseries data, ignore this info.
     station_id.mask = ~is_split_series
     fields['station_id'] = station_id
     # For timeseries data, the usual leadtime (from deet*npas) is not
     # used.  Instead, we will get forecast info from nj coordinate.
-    if 'leadtime' in fields.dtype.names:
+    if 'leadtime' in fields:
       fields['leadtime'] = np.ma.asarray(fields['leadtime'])
       fields['leadtime'].mask = np.ma.getmaskarray(fields['leadtime']) | is_series
     # Similarly, the 'reftime' is not used either.
-    if 'reftime' in fields.dtype.names:
+    if 'reftime' in fields:
       fields['reftime'] = np.ma.asarray(fields['reftime'])
       fields['reftime'].mask = np.ma.getmaskarray(fields['reftime']) | is_series
 

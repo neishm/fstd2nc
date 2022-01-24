@@ -290,8 +290,6 @@ class BufferBase (object):
     group.add_argument('--rpnstd-metadata-list', metavar='nomvar,...', help=_("Specify a minimal set of RPN record attributes to include in the output file."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
-    parser.add_argument('--no-quick-scan', action='store_true', help=SUPPRESS)
-    #help=_('Don't read record headers from the raw librmn structures, instead call fstprm.  This can be much slower, but safer.')
 
   # Do some checks on the command-line arguments after parsing them.
   @classmethod
@@ -360,7 +358,7 @@ class BufferBase (object):
   def __new__ (cls, *args, **kwargs):
     return object.__new__(cls)
 
-  def __init__ (self, filename, header_cache=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, no_quick_scan=False):
+  def __init__ (self, filename, header_cache=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -466,31 +464,17 @@ class BufferBase (object):
       filenum = len(self._files)
       self._files.append(f)
       if fkey not in header_cache:
-
-        if no_quick_scan:
-          funit = self._open(filenum)
-          nrecs = fstnbr(funit)
-          keys = fstinl(funit)
-          params = map(fstprm, keys)
-          h = np.zeros(nrecs, dtype=self._headers_dtype)
-          for i,prm in enumerate(params):
-            for n,v in prm.items():
-              if n in h.dtype.names:
-                h[n][i] = v
-        else:
-          from fstd2nc.extra import all_params, nrecs
-          with open(f,'rb') as funit:
-            h = np.zeros(nrecs(funit), dtype=self._headers_dtype)
-            params = all_params(funit,out=h)
-            keys = params['key']
+        from fstd2nc.extra import all_params
+        with open(f,'rb') as funit:
+          h = all_params(funit)
 
         # Encode the keys without the file index info.
-        h['key'] = keys
         h['key'] >>= 10
         header_cache[fkey] = h
       h = header_cache[fkey]
       # The file info will be an index into a separate file list.
-      h['file_id'] = filenum
+      h['file_id'] = np.empty(len(h['swa']), dtype='int32')
+      h['file_id'][:] = filenum
 
       headers.append(h)
 
@@ -516,18 +500,21 @@ class BufferBase (object):
       _pandas_needed = True
     info(_("Found %d RPN input file(s)"%nfiles))
 
-    self._headers = np.ma.concatenate(headers)
-
+    self._headers = {}
+    for key in headers[0].keys():
+      self._headers[key] = np.ma.concatenate([headers[i][key] for i in range(nfiles)])
+    self._nrecs = len(self._headers[key])
 
     # Find all unique meta (coordinate) records, and link a subset of files
     # that provide all unique metadata records.
     # This will make it easier to look up the meta records later.
-    meta_mask = np.zeros(len(self._headers),dtype='bool')
+    meta_mask = np.zeros(self._nrecs,dtype='bool')
     for meta_name in self._meta_records + self._maybe_meta_records:
       meta_name = (meta_name+b'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name)
 
     # Store this metadata identification in case it's useful for some mixins.
+    self._headers['ismeta'] = np.empty(self._nrecs, dtype='bool')
     self._headers['ismeta'][:] = meta_mask
 
     meta_recids = np.where(meta_mask)[0]
@@ -536,7 +523,9 @@ class BufferBase (object):
     # Suppress FutureWarning from numpy about doing this.  Probably benign...
     with warnings.catch_warnings():
       warnings.simplefilter("ignore")
-      meta_keys = self._headers.data[meta_mask][list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
+      from fstd2nc.extra import structured_array
+      headers = structured_array(self._headers)
+      meta_keys = headers.data[meta_mask][list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
     meta_keys, ind = np.unique(meta_keys, return_index=True)
     meta_recids = meta_recids[ind]
     # Find the files that give these unique coord records.
@@ -560,13 +549,14 @@ class BufferBase (object):
     from collections import OrderedDict
     import numpy as np
     import warnings
+    from fstd2nc.extra import structured_array
 
-    nrecs = len(self._headers)
+    nrecs = self._nrecs
 
     # Degenerate case: no data in buffer
     if nrecs == 0: return
 
-    records = self._headers
+    records = structured_array(self._headers)
 
     # Ignore deleted / invalidated records, and coordinate records.
     valid = (records['dltf'] == 0) & (records['ismeta'] == 0)
@@ -726,15 +716,15 @@ class BufferBase (object):
     import pandas as pd
     import warnings
 
-    nrecs = len(self._headers)
+    nrecs = self._nrecs
 
     # Degenerate case: no data in buffer
     if nrecs == 0: return
 
     # Convert records to a pandas DataFrame, which is faster to operate on.
-    records = pd.DataFrame.from_records(self._headers)
+    records = pd.DataFrame.from_dict(self._headers)
     # Keep track of original dtypes (may need to re-cast later).
-    original_dtypes = dict(self._headers_dtype)
+    original_dtypes = dict([(key,value.dtype) for key,value in self._headers.items()])
 
     # Ignore deleted / invalidated records.
     records = records[records['dltf']==0]

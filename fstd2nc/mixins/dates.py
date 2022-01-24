@@ -92,7 +92,7 @@ class Dates (BufferBase):
     dateo.mask = np.isnat(dateo)
     datev.mask = np.isnat(datev)
     # Where there are dummy dates, ignore the forecast information too.
-    forecast = np.ma.asarray(fields['leadtime'])
+    forecast = np.ma.asarray(fields['leadtime'], dtype='float32')
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))
     fields['leadtime'] = forecast
     fields['reftime'] = dateo

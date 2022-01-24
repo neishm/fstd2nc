@@ -49,13 +49,13 @@ class ExternOutput (BufferBase):
     from fstd2nc.extra import blocksize
     from os.path import getsize
     import numpy as np
-    graphs = [None] * len(self._headers)
+    graphs = [None] * self._nrecs
     blocksizes = dict()
     fs_blocks = dict()
     all_file_ids = np.array(self._headers['file_id'],copy=True)
     all_swa = np.array(self._headers['swa'],copy=True)
     all_lng = np.array(self._headers['lng'],copy=True)
-    for rec_id in range(len(self._headers)):
+    for rec_id in range(self._nrecs):
       graph = dict()
       file_id = all_file_ids[rec_id]
       filename = self._files[file_id]

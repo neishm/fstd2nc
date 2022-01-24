@@ -45,8 +45,8 @@ class FilterRecords (BufferBase):
     self._filters = tuple(filter)
     super(FilterRecords,self).__init__(*args,**kwargs)
     if len(self._filters) == 0: return
-    flags = np.ones(len(self._headers),dtype='bool')
-    records = dict([(n,self._headers[n]) for n in self._headers.dtype.names])
+    flags = np.ones(self._nrecs,dtype='bool')
+    records = self._headers
     for cmd in self._filters:
       try:
         flags &= self._do_filter(records, cmd)

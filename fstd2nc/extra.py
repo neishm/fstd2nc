@@ -124,31 +124,6 @@ def decode (data):
     librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
   return work.view(dtype)[:nelm.value].reshape(shape).T
 
-def nrecs (f):
-  '''
-  Get the total number of records for the specified file.
-  Same value as librmn function fstnbr.
-
-  Parameters
-  ----------
-  f : file object
-      The Python file object to scan for headers.
-  '''
-  # Note: having trouble using number of rewrites / erasures to get the
-  # true number of records.  The way librmn computes the total number of
-  # records is to count them over all the directory pages, so we can get that
-  # same count from "all_params".
-  #TODO: more efficient solution.
-  x = all_params (f)
-  return len(x['swa'])
-  # This code ended up not working in some cases, so no longer used.
-  import numpy as np
-  f.seek(0x14, 0)
-  rewrites = np.fromfile(f, '>i4', 1)[0]
-  f.seek(0x34, 0)
-  valid_records = np.fromfile(f, '>i4', 1)[0]
-  return int(valid_records + rewrites)
-
 
 def decode_headers (raw, out=None):
   '''
@@ -318,6 +293,19 @@ def blocksize (filename):
     return int(subprocess.check_output(['stat', '-c', '%s', '-f', filename]))
   except OSError:
     return 4096  # Give some default value if 'stat' not available.
+
+
+# Return the given arrays as a single structured array.
+# Makes certain operations easier, such as finding unique combinations.
+# Takes a dictionary of arrays, returns a single structured array.
+def structured_array (data):
+  import numpy as np
+  dtype = [(key,value.dtype) for key,value in data.items()]
+  n = len(list(data.values())[0])
+  out = np.ma.empty(n, dtype=dtype)
+  for key in data.keys():
+    out[key] = data[key]
+  return out
 
 
 # Lightweight test for FST files.

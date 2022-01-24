@@ -48,7 +48,7 @@ class SelectVars (BufferBase):
       vars = vars.replace(',', ' ')
       vars = vars.split()
     info (_('Will look for variables: ') + ' '.join(vars))
-    select = np.zeros(len(self._headers),dtype='bool')
+    select = np.zeros(self._nrecs,dtype='bool')
     missing = []
     for v in vars:
       f = self._headers['nomvar'] ==  v.ljust(4).encode()
