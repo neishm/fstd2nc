@@ -243,7 +243,7 @@ def decode_headers (raw, out=None):
   return out
 
 
-def all_params (f, out=None):
+def all_params (f, out=None, decode=True):
   '''
   Extract record headers from the specified file.
   Returns a dictionary similar to fstprm, only the entries are
@@ -274,6 +274,7 @@ def all_params (f, out=None):
     pageno_list.extend([pageno]*nent)
     pageaddr = page[4]; pageno += 1
   raw = np.concatenate(raw)
+  if not decode: return raw
   out = decode_headers (raw, out=out)
   # Calculate the handles (keys)
   # Based on "MAKE_RND_HANDLE" macro in qstdir.h.

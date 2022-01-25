@@ -369,12 +369,13 @@ class BufferBase (object):
     """
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
-    from fstd2nc.extra import maybeFST as isFST
-    from collections import Counter
+    from fstd2nc.extra import maybeFST as isFST, all_params, decode_headers
+    from collections import Counter, deque
     import numpy as np
     from glob import glob, has_magic
     import os
     import warnings
+    from threading import Thread
 
     # Set up lock for threading.
     # The same lock is shared for all Buffer objects, to synchronize access to
@@ -424,42 +425,64 @@ class BufferBase (object):
         else:
           expanded_infiles.append((infile,f))
 
-    # Inspect all input files, and extract the headers from valid RPN files.
-    matches = Counter()
-    headers = []
-    self._files = []
+    # Find out which of those files are valid input files.
+    is_valid = [None] * len(expanded_infiles)
+    headers = [None] * len(expanded_infiles)
+    # First, short-circuit the check for cached data.
     if header_cache is None: header_cache = {}
-
-    # Show a progress bar when there are multiple input files.
-    if len(expanded_infiles) > 1:
-      expanded_infiles = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)').iter(expanded_infiles)
-
-    for infile, f in expanded_infiles:
+    for i, (infile, f) in enumerate(expanded_infiles):
       fkey = f
       if fkey.startswith('/'):
         fkey = '__ROOT__'+fkey
-      if fkey not in header_cache and (not os.path.exists(f) or not isFST(f)):
+      if fkey in header_cache:
+        is_valid[i] = True
+        headers[i] = header_cache[fkey]
+    # Next, inspect the remaining entries to see which ones are valid.
+    # Extract headers for the valid ones.
+    def check_valid (i):
+      infile, f = expanded_infiles[i]
+      is_valid[i] = os.path.exists(f) and isFST(f)
+      headers[i] = all_params(open(f,'rb'),decode=False)
+    threads = deque()
+    bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
+    for i in range(len(expanded_infiles)):
+      if is_valid[i] is not None: continue
+      while len(threads) >= 32:
+        t = threads.popleft()
+        t.join()
+        bar.next()
+      threads.append(Thread(None, target=check_valid, args=(i,)))
+      threads[-1].start()
+    for t in threads:
+      t.join()
+      bar.next()
+    bar.finish()
+
+    # Check which files had headers used, report on the results.
+    matches = Counter()
+    self._files = []
+    file_ids = []
+    for i, (infile, f) in enumerate(expanded_infiles):
+      fkey = f
+      if fkey.startswith('/'):
+        fkey = '__ROOT__'+fkey
+      if is_valid[i]:
+        matches[infile] += 1
+        filenum = len(self._files)
+        self._files.append(f)
+        file_ids.extend([filenum]*(len(headers[i])//72))
+        header_cache[fkey] = headers[i]
+      else:
         matches[infile] += 0
-        continue
-      matches[infile] += 1
 
-      # Read the headers from the file(s) and store the info in the table.
-      filenum = len(self._files)
-      self._files.append(f)
-      if fkey not in header_cache:
-        from fstd2nc.extra import all_params
-        with open(f,'rb') as funit:
-          h = all_params(funit)
-
-        # Encode the keys without the file index info.
-        h['key'] >>= 10
-        header_cache[fkey] = h
-      h = header_cache[fkey]
-      # The file info will be an index into a separate file list.
-      h['file_id'] = np.empty(len(h['nomvar']), dtype='int32')
-      h['file_id'][:] = filenum
-
-      headers.append(h)
+    # Decode all the headers
+    headers = [h for h in headers if h is not None]
+    if len(headers) > 0:
+      headers = np.concatenate(headers)
+      headers = decode_headers(headers)
+      headers['file_id'] = np.array(file_ids, dtype='int32')
+      # Encode the keys without the file index info.
+      headers['key'] >>= 10
 
     # Check if the input entries actually matched anything.
     for infile, count in matches.items():
@@ -475,7 +498,7 @@ class BufferBase (object):
         else:
           warn(_("Problem with input file '%s'")%infile)
 
-    nfiles = len(headers)
+    nfiles = len(self._files)
     if nfiles == 0:
       error(_("no input files found!"))
     elif nfiles > 10:
@@ -483,10 +506,8 @@ class BufferBase (object):
       _pandas_needed = True
     info(_("Found %d RPN input file(s)"%nfiles))
 
-    self._headers = {}
-    for key in headers[0].keys():
-      self._headers[key] = np.ma.concatenate([headers[i][key] for i in range(nfiles)])
-    self._nrecs = len(self._headers[key])
+    self._headers = headers
+    self._nrecs = len(headers['nomvar'])
 
     # Find all unique meta (coordinate) records, and link a subset of files
     # that provide all unique metadata records.
