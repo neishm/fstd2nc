@@ -414,6 +414,9 @@ class VCoords (BufferBase):
               coordC.array = np.asarray(C)
             except (KeyError,ValueError,VGDError):
               warn (_("Unable to get A/B coefficients for %s.")%var.name)
+              coordA = None
+              coordB = None
+              coordC = None
             vgd_free (vgd_id)
         ###
 
@@ -476,11 +479,11 @@ class VCoords (BufferBase):
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_ln_pressure_coordinate'
                 # Document the formula to follow, since it's not in the conventions.
                 #TODO: update this once there's an actual convention to follow!
-                if version in (1,2,3,4,5):
+                if version in (1,2,3,4,5) and None not in (coordA,coordB):
                   atts['formula'] = "p = exp(a+b*log(ps/pref)) / 100.0"
                   atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('ps','P0'),('pref','pref')])
                   coordinates.extend([coordA,coordB])
-                elif sleve:
+                elif sleve and None not in (coordA,coordB,coordC):
                   atts['formula'] = "p = exp(a+b*log(ps/pref)+c*log(psl/pref)) / 100.0"
                   atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('c',coordC),('ps','P0'),('psl','P0LS'),('pref','pref')])
                   coordinates.extend([coordA,coordB,coordC])
@@ -494,11 +497,12 @@ class VCoords (BufferBase):
                   pass # Don't have PREF available for some reason?
               else:
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
-                coordA.array /= 100.0  # Use hPa for final units.
-                atts['formula'] = 'p = ap + b*ps'
-                coordA.name = 'ap'
-                atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
-                coordinates.extend([coordA,coordB])
+                if None not in (coordA,coordB):
+                  coordA.array /= 100.0  # Use hPa for final units.
+                  atts['formula'] = 'p = ap + b*ps'
+                  coordA.name = 'ap'
+                  atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
+                  coordinates.extend([coordA,coordB])
 
             # Not a '!!' coordinate, so must be 'HY'?
             else:
@@ -535,19 +539,21 @@ class VCoords (BufferBase):
           if sleve:
             atts['standard_name'] = 'atmosphere_sleve_coordinate'
             atts['positive'] = 'up'
-            atts['formula'] = 'z = az + b1*zsurf1 + b2*zsurf2'
-            coordA.name = 'az'
-            coordB.name = 'b2'
-            coordC.name = 'b1'
-            atts['formula_terms'] = OrderedDict([('az',coordA),('b1',coordC),('zsurf1','MELS'),('b2',coordB),('zsurf2','ME')])
-            coordinates.extend([coordA,coordB,coordC])
+            if None not in (coordA,coordB,coordC):
+              atts['formula'] = 'z = az + b1*zsurf1 + b2*zsurf2'
+              coordA.name = 'az'
+              coordB.name = 'b2'
+              coordC.name = 'b1'
+              atts['formula_terms'] = OrderedDict([('az',coordA),('b1',coordC),('zsurf1','MELS'),('b2',coordB),('zsurf2','ME')])
+              coordinates.extend([coordA,coordB,coordC])
 
           else:
             atts['standard_name'] = 'atmosphere_hybrid_height_coordinate'
             atts['positive'] = 'up'
-            atts['formula'] = 'z = a + b*orog'
-            atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('orog','ME')])
-            coordinates.extend([coordA,coordB])
+            if None not in (coordA,coordB):
+              atts['formula'] = 'z = a + b*orog'
+              atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('orog','ME')])
+              coordinates.extend([coordA,coordB])
 
         # Add this vertical axis.
         if len(coordinates) > 0:
