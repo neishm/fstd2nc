@@ -125,21 +125,18 @@ def decode (data):
   return work.view(dtype)[:nelm.value].reshape(shape).T
 
 
-def decode_headers (raw, out=None):
+def decode_headers (raw):
   '''
   Decode record headers from a raw byte array.
   Returns a dictionary similar to fstprm, only the entries are
   vectorized over all records instead of 1 record at a time.
   NOTE: This includes deleted records as well.  You can filter them out using
         the 'dltf' flag.
-  See also 'all_params', which decodes headers from a file object.
 
   Parameters
   ----------
   raw : numpy array (dtype='B')
       The raw array of headers to decode.
-  out : dict or pandas DataFrame, optional
-      Object to store the headers.  By default a dictionary will be created.
   '''
   import numpy as np
   raw = raw.view('>i4').astype('uint32').reshape(-1,9,2)
@@ -155,36 +152,34 @@ def decode_headers (raw, out=None):
   # 7      word ip1:28, levtyp:4, ip2:28, pad5:4;
   # 8      word ip3:28, pad6:4, date_stamp:32;
   nrecs = raw.shape[0]
-  if out is None:
-    out = {}
-    out['lng'] = np.empty(nrecs, dtype='int32')
-    out['dltf'] = np.empty(nrecs, dtype='ubyte')
-    out['swa'] =  np.empty(nrecs, dtype='uint32')
-    out['deet'] = np.empty(nrecs, dtype='int32')
-    out['nbits'] = np.empty(nrecs, dtype='byte')
-    out['grtyp'] = np.empty(nrecs, dtype='|S1')
-    out['ni'] = np.empty(nrecs, dtype='int32')
-    out['nj'] = np.empty(nrecs, dtype='int32')
-    out['datyp'] = np.empty(nrecs, dtype='ubyte')
-    out['nk'] = np.empty(nrecs, dtype='int32')
-    out['ubc'] = np.empty(nrecs, dtype='uint16')
-    out['npas'] = np.empty(nrecs, dtype='int32')
-    out['ig1'] = np.empty(nrecs, dtype='int32')
-    out['ig2'] = np.empty(nrecs, dtype='int32')
-    out['ig3'] = np.empty(nrecs, dtype='int32')
-    out['ig4'] = np.empty(nrecs, dtype='int32')
-    out['etiket'] = np.empty(nrecs,dtype='|S12')
-    out['typvar'] = np.empty(nrecs,dtype='|S2')
-    out['nomvar'] = np.empty(nrecs,dtype='|S4')
-    out['ip1'] = np.empty(nrecs, dtype='int32')
-    out['ip2'] = np.empty(nrecs, dtype='int32')
-    out['ip3'] = np.empty(nrecs, dtype='int32')
-    out['datev'] = np.empty(nrecs, dtype='int32')
-    out['dateo'] = np.empty(nrecs, dtype='int32')
-    out['xtra1'] = np.empty(nrecs, dtype='uint32')
-    out['xtra2'] = np.empty(nrecs, dtype='uint32')
-    out['xtra3'] = np.empty(nrecs, dtype='uint32')
-    out['key'] = np.empty(nrecs, dtype='int32')
+  out = {}
+  out['lng'] = np.empty(nrecs, dtype='int32')
+  out['dltf'] = np.empty(nrecs, dtype='ubyte')
+  out['swa'] =  np.empty(nrecs, dtype='uint32')
+  out['deet'] = np.empty(nrecs, dtype='int32')
+  out['nbits'] = np.empty(nrecs, dtype='byte')
+  out['grtyp'] = np.empty(nrecs, dtype='|S1')
+  out['ni'] = np.empty(nrecs, dtype='int32')
+  out['nj'] = np.empty(nrecs, dtype='int32')
+  out['datyp'] = np.empty(nrecs, dtype='ubyte')
+  out['nk'] = np.empty(nrecs, dtype='int32')
+  out['ubc'] = np.empty(nrecs, dtype='uint16')
+  out['npas'] = np.empty(nrecs, dtype='int32')
+  out['ig1'] = np.empty(nrecs, dtype='int32')
+  out['ig2'] = np.empty(nrecs, dtype='int32')
+  out['ig3'] = np.empty(nrecs, dtype='int32')
+  out['ig4'] = np.empty(nrecs, dtype='int32')
+  out['etiket'] = np.empty(nrecs,dtype='|S12')
+  out['typvar'] = np.empty(nrecs,dtype='|S2')
+  out['nomvar'] = np.empty(nrecs,dtype='|S4')
+  out['ip1'] = np.empty(nrecs, dtype='int32')
+  out['ip2'] = np.empty(nrecs, dtype='int32')
+  out['ip3'] = np.empty(nrecs, dtype='int32')
+  out['datev'] = np.empty(nrecs, dtype='int32')
+  out['dateo'] = np.empty(nrecs, dtype='int32')
+  out['xtra1'] = np.empty(nrecs, dtype='uint32')
+  out['xtra2'] = np.empty(nrecs, dtype='uint32')
+  out['xtra3'] = np.empty(nrecs, dtype='uint32')
 
   temp8 = np.empty(nrecs, dtype='ubyte')
   temp32 = np.empty(nrecs, dtype='int32')
@@ -239,16 +234,10 @@ def decode_headers (raw, out=None):
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0
-  # Calculate the handles (keys)
-  # Based loosely on "MAKE_RND_HANDLE" macro in qstdir.h.
-  indices = np.arange(len(out['nomvar']), dtype='int32')
-  recno = indices % 256
-  pageno = indices // 256
-  out['key'][:] = ((recno&0x1FF)<<10) | ((pageno&0xFFF)<<19)
   return out
 
 
-def all_params (f, out=None, decode=True):
+def raw_headers (filename):
   '''
   Extract record headers from the specified file.
   Returns a dictionary similar to fstprm, only the entries are
@@ -258,12 +247,14 @@ def all_params (f, out=None, decode=True):
 
   Parameters
   ----------
-  f : file object
-      The Python file object to scan for headers.
-  out : dict or pandas DataFrame, optional
-      Object to store the headers.  By default a dictionary will be created.
+  filename : string
+      The file to scan for headers.
   '''
   import numpy as np
+  import os
+  if not os.path.exists(filename) or not maybeFST(filename):
+    return None
+  f = open(filename,'rb')
   # Get the raw (packed) parameters.
   pageaddr = 27; pageno = 0
   raw = []
@@ -279,9 +270,8 @@ def all_params (f, out=None, decode=True):
     pageno_list.extend([pageno]*nent)
     pageaddr = page[4]; pageno += 1
   raw = np.concatenate(raw)
-  if not decode: return raw
-  out = decode_headers (raw, out=out)
-  return out
+  f.close()
+  return raw
 
 # Get the block size for the filesystem where the given file resides.
 # May be useful for determining the best way to read chunks of data from
@@ -325,10 +315,3 @@ def maybeFST(filename):
     # Same check as c_wkoffit in librmn
     return buf[12:] == b'STDR'
 
-def get_headers (f):
-  import os
-  if os.path.exists(f) and maybeFST(f):
-    return all_params(open(f,'rb'),decode=False)
-  else:
-    return None
-  return headers

@@ -369,7 +369,7 @@ class BufferBase (object):
     """
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
-    from fstd2nc.extra import get_headers, decode_headers
+    from fstd2nc.extra import raw_headers, decode_headers
     from collections import Counter, deque
     import numpy as np
     from glob import glob, has_magic
@@ -428,7 +428,7 @@ class BufferBase (object):
     # Extract headers from the files.
     bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
     with Pool() as p:
-      headers = p.imap (get_headers, [f for (infile,f) in expanded_infiles])
+      headers = p.imap (raw_headers, [f for (infile,f) in expanded_infiles])
       headers = bar.iter(headers)
       headers = list(headers) # Start!
     bar.finish()
@@ -448,12 +448,15 @@ class BufferBase (object):
 
     # Decode all the headers
     headers = [h for h in headers if h is not None]
+    # Remember indices in the headers (needed for reconstructing keys)
+    indices = [range(len(h)//72) for h in headers]
     if len(headers) > 0:
       headers = np.concatenate(headers)
+      indices = np.concatenate(indices)
       headers = decode_headers(headers)
-      headers['file_id'] = np.array(file_ids, dtype='int32')
       # Encode the keys without the file index info.
-      headers['key'] >>= 10
+      headers['key'] = (indices % 256) | ((indices//256)<<9)
+      headers['file_id'] = np.array(file_ids, dtype='int32')
 
     # Check if the input entries actually matched anything.
     for infile, count in matches.items():
