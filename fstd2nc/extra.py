@@ -239,7 +239,12 @@ def decode_headers (raw, out=None):
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0
-
+  # Calculate the handles (keys)
+  # Based loosely on "MAKE_RND_HANDLE" macro in qstdir.h.
+  indices = np.arange(len(out['nomvar']), dtype='int32')
+  recno = indices % 256
+  pageno = indices // 256
+  out['key'][:] = ((recno&0x1FF)<<10) | ((pageno&0xFFF)<<19)
   return out
 
 
@@ -276,9 +281,6 @@ def all_params (f, out=None, decode=True):
   raw = np.concatenate(raw)
   if not decode: return raw
   out = decode_headers (raw, out=out)
-  # Calculate the handles (keys)
-  # Based on "MAKE_RND_HANDLE" macro in qstdir.h.
-  out['key'][:] = ((np.array(recno_list)&0x1FF)<<10) | ((np.array(pageno_list)&0xFFF)<<19)
   return out
 
 # Get the block size for the filesystem where the given file resides.
