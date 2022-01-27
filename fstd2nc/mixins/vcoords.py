@@ -276,8 +276,8 @@ class VCoords (BufferBase):
     for var in self._varlist:
       level_axis = var.getaxis('level')
       if level_axis is None: continue
-      # Degenerate vertical axis?
-      if 'ip1' in var.atts and var.atts['ip1'] == 0:
+      # Degenerate vertical axis (0mb or 0hy?)
+      if 'ip1' in var.atts and var.atts['ip1'] in (0, 99614720):
         if len(level_axis) == 1:
           i = var.dims.index('level')
           var.axes.pop(i)
