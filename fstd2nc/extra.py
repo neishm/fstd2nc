@@ -324,3 +324,11 @@ def maybeFST(filename):
     if len(buf) < 16: return False
     # Same check as c_wkoffit in librmn
     return buf[12:] == b'STDR'
+
+def get_headers (f):
+  import os
+  if os.path.exists(f) and maybeFST(f):
+    return all_params(open(f,'rb'),decode=False)
+  else:
+    return None
+  return headers

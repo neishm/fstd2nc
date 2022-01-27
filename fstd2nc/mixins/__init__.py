@@ -341,7 +341,7 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, header_cache=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False):
+  def __init__ (self, filename, _headers=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -369,13 +369,13 @@ class BufferBase (object):
     """
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
-    from fstd2nc.extra import maybeFST as isFST, all_params, decode_headers
+    from fstd2nc.extra import get_headers, decode_headers
     from collections import Counter, deque
     import numpy as np
     from glob import glob, has_magic
     import os
     import warnings
-    from threading import Thread
+    from multiprocessing import Pool
 
     # Set up lock for threading.
     # The same lock is shared for all Buffer objects, to synchronize access to
@@ -425,37 +425,12 @@ class BufferBase (object):
         else:
           expanded_infiles.append((infile,f))
 
-    # Find out which of those files are valid input files.
-    is_valid = [None] * len(expanded_infiles)
-    headers = [None] * len(expanded_infiles)
-    # First, short-circuit the check for cached data.
-    if header_cache is None: header_cache = {}
-    for i, (infile, f) in enumerate(expanded_infiles):
-      fkey = f
-      if fkey.startswith('/'):
-        fkey = '__ROOT__'+fkey
-      if fkey in header_cache:
-        is_valid[i] = True
-        headers[i] = header_cache[fkey]
-    # Next, inspect the remaining entries to see which ones are valid.
-    # Extract headers for the valid ones.
-    def check_valid (i):
-      infile, f = expanded_infiles[i]
-      is_valid[i] = os.path.exists(f) and isFST(f)
-      headers[i] = all_params(open(f,'rb'),decode=False)
-    threads = deque()
+    # Extract headers from the files.
     bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
-    for i in range(len(expanded_infiles)):
-      if is_valid[i] is not None: continue
-      while len(threads) >= 32:
-        t = threads.popleft()
-        t.join()
-        bar.next()
-      threads.append(Thread(None, target=check_valid, args=(i,)))
-      threads[-1].start()
-    for t in threads:
-      t.join()
-      bar.next()
+    with Pool() as p:
+      headers = p.imap (get_headers, [f for (infile,f) in expanded_infiles])
+      headers = bar.iter(headers)
+      headers = list(headers) # Start!
     bar.finish()
 
     # Check which files had headers used, report on the results.
@@ -463,15 +438,11 @@ class BufferBase (object):
     self._files = []
     file_ids = []
     for i, (infile, f) in enumerate(expanded_infiles):
-      fkey = f
-      if fkey.startswith('/'):
-        fkey = '__ROOT__'+fkey
-      if is_valid[i]:
+      if headers[i] is not None:
         matches[infile] += 1
         filenum = len(self._files)
         self._files.append(f)
         file_ids.extend([filenum]*(len(headers[i])//72))
-        header_cache[fkey] = headers[i]
       else:
         matches[infile] += 0
 
@@ -505,6 +476,13 @@ class BufferBase (object):
       global _pandas_needed
       _pandas_needed = True
     info(_("Found %d RPN input file(s)"%nfiles))
+
+    # Add extra headers? (hack for generating Buffer objects from external
+    # sources (not FSTD files)
+    if _headers is not None:
+      headers = dict(_headers)
+      # Keep link to first file for metadata purposes below?
+      headers['file_id'] = np.zeros(len(headers['nomvar']), dtype='int32')
 
     self._headers = headers
     self._nrecs = len(headers['nomvar'])

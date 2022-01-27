@@ -338,7 +338,7 @@ class ExternInput (BufferBase):
     rmn.fstcloseall(iun)
 
     # Initialize the Buffer object with this info.
-    b = cls(gridfile, header_cache={'__ROOT__'+gridfile:headers}, **kwargs)
+    b = cls(gridfile, _headers=headers, **kwargs)
     b._grid_tmpdir = grid_tmpdir  # Save tmpdir until cleanup.
 
     # Save the dataframe for reference.
