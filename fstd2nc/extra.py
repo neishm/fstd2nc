@@ -252,9 +252,14 @@ def raw_headers (filename):
   '''
   import numpy as np
   import os
-  if not os.path.exists(filename) or not maybeFST(filename):
+  if not os.path.exists(filename):
     return None
   f = open(filename,'rb')
+  # Use same check as maybeFST
+  magic = f.read(16)
+  if len(magic) < 16 or magic[12:] != b'STDR':
+    f.close()
+    return None
   # Get the raw (packed) parameters.
   pageaddr = 27; pageno = 0
   raw = []
