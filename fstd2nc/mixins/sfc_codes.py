@@ -50,7 +50,31 @@ sfc_agg_nomvars = (
   'ZT','WT','SD','7A','TRAF'
 )
 
+# List of variables that use a soil depth coordinate.
+# For output of SPS.
+default_soil_depths = "0.05,0.1,0.2,0.4,1.0,2.0,3.0"
+soil_depth_nomvars = ('WSOL', 'ISOL')
+
 class Sfc_Codes (BufferBase):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    super(Sfc_Codes,cls)._cmdline_args(parser)
+    parser.add_argument('--soil-depths', default=default_soil_depths, help=_('Define custom depths for soil fields (%s).  Defaults are %%(default)s.')%(','.join(soil_depth_nomvars)))
+
+  def __init__ (self, *args, **kwargs):
+    """
+    soil_depths : str or list, optional
+        Define custom depths for soil fields.
+    """
+    import numpy as np
+    soil_depths = kwargs.pop('soil_depths',default_soil_depths)
+    try:
+      if isinstance(soil_depths,str):
+        soil_depths = map(float,soil_depths.split(','))
+      self._soil_bounds = np.array((0.,) + tuple(soil_depths), dtype='float32')
+    except ValueError:
+      error(_("Unable to parse soil-depths parameter."))
+    super(Sfc_Codes,self).__init__(*args,**kwargs)
 
   def _makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
@@ -58,6 +82,7 @@ class Sfc_Codes (BufferBase):
     import numpy as np
 
     handled_agg_codes = dict()
+    handled_soil_depth_codes = dict()
 
     super(Sfc_Codes,self)._makevars()
     for var in self._varlist:
@@ -71,6 +96,7 @@ class Sfc_Codes (BufferBase):
       codes = tuple(levels.array)
       coordinates = var.atts.get('coordinates',[])
 
+      # Handle surface type codes.
       if var.name in sfc_agg_nomvars:
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
@@ -87,6 +113,25 @@ class Sfc_Codes (BufferBase):
         # Add the area type to the list of auxiliary coordinates.
         coordinates.append(surface_type)
 
+      # Handle soil depth codes.
+      if var.name in soil_depth_nomvars and set(codes) <= set(range(1,len(self._soil_bounds))):
+        # Generate the soil depths.
+        if codes not in handled_soil_depth_codes:
+          indices = np.asarray(codes,dtype='int32')
+          depths = (self._soil_bounds[indices-1] + self._soil_bounds[indices]) / 2.
+          atts = OrderedDict([('standard_name','depth'), ('long_name','soil depth'), ('axis', 'Z'), ('positive', 'down'), ('units', 'm')])
+          soil_depth = _axis_type('soil_depth',atts,depths)
+          bnds = _dim_type('bnds',2)
+          atts = OrderedDict([('units','m'),('long_name','soil depth bounds')])
+          soil_depth_bnds = _var_type('soil_depth_bnds',atts,[soil_depth,bnds],np.stack([self._soil_bounds[indices-1],self._soil_bounds[indices]]).T)
+          soil_depth.atts['bounds'] = soil_depth_bnds
+          handled_soil_depth_codes[codes] = soil_depth_bnds
+        soil_depth_bnds = handled_soil_depth_codes[codes]
+        var.axes[var.dims.index('level')] = soil_depth_bnds.getaxis('soil_depth')
+      elif var.name in soil_depth_nomvars:
+        warn(_("More than the expected number of soil depths were found.  No depth values will be encoded."))
+        soil_depth = _dim_type('soil_depth',len(codes))
+        var.axes[var.dims.index('level')] = soil_depth
       if len(coordinates) > 0:
         var.atts['coordinates'] = coordinates
 
