@@ -278,6 +278,7 @@ class BufferBase (object):
     group.add_argument('--rpnstd-metadata-list', metavar='nomvar,...', help=_("Specify a minimal set of RPN record attributes to include in the output file."))
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
+    parser.add_argument('--serial', action='store_true', help=_('Disables multithreading/multiprocessing.  Useful for resource-limited machines.'))
 
   # Do some checks on the command-line arguments after parsing them.
   @classmethod
@@ -341,7 +342,7 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, _headers=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False):
+  def __init__ (self, filename, _headers=None, progress=False, minimal_metadata=None, rpnstd_metadata=None, rpnstd_metadata_list=None, ignore_typvar=False, ignore_etiket=False, serial=False):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -366,16 +367,23 @@ class BufferBase (object):
         Tells the converter to ignore the etiket when deciding if two
         records are part of the same field.  Default is to split the
         variable on different etikets.
+    serial : bool, optional
+        Disables multithreading/multiprocessing.  Useful for resource-limited
+        machines.
     """
     from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
     from rpnpy.librmn.const import FST_RO
     from fstd2nc.extra import raw_headers, decode_headers
-    from collections import Counter, deque
+    from collections import Counter
     import numpy as np
     from glob import glob, has_magic
     import os
     import warnings
     from multiprocessing import Pool
+    try:
+      from itertools import imap  # Python 2
+    except ImportError:
+      imap = map
 
     # Set up lock for threading.
     # The same lock is shared for all Buffer objects, to synchronize access to
@@ -409,6 +417,8 @@ class BufferBase (object):
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
       self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
 
+    self._serial = serial
+
     if isinstance(filename,str):
       infiles = [filename]
     else:
@@ -428,13 +438,19 @@ class BufferBase (object):
     # Extract headers from the files.
     if len(expanded_infiles) > 1:
       bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
+
+    if len(expanded_infiles) > 1 and not self._serial:
       with Pool() as p:
         headers = p.imap (raw_headers, [f for (infile,f) in expanded_infiles])
         headers = bar.iter(headers)
-        headers = list(headers) # Start!
-      bar.finish()
+        headers = list(headers) # Start scanning.
     else:
-      headers = list(map(raw_headers, [f for (infile,f) in expanded_infiles]))
+      headers = imap (raw_headers, [f for (infile,f) in expanded_infiles])
+      headers = bar.iter(headers)
+      headers = list(headers) # Start scanning.
+
+    if len(expanded_infiles) > 1:
+      bar.finish()
 
     # Check which files had headers used, report on the results.
     matches = Counter()
