@@ -436,8 +436,8 @@ class BufferBase (object):
           expanded_infiles.append((infile,f))
 
     # Extract headers from the files.
-    if len(expanded_infiles) > 1:
-      bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
+    if len(expanded_infiles) == 1: Bar = _FakeBar
+    bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
 
     if len(expanded_infiles) > 1 and not self._serial:
       with Pool() as p:
@@ -449,8 +449,7 @@ class BufferBase (object):
       headers = bar.iter(headers)
       headers = list(headers) # Start scanning.
 
-    if len(expanded_infiles) > 1:
-      bar.finish()
+    bar.finish()
 
     # Check which files had headers used, report on the results.
     matches = Counter()
