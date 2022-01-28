@@ -426,12 +426,15 @@ class BufferBase (object):
           expanded_infiles.append((infile,f))
 
     # Extract headers from the files.
-    bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
-    with Pool() as p:
-      headers = p.imap (raw_headers, [f for (infile,f) in expanded_infiles])
-      headers = bar.iter(headers)
-      headers = list(headers) # Start!
-    bar.finish()
+    if len(expanded_infiles) > 1:
+      bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
+      with Pool() as p:
+        headers = p.imap (raw_headers, [f for (infile,f) in expanded_infiles])
+        headers = bar.iter(headers)
+        headers = list(headers) # Start!
+      bar.finish()
+    else:
+      headers = list(map(raw_headers, [f for (infile,f) in expanded_infiles]))
 
     # Check which files had headers used, report on the results.
     matches = Counter()
