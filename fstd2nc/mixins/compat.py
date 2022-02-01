@@ -310,7 +310,7 @@ class FSTD_Compat (BufferBase):
       rmn.fstecr(iun,d)
       # Keep track of where the data was written.
       prm = rmn.fstprm(rmn.fstinl(iun)[-1])
-      chunk_addresses[rec_id] = (prm['swa']-1)*8+72, (prm['lng']*8)-96, d['datyp'], d['nbits']
+      chunk_addresses[rec_id] = (prm['swa']-1)*8+72, (prm['lng']*4)-96, d['datyp'], d['nbits']
     rmn.fstcloseall(iun)
 
     # By this point, all data is in the file.  This includes netCDF-only data,

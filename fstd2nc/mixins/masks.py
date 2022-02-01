@@ -61,7 +61,7 @@ class Masks (BufferBase):
       if np.sum(uses_mask) > 0:
         overlap = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
         overlap = np.where(overlap)[0]
-        lng[overlap] = swa[overlap+1] + lng[overlap+1] - swa[overlap]
+        lng[overlap] = swa[overlap+1]*2 + lng[overlap+1] - swa[overlap]*2
         self._headers['lng'] = lng
     except KeyError:
       pass  # Not our data from disk (maybe from fstpy?) so can't do that.
@@ -138,7 +138,7 @@ class Masks (BufferBase):
         filename = self._files[self._headers['file_id'][rec_id]]
         with open (filename, 'rb') as f:
           f.seek(self._headers['swa'][rec_id]*8-8)
-          mask = np.fromfile(f,'B',self._headers['lng'][rec_id]*8)
+          mask = np.fromfile(f,'B',self._headers['lng'][rec_id]*4)
         mask = super(Masks,self)._decode(mask)
         return ((field1*mask) + self._fill_value * (1-mask)).astype(field1.dtype)
     # Ok, back to the case where the other field is available conveniently

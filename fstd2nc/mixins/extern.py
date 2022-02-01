@@ -80,7 +80,7 @@ class ExternOutput (BufferBase):
         blocksizes[filename] = max(blocksize(filename), 2**20)
       bs = blocksizes[filename]
       offset = all_swa[rec_id] * 8 - 8
-      length = all_lng[rec_id] * 8
+      length = all_lng[rec_id] * 4
       current_block = offset // bs
       pieces = []
       while current_block * bs < offset + length:

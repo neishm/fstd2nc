@@ -185,6 +185,7 @@ def decode_headers (raw):
   temp32 = np.empty(nrecs, dtype='int32')
 
   np.divmod(raw[:,0,0],2**24, temp8, out['lng'])
+  out['lng'] *= 2 # Convert from 8-byte to 4-byte units.
   np.divmod(temp8,128, out['dltf'], temp8)
   out['swa'][:] = raw[:,0,1]
   np.divmod(raw[:,1,0],256, out['deet'], out['nbits'])
