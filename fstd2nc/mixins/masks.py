@@ -86,8 +86,11 @@ class Masks (BufferBase):
       if not isinstance(var,_iter_type):
         continue
       # Look for typvars such as 'P@'.
-      if var.atts.get('typvar','').endswith('@'):
-        var.atts['_FillValue'] = var.dtype.type(self._fill_value)
+      if var.atts.get('typvar','').endswith('@') or var.atts.get('datyp',0) & 64 == 64:
+        try:
+          var.atts['_FillValue'] = var.dtype.type(self._fill_value)
+        except OverflowError:
+          warn(_("Can't set fill value '%g' for %s.")%(self._fill_value,var.name))
 
   # Apply the mask data
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
