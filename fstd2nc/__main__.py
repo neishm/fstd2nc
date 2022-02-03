@@ -33,6 +33,13 @@ def _fstdump (buffer_type=Buffer):
   from rpnpy.librmn.fstd98 import FSTDError, fstopt
   from os.path import basename
   import textwrap
+  from sys import argv
+  # Strip '-h' from command-line.
+  # It will be interpreted as similar to ncdump -h (print headers), which is
+  # the default beviour.  Don't to trigger the help message if the user
+  # includes this flag.
+  if '-h' in argv: argv.remove('-h')
+  # Now, parse everything else as per usual.
   parser = ArgumentParser(description=_("Display RPN standard file (FSTD) metadata in a structured format."))
   parser.add_argument('infile', metavar='<fstd_file>', help=_('The RPN standard file to query.'))
   parser.add_argument('-v', metavar='NOMVAR,...', help=_('Display the values for the specified variable.'))
