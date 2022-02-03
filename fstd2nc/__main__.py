@@ -117,6 +117,10 @@ def _fstdump (buffer_type=Buffer):
           values = '"' + '", "'.join(values) + '"'
         else:
           values = values.flatten()
+          # Appy mask?
+          if '_FillValue' in var.atts:
+            values = np.ma.array(values)
+            values.mask = (values==var.atts['_FillValue'])
           values = map(str,values)
           values = ', '.join(values)
         lines = textwrap.wrap('%s = %s ;'%(var.name, values), initial_indent=' ', subsequent_indent='    ')
