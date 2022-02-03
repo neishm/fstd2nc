@@ -46,6 +46,7 @@ librmn.c_float_unpacker.argtypes = (npc.ndpointer(dtype='int32'),npc.ndpointer(d
 # https://wiki.cmc.ec.gc.ca/wiki/Python-RPN/2.0/examples#Example_4:_Plot_RPN_STD_field_on_an_X-grid
 # https://wiki.cmc.ec.gc.ca/wiki/Talk:Python-RPN/2.0/examples#Plot_GIOPS_Forecast_Data_with_Basemap
 def dtype_fst2numpy (datyp, nbits=None):
+  from fstd2nc.stdout import _, info, warn, error
   from rpnpy.librmn.fstd98 import dtype_fst2numpy
   if datyp == 0:
     warn (_("Raw binary records detected.  The values may not be properly decoded if you're opening on a different platform."))
