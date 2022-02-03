@@ -69,15 +69,12 @@ def decode (data):
   data = data.view('>i4').astype('i4')
   ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
   nelm = ni*nj*nk
-  datyp = data[4]%256 
-  nbits = data[2]%256
+  datyp = int(data[4]%256) & 191  # Ignore +64 mask.
+  nbits = int(data[2]%256)
+  dtype = dtype_fst2numpy (datyp, nbits)
   if nbits <= 32:
-    dtype = rmn.FST_DATYP2NUMPY_LIST[datyp%128]
-    #if datyp == 0: dtype = 'float32'
     work = np.empty(nelm,'int32')
   else:
-    dtype = rmn.FST_DATYP2NUMPY_LIST64[datyp%128]
-    #if datyp == 0: dtype = 'float64'
     work = np.empty(nelm,'int64').view('int32')
   # Strip header
   data = data[20:]
@@ -101,40 +98,42 @@ def decode (data):
   #print (ni, nj, nk, nbits, datyp, dtype)
   if datyp == 0:
     work = data
-  if datyp == 1:
+  elif datyp == 1:
     if nbits.value <= 32:
       librmn.compact_float(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
     else:
       raise Exception
       librmn.compact_double(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
-  if datyp == 2:
+  elif datyp == 2:
     librmn.compact_integer(work, None, data, nelm, nbits, 0, 1, 2)
-  if datyp == 3:
+  elif datyp == 3:
     raise Exception
-  if datyp == 4:
+  elif datyp == 4:
     librmn.compact_integer(work, None, data, nelm, nbits, 0, 1, 4)
-  if datyp == 5:
+  elif datyp == 5:
     librmn.ieeepak_(work, data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
-  if datyp == 6:
+  elif datyp == 6:
     librmn.c_float_unpacker(work, data, data[3:], nelm, ct.byref(nbits));
-  if datyp == 7:
+  elif datyp == 7:
     ier = librmn.compact_char(work, None, data, nelm, 8, 0, 1, 10)
     work = work.view('B')[:len(work)] #& 127
-  if datyp == 8:
+  elif datyp == 8:
     raise Exception
-  if datyp == 129:
+  elif datyp == 129:
     librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
     librmn.compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
-  if datyp == 130:
+  elif datyp == 130:
     #librmn.c_armn_compress_setswap(0)
     librmn.armn_compress(data[1:],ni,nj,nk,nbits,2)
     #librmn.c_armn_compress_setswap(1)
     work[:] = data[1:].astype('>i4').view('>H')[:nelm.value]
-  if datyp == 133:
+  elif datyp == 133:
     librmn.c_armn_uncompress32(work, data[1:], ni, nj, nk, nbits)
-  if datyp == 134:
+  elif datyp == 134:
     librmn.armn_compress(data[4:],ni,nj,nk,nbits,2);
     librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
+  else:
+    raise Exception(datyp)
   return work.view(dtype)[:nelm.value].reshape(shape).T
 
 
