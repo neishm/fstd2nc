@@ -24,10 +24,13 @@ from fstd2nc.mixins import BufferBase
 # Disable automatic decoding of datyp+64 missing value codes.
 # Easier to find the encoded missing values (maximum value in the field).
 # TODO: Remove this once the missing value interface is wrapped in rpnpy.
-import ctypes
-from rpnpy.librmn import librmn
-librmn.ForceMissingValueUsage(ctypes.c_int(0))
-del ctypes, librmn
+try:
+  import ctypes
+  from rpnpy.librmn import librmn
+  librmn.ForceMissingValueUsage(ctypes.c_int(0))
+  del ctypes, librmn
+except ImportError:  # rpnpy not available, so nothing to do here.
+  pass
 
 
 #################################################
