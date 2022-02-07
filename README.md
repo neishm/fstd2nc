@@ -38,6 +38,8 @@ optional arguments:
   --ignore-etiket       Tells the converter to ignore the etiket when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different etikets.
+  --serial              Disables multithreading/multiprocessing. Useful for
+                        resource-limited machines.
   --vars VAR1,VAR2,...  Comma-separated list of variables to convert. By
                         default, all variables are converted.
   --fill-value FILL_VALUE
@@ -66,6 +68,9 @@ optional arguments:
                         (XML format).
   --opdict              Similar to above, but use the standard CMC-RPN
                         operational dictionary.
+  --soil-depths SOIL_DEPTHS
+                        Define custom depths for soil fields (WSOL,ISOL).
+                        Defaults are 0.05,0.1,0.2,0.4,1.0,2.0,3.0.
   --strict-vcoord-match
                         Require the IP1/IP2/IP3 parameters of the vertical
                         coordinate to match the IG1/IG2/IG3 paramters of the

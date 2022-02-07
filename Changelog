@@ -1,3 +1,26 @@
+Version 0.20220204.0 (Feb 4, 2022)
+	* New 'fstdump' command for displaying the structure of an FSTD file
+	  in the same layout as would go into netCDF.
+	* Some support for 'M' and '#' grids.
+	* Improved startup time for the converter by avoiding imports of large
+	  packages like pandas, xarray and dask unless actually needed.
+	* Removed pydap interface (no known use case, extra work to maintain).
+	* Much better threading performance for xarray/dask interface.
+	* Fixed 'interp' argument when used from Python interface.
+	* Internally, changed Buffer._headers to be a dictionary instead of a
+	  structured array.  No impacted expected for user-facing functions.
+	* Fixed a crash in vcoord mixin when encountering a degenerate '0 hy'
+	  level.
+	* Also, removed the above-mentioned '0 hy' coordinate from the output
+	  file (treat as 2D field).
+	* Improved the speed of querying multiple FSTD files by using multi-
+	  processing.
+	* Added new --serial option to disable the aforementioned multi-
+	  processing.
+	* Added proper depth coordinate for WSOL and ISOL surface fields, with
+	  new option --soil-depths to override the default values.
+	* Added support for missing values encoded using the datyp+64 flag.
+
 Version 0.20211202.0 (Dec 3, 2021)
 	* Changed the earth_radius grid attribute from 6371229 to 6370997, to
 	  be consistent with librmn.

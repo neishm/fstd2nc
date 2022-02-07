@@ -23,7 +23,7 @@
 Functionality for converting between FSTD and netCDF files.
 """
 
-__version__ = "0.20211202.0"
+__version__ = "0.20220204.0"
 
 
 # Check for bundled rpnpy package.
