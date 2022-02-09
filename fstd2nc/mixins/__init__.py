@@ -512,9 +512,12 @@ class BufferBase (object):
     # that provide all unique metadata records.
     # This will make it easier to look up the meta records later.
     meta_mask = np.zeros(self._nrecs,dtype='bool')
-    for meta_name in self._meta_records + self._maybe_meta_records:
+    for meta_name in self._meta_records:
       meta_name = (meta_name+b'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name)
+    for meta_name in self._maybe_meta_records:
+      meta_name = (meta_name+b'   ')[:4]
+      meta_mask |= (self._headers['nomvar'] == meta_name) & ((self._headers['ni']==1)|(self._headers['nj']==1))
 
     # Store this metadata identification in case it's useful for some mixins.
     self._headers['ismeta'] = np.empty(self._nrecs, dtype='bool')
