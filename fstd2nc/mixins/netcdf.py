@@ -21,6 +21,23 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+# Helper function - apply metadata and renames to the variables.
+def apply_metadata (b):
+  if hasattr(b,'_metadata'):
+    # Apply the user-supplied metadata.
+    for obj in b._iter_objects():
+      # Add extra metadata provided by the user?
+      if obj.name in b._metadata:
+        for attname, attval in b._metadata[obj.name].items():
+          # Check if attribute should be removed?
+          # (i.e., if value is intentionally left empty)
+          if attval == "": obj.atts.pop(attname,None)
+          else: obj.atts[attname] = attval
+      # Apply renames.
+      if obj.name in b._renames:
+        obj.name = b._renames[obj.name]
+
+
 #################################################
 # Mixin for adding netCDF metadata to the variables
 
@@ -119,23 +136,13 @@ class netCDF_Atts (BufferBase):
     super(netCDF_Atts,self)._makevars()
 
     # Extract variable rename requests from the user-supplied metadata.
-    renames = {}
+    self._renames = {}
     for varname, atts in self._metadata.items():
       if 'rename' in atts:
-        renames[varname] = atts.pop('rename')
+        self._renames[varname] = atts.pop('rename')
 
     # Apply the user-supplied metadata.
-    for obj in self._iter_objects():
-      # Add extra metadata provided by the user?
-      if obj.name in self._metadata:
-        for attname, attval in self._metadata[obj.name].items():
-          # Check if attribute should be removed?
-          # (i.e., if value is intentionally left empty)
-          if attval == "": obj.atts.pop(attname,None)
-          else: obj.atts[attname] = attval
-      # Apply renames.
-      if obj.name in renames:
-        obj.name = renames[obj.name]
+    apply_metadata (self)
 
 
 
@@ -188,8 +195,11 @@ class netCDF_IO (BufferBase):
       if var.dims.index('time') > 0:
         self._time_unlimited = False
 
+    # Generate unique names for output data.
     if self._unique_names:
       self._fix_names()
+      # Hack: re-apply metadata for the final (renamed) variables.
+      apply_metadata(self)
 
     for var in self._iter_objects():
       # Modify time axes to be relative units instead of datetime objects.
