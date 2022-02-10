@@ -56,6 +56,9 @@ class FilterRecords (BufferBase):
     self._headers['dltf'] = self._headers['dltf'] | (~flags)
   @staticmethod
   def _do_filter (p, cmd):
+    # Allow numpy functions to work with the filters.
+    import numpy
+    p = dict(p, numpy=numpy, np=numpy)
     try:
       return eval(cmd, None, p)
     except SyntaxError:
