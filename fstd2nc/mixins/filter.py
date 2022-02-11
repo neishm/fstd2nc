@@ -37,6 +37,7 @@ class FilterRecords (BufferBase):
         convert only 24-hour forecasts you could use filter="ip2==24"
     """
     import numpy as np
+    import re
     filter = kwargs.pop('filter',None)
     if filter is None:
       filter = []
@@ -46,10 +47,22 @@ class FilterRecords (BufferBase):
     super(FilterRecords,self).__init__(*args,**kwargs)
     if len(self._filters) == 0: return
     flags = np.ones(self._nrecs,dtype='bool')
-    records = self._headers
+    # Get copy of records with bytestrings and with unicode strings.
+    records_with_bytestrings = self._headers
+    records_with_strings = self._headers.copy()
+    for key, value in records_with_strings.items():
+      if value.dtype.char == 'S':
+        new_dtype = 'U'+str(value.dtype.itemsize)
+        records_with_strings[key] = np.char.rstrip(value).astype(new_dtype)
+    bytestrings_pattern = re.compile("b['\"]")
+    # Loop over each filter and apply.
     for cmd in self._filters:
       try:
-        flags &= self._do_filter(records, cmd)
+        # Check if the filter uses byte strings or standard (unicode) strings.
+        if re.search(bytestrings_pattern, cmd):
+          flags &= self._do_filter(records_with_bytestrings, cmd)
+        else:
+          flags &= self._do_filter(records_with_strings, cmd)
       except TypeError:
         error (_("unable to apply the filter: %s")%cmd)
     # To filter out unwanted records, mark them as "deleted" in the list.
