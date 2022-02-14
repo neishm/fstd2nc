@@ -1,3 +1,16 @@
+Version 0.20220204.1 (Feb 14, 2022)
+	* Fixed regression where some data records were being identified as
+	  (unused) coordinate records, causing them to be omitted from the
+	  netCDF file.
+	* Metadata can now be applied based on forced-renamed variable names.
+	  E.g., can have sections [SSH_vgrid0] and [SSH_vgrid3] in the metadata
+	  file to control the attributes separately for each vertical
+	  coordinate type of an SSH variable.
+	* Fixed the handling of strings in --filter option.  It should now work
+	  with normal (not byte) strings without any padding.
+	* Also added 'np' shortcut to filters to allow numpy functions to be
+	  used in the filter criteria (such as np.isin).
+
 Version 0.20220204.0 (Feb 4, 2022)
 	* New 'fstdump' command for displaying the structure of an FSTD file
 	  in the same layout as would go into netCDF.
