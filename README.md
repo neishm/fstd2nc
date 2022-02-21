@@ -148,6 +148,8 @@ optional arguments:
   -f, --force           Overwrite the output file if it already exists.
   --no-history          Don't put the command-line invocation in the netCDF
                         metadata.
+  -q, --quiet           Don't display any information except for critical
+                        error messages. Implies --no-progress.
 ```
 
 Using in a Python script

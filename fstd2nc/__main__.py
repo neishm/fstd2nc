@@ -138,6 +138,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from sys import stdout, argv
   from os.path import exists
   from rpnpy.librmn.fstd98 import FSTDError, fstopt
+  import fstd2nc
   parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
   parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
@@ -148,6 +149,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('--compression', type=int, default=4, help=_("Compression level for the netCDF file. Only used if --zlib is set. Default: %(default)s."))
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
+  parser.add_argument('-q', '--quiet', action='store_true', help=_("Don't display any information except for critical error messages.  Implies --no-progress."))
   args = parser.parse_args()
   buffer_type._check_args(parser, args)
   args = vars(args)
@@ -159,6 +161,11 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   force = args.pop('force')
   no_history = args.pop('no_history')
   compression = args.pop('compression')
+  quiet = args.pop('quiet')
+  if quiet:
+    fstopt ('MSGLVL',6)
+    fstd2nc.stdout.streams = ('error',)
+    args['progress'] = False
   progress = args.get('progress',False)
 
   # Apply message level criteria.
