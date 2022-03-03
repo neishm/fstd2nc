@@ -1,3 +1,9 @@
+Version 0.20220204.2 (Mar 3, 2022)
+	* Fixed  a bug with rotated grids.  They were not properly oriented for
+	  the particular case where the rlon values didn't cross the numerical
+	  dateline for the coordinate.
+	* Added --quiet option to suppress messages from the converter.
+
 Version 0.20220204.1 (Feb 14, 2022)
 	* Fixed regression where some data records were being identified as
 	  (unused) coordinate records, causing them to be omitted from the
