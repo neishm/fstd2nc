@@ -160,8 +160,11 @@ class RotLatLon(GridMap):
     # Offset applied to bring rotated longitude in range [-180,180]
     # Done to avoid crossing the dateline and representation problems 
     # in some software (e.g. IDV, Panoply, Iris)
-    if adjust_rlon and self._ax.max() > 180.:
+    if adjust_rlon:
       self._ax = self._ax - self._north_pole_grid_longitude 
+      # Make sure rlon axis is still in range.
+      if self._ax.max() >= 360.: self._ax -= 360.
+      if self._ax.min() <= -180.: self._ax += 360.
     self._ay = self._grd['ay'][0,:]
   def gen_gmapvar(self):
     from fstd2nc.mixins import _var_type
