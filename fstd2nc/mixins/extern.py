@@ -32,23 +32,13 @@ def _read_block (filename, offset, length):
     f.seek (offset,0)
     return np.fromfile(f,'B',length)
 
-# Method for selecting a subset of data from a block of data.
-def _subset (block, start, end):
-  return block[start:end]
-
-# Method for merging arrays together.
-def _concat (*data):
-  import numpy as np
-  return np.concatenate(data)
-
 
 class ExternOutput (BufferBase):
 
   # Helper method to get graph for raw input data.
   def _graphs (self):
-    from fstd2nc.extra import blocksize
-    from os.path import getsize
     import numpy as np
+    import pandas as pd
     graphs = [None] * self._nrecs
     ###
     # Special case: already have a dask object from external source.
@@ -63,42 +53,16 @@ class ExternOutput (BufferBase):
         else:  # Special case: have a numpy array in memory.
           graph = d
           graph = np.ravel(graph, 'K')
-        graphs[rec_id] = {None:graph}
+        graphs[rec_id] = graph
       return graphs
     ###
     # Otherwise, construct graphs with our own dask wrapper.
-    blocksizes = dict()
-    fs_blocks = dict()
-    all_file_ids = np.array(self._headers['file_id'],copy=True)
-    all_swa = np.array(self._headers['swa'],copy=True)
-    all_lng = np.array(self._headers['lng'],copy=True)
-    for rec_id in range(self._nrecs):
-      graph = dict()
-      file_id = all_file_ids[rec_id]
-      filename = self._files[file_id]
-      if filename not in blocksizes:
-        blocksizes[filename] = max(blocksize(filename), 2**20)
-      bs = blocksizes[filename]
-      offset = all_swa[rec_id] * 8 - 8
-      length = all_lng[rec_id] * 4
-      current_block = offset // bs
-      pieces = []
-      while current_block * bs < offset + length:
-        s1 = max(current_block*bs, offset) - current_block*bs
-        s2 = min(current_block*bs+bs, offset+length) - current_block*bs
-        if (filename,current_block) not in fs_blocks:
-          fs_blocks[(filename,current_block)] = (_read_block, filename, current_block*bs, bs)
-        graph[filename+'-block-'+str(current_block)] = fs_blocks[(filename,current_block)]
-        pieces.append( (_subset, filename+'-block-'+str(current_block), s1, s2) )
-        current_block = current_block + 1
-      if len(pieces) > 1:
-        graph[filename+'-raw-'+str(offset)] = (_concat,) + tuple(pieces)
-      else:
-        graph[filename+'-raw-'+str(offset)] = pieces[0]
-      graph[filename+'-decode-'+str(offset)] = (np.transpose, (self._decode, filename+'-raw-'+str(offset)))
-      graph[None] = filename+'-decode-'+str(offset)
-      graphs[rec_id] = graph
-    return graphs
+    files = dict(enumerate(self._files))
+    filenames = pd.Series(self._headers['file_id']).map(files)
+    graphs = zip([_read_block]*self._nrecs, filenames, self._headers['swa']*8-8, self._headers['lng']*4)
+    graphs = zip([self._decode]*self._nrecs, graphs)
+    graphs = zip([np.transpose]*self._nrecs, graphs)
+    return list(graphs)
 
   def _iter_dask (self):
     """
@@ -110,7 +74,6 @@ class ExternOutput (BufferBase):
     import numpy as np
     from itertools import product
     from dask import delayed
-    from fstd2nc.extra import decode
     unique_token = tokenize(self._files,id(self))
     graphs = self._graphs()
     self._makevars()
@@ -162,9 +125,7 @@ class ExternOutput (BufferBase):
           # Also, specify the preferred order of reading the chunks within the
           # file.
           if rec_id >= 0:
-            graph = graphs[rec_id][None]
-            dsk.update(graphs[rec_id])
-            del dsk[None]
+            graph = graphs[rec_id]
             dsk[key] = (np.reshape, graph, chunk_shape)
           else:
             # Fill missing chunks with fill value or NaN.

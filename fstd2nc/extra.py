@@ -279,20 +279,6 @@ def raw_headers (filename):
   f.close()
   return raw
 
-# Get the block size for the filesystem where the given file resides.
-# May be useful for determining the best way to read chunks of data from
-# FSTD files.
-def blocksize (filename):
-  import subprocess
-  try:
-    # Use the command-line "stat" program instead of os.stat, because the
-    # latter is giving incorrect results for some filesystems.
-    # E.g., on a GPFS filesystem with 16MB block size, os.stat is giving a size
-    # of 256KB.
-    return int(subprocess.check_output(['stat', '-c', '%s', '-f', filename]))
-  except OSError:
-    return 4096  # Give some default value if 'stat' not available.
-
 
 # Return the given arrays as a single structured array.
 # Makes certain operations easier, such as finding unique combinations.
