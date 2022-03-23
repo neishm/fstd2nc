@@ -144,7 +144,7 @@ class Masks (BufferBase):
     # Find out where the next field should be.
     swa = d[1]
     offset = d[0]&(0x00FFFFFF)
-    while offset < len(d)//2 and swa+offset != d[offset*2+1]:
+    while offset < len(d)//2 and (swa+offset != d[offset*2+1] or d[offset*2] == 2308):
       offset += 1
     else:
       # No extra fields found?
