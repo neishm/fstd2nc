@@ -101,8 +101,8 @@ class ExternOutput (BufferBase):
       return graphs
     ###
     # Otherwise, construct graphs with our own dask wrapper.
-    files = dict(enumerate(self._files))
-    filenames = pd.Series(self._headers['file_id']).map(files)
+    files = np.array(self._files, dtype=object)
+    filenames = files[self._headers['file_id']]
     graphs = zip([_read_block]*self._nrecs, filenames, self._headers['swa']*8-8, self._headers['lng']*4)
     graphs = zip([self._decode]*self._nrecs, graphs)
     graphs = zip([np.transpose]*self._nrecs, graphs)
