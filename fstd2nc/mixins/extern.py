@@ -102,11 +102,19 @@ class ExternOutput (BufferBase):
     ###
     # Otherwise, construct graphs with our own dask wrapper.
     files = np.array(self._files, dtype=object)
-    filenames = files[self._headers['file_id']]
-    graphs = zip([_read_block]*self._nrecs, filenames, self._headers['swa']*8-8, self._headers['lng']*4)
-    graphs = zip([self._decode]*self._nrecs, graphs)
-    graphs = zip([np.transpose]*self._nrecs, graphs)
-    return list(graphs)
+    # Only construct graphs for records that will ultimately appear in the
+    # dask objects.
+    active = self._headers['dltf'] == 0
+    nrecs = np.sum(active)
+    filenames = files[self._headers['file_id'][active]]
+    graphs = zip([_read_block]*nrecs, filenames, self._headers['swa'][active]*8-8, self._headers['lng'][active]*4)
+    graphs = zip([self._decode]*nrecs, graphs)
+    graphs = zip([np.transpose]*nrecs, graphs)
+    g = np.empty(nrecs, dtype=object)
+    g[:] = list(graphs)
+    out = np.empty(self._nrecs, dtype=object)
+    out[active] = g
+    return out
 
   def _iter_dask (self):
     """
