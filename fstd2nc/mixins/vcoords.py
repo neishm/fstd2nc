@@ -584,7 +584,7 @@ class VCoords (BufferBase):
     # those fields.
     # Also detect where *only* diagnostic level was found, and revert that
     # back to the correct type.
-    if not self._diag_as_model_level:
+    if not self._diag_as_model_level and not self._split_diag_level and not self._ignore_diag_level:
       for var in self._varlist:
         if not hasattr(var,'record_id'): continue
         valid_records = var.record_id[var.record_id>=0]
