@@ -774,27 +774,26 @@ class BufferBase (object):
           # For instance, pandas < 0.23 can't convert between datetime64 with
           # different increments ([ns] and [s]).
           column = var_records[n]
-        cat = pd.Categorical(column)
         # Is this column an outer axis?
         if n in self._outer_axes:
-          values = tuple(cat.categories)
+          values, indices[n] = np.unique(column, return_inverse=True)
+          values = tuple(values)
           if (n,values) not in known_axes:
             known_axes[(n,values)] = _axis_type(name = n, atts = OrderedDict(),
                                    array = np.array(values,dtype=column.dtype))
           axes[n] = known_axes[(n,values)]
-          indices[n] = cat.codes
           # Is this also an axis for an auxiliary coordinate?
           for coordname,coordaxes in self._outer_coords.items():
             if n in coordaxes:
               coordnames.append(coordname)
               coord_axes.setdefault(coordname,OrderedDict())[n] = axes[n]
-              coord_indices.setdefault(coordname,OrderedDict())[n] = cat.codes
+              coord_indices.setdefault(coordname,OrderedDict())[n] = indices[n]
         # Otherwise, does it have a consistent value?
         # If so, can add it to the metadata.
         # Ignore outer coords, since the value is already encoded elsewhere.
-        elif len(cat.categories) == 1 and n not in self._outer_coords:
+        elif np.all(column.values == column.values[0]) and n not in self._outer_coords:
           try:
-            v = cat[0]
+            v = column.values[0]
             # Python3: convert bytes to str.
             if isinstance(v,bytes): v = str(v.decode())
             # Trim string attributes (remove whitespace padding).
