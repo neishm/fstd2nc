@@ -53,7 +53,9 @@ class FilterRecords (BufferBase):
     for key, value in records_with_strings.items():
       if value.dtype.char == 'S':
         new_dtype = 'U'+str(value.dtype.itemsize)
-        records_with_strings[key] = np.char.rstrip(value).astype(new_dtype)
+        value = value.view('B').astype('i4')
+        value[value==32] = 0  # rstrip
+        records_with_strings[key] = value.view(new_dtype)
     bytestrings_pattern = re.compile("b['\"]")
     # Loop over each filter and apply.
     for cmd in self._filters:
