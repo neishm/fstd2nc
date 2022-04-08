@@ -530,7 +530,10 @@ class BufferBase (object):
     with warnings.catch_warnings():
       warnings.simplefilter("ignore")
       from fstd2nc.extra import structured_array
-      headers = structured_array(self._headers)
+      headers = dict()
+      for key in list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']:
+        headers[key] = self._headers[key]
+      headers = structured_array(headers)
       meta_keys = headers.data[meta_mask][list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
     meta_keys, ind = np.unique(meta_keys, return_index=True)
     meta_recids = meta_recids[ind]
