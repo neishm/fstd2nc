@@ -763,7 +763,10 @@ class BufferBase (object):
         if n in self._ignore_atts: continue
         # Ignore columns which are masked out.
         # https://stackoverflow.com/questions/29530232/python-pandas-check-if-any-value-is-nan-in-dataframe
-        if var_records[n].isnull().values.any(): continue
+        try:
+          if np.isnan(var_records[n].values[0]): continue
+        except TypeError:
+          if var_records[n].values[0] is None: continue
         # Get the unique values, in order.
         # Coerce back to original dtype, since masked columns get upcasted to
         # float64 in pandas.DataFrame.from_records.
@@ -826,7 +829,10 @@ class BufferBase (object):
       coords = []
       for n in coordnames:
         # Ignore auxiliary coordinates which are masked out.
-        if var_records[n].isnull().values.any(): continue
+        try:
+          if np.isnan(var_records[n].values[0]): continue
+        except TypeError:
+          if var_records[n].values[0] is None: continue
         # Unique key for this coordinate
         key = (n,tuple(coord_axes[n].items()))
         # Arrange the coordinate values in the appropriate location.
