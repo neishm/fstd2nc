@@ -37,6 +37,21 @@ def decode_ip1 (ip1):
     out['level'] = r1.v1
   return out
 
+@vectorize
+def decode_ip1_kind (ip1):
+  from rpnpy.librmn.fstd98 import DecodeIp
+  r1, r2, r3 = DecodeIp(ip1,0,0)
+  return r1.kind
+
+@vectorize
+def decode_ip1_level (ip1):
+  from rpnpy.librmn.fstd98 import DecodeIp
+  r1, r2, r3 = DecodeIp(ip1,0,0)
+  if r1.v1 == 0 and r1.v2 != 0 :
+    return r1.v2
+  else:
+    return r1.v1
+
 
 
 #################################################
@@ -156,10 +171,8 @@ class VCoords (BufferBase):
 
     fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
-    decoded = np.concatenate(decode_ip1(fields['ip1']))
-    # Only use first set of levels (can't handle ranges yet).
-    fields['level'] = decoded['level']
-    fields['kind'] = decoded['kind']
+    fields['level'] = decode_ip1_level(fields['ip1'])
+    fields['kind'] = decode_ip1_kind(fields['ip1'])
 
     # Pre-filter the diagnostic level data?
     # Start by treating diagnostic level as model level, then
