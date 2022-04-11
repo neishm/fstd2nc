@@ -690,7 +690,7 @@ class BufferBase (object):
         atts['coordinates'] = coords
 
       # Check if we have full coverage along all axes.
-      have_data = [k >= 0 for k in record_id.flatten()]
+      have_data = (record_id.flatten() >= 0)
       if not np.all(have_data):
         warn (_("Missing some records for %s.")%nomvar)
 
@@ -855,7 +855,7 @@ class BufferBase (object):
 
 
       # Check if we have full coverage along all axes.
-      have_data = [k >= 0 for k in record_id.flatten()]
+      have_data = (record_id.flatten() >= 0)
       if not np.all(have_data):
         warn (_("Missing some records for %s.")%nomvar)
 
