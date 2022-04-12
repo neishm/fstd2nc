@@ -86,6 +86,8 @@ optional arguments:
                         (i.e. _diag_level and _model_levels for diagnostic
                         height and hybrid levels respectively).
   --ignore-diag-level   Ignore data on diagnostic (near-surface) height.
+  --only-diag-level     Only use the diagnostic (near-surface) height,
+                        ignoring other atmospheric levels.
   --thermodynamic-levels, --tlev
                         Only convert data that's on 'thermodynamic' vertical
                         levels.

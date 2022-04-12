@@ -67,6 +67,7 @@ class VCoords (BufferBase):
     group.add_argument('--diag-as-model-level', action='store_true', help=_("Treat diagnostic (near-surface) data as model level '1.0'.  This is the default behaviour."))
     group.add_argument('--split-diag-level', action='store_true', help=_("Put the diagnostic (near-surface) data in a separate variable, away from the 3D model output.  Suffices will be added to distinguish the different types of levels (i.e. _diag_level and _model_levels for diagnostic height and hybrid levels respectively)."))
     group.add_argument('--ignore-diag-level', action='store_true', help=_("Ignore data on diagnostic (near-surface) height."))
+    group.add_argument('--only-diag-level', action='store_true', help=_("Only use the diagnostic (near-surface) height, ignoring other atmospheric levels."))
     parser.add_argument('--thermodynamic-levels', '--tlev', action='store_true', help=_("Only convert data that's on 'thermodynamic' vertical levels."))
     parser.add_argument('--momentum-levels', '--mlev', action='store_true', help=_("Only convert data that's on 'momentum' vertical levels."))
     parser.add_argument('--vertical-velocity-levels', '--wlev', action='store_true', help=_("Only convert data that's on 'vertical velocity' levels."))
@@ -88,6 +89,9 @@ class VCoords (BufferBase):
         diagnostic height and hybrid levels respectively).
     ignore_diag_level : bool, optional
         Ignore data on diagnostic (near-surface) height.
+    only_diag_level : bool, optional
+        Only use the diagnostic (near-surface) height, ignoring other
+        atmospheric levels.
     thermodynamic_levels : bool, optional
         Only convert data that's on 'thermodynamic' vertical levels.
     momentum_levels : bool, optional
@@ -104,6 +108,7 @@ class VCoords (BufferBase):
     self._diag_as_model_level = kwargs.pop('diag_as_model_level',False)
     self._split_diag_level = kwargs.pop('split_diag_level',False)
     self._ignore_diag_level = kwargs.pop('ignore_diag_level',False)
+    self._only_diag_level = kwargs.pop('only_diag_level',False)
     self._thermodynamic_levels = kwargs.pop('thermodynamic_levels',False) or kwargs.pop('tlev',False)
     self._momentum_levels = kwargs.pop('momentum_levels',False) or kwargs.pop('mlev',False)
     self._vertical_velocity_levels = kwargs.pop('vertical_velocity_levels',False) or kwargs.pop('wlev',False)
@@ -177,7 +182,7 @@ class VCoords (BufferBase):
     # Pre-filter the diagnostic level data?
     # Start by treating diagnostic level as model level, then
     # revert this later if it ends up not working.
-    if not self._split_diag_level:
+    if not self._split_diag_level and not self._only_diag_level:
       for ip1_val in diag_ip1:
           mask = (fields['ip1'] == ip1_val)
           if self._ignore_diag_level:
@@ -186,6 +191,13 @@ class VCoords (BufferBase):
             #fields['ip1'][mask] = 93423264
             fields['level'][mask] = 1.0
             fields['kind'][mask] = 5
+
+    # Only use diagnostic level(s)?
+    if self._only_diag_level:
+      mask = False
+      for ip1_val in diag_ip1:
+          mask |= (fields['ip1'] == ip1_val)
+      fields['dltf'] |= ~mask
 
     # Keep only "thermodynamic" levels?
     if self._thermodynamic_levels:
@@ -597,7 +609,7 @@ class VCoords (BufferBase):
     # those fields.
     # Also detect where *only* diagnostic level was found, and revert that
     # back to the correct type.
-    if not self._diag_as_model_level and not self._split_diag_level and not self._ignore_diag_level:
+    if not self._diag_as_model_level and not self._split_diag_level and not self._ignore_diag_level and not self._only_diag_level:
       for var in self._varlist:
         if not hasattr(var,'record_id'): continue
         valid_records = var.record_id[var.record_id>=0]
