@@ -80,7 +80,7 @@ class VarDict (BufferBase):
 
     for vardict in vardicts:
       try:
-        metvars = ET.parse(vardict).getroot().getchildren()
+        metvars = list(ET.parse(vardict).getroot())
       except ET.ParseError:
         error (_("Invalid dictionary file '%s'"%vardict.name))
 
