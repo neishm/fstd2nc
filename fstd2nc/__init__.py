@@ -51,7 +51,7 @@ from fstd2nc.mixins.mesh import Mesh
 from fstd2nc.mixins.misc import NoNK
 from fstd2nc.mixins.filter import FilterRecords
 from fstd2nc.mixins.removestuff import RemoveStuff
-from fstd2nc.mixins.interp import Interp
+from fstd2nc.mixins.gridhacks import Interp
 from fstd2nc.mixins.pruneaxes import PruneAxes
 from fstd2nc.mixins.netcdf import netCDF_Atts, netCDF_IO
 from fstd2nc.mixins.compat import FSTD_Compat
