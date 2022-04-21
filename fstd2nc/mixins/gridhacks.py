@@ -157,3 +157,119 @@ class Interp (BufferBase):
     # Return the data for the interpolated field.
     return d
 
+
+#################################################
+# Mixin for yin/yang grid subsetting.
+#
+
+class YinYang (BufferBase):
+  @classmethod
+  def _cmdline_args (cls, parser):
+    from argparse import SUPPRESS
+    super(YinYang,cls)._cmdline_args(parser)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--yin', action='store_true', help=SUPPRESS)#_('Select first subgrid from a supergrid.'))
+    group.add_argument('--yang', action='store_true', help=SUPPRESS)#_('Select second subgrid from a supergrid.'))
+
+  def __init__ (self, *args, **kwargs):
+    """
+    yin : bool, optional
+        Select first subgrid from a supergrid.
+    yang : bool, optional
+        Select second subgrid from a supergrid.
+    """
+    import rpnpy.librmn.all as rmn
+    import tempfile
+    from os import path
+    import numpy as np
+    from fstd2nc.extra import structured_array
+    from collections import OrderedDict
+    self._yin = kwargs.pop('yin',False)
+    self._yang = kwargs.pop('yang',False)
+
+    # Load the metadata from the file(s).
+    super(YinYang,self).__init__(*args,**kwargs)
+
+    # Update yin-yang records to appear as regular rotated grids.
+    if not self._yin and not self._yang:
+      return
+
+    # Need to keep track of which subgrid is requested.
+    self._headers['subgrid'] = np.empty(self._nrecs,dtype='int32')
+    self._headers['subgrid'][:] = -1
+
+    # Find all unique YY input grids.
+    mask = (self._headers['ismeta']==0) & (self._headers['grtyp']==b'U')
+    grids = OrderedDict((key,self._headers[key][mask]) for key in ('ig1','ig2','ig3','ig4'))
+    grids, rec_ids = np.unique(structured_array(grids), return_index=True)
+    rec_ids = np.where(mask)[0][rec_ids]
+    nomvars = self._headers['nomvar'][rec_ids]
+    source_grids = dict()
+    for nomvar, grid in zip(nomvars,grids):
+      ig1 = grid['ig1']
+      ig2 = grid['ig2']
+      ig3 = grid['ig3']
+      ig4 = grid['ig4']
+      for handle in rmn.fstinl(self._meta_funit, nomvar=nomvar.decode()):
+        prm = rmn.fstprm(handle)
+        if prm['grtyp'] == b'U' and prm['ig1'] == ig1 and prm['ig2'] == ig2 and prm['ig3'] == ig3 and prm['ig4'] == ig4:
+          break
+      source_grids[(ig1,ig2,ig3,ig4)] = rmn.readGrid (self._meta_funit, prm)
+
+    # Generate temporary file with target grid info.
+    try: # Python 3
+      self._yy_tmpdir = tempfile.TemporaryDirectory()
+      gridfile = path.join(self._yy_tmpdir.name,"grid.fst")
+    except AttributeError: # Python 2 (no auto cleanup)
+      self._yy_tmpdir = tempfile.mkdtemp()
+      gridfile = path.join(self._yy_tmpdir,"grid.fst")
+    iun = rmn.fstopenall(gridfile, rmn.FST_RW)
+
+    if self._yin: yy_ind = 0
+    else: yy_ind = 1
+    self._headers['subgrid'][mask] = yy_ind
+
+    # Write all target grids and set the headers appropriately.
+    for (ig1,ig2,ig3,ig4), source_grid in source_grids.items():
+      dest_grid = source_grid['subgrid'][yy_ind]
+      rmn.writeGrid (iun, dest_grid)
+      submask = mask & (self._headers['ig1'] == ig1) & (self._headers['ig2'] == ig2) & (self._headers['ig3'] == ig3) & (self._headers['ig4'] == ig4)
+      for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
+        self._headers[key][submask] = dest_grid[key]
+    rmn.fstcloseall (iun)
+
+    # Hack in these extra coordinate records, and refresh metadata file unit.
+    rmn.fstcloseall (self._meta_funit)
+    self._meta_filenames.append(gridfile)
+    self._meta_funit = rmn.fstopenall(self._meta_filenames,rmn.FST_RO)
+
+  # Handle grid interpolation
+  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
+    import rpnpy.librmn.all as rmn
+    import numpy as np
+    out = super(YinYang,self)._fstluk (rec_id, dtype, rank, dataArray)
+    if self._yin or self._yang:
+      yy_ind = self._headers['subgrid'][rec_id]
+      if yy_ind == 0:
+        out['d'] = out['d'][:,:out['nj']//2]
+      elif yy_ind == 1:
+        out['d'] = out['d'][:,out['nj']//2:]
+    return out
+
+  # Handle grid interpolations from raw binary array.
+  def _decode (self, data):
+    import rpnpy.librmn.all as rmn
+    import numpy as np
+    from fstd2nc.extra import decode_headers, decode
+    if not self._yin and not self._yang:
+      return super(YinYang,self)._decode (data)
+    grid_params = ('ni','nj','grtyp','ig1','ig2','ig3','ig4')
+    prm = decode_headers(data[:72])
+    prm = dict((k,v[0]) for k,v in prm.items())
+    d = super(YinYang,self)._decode (data)
+    if prm['grtyp'] == b'U' and self._yin:
+      d = d[:,:prm['nj']//2]
+    elif prm['grtyp'] == b'U' and self._yang:
+      d = d[:,prm['nj']//2:]
+    return d
+

@@ -548,6 +548,7 @@ class BufferBase (object):
     if len(filenames) == 0:
       filenames = self._files[0:1]
     # Open these files and link them together
+    self._meta_filenames = filenames  # Store this for further hacking.
     self._meta_funit = fstopenall(filenames, FST_RO)
 
 
