@@ -108,7 +108,7 @@ class ExternOutput (BufferBase):
     nrecs = np.sum(active)
     filenames = files[self._headers['file_id'][active]]
     graphs = zip([_read_block]*nrecs, filenames, self._headers['swa'][active]*8-8, self._headers['lng'][active]*4)
-    graphs = zip([self._decode]*nrecs, graphs)
+    graphs = zip([self._decode]*nrecs, graphs, np.where(active)[0])
     graphs = zip([np.transpose]*nrecs, graphs)
     g = np.empty(nrecs, dtype=object)
     g[:] = list(graphs)
