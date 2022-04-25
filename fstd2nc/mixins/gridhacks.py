@@ -351,6 +351,7 @@ class Crop (BufferBase):
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
     out = super(Crop,self)._fstluk (rec_id, dtype, rank, dataArray)
     if not self._crop_to_smallest_grid: return out
+    if self._headers['ismeta'][rec_id] == 1: return out
     # Check if cropping necessary.
     ni = self._headers['ni'][rec_id]
     nj = self._headers['nj'][rec_id]
