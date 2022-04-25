@@ -168,8 +168,8 @@ class YinYang (BufferBase):
     from argparse import SUPPRESS
     super(YinYang,cls)._cmdline_args(parser)
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--yin', action='store_true', help=SUPPRESS)#_('Select first subgrid from a supergrid.'))
-    group.add_argument('--yang', action='store_true', help=SUPPRESS)#_('Select second subgrid from a supergrid.'))
+    group.add_argument('--yin', action='store_true', help=_('Select first subgrid from a supergrid.'))
+    group.add_argument('--yang', action='store_true', help=_('Select second subgrid from a supergrid.'))
 
   def __init__ (self, *args, **kwargs):
     """
@@ -274,7 +274,7 @@ class Crop (BufferBase):
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
     super(Crop,cls)._cmdline_args(parser)
-    parser.add_argument('--crop-to-smallest-grid', action='store_true', help=SUPPRESS)#_('Crop grids to the smaller (inner core) domain for LAM outputs.'))
+    parser.add_argument('--crop-to-smallest-grid', action='store_true', help=_('Crop grids to the smaller (inner core) domain for LAM outputs.'))
 
   def __init__ (self, *args, **kwargs):
     """

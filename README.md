@@ -115,6 +115,11 @@ optional arguments:
                         don't recognize leadtime and reftime as valid
                         coordinates. Note that axes will only be excluded if
                         they have a length of 1.
+  --yin                 Select first subgrid from a supergrid.
+  --yang                Select second subgrid from a supergrid.
+  --crop-to-smallest-grid
+                        Crop grids to the smaller (inner core) domain for LAM
+                        outputs.
   --metadata-file METADATA_FILE
                         Use metadata from the specified file. You can repeat
                         this option multiple times to build metadata from
