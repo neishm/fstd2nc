@@ -294,25 +294,24 @@ class Crop (BufferBase):
       return
 
     # Find all unique grids.
-    # (Same as Yin-Yang code)
     ###
-    # Find all unique input grids.
-    mask = (self._headers['ismeta']==0)
+    # Skip supergrids.
+    mask = (self._headers['ismeta']==0) & (self._headers['grtyp'] != b'U')
     grids = OrderedDict((key,self._headers[key][mask]) for key in ('ig1','ig2','ig3','ig4'))
     grids, rec_ids = np.unique(structured_array(grids), return_index=True)
     rec_ids = np.where(mask)[0][rec_ids]
-    nomvars = self._headers['nomvar'][rec_ids]
     source_grids = dict()
-    for nomvar, grid in zip(nomvars,grids):
-      ig1 = grid['ig1']
-      ig2 = grid['ig2']
-      ig3 = grid['ig3']
-      ig4 = grid['ig4']
-      for handle in rmn.fstinl(self._meta_funit, nomvar=nomvar.decode()):
-        prm = rmn.fstprm(handle)
-        if prm['ig1'] == ig1 and prm['ig2'] == ig2 and prm['ig3'] == ig3 and prm['ig4'] == ig4:
-          break
-      source_grids[(ig1,ig2,ig3,ig4)] = rmn.readGrid (self._meta_funit, prm)
+    for rec_id in rec_ids:
+      prm = dict()
+      prm['grtyp'] = self._headers['grtyp'][rec_id].decode()
+      prm['ni'] = int(self._headers['ni'][rec_id])
+      prm['nj'] = int(self._headers['nj'][rec_id])
+      prm['ig1'] = int(self._headers['ig1'][rec_id])
+      prm['ig2'] = int(self._headers['ig2'][rec_id])
+      prm['ig3'] = int(self._headers['ig3'][rec_id])
+      prm['ig4'] = int(self._headers['ig4'][rec_id])
+      key = tuple(prm[k] for k in ('ig1','ig2','ig3','ig4'))
+      source_grids[key] = rmn.readGrid (self._meta_funit, prm)
 
     ###
 
