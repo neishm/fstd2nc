@@ -60,8 +60,11 @@ try:
   from dask.callbacks import Callback
   class _FSTD_Callback (Callback):
     def _start_state (self, dsk, state):
-      ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
-      state['ready'] = ready[::-1]
+      # Try sorting by FSTD filename, offset (if applicable)
+      try:
+        ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
+        state['ready'] = ready[::-1]
+      except TypeError: pass  # Not applicable for this graph.
   _FSTD_Callback().register()
   del Callback
 
