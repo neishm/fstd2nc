@@ -62,7 +62,7 @@ class FSTD_Compat (BufferBase):
     self._used_rec_ids.append(rec_id)
     return super(FSTD_Compat,self)._fstluk (rec_id, dtype=dtype, rank=rank, dataArray=dataArray)
 
-  def _to_netcdf_compat (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False):
+  def _to_netcdf_compat (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False, turbo=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.

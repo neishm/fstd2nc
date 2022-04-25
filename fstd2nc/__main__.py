@@ -134,7 +134,7 @@ def _fstdump (buffer_type=Buffer):
 #################################################
 # Command-line invocation of the converter.
 def _fstd2nc_cmdline (buffer_type=Buffer):
-  from argparse import ArgumentParser
+  from argparse import ArgumentParser, SUPPRESS
   from sys import stdout, argv
   from os.path import exists
   from rpnpy.librmn.fstd98 import FSTDError, fstopt
@@ -148,6 +148,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('--zlib', action='store_true', help=_("Turn on compression for the netCDF file.  Only works for NETCDF4 and NETCDF4_CLASSIC formats."))
   parser.add_argument('--compression', type=int, default=4, help=_("Compression level for the netCDF file. Only used if --zlib is set. Default: %(default)s."))
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
+  parser.add_argument('--turbo', action='store_true', help=SUPPRESS)#_('Throw more resources at the writer, to make it go faster.'))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
   parser.add_argument('-q', '--quiet', action='store_true', help=_("Don't display any information except for critical error messages.  Implies --no-progress."))
   args = parser.parse_args()
@@ -159,6 +160,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   nc_format = args.pop('nc_format')
   zlib = args.pop('zlib')
   force = args.pop('force')
+  turbo = args.pop('turbo')
   no_history = args.pop('no_history')
   compression = args.pop('compression')
   quiet = args.pop('quiet')
@@ -213,7 +215,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
-  buf.to_netcdf(outfile, nc_format=nc_format, global_metadata=global_metadata, zlib=zlib, compression=compression, progress=progress)
+  buf.to_netcdf(outfile, nc_format=nc_format, global_metadata=global_metadata, zlib=zlib, compression=compression, progress=progress, turbo=turbo)
 
 #################################################
 # Command-line invocation with error trapping.

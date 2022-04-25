@@ -346,7 +346,7 @@ class netCDF_IO (BufferBase):
             var.atts.pop(n,None)
 
 
-  def to_netcdf (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False):
+  def to_netcdf (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False, turbo=False):
     """
     Write the records to a netCDF file.
     Requires the netCDF4 package.
@@ -436,16 +436,37 @@ class netCDF_IO (BufferBase):
     # Read/write the data in the same order of records in the RPN file(s) to
     # improve performance.
     Bar = _ProgressBar if (progress is True and len(io) > 0) else _FakeBar
-    bar = Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]")
-    for r,shape,v,ind in bar.iter(sorted(io)):
-      try:
-        data = self._fstluk(r,dtype=v.dtype)['d'].transpose().reshape(shape)
-        v[ind] = data
-      except (IndexError,ValueError):
-        warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
-        continue
+    bar = Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]", max=len(io)-1)
+    if turbo:
+      from multiprocessing import Pool
+      import numpy as np
+      io = sorted(io)
+      with Pool() as p:
+        raw = p.imap (_turbo_load, ((self._files[self._headers['file_id'][r]], self._headers['swa'][r], self._headers['lng'][r]) for r,shape,v,ind in io))
+        raw = bar.iter(raw)
+        for (r,shape,v,ind), stuff in zip(io, raw):
+          data = self._decode (stuff, r)
+          v[ind] = data.astype(v.dtype).transpose().reshape(shape)
+        bar.finish()
+    else:
+      for r,shape,v,ind in bar.iter(sorted(io)):
+        try:
+          data = self._fstluk(r,dtype=v.dtype)['d'].transpose().reshape(shape)
+          v[ind] = data
+        except (IndexError,ValueError):
+          warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
+          continue
 
     f.close()
 
   # Alias "to_netcdf" as "write_nc_file" for backwards compatibility.
   write_nc_file = to_netcdf
+
+# Internal helper method for delegating the load to a multiprocessing Pool.
+def _turbo_load (args):
+  import numpy as np
+  filename, swa, lng = args
+  with open (filename, 'rb') as f:
+    f.seek (swa*8-8, 0)
+    return np.fromfile(f,'B',lng*4)
+
