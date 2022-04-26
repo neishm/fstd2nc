@@ -180,6 +180,9 @@ try:
     from progress.bar import Bar as IncrementalBar
   del sys
   class _ProgressBar(IncrementalBar):
+    # Also display (even if not a tty).
+    # Could be a jupyter notebook, which can still benefit from a progress bar.
+    check_tty = False
     # Define a custom ETA, which prints the elapsed time at the end.
     @property
     def myeta(self):
@@ -267,10 +270,11 @@ class BufferBase (object):
   def _cmdline_args (cls, parser):
     from fstd2nc import __version__
     from argparse import SUPPRESS
+    from sys import stdout
     parser.add_argument('--version', action='version', version=__version__)
     group = parser.add_mutually_exclusive_group()
     _('Display a progress bar during the conversion, if the "progress" module is installed.')
-    group.add_argument('--progress', action='store_true', default=True, help=SUPPRESS)
+    group.add_argument('--progress', action='store_true', default=stdout.isatty(), help=SUPPRESS)
     group.add_argument('--no-progress', action='store_false', dest='progress', help=_('Disable the progress bar.'))
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--minimal-metadata', action='store_true', default=True, help=_("Don't include RPN record attributes and other internal information in the output metadata.")+" "+_("This is the default behaviour."))
