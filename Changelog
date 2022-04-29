@@ -1,3 +1,8 @@
+Version 0.20220204.3 (Mar 23, 2022)
+	* Fixed a bug with xarray interface when used with masked fields.
+	  Sometimes it was identifying a directory page as the mask of a field,
+	  with catastrophic consequences.
+
 Version 0.20220204.2 (Mar 3, 2022)
 	* Fixed  a bug with rotated grids.  They were not properly oriented for
 	  the particular case where the rlon values didn't cross the numerical
