@@ -1,3 +1,24 @@
+Version 0.20220429.0 (Apr 29, 2022)
+	* Improved memory usage of dask wrapper.  Don't pre-load entire block.
+	* Some miscellaneous speedups to dask wrapper and netCDF conversion.
+	* New command-line option --only-diag-level, to select only the near-
+	  surface level data (opposite of --ignore-diag-level).
+	* Fixed --opdict / --vardict parsing for Python 3.9 (it was using a
+	  deprecated xml function).
+	* Moved 'interp' module to 'gridhacks', since it contains other
+	  non-interpolation features now.
+	* Added --yin and --yang options to select one of the two pieces of a
+	  yin-yang grid.
+	* Added --crop-to-smallest-grid option to handle case where there is
+	  a grid that's slightly nested inside of another grid (such as with
+	  GEM output for dynamics vs. permanent bus?).  This option will trim
+	  all the data to the smallest of such grids.
+	* Experimental --turbo option to speed up conversions in the case where
+	  it needs to extract data from many (thousands) of files.
+	* Allow progress bar to be turned on, even if there does not appear to
+	  be a TTY available.  Useful for interactive work within a Jupyter
+	  notebook.
+
 Version 0.20220204.3 (Mar 23, 2022)
 	* Fixed a bug with xarray interface when used with masked fields.
 	  Sometimes it was identifying a directory page as the mask of a field,
