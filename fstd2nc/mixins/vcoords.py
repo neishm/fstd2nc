@@ -176,7 +176,7 @@ class VCoords (BufferBase):
 
     fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
-    fields['level'] = np.array(decode_ip1_level(fields['ip1']), dtype='float64')
+    fields['level'] = np.array(decode_ip1_level(fields['ip1']), dtype='float32')
     fields['kind'] = np.array(decode_ip1_kind(fields['ip1']), dtype='int32')
 
     # Pre-filter the diagnostic level data?
