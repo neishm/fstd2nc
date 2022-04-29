@@ -24,14 +24,22 @@ from fstd2nc.mixins import BufferBase
 
 # Convert an RPN date stamp to datetime object.
 # Returns None for invalid stamps.
-from fstd2nc.mixins import vectorize
-@vectorize
-def stamp2datetime (date):
+# Scalar version, using simple datetime objects.
+def stamp2datetime_scalar (date):
   from rpnpy.rpndate import RPNDate
-  import numpy as np
   dummy_stamps = (0, 10101011, 101010101)
   if date not in dummy_stamps:
-    return np.asarray(RPNDate(int(date)).toDateTime().replace(tzinfo=None), dtype='datetime64[s]')[()]
+    return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
+  else:
+    return None
+# Vectorized version, using datetime64 objects.
+from fstd2nc.mixins import vectorize
+@vectorize
+def stamp2datetime64 (date):
+  import numpy as np
+  date = stamp2datetime_scalar (date)
+  if date is not None:
+    return np.asarray(date, dtype='datetime64[s]')[()]
   else:
     return None
 
@@ -79,8 +87,8 @@ class Dates (BufferBase):
     # Calculate the forecast (in hours).
     fields = self._headers
     fields['leadtime']=fields['deet']*fields['npas']/3600.
-    dateo = stamp2datetime(fields['dateo'])
-    datev = stamp2datetime(fields['datev'])
+    dateo = stamp2datetime64(fields['dateo'])
+    datev = stamp2datetime64(fields['datev'])
     # Convert date stamps to datetime objects, filtering out dummy values.
     dateo = np.ma.asarray(dateo, dtype='datetime64[s]')
     datev = np.ma.asarray(datev, dtype='datetime64[s]')

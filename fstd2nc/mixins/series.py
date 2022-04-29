@@ -126,7 +126,7 @@ class Series (BufferBase):
 
   def _makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
-    from fstd2nc.mixins.dates import stamp2datetime
+    from fstd2nc.mixins.dates import stamp2datetime_scalar
     from collections import OrderedDict
     import numpy as np
     from rpnpy.librmn.fstd98 import fstlir
@@ -168,7 +168,7 @@ class Series (BufferBase):
       # Note: the information in 'HH' is actually the hour of validity.
       # Need to subtract the hour from the date of origin in order to get
       # the leadtime.
-      starting_hour = stamp2datetime(forecast_header['dateo']).hour
+      starting_hour = stamp2datetime_scalar(forecast_header['dateo']).hour
       array = forecast_header['d'].flatten() - starting_hour
       forecast_timedelta = np.array(array*3600,'timedelta64[s]')
       forecast_axis = _axis_type('forecast',atts,array)
