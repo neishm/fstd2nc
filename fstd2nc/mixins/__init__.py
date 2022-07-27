@@ -341,7 +341,54 @@ class BufferBase (object):
     self._opened_file_id = -1
     self._opened_funit = -1
     self._opened_librmn_index = -1
+
+  # Open metadata funit (done once during init of object).
+  def _open_meta_funit (self):
+    from rpnpy.librmn.fstd98 import fstopenall
+    from rpnpy.librmn.const import FST_RO
+    import numpy as np
+    import warnings
+    meta_mask = self._headers['ismeta'][:]
+    meta_recids = np.where(meta_mask)[0]
+    _var_id = ('nomvar','ni','nj','nk')
+    # Use the same unique parameters as regular variables.
+    # Plus, ig1,ig2,ig3,ig4.
+    # Suppress FutureWarning from numpy about doing this.  Probably benign...
+    with warnings.catch_warnings():
+      warnings.simplefilter("ignore")
+      from fstd2nc.extra import structured_array
+      headers = dict()
+      for key in list(_var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']:
+        headers[key] = self._headers[key]
+      headers = structured_array(headers)
+      meta_keys = headers.data[meta_mask][list(_var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
+    meta_keys, ind = np.unique(meta_keys, return_index=True)
+    meta_recids = meta_recids[ind]
+    # Find the files that give these unique coord records.
+    file_ids = sorted(set(self._headers['file_id'][meta_recids]))
+    filenames = [self._files[f] for f in file_ids]
+    if len(filenames) > 500:
+      error(_("Holy crap, how many coordinates do you have???"))
+    # If no coordinates found, just open the first file as a dummy file.
+    # Less error-prone than checking if _meta_funit is defined every time
+    # an FSTD function is called.
+    if len(filenames) == 0:
+      filenames = self._files[0:1]
+    # Open these files and link them together
+    self._meta_filenames = filenames  # Store this for further hacking.
+    self._meta_funit = fstopenall(filenames, FST_RO)
         
+  # Control the pickling / unpickling of BufferBase objects.
+  def __getstate__ (self):
+    state = self.__dict__.copy()
+    state.pop('_lock',None)  # librmn lock will be defined upon unpickling.
+    state.pop('_meta_funit',None) # Same with librmn file handles.
+    return state
+  def __setstate__ (self, state):
+    self.__dict__.update(state)
+    self._lock = _lock
+    self._open_meta_funit()
+
 
   ###############################################
   # Basic flow for reading data
@@ -375,14 +422,11 @@ class BufferBase (object):
         Disables multithreading/multiprocessing.  Useful for resource-limited
         machines.
     """
-    from rpnpy.librmn.fstd98 import fstnbr, fstinl, fstprm, fstopenall
-    from rpnpy.librmn.const import FST_RO
     from fstd2nc.extra import raw_headers, decode_headers
     from collections import Counter
     import numpy as np
     from glob import glob, has_magic
     import os
-    import warnings
     from multiprocessing import Pool
     try:
       from itertools import imap  # Python 2
@@ -527,34 +571,8 @@ class BufferBase (object):
     self._headers['ismeta'] = np.empty(self._nrecs, dtype='bool')
     self._headers['ismeta'][:] = meta_mask
 
-    meta_recids = np.where(meta_mask)[0]
-    # Use the same unique parameters as regular variables.
-    # Plus, ig1,ig2,ig3,ig4.
-    # Suppress FutureWarning from numpy about doing this.  Probably benign...
-    with warnings.catch_warnings():
-      warnings.simplefilter("ignore")
-      from fstd2nc.extra import structured_array
-      headers = dict()
-      for key in list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']:
-        headers[key] = self._headers[key]
-      headers = structured_array(headers)
-      meta_keys = headers.data[meta_mask][list(self._var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
-    meta_keys, ind = np.unique(meta_keys, return_index=True)
-    meta_recids = meta_recids[ind]
-    # Find the files that give these unique coord records.
-    file_ids = sorted(set(self._headers['file_id'][meta_recids]))
-    filenames = [self._files[f] for f in file_ids]
-    if len(filenames) > 500:
-      error(_("Holy crap, how many coordinates do you have???"))
-    # If no coordinates found, just open the first file as a dummy file.
-    # Less error-prone than checking if _meta_funit is defined every time
-    # an FSTD function is called.
-    if len(filenames) == 0:
-      filenames = self._files[0:1]
-    # Open these files and link them together
-    self._meta_filenames = filenames  # Store this for further hacking.
-    self._meta_funit = fstopenall(filenames, FST_RO)
-
+    # Make metadata records available for mixins.
+    self._open_meta_funit()
 
   # Generate structured variables from FST records.
 
