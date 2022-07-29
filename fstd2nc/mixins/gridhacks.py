@@ -293,6 +293,12 @@ class Crop (BufferBase):
     if not self._crop_to_smallest_grid:
       return
 
+    # Keep track of cropping regions for the data.
+    self._headers['i0'] = np.zeros(self._nrecs,'uint16')
+    self._headers['iN'] = np.array(self._headers['ni'],'uint16')
+    self._headers['j0'] = np.zeros(self._nrecs,'uint16')
+    self._headers['jN'] = np.array(self._headers['nj'],'uint16')
+
     # Find all unique grids.
     ###
     # Skip supergrids.
@@ -336,16 +342,22 @@ class Crop (BufferBase):
       # Nothing to do if already the smallest grid.
       if grid['id'] == smallest_grid['id']: continue
       # Make sure the coordinates are actually compatible.
-      pad = (grid['ni'] - smallest_grid['ni']) // 2
-      if grid['ni'] - 2*pad != smallest_grid['ni']: continue
-      if grid['nj'] - 2*pad != smallest_grid['nj']: continue
-      if np.any(grid['ax'].flatten()[pad:-pad] != smallest_grid['ax'].flatten()): continue
-      if np.any(grid['ay'].flatten()[pad:-pad] != smallest_grid['ay'].flatten()): continue
+      ind = np.searchsorted(grid['ax'].flatten(), smallest_grid['ax'].flatten())
+      i0, iN = ind[0], ind[-1]+1
+      ind = np.searchsorted(grid['ay'].flatten(), smallest_grid['ay'].flatten())
+      j0, jN = ind[0], ind[-1]+1
+      if iN-i0 != smallest_grid['ni']: continue
+      if jN-j0 != smallest_grid['nj']: continue
+      if np.any(grid['ax'].flatten()[i0:iN] != smallest_grid['ax'].flatten()): continue
+      if np.any(grid['ay'].flatten()[j0:jN] != smallest_grid['ay'].flatten()): continue
       # Able to crop, so update the headers to point to the cropped coordinates.
       submask = mask & (self._headers['ig1'] == ig1) & (self._headers['ig2'] == ig2) & (self._headers['ig3'] == ig3) & (self._headers['ig4'] == ig4)
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][submask] = smallest_grid[key]
-
+      self._headers['i0'][submask] = i0
+      self._headers['iN'][submask] = iN
+      self._headers['j0'][submask] = j0
+      self._headers['jN'][submask] = jN
 
   # Handle cropping
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
@@ -356,8 +368,11 @@ class Crop (BufferBase):
     ni = self._headers['ni'][rec_id]
     nj = self._headers['nj'][rec_id]
     if out['d'].shape == (ni,nj): return out
-    pad = (out['d'].shape[0] - ni) // 2
-    out['d'] = out['d'][pad:-pad,pad:-pad]
+    i0 = self._headers['i0'][rec_id]
+    iN = self._headers['iN'][rec_id]
+    j0 = self._headers['j0'][rec_id]
+    jN = self._headers['jN'][rec_id]
+    out['d'] = out['d'][i0:iN,j0:jN]
     return out
 
   # Handle cropping from raw binary array.
@@ -370,7 +385,10 @@ class Crop (BufferBase):
     ni = self._headers['ni'][rec_id]
     nj = self._headers['nj'][rec_id]
     if d.shape == (ni,nj): return d
-    pad = (d.shape[0] - ni) // 2
-    d = d[pad:-pad,pad:-pad]
+    i0 = self._headers['i0'][rec_id]
+    iN = self._headers['iN'][rec_id]
+    j0 = self._headers['j0'][rec_id]
+    jN = self._headers['jN'][rec_id]
+    d = d[i0:iN,j0:jN]
     return d
 
