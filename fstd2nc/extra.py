@@ -155,7 +155,7 @@ def decode_headers (raw):
   out = {}
   out['lng'] = np.empty(nrecs, dtype='int32')
   out['dltf'] = np.empty(nrecs, dtype='ubyte')
-  out['swa'] =  np.empty(nrecs, dtype='uint32')
+  out['swa'] =  np.empty(nrecs, dtype='uint64')
   out['deet'] = np.empty(nrecs, dtype='int32')
   out['nbits'] = np.empty(nrecs, dtype='byte')
   out['grtyp'] = np.empty(nrecs, dtype='|S1')
