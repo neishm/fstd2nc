@@ -1,3 +1,16 @@
+Version 0.20220829.0 (Aug 29, 2022)
+	* Allow fstd2nc.Buffer objects to be serialized / deserialized.
+	  This allows the objects to be used with the Python multiprocessing
+	  library.  Note: not yet compatible with dask multiprocessing, which
+	  seems to use a different mechanism for serialization?
+	* New keyword args add_px and add_gz for computing pressure or
+	  geopotential height fields in Buffer.to_xarray().  Not available for
+	  command-line usage.
+	* Allow asymmetric cropping with the --crop-to-smallest-grid option,
+	  i.e., when the smaller grid is not centered inside the larger grid.
+	* Fixed an address overflow bug when using the xarray interface on
+	  files larger than 4GB.
+
 Version 0.20220429.0 (Apr 29, 2022)
 	* Improved memory usage of dask wrapper.  Don't pre-load entire block.
 	* Some miscellaneous speedups to dask wrapper and netCDF conversion.
