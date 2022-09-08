@@ -220,6 +220,43 @@ class ExternOutput (BufferBase):
 
     return out
 
+  def to_xarray_list (self):
+    """
+    Similar to the to_xarray method, but returns a list of xarray Datasets,
+    one for each variable, instead of a single Dataset object.
+    Could be useful for case where the dimension names are non-unique, to avoid
+    name clobbering (in conjunction with unique_names initialization option).
+    E.g.,
+    Buffer("filename",unique_names=False).to_xarray_list()
+    """
+    from collections import OrderedDict
+    import xarray as xr
+    from fstd2nc.mixins import _axis_type
+    out_list = []
+    for var in self._iter_dask():
+      if not hasattr(var,'array'): continue
+      # Skip axes (they don't need their own dataset).
+      if isinstance(var,_axis_type): continue
+      out = OrderedDict()
+      out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)
+      for axis in var.axes:
+        if not hasattr(axis,'array'): continue
+        out[axis.name] = xr.DataArray(data=axis.array, dims=axis.dims, name=axis.name, attrs=axis.atts)
+      # Preserve chunking information for writing to netCDF4.
+      if hasattr(var.array,'chunks'):
+        chunk_shape = [c[0] for c in var.array.chunks]
+        out[var.name].encoding['chunksizes'] = chunk_shape
+        out[var.name].encoding['original_shape'] = out[var.name].shape
+      # Construct the Dataset from the variable.
+      out = xr.Dataset(out)
+      # Decode CF metadata
+      out = xr.conventions.decode_cf(out)
+      # Make the time dimension unlimited when writing to netCDF.
+      out.encoding['unlimited_dims'] = ('time',)
+      out_list.append(out)
+
+    return out_list
+
   def to_iris (self):
     """
     Create an iris interface for the RPN data.
