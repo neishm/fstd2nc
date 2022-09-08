@@ -119,7 +119,7 @@ class ExternOutput (BufferBase):
     out[active] = g
     return out
 
-  def _iter_dask (self):
+  def _iter_dask (self, include_coords=True):
     """
     Iterate over all the variables, and convert to dask arrays.
     """
@@ -133,6 +133,9 @@ class ExternOutput (BufferBase):
     graphs = self._graphs()
     self._makevars()
     for var in self._iter_objects():
+      if not include_coords:
+        if var not in self._varlist:
+          continue
       if not isinstance(var,(_iter_type,_chunk_type)):
         yield var
         continue
@@ -233,15 +236,13 @@ class ExternOutput (BufferBase):
     import xarray as xr
     from fstd2nc.mixins import _axis_type
     out_list = []
-    for var in self._iter_dask():
+    for var in self._iter_dask(include_coords=False):
       if not hasattr(var,'array'): continue
-      # Skip axes (they don't need their own dataset).
-      if isinstance(var,_axis_type): continue
       out = OrderedDict()
       out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)
-      for axis in var.axes:
-        if not hasattr(axis,'array'): continue
-        out[axis.name] = xr.DataArray(data=axis.array, dims=axis.dims, name=axis.name, attrs=axis.atts)
+      for extra in self._iter_objects(var):
+        if not hasattr(extra,'array'): continue
+        out[extra.name] = xr.DataArray(data=extra.array, dims=extra.dims, name=extra.name, attrs=extra.atts)
       # Preserve chunking information for writing to netCDF4.
       if hasattr(var.array,'chunks'):
         chunk_shape = [c[0] for c in var.array.chunks]
