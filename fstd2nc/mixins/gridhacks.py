@@ -278,7 +278,7 @@ class Crop (BufferBase):
 
   def __init__ (self, *args, **kwargs):
     """
-    crop_to_smallest_room : bool, optional
+    crop_to_smallest_grid : bool, optional
         Crop grids to the smaller (inner core) domain for LAM outputs.
     """
     import rpnpy.librmn.all as rmn
