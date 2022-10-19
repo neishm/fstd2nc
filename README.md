@@ -271,8 +271,10 @@ Basic requirements
 
 This package requires [Python-RPN](https://github.com/meteokid/python-rpn) for reading/writing FSTD files, and [netcdf4-python](https://github.com/Unidata/netcdf4-python) for reading/writing netCDF files.
 
-Optional requirements
+Optional dependencies
 ---------------------
+
+A useful variable dictionary for the `--vardict` option is available [here](https://collaboration.cmc.ec.gc.ca/cmc/CMOI/VariableDictionary/).
 
 For reading large numbers of input files (>100), this utility can leverage [pandas](https://github.com/pandas-dev/pandas) to quickly process the FSTD record headers.
 
