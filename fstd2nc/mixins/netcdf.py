@@ -154,7 +154,7 @@ class netCDF_IO (BufferBase):
   def _cmdline_args (cls, parser):
     super(netCDF_IO,cls)._cmdline_args(parser)
     parser.add_argument('--time-units', choices=['seconds','minutes','hours','days'], default='hours', help=_('The units for the output time axis.  Default is %(default)s.'))
-    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the RPN file.'))
+    parser.add_argument('--reference-date', metavar=_('YYYY-MM-DD'), help=_('The reference date for the output time axis.  The default is the starting date in the %s.')%cls._format)
 
   @classmethod
   def _check_args (cls, parser, args):
@@ -178,6 +178,7 @@ class netCDF_IO (BufferBase):
     from datetime import datetime
     import numpy as np
     from netCDF4 import date2num
+    import cftime
 
     super(netCDF_IO,self)._makevars()
 
@@ -204,15 +205,18 @@ class netCDF_IO (BufferBase):
     for var in self._iter_objects():
       # Modify time axes to be relative units instead of datetime objects.
       # Also attach relevant metadata.
-      if hasattr(var,'array') and isinstance(var.array.reshape(-1)[0],np.datetime64):
+      if hasattr(var,'array') and isinstance(var.array.reshape(-1)[0],(np.datetime64,cftime.datetime)):
         # Convert from np.datetime64 to datetime.datetime
         # .tolist() only returns a datetime object for datetime64[s], not
         # for datetime64[ns].
-        var.array = np.asarray(var.array, dtype='datetime64[s]')
-        # https://stackoverflow.com/a/13703930/9947646
-        var.array = np.array(var.array.tolist())
+        # Skip opaque types like cftime.datetime
+        if var.array.dtype.name != 'object':
+          var.array = np.asarray(var.array, dtype='datetime64[s]')
+          # https://stackoverflow.com/a/13703930/9947646
+          var.array = np.array(var.array.tolist())
+        calendar = getattr(var.array.flatten()[0],'calendar','gregorian')
         units = '%s since %s'%(self._time_units, reference_date or var.array.reshape(-1)[0])
-        var.atts.update(units=units, calendar='gregorian')
+        var.atts.update(units=units, calendar=calendar)
         var.array = np.asarray(date2num(var.array,units=units), dtype='double')
 
     for obj in self._iter_objects():
@@ -338,11 +342,11 @@ class netCDF_IO (BufferBase):
         warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
         var.name = '_'+var.name
 
-      # Strip out FSTD-specific metadata?
+      # Strip out internal metadata?
       if not hasattr(var,'atts'): continue
-      if self._rpnstd_metadata_list is not None:
+      if self._metadata_list is not None:
         for n in internal_meta:
-          if n not in self._rpnstd_metadata_list:
+          if n not in self._metadata_list:
             var.atts.pop(n,None)
 
 
@@ -442,17 +446,18 @@ class netCDF_IO (BufferBase):
       import numpy as np
       io = sorted(io)
       with Pool() as p:
-        raw = p.imap (_turbo_load, ((self._files[self._headers['file_id'][r]], self._headers['swa'][r], self._headers['lng'][r]) for r,shape,v,ind in io))
+        raw = p.imap (_quick_load, ((self._files[self._headers['file_id'][r]], self._headers['address'][r], self._headers['length'][r]) for r,shape,v,ind in io))
         raw = bar.iter(raw)
         for (r,shape,v,ind), stuff in zip(io, raw):
           data = self._decode (stuff, r)
-          v[ind] = data.astype(v.dtype).transpose().reshape(shape)
+          v[ind] = data.astype(v.dtype).reshape(shape)
         bar.finish()
     else:
       for r,shape,v,ind in bar.iter(sorted(io)):
         try:
-          data = self._fstluk(r,dtype=v.dtype)['d'].transpose().reshape(shape)
-          v[ind] = data
+          stuff = _quick_load ((self._files[self._headers['file_id'][r]], self._headers['address'][r], self._headers['length'][r]))
+          data = self._decode (stuff, r)
+          v[ind] = data.astype(v.dtype).reshape(shape)
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
           continue
@@ -463,10 +468,10 @@ class netCDF_IO (BufferBase):
   write_nc_file = to_netcdf
 
 # Internal helper method for delegating the load to a multiprocessing Pool.
-def _turbo_load (args):
+def _quick_load (args):
   import numpy as np
-  filename, swa, lng = args
+  filename, address, length = args
   with open (filename, 'rb') as f:
-    f.seek (swa*8-8, 0)
-    return np.fromfile(f,'B',lng*4)
+    f.seek (address, 0)
+    return np.fromfile(f,'B',length)
 

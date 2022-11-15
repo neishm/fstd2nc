@@ -37,6 +37,7 @@ except ImportError:
   pass
 
 # Combine all the mixins to create a final interface for I/O.
+from fstd2nc.mixins.fstd import FSTD
 from fstd2nc.mixins.select import SelectVars
 from fstd2nc.mixins.ascii import ASCII
 from fstd2nc.mixins.masks import Masks
@@ -58,7 +59,7 @@ from fstd2nc.mixins.compat import FSTD_Compat
 from fstd2nc.mixins.extern import ExternInput, ExternOutput
 from fstd2nc.mixins.diaghacks import DiagHacks
 
-class Buffer (DiagHacks,ExternOutput,FSTD_Compat,netCDF_IO,netCDF_Atts,PruneAxes,Crop,YinYang,Interp,RemoveStuff,FilterRecords,NoNK,Mesh,XYCoords,VCoords,Sfc_Codes,VarDict,Series,Ensembles,Dates,Masks,ASCII,SelectVars,ExternInput):
+class Buffer (DiagHacks,ExternOutput,FSTD_Compat,netCDF_IO,netCDF_Atts,PruneAxes,Crop,YinYang,Interp,RemoveStuff,FilterRecords,NoNK,Mesh,XYCoords,VCoords,Sfc_Codes,VarDict,Series,Ensembles,Dates,Masks,ASCII,SelectVars,ExternInput,FSTD):
   """
   High-level interface for FSTD data, to treat it as multi-dimensional arrays.
   Contains logic for dealing with most of the common FSTD file conventions.

@@ -140,6 +140,7 @@ class Series (BufferBase):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
+    if not hasattr(self,'_meta_funit'): return
     station_header = fstlir(self._meta_funit, nomvar='STNS')
     if station_header is not None:
       array = station_header['d'].transpose()

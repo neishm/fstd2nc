@@ -24,13 +24,16 @@ optional arguments:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   --no-progress         Disable the progress bar.
-  --minimal-metadata    Don't include RPN record attributes and other internal
-                        information in the output metadata. This is the
-                        default behaviour.
-  --rpnstd-metadata     Include all RPN record attributes in the output
+  --serial              Disables multithreading/multiprocessing. Useful for
+                        resource-limited machines.
+  --minimal-metadata    Don't include internal record attributes and other
+                        internal information in the output metadata. This is
+                        the default behaviour.
+  --internal-metadata, --rpnstd-metadata
+                        Include all internal record attributes in the output
                         metadata.
-  --rpnstd-metadata-list nomvar,...
-                        Specify a minimal set of RPN record attributes to
+  --metadata-list nomvar,..., --rpnstd-metadata-list nomvar,...
+                        Specify a minimal set of internal record attributes to
                         include in the output file.
   --ignore-typvar       Tells the converter to ignore the typvar when deciding
                         if two records are part of the same field. Default is
@@ -38,8 +41,6 @@ optional arguments:
   --ignore-etiket       Tells the converter to ignore the etiket when deciding
                         if two records are part of the same field. Default is
                         to split the variable on different etikets.
-  --serial              Disables multithreading/multiprocessing. Useful for
-                        resource-limited machines.
   --vars VAR1,VAR2,...  Comma-separated list of variables to convert. By
                         default, all variables are converted.
   --fill-value FILL_VALUE
@@ -105,9 +106,9 @@ optional arguments:
   --no-adjust-rlon      For rotated grids, do NOT adjust rlon coordinate to
                         keep the range in -180..180. Allow the rlon value to
                         be whatever librmn says it should be.
-  --filter CONDITION    Subset RPN file records using the given criteria. For
-                        example, to convert only 24-hour forecasts you could
-                        use --filter ip2==24
+  --filter CONDITION    Subset RPN standard file records using the given
+                        criteria. For example, to convert only 24-hour
+                        forecasts you could use --filter ip2==24
   --exclude NAME,NAME,...
                         Exclude some axes, attributes, or derived variables
                         from the output. For instance, excluding
@@ -138,7 +139,7 @@ optional arguments:
                         The units for the output time axis. Default is hours.
   --reference-date YYYY-MM-DD
                         The reference date for the output time axis. The
-                        default is the starting date in the RPN file.
+                        default is the starting date in the RPN standard file.
   --fstd-compat         Adds a compatibility layer to the netCDF output file,
                         so it can also function as a valid FSTD file.
                         EXPERIMENTAL.

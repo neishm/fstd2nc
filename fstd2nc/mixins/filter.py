@@ -29,7 +29,7 @@ class FilterRecords (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(FilterRecords,cls)._cmdline_args(parser)
-    parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset RPN file records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24"))
+    parser.add_argument('--filter', metavar='CONDITION', action='append', help=_("Subset %s records using the given criteria.  For example, to convert only 24-hour forecasts you could use --filter ip2==24")%cls._format)
   def __init__ (self, *args, **kwargs):
     """
     filter : str or list, optional
@@ -67,8 +67,8 @@ class FilterRecords (BufferBase):
           flags &= self._do_filter(records_with_strings, cmd)
       except TypeError:
         error (_("unable to apply the filter: %s")%cmd)
-    # To filter out unwanted records, mark them as "deleted" in the list.
-    self._headers['dltf'] = self._headers['dltf'] | (~flags)
+    # To filter out unwanted records, unselected in the list.
+    self._headers['selected'] = self._headers['selected'] & flags
   @staticmethod
   def _do_filter (p, cmd):
     # Allow numpy functions to work with the filters.

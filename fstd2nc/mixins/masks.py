@@ -74,12 +74,13 @@ class Masks (BufferBase):
         overlap = np.where(overlap)[0]
         lng[overlap] = swa[overlap+1]*2 + lng[overlap+1] - swa[overlap]*2
         self._headers['lng'] = lng
+        self._headers['length'] = lng*4  # Length in bytes used for _decode
     except KeyError:
       pass  # Not our data from disk (maybe from fstpy?) so can't do that.
     # Remove all mask records from the table, they should not become variables
     # themselves.
     is_mask = (self._headers['typvar'] == b'@@')
-    self._headers['dltf'][is_mask] = 1
+    self._headers['selected'][is_mask] = False
 
   # Apply the fill value to the data.
   def _makevars (self):
@@ -124,7 +125,6 @@ class Masks (BufferBase):
 
   # Apply the mask data from raw binary array.
   def _decode (self, data, unused):
-    from fstd2nc.extra import decode_headers
     import numpy as np
     d = data.view('>i4')
     # Get first field.
@@ -153,13 +153,13 @@ class Masks (BufferBase):
         # record, need to go hunting for it.
         # TODO: search for it ahead of time (in __init__ stage) if an efficient
         # way of matching masks is found.
-        prm = decode_headers(data[:72])
+        prm = self._decode_headers(data[:72])
         criteria = True
         for name in ('nomvar', 'datev', 'etiket', 'ip1', 'ip2', 'ip3'):
           criteria = criteria & (self._headers[name] == prm[name][0])
-        # Note: with this approach, can't check if the mask was truly deleted
-        # or just ignored.  Hope for the best, until 'dltf' logic is revisited.
         criteria &= (self._headers['typvar'] == b'@@')
+        # Ignore deleted masks
+        criteria &= (self._headers['dltf'] == 0)
         ind = np.where(criteria)[0]
         # If still no mask found, then give up.
         if len(ind) == 0:
@@ -167,7 +167,7 @@ class Masks (BufferBase):
         rec_id = ind[0]
         filename = self._files[self._headers['file_id'][rec_id]]
         with open (filename, 'rb') as f:
-          f.seek(self._headers['swa'][rec_id]*8-8)
+          f.seek(int(self._headers['swa'][rec_id])*8-8)
           mask = np.fromfile(f,'B',self._headers['lng'][rec_id]*4)
         mask = super(Masks,self)._decode(mask, unused)
         return ((field1*mask) + self._fill_value * (1-mask)).astype(field1.dtype)

@@ -107,12 +107,11 @@ class ExternOutput (BufferBase):
     files = np.array(self._files, dtype=object)
     # Only construct graphs for records that will ultimately appear in the
     # dask objects.
-    active = self._headers['dltf'] == 0
+    active = self._headers['selected'] == True
     nrecs = np.sum(active)
     filenames = files[self._headers['file_id'][active]]
-    graphs = zip([_read_block]*nrecs, filenames, self._headers['swa'][active]*8-8, self._headers['lng'][active]*4)
+    graphs = zip([_read_block]*nrecs, filenames, self._headers['address'][active], self._headers['length'][active])
     graphs = zip([self._decode]*nrecs, graphs, np.where(active)[0])
-    graphs = zip([np.transpose]*nrecs, graphs)
     g = np.empty(nrecs, dtype=object)
     g[:] = list(graphs)
     out = np.empty(self._nrecs, dtype=object)

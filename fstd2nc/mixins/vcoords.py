@@ -131,6 +131,8 @@ class VCoords (BufferBase):
     # Keep track of any diagnostic levels, e.g. from GEM.
     diag_ip1 = []
     for vcoord_nomvar in ('HY','!!'):
+      # Can only do this if we have metadata records.
+      if not hasattr(self,'_meta_funit'): continue
       for handle in fstinl(self._meta_funit, nomvar=vcoord_nomvar):
         header = fstprm(handle)
         key = (header['ip1'],header['ip2'])
@@ -186,7 +188,7 @@ class VCoords (BufferBase):
       for ip1_val in diag_ip1:
           mask = (fields['ip1'] == ip1_val)
           if self._ignore_diag_level:
-            fields['dltf'] |= mask
+            fields['selected'] &= (~mask)
           else:
             #fields['ip1'][mask] = 93423264
             fields['level'][mask] = 1.0
@@ -197,7 +199,7 @@ class VCoords (BufferBase):
       mask = False
       for ip1_val in diag_ip1:
           mask |= (fields['ip1'] == ip1_val)
-      fields['dltf'] |= ~mask
+      fields['selected'] &= mask
 
     # Keep only "thermodynamic" levels?
     if self._thermodynamic_levels:
@@ -211,7 +213,7 @@ class VCoords (BufferBase):
           for ip1_t in vgd_get(vgd_id,'VIPT'):
             # Add this level to the mask (unless it's right at the surface).
             mask |= (fields['ip1'] == ip1_t) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
-          fields['dltf'] |= ~mask
+          fields['selected'] &= mask
         except (KeyError,VGDError):
           warn(_("Unable to parse thermodynamic levels from the vertical coordinate"))
         vgd_free (vgd_id)
@@ -227,7 +229,7 @@ class VCoords (BufferBase):
           for ip1_m in vgd_get(vgd_id,'VIPM'):
             # Add this level to the mask (unless it's right at the surface).
             mask |= (fields['ip1'] == ip1_m) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
-          fields['dltf'] |= ~mask
+          fields['selected'] &= mask
         except (KeyError,VGDError):
           warn(_("Unable to parse momentum levels from the vertical coordinate"))
         vgd_free (vgd_id)
@@ -243,7 +245,7 @@ class VCoords (BufferBase):
           for ip1_w in vgd_get(vgd_id,'VIPW'):
             # Add this level to the mask (unless it's right at the surface).
             mask |= (fields['ip1'] == ip1_w) & (fields['level'] != 1.0) & (fields['level'] != 0.0)
-          fields['dltf'] |= ~mask
+          fields['selected'] &= mask
         except (KeyError,VGDError):
           warn(_("Unable to parse vertical velocity levels from the vertical coordinate"))
         vgd_free (vgd_id)
@@ -404,7 +406,7 @@ class VCoords (BufferBase):
 
             # Put this information in the final output file?
             for k,v in internal_atts.items():
-              if self._rpnstd_metadata_list is None or k in self._rpnstd_metadata_list:
+              if self._metadata_list is None or k in self._metadata_list:
                 atts[k] = v
 
             # Attempt to fill in A/B coefficients (if available).

@@ -362,7 +362,7 @@ class XYCoords (BufferBase):
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
   # them?
   def _find_coord (self, var, coordname):
-    from fstd2nc.mixins import dtype_fst2numpy
+    from fstd2nc.mixins.fstd import dtype_fst2numpy
     from rpnpy.librmn.fstd98 import fstlir
     # Special case for series data - match any of the lat/lon grids.
     if var.atts['grtyp'] in ('+','Y'):
@@ -455,7 +455,7 @@ class XYCoords (BufferBase):
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar
             (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll()
-          except (TypeError,EzscintError,KeyError,RMNError,ValueError):
+          except (TypeError,EzscintError,KeyError,RMNError,ValueError,AttributeError):
             pass # Wasn't supported.
 
         # Otherwise, need to decode the information here.
@@ -480,7 +480,7 @@ class XYCoords (BufferBase):
               lonarray = self._find_coord(var,'>>')['d'].squeeze(axis=2)
             # Handle ezqkdef grids.
             else:
-              gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, self._meta_funit)
+              gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, getattr(self,'_meta_funit',0))
               ll = gdll(gdid)
               latarray = ll['lat']
               lonarray = ll['lon']

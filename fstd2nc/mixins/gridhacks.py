@@ -112,7 +112,8 @@ class Interp (BufferBase):
         ingrid = _grid_cache[cache_key]
       else:
         ingrid = dict((k,prm[k]) for k in grid_params)
-        ingrid['iunit'] = self._meta_funit
+        if hasattr(self,'_meta_funit'):
+          ingrid['iunit'] = self._meta_funit
         ingrid = rmn.ezqkdef (**ingrid)
         _grid_cache[cache_key] = ingrid
       # Propogate any fill values to the interpolated grid.
@@ -130,13 +131,12 @@ class Interp (BufferBase):
   def _decode (self, data, unused, _grid_cache={}):
     import rpnpy.librmn.all as rmn
     import numpy as np
-    from fstd2nc.extra import decode_headers, decode
     if not hasattr(self,'_interp_grid'):
       return super(Interp,self)._decode (data, unused)
     grid_params = ('ni','nj','grtyp','ig1','ig2','ig3','ig4')
-    prm = decode_headers(data[:72])
+    prm = self._decode_headers(data[:72])
     prm = dict((k,v[0]) for k,v in prm.items())
-    prm['d'] = super(Interp,self)._decode (data, unused)
+    prm['d'] = super(Interp,self)._decode (data, unused).T
     with self._lock:
       cache_key = tuple(prm[k] for k in grid_params)
       # Check if we've already defined the input grid in a previous call.
@@ -144,7 +144,8 @@ class Interp (BufferBase):
         ingrid = _grid_cache[cache_key]
       else:
         ingrid = dict((k,(str(prm[k].decode()) if k=='grtyp' else int(prm[k]))) for k in grid_params)
-        ingrid['iunit'] = self._meta_funit
+        if hasattr(self,'_meta_funit'):
+          ingrid['iunit'] = self._meta_funit
         ingrid = rmn.ezqkdef (**ingrid)
         _grid_cache[cache_key] = ingrid
 
@@ -155,7 +156,7 @@ class Interp (BufferBase):
     out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
     d[out_mask!=0] = self._fill_value
     # Return the data for the interpolated field.
-    return d
+    return d.T
 
 
 #################################################
@@ -253,17 +254,16 @@ class YinYang (BufferBase):
 
   # Handle grid interpolations from raw binary array.
   def _decode (self, data, unused):
-    from fstd2nc.extra import decode_headers
     if not self._yin and not self._yang:
       return super(YinYang,self)._decode (data, unused)
-    prm = decode_headers(data[:72])
+    prm = self._decode_headers(data[:72])
     prm = dict((k,v[0]) for k,v in prm.items())
-    d = super(YinYang,self)._decode (data, unused)
+    d = super(YinYang,self)._decode (data, unused).T
     if prm['grtyp'] == b'U' and self._yin:
       d = d[:,:prm['nj']//2]
     elif prm['grtyp'] == b'U' and self._yang:
       d = d[:,prm['nj']//2:]
-    return d
+    return d.T
 
 #################################################
 # Mixin for grid cropping.
@@ -378,17 +378,16 @@ class Crop (BufferBase):
   # Handle cropping from raw binary array.
   def _decode (self, data, rec_id):
     import numpy as np
-    from fstd2nc.extra import decode_headers
     d = super(Crop,self)._decode (data, rec_id)
     if not self._crop_to_smallest_grid: return d
     # Check if cropping necessary.
     ni = self._headers['ni'][rec_id]
     nj = self._headers['nj'][rec_id]
-    if d.shape == (ni,nj): return d
+    if d.shape == (nj,ni): return d
     i0 = self._headers['i0'][rec_id]
     iN = self._headers['iN'][rec_id]
     j0 = self._headers['j0'][rec_id]
     jN = self._headers['jN'][rec_id]
-    d = d[i0:iN,j0:jN]
+    d = d[j0:jN,i0:iN]
     return d
 

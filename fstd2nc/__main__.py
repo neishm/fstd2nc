@@ -40,8 +40,8 @@ def _fstdump (buffer_type=Buffer):
   # includes this flag.
   if '-h' in argv: argv.remove('-h')
   # Now, parse everything else as per usual.
-  parser = ArgumentParser(description=_("Display RPN standard file (FSTD) metadata in a structured format."))
-  parser.add_argument('infile', metavar='<fstd_file>', help=_('The RPN standard file to query.'))
+  parser = ArgumentParser(description=_("Display %s metadata in a structured format.")%buffer_type._format)
+  parser.add_argument('infile', metavar='<file>', help=_('The %s to query.')%buffer_type._format)
   parser.add_argument('-v', metavar='NOMVAR,...', help=_('Display the values for the specified variable.'))
   buffer_type._cmdline_args(parser)
   args = parser.parse_args()
@@ -139,8 +139,8 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   from os.path import exists
   from rpnpy.librmn.fstd98 import FSTDError, fstopt
   import fstd2nc
-  parser = ArgumentParser(description=_("Converts an RPN standard file (FSTD) to netCDF format."))
-  parser.add_argument('infile', nargs='+', metavar='<fstd_file>', help=_('The RPN standard file(s) to convert.'))
+  parser = ArgumentParser(description=_("Converts %s to netCDF format.")%buffer_type._format_plural)
+  parser.add_argument('infile', nargs='+', metavar='<file>', help=_('The %s to convert.')%buffer_type._format_plural)
   parser.add_argument('outfile', metavar='<netcdf_file>', help=_('The name of the netCDF file to create.'))
   buffer_type._cmdline_args(parser)
   parser.add_argument('--msglvl', choices=['0','DEBUG','2','INFORM','4','WARNIN','6','ERRORS','8','FATALE','10','SYSTEM','CATAST'], default='WARNIN', help=_('How much information to print to stdout during the conversion.  Default is %(default)s.'))

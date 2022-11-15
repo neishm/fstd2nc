@@ -59,6 +59,6 @@ class SelectVars (BufferBase):
       warn(_('Unable to find variable(s): ') + ' '.join(missing))
     if not np.any(select):
       error(_('Nothing to convert.'))
-    # Marked unselected variables as "deleted" from the list.
-    self._headers['dltf'] = self._headers['dltf'] | (~select)
+    # Marked unselected variables.
+    self._headers['selected'] = self._headers['selected'] & select
 

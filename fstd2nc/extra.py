@@ -53,7 +53,7 @@ def decode (data):
   '''
   import rpnpy.librmn.all as rmn
   import numpy as np
-  from fstd2nc.mixins import dtype_fst2numpy
+  from fstd2nc.mixins.fstd import dtype_fst2numpy
   data = data.view('>i4').astype('i4')
   ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
   nelm = ni*nj*nk
@@ -122,7 +122,7 @@ def decode (data):
     librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
   else:
     raise Exception(datyp)
-  return work.view(dtype)[:nelm.value].reshape(shape).T
+  return work.view(dtype)[:nelm.value].reshape(shape)
 
 
 def decode_headers (raw):
@@ -277,7 +277,7 @@ def raw_headers (filename):
     pageaddr = page[4]; pageno += 1
   raw = np.concatenate(raw)
   f.close()
-  return raw
+  return raw.reshape(-1,72)
 
 
 # Return the given arrays as a single structured array.
