@@ -237,8 +237,12 @@ class FSTD (BufferBase):
 
     # Add some standard fields needed for the Buffer.
     self._headers['name'] = self._headers['nomvar']
-    self._headers['address'] = np.array(self._headers['swa'],int)*8-8
-    self._headers['length'] = np.array(self._headers['lng'],int)*4
+    # These two fields may not exist for externally-sourced data
+    # (such as from fstpy)
+    if 'swa' in self._headers:
+      self._headers['address'] = np.array(self._headers['swa'],int)*8-8
+    if 'lng' in self._headers:
+      self._headers['length'] = np.array(self._headers['lng'],int)*4
     self._headers['dtype'] = np.array(fast_dtype_fst2numpy(self._headers['datyp'],self._headers['nbits']))
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 

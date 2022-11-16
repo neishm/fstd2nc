@@ -471,6 +471,15 @@ class netCDF_IO (BufferBase):
 def _quick_load (args):
   import numpy as np
   filename, address, length = args
+  # Check if this was from an external source, in which case we have no file
+  # data to provide.  The _decode method will have to find the data from the
+  # other argument (record index).
+  if address is None or length is None:
+    # Return some minimal amount of empty data, in case a mixin tries to
+    # access this data.  This is probably a bad idea (in case the mixin
+    # does something weird with the zero values).
+    #TODO: fix the mixins so they don't try to read these values directly.
+    return np.zeros(256,'B')
   with open (filename, 'rb') as f:
     f.seek (address, 0)
     return np.fromfile(f,'B',length)
