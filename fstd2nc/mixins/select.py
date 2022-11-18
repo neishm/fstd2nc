@@ -21,6 +21,12 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+# Helper method - decode name information (from bytes) into string.
+from fstd2nc.mixins import vectorize
+@vectorize
+def to_string (name):
+  return name.decode().strip()
+
 
 #################################################
 # Mixin for selecting particular fields.
@@ -50,8 +56,10 @@ class SelectVars (BufferBase):
     info (_('Will look for variables: ') + ' '.join(vars))
     select = np.zeros(self._nrecs,dtype='bool')
     missing = []
+    names = to_string(self._headers['name'])
+    names = np.array(names,object)
     for v in vars:
-      f = self._headers['nomvar'] ==  v.ljust(4).encode()
+      f = (names == v)
       if not np.any(f):
         missing.append(v)
       select |= f
