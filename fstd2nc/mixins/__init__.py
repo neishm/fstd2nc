@@ -514,13 +514,13 @@ class BufferBase (object):
         # Only use attributes that are consistent across all variable records.
         if len(set(v)) > 1: continue
         v = v[0]
-        # Use regular integers for numeric types.
-        if np.can_cast(v.dtype,int):
-          v = int(v)
         # Python3: convert bytes to str.
         if isinstance(v,bytes): v = str(v.decode())
         # Trim string attributes (remove whitespace padding).
         if isinstance(v,str): v = v.strip()
+        # Use regular integers for numeric types.
+        elif np.can_cast(v.dtype,int):
+          v = int(v)
         atts[n] = v
 
       # Get the axes.
