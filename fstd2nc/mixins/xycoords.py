@@ -21,6 +21,47 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+# Define coordinateless dimensions for grid cell boundaries.
+from fstd2nc.mixins import _dim_type
+bnds2 = _dim_type('bnds',2)
+bnds4 = _dim_type('nv',4)
+
+# Helper function - compute bounds for the given array.
+# Returned dimension is (n,2) where n is the length of the array.
+# [:,0] indices are the lefthand bounds, [:,1] indices are the righthand.
+def get_bounds (array, Min=None, Max=None, snap_minmax=False):
+  import numpy as np
+  bounds = np.empty((len(array),2),dtype=array.dtype)
+  bounds[1:,0] = bounds[:-1,1] = (array[1:]+array[:-1])/2.0
+  bounds[0,0] = array[0] - (bounds[0,1]-array[0])
+  bounds[-1,1] = array[-1] + (array[-1]-bounds[-1,0])
+  if Min is not None: bounds[0,0] = max(bounds[0,0],Min)
+  if Max is not None: bounds[-1,1] = min(bounds[-1,1],Max)
+  if snap_minmax:
+    if bounds[0,0] - Min < array[0] - bounds[0,0]:
+      bounds[0,0] = Min
+    if Max - bounds[-1,1] < bounds[-1,1] - array[-1]:
+      bounds[-1,1] = Max
+  return bounds
+
+# Helper function - compute lat/lon cell boundaries from x/y cell boundaries.
+def get_ll_vertices (gdid, x, y):
+  from rpnpy.librmn.all import gdllfxy
+  import numpy as np
+  assert x.shape[1] == y.shape[1] == 2
+  xpts = np.empty((y.shape[0],x.shape[0],4),dtype=x.dtype)
+  ypts = np.empty((y.shape[0],x.shape[0],4),dtype=x.dtype)
+  xpts[:,:,0] = x[None,:,0]
+  xpts[:,:,3] = x[None,:,0]
+  xpts[:,:,1] = x[None,:,1]
+  xpts[:,:,2] = x[None,:,1]
+  ypts[:,:,0] = y[:,None,0]
+  ypts[:,:,1] = y[:,None,0]
+  ypts[:,:,2] = y[:,None,1]
+  ypts[:,:,3] = y[:,None,1]
+  ll = gdllfxy(gdid, xpts.flatten(), ypts.flatten())
+  return ll['lon'].reshape(xpts.shape), ll['lat'].reshape(ypts.shape)
+  #return xpts, ypts
 
 # Modify gdll to handle supergrids.
 # Simply loops over each subgrid, then re-stacks them together.
@@ -108,10 +149,10 @@ class LatLon(GridMap):
     self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
     return self.gmap     
   # Generate true latitudes and longitudes
-  def gen_ll(self):    
+  def gen_ll(self,bounds=False):
     from collections import OrderedDict
     from rpnpy.librmn.all import gdll 
-    from fstd2nc.mixins import _axis_type
+    from fstd2nc.mixins import _axis_type, _var_type
     ll = gdll(self._grd['id'])
     self._lonarray = ll['lon'][:,0]
     self._lonatts = OrderedDict()
@@ -133,10 +174,18 @@ class LatLon(GridMap):
     # Taken from old fstd_core.c code.
     if len(self._lonarray) >= 3 and self._lonarray[-2] > self._lonarray[-3] and self._lonarray[-1] < self._lonarray[-2]:
       self._lonarray[-1] += 360.
+    # Add lat/lon boundaries.
+    if bounds:
+      lon_bnds = get_bounds(self._lonarray)
+      lon_bnds = _var_type("lon_bnds",{},[self.lon,bnds2],lon_bnds)
+      self.lon.atts["bounds"] = lon_bnds
+      lat_bnds = get_bounds(self._latarray,Min=-90,Max=90,snap_minmax=True)
+      lat_bnds = _var_type("lat_bnds",{},[self.lat,bnds2],lat_bnds)
+      self.lat.atts["bounds"] = lat_bnds
     return (self.gridaxes, self.lon, self.lat)
   # Generic gen_xyll function.
-  def gen_xyll(self):
-    gridaxes, lon, lat = self.gen_ll()
+  def gen_xyll(self, bounds=False):
+    gridaxes, lon, lat = self.gen_ll(bounds=bounds)
     return (None, None, gridaxes, lon, lat)
 
 class RotLatLon(GridMap):
@@ -183,10 +232,11 @@ class RotLatLon(GridMap):
     return self.gmap
   # Generate latitudes and longitudes in rotated pole grid 
   # and true latitudes and longitudes
-  def gen_xyll(self):
+  def gen_xyll(self, bounds=False):
     from collections import OrderedDict
     from rpnpy.librmn.all import gdll
     from fstd2nc.mixins import _var_type, _axis_type
+    import numpy as np
     self._xaxisatts['long_name'] = 'longitude in rotated pole grid'
     self._xaxisatts['standard_name'] = 'grid_longitude'
     self._xaxisatts['units'] = 'degrees'
@@ -213,6 +263,23 @@ class RotLatLon(GridMap):
     self._latatts['axis'] = 'Y'
     self.lon = _var_type('lon',self._lonatts,self.gridaxes,self._lonarray)
     self.lat = _var_type('lat',self._latatts,self.gridaxes,self._latarray)
+    # Get boundary info.
+    if bounds:
+      x_bnds = get_bounds(self._ax)
+      x_bnds = _var_type('rlon_bnds',{},[self.xaxis,bnds2],x_bnds)
+      self.xaxis.atts['bounds'] = x_bnds
+      y_bnds = get_bounds(self._ay,Min=-90,Max=90,snap_minmax=True)
+      y_bnds = _var_type('rlat_bnds',{},[self.yaxis,bnds2],y_bnds)
+      self.yaxis.atts['bounds'] = y_bnds
+      # Compute bounds as array indices (needed for coordinate transformation).
+      ax_bnds = get_bounds(np.arange(1,len(self._ax)+1,dtype='float32'))
+      ay_bnds = get_bounds(np.arange(1,len(self._ay)+1,dtype='float32'))
+      # Compute lat/lon of cell boundaries.
+      lon_bnds, lat_bnds = get_ll_vertices (self._grd['id'], ax_bnds, ay_bnds)
+      lon_bnds = _var_type('lon_bnds',{},[self.yaxis,self.xaxis,bnds4],lon_bnds)
+      self.lon.atts['bounds'] = lon_bnds
+      lat_bnds = _var_type('lat_bnds',{},[self.yaxis,self.xaxis,bnds4],lat_bnds)
+      self.lat.atts['bounds'] = lat_bnds
     return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
 
 
@@ -307,9 +374,28 @@ class PolarStereo(GridMap):
     self.lat = _var_type('lat',self._latatts,self.gridaxes,self._latarray)
     return (self._false_easting, self._false_northing, self.xaxis, self.yaxis, \
             self.gridaxes, self.lon, self.lat)
-  def gen_xyll(self):
+  def gen_xyll(self, bounds=False):
+    from fstd2nc.mixins import _var_type
+    import numpy as np
     if self.xaxis == None:
       self._gen_xyll()
+    # Get boundary info.
+    if bounds:
+      x_bnds = get_bounds(self._ax)
+      x_bnds = _var_type('xc_bnds',{},[self.xaxis,bnds2],x_bnds)
+      self.xaxis.atts['bounds'] = x_bnds
+      y_bnds = get_bounds(self._ay)
+      y_bnds = _var_type('yc_bnds',{},[self.yaxis,bnds2],y_bnds)
+      self.yaxis.atts['bounds'] = y_bnds
+      # Compute bounds as array indices (needed for coordinate transformation).
+      ax_bnds = get_bounds(np.arange(1,len(self._ax)+1,dtype='float32'))
+      ay_bnds = get_bounds(np.arange(1,len(self._ay)+1,dtype='float32'))
+      # Compute lat/lon of cell boundaries.
+      lon_bnds, lat_bnds = get_ll_vertices (self._grd['id'], ax_bnds, ay_bnds)
+      lon_bnds = _var_type('lon_bnds',{},[self.yaxis,self.xaxis,bnds4],lon_bnds)
+      self.lon.atts['bounds'] = lon_bnds
+      lat_bnds = _var_type('lat_bnds',{},[self.yaxis,self.xaxis,bnds4],lat_bnds)
+      self.lat.atts['bounds'] = lat_bnds
     return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
       
 
@@ -326,10 +412,14 @@ class XYCoords (BufferBase):
 
   @classmethod
   def _cmdline_args (cls, parser):
+    from argparse import SUPPRESS
     super(XYCoords,cls)._cmdline_args(parser)
     parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
     parser.add_argument('--keep-LA-LO', action='store_true', help=_('Include LA and LO records, even if they appear to be redundant.'))
     parser.add_argument('--no-adjust-rlon', action='store_true', help=_('For rotated grids, do NOT adjust rlon coordinate to keep the range in -180..180.  Allow the rlon value to be whatever librmn says it should be.'))
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--bounds', action='store_true', default=False, help=_('Include grid cell boundaries in the output.'))
+    group.add_argument('--no-bounds', action='store_false', dest='bounds', help=SUPPRESS)
 
   def __init__ (self, *args, **kwargs):
     """
@@ -343,10 +433,13 @@ class XYCoords (BufferBase):
         For rotated grids, do NOT adjust rlon coordinate to keep the range
         in -180..180.  Allow the rlon value to be whatever librmn says it
         should be.
+    bounds : bool, optional
+        Include grid cell boundaries in the output.
     """
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     self._keep_LA_LO = kwargs.pop('keep_LA_LO',False)
     self._no_adjust_rlon = kwargs.pop('no_adjust_rlon',False)
+    self._bounds = kwargs.pop('bounds',False)
     # Tell the decoder not to process horizontal records as variables.
     self._meta_records = self._meta_records + self._xycoord_nomvars
     super(XYCoords,self).__init__(*args,**kwargs)
@@ -454,7 +547,7 @@ class XYCoords (BufferBase):
             gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon)
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar
-            (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll()
+            (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll(bounds=self._bounds)
           except (TypeError,EzscintError,KeyError,RMNError,ValueError,AttributeError):
             pass # Wasn't supported.
 
@@ -536,6 +629,14 @@ class XYCoords (BufferBase):
             lonarray = meanlon
             lat = _axis_type('lat',latatts,latarray)
             lon = _axis_type('lon',lonatts,lonarray)
+            # Add boundary information.
+            if self._bounds:
+              lon_bnds = get_bounds(lonarray)
+              lon_bnds = _var_type('lon_bnds',{},[lon,bnds2],lon_bnds)
+              lon.atts['bounds'] = lon_bnds
+              lat_bnds = get_bounds(latarray)
+              lat_bnds = _var_type('lat_bnds',{},[lat,bnds2],lat_bnds)
+              lat.atts['bounds'] = lat_bnds
             gridaxes = [lat,lon]
 
           # Case 2: lat/lon are series of points.

@@ -106,6 +106,7 @@ optional arguments:
   --no-adjust-rlon      For rotated grids, do NOT adjust rlon coordinate to
                         keep the range in -180..180. Allow the rlon value to
                         be whatever librmn says it should be.
+  --bounds              Include grid cell boundaries in the output.
   --filter CONDITION    Subset RPN standard file records using the given
                         criteria. For example, to convert only 24-hour
                         forecasts you could use --filter ip2==24
