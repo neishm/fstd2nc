@@ -110,7 +110,7 @@ class Dates (BufferBase):
   def _makevars (self):
     import numpy as np
     super(Dates,self)._makevars()
-    for coord in self._iter_coords():
+    for coord in self._iter_objects():
       # Add metadata to auxiliary coordinates.
       if coord.name == 'leadtime':
         coord.atts['standard_name'] = 'forecast_period'
