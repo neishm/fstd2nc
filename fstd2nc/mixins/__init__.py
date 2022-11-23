@@ -579,8 +579,6 @@ class BufferBase (object):
                            axes = list(coordaxes.values()), array = values )
           known_coords[key] = coord
         coords.append(known_coords[key])
-      if len(coords) > 0:
-        atts['coordinates'] = coords
 
       # Check if we have full coverage along all axes.
       have_data = (record_id.flatten() >= 0)
@@ -607,6 +605,11 @@ class BufferBase (object):
                         axes = list(axes.values()),
                         dtype = dtype,
                         record_id = record_id )
+      # Add auxiliary coordinate variables through silent dependency.
+      # Don't want these in the 'coordinates' attribute because they seem to
+      # cause issues with certain netCDF decoders.
+      if len(coords) > 0:
+        var.deps = coords
       self._varlist.append(var)
 
       #TODO: Find a minimum set of partial coverages for the data.
@@ -741,8 +744,6 @@ class BufferBase (object):
                            array = values )
           known_coords[key] = coord
         coords.append(known_coords[key])
-      if len(coords) > 0:
-        atts['coordinates'] = coords
 
 
 
@@ -782,6 +783,11 @@ class BufferBase (object):
                         axes = list(axes.values()),
                         dtype = dtype,
                         record_id = record_id )
+      # Add auxiliary coordinate variables through silent dependency.
+      # Don't want these in the 'coordinates' attribute because they seem to
+      # cause issues with certain netCDF decoders.
+      if len(coords) > 0:
+        var.deps = coords
       self._varlist.append(var)
 
       #TODO: Find a minimum set of partial coverages for the data.
