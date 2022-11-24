@@ -149,14 +149,14 @@ class Interp (BufferBase):
         ingrid = rmn.ezqkdef (**ingrid)
         _grid_cache[cache_key] = ingrid
 
-    # Propogate any fill values to the interpolated grid.
-    in_mask = np.zeros(prm['d'].shape, order='F', dtype='float32')
-    in_mask[prm['d']==self._fill_value] = 1.0
-    d = rmn.ezsint (self._interp_grid, ingrid, prm['d'])
-    out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
-    d[out_mask!=0] = self._fill_value
-    # Return the data for the interpolated field.
-    return d.T
+      # Propogate any fill values to the interpolated grid.
+      in_mask = np.zeros(prm['d'].shape, order='F', dtype='float32')
+      in_mask[prm['d']==self._fill_value] = 1.0
+      d = rmn.ezsint (self._interp_grid, ingrid, prm['d'])
+      out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
+      d[out_mask!=0] = self._fill_value
+      # Return the data for the interpolated field.
+      return d.T
 
 
 #################################################
