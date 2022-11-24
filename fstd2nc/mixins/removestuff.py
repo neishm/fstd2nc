@@ -98,6 +98,8 @@ class RemoveStuff (BufferBase):
       # Remove excluded attributes.
       if key in self._exclude:
         var.atts.pop(key)
+    # Remove from silent dependencies.
+    var.deps = [self._do_exclude(v) for v in var.deps]
 
     return var
 
