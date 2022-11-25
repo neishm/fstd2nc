@@ -1,3 +1,12 @@
+Version 0.20221124.0 (Nov 24, 2022)
+	* New .to_xarray_list() method to return list of variables wrapped in
+	  individual Datasets.
+	* New command-line --bounds flag, to output grid cell boundaries.
+	* Remove "leadtime", "reftime", "surface_type", and "station" from
+	  list of coordinates, since some netCDF viewers have trouble with them
+	  being listed in there.
+	* Fix crash in xarray interface when interpolation is enabled.
+
 Version 0.20220829.0 (Aug 29, 2022)
 	* Allow fstd2nc.Buffer objects to be serialized / deserialized.
 	  This allows the objects to be used with the Python multiprocessing
