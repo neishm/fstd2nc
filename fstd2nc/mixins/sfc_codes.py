@@ -94,7 +94,7 @@ class Sfc_Codes (BufferBase):
         continue
 
       codes = tuple(levels.array)
-      coordinates = var.atts.get('coordinates',[])
+      coordinates = []
 
       # Handle surface type codes.
       if var.name in sfc_agg_nomvars:
@@ -133,7 +133,7 @@ class Sfc_Codes (BufferBase):
         soil_depth = _dim_type('soil_depth',len(codes))
         var.axes[var.dims.index('level')] = soil_depth
       if len(coordinates) > 0:
-        var.atts['coordinates'] = coordinates
+        var.deps.extend(coordinates)
 
 
 

@@ -288,9 +288,7 @@ class Series (BufferBase):
           known_reftimes[key] = reftime
         var.axes[var.dims.index('forecast')] = known_squashed_forecasts[key]
         # Add leadtime and reftime as auxiliary coordinates.
-        coords = var.atts.get('coordinates',[])
-        coords.extend([known_leadtimes[key],known_reftimes[key]])
-        var.atts['coordinates'] = coords
+        var.deps.extend([known_leadtimes[key],known_reftimes[key]])
 
     # Hook in the station names as coordinate information.
     if station is not None:
@@ -314,7 +312,5 @@ class Series (BufferBase):
           station_coord = _var_type('station',{},axes,array)
         # Attach the station as a coordinate.
         for var in varlist:
-          coords = var.atts.get('coordinates',[])
-          coords.append(station_coord)
-          var.atts['coordinates'] = coords
+          var.deps.append(station_coord)
 

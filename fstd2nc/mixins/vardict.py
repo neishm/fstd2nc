@@ -156,7 +156,7 @@ class VarDict (BufferBase):
         continue
 
       codes = tuple(levels.array)
-      coordinates = var.atts.get('coordinates',[])
+      coordinates = []
 
       if var.name in self._vardict_ip1_axis:
         # Generate the list of surface types.
@@ -175,6 +175,6 @@ class VarDict (BufferBase):
         coordinates.append(surface_type)
 
       if len(coordinates) > 0:
-        var.atts['coordinates'] = coordinates
+        var.deps.extend(coordinates)
 
 
