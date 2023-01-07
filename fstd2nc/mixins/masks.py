@@ -119,8 +119,8 @@ class Masks (BufferBase):
                         ip1 = prm['ip1'], ip2 = prm['ip2'], ip3 = prm['ip3'])
     if mask_key is not None:
       mask = super(Masks,self)._fstluk(mask_key, rank=rank)['d']
-      prm['d'] *= mask
-      prm['d'] += self._fill_value * (1-mask)
+      prm['d'] *= (mask>0)
+      prm['d'] += self._fill_value * (mask==0)
     return prm
 
   # Apply the mask data from raw binary array.
@@ -170,7 +170,7 @@ class Masks (BufferBase):
           f.seek(int(self._headers['swa'][rec_id])*8-8)
           mask = np.fromfile(f,'B',self._headers['lng'][rec_id]*4)
         mask = super(Masks,self)._decode(mask, unused)
-        return ((field1*mask) + self._fill_value * (1-mask)).astype(field1.dtype)
+        return ((field1*(mask>0)) + self._fill_value * (mask==0)).astype(field1.dtype)
     # Ok, back to the case where the other field is available conveniently
     # after the first.
     data = data.view('>i4')[offset*2:].view(data.dtype)
@@ -180,9 +180,9 @@ class Masks (BufferBase):
     field2 = super(Masks,self)._decode(data, unused)
     # Apply the mask.
     if code1 == 2080:
-      return ((field1*field2) + self._fill_value * (1-field1)).astype(field2.dtypee)
+      return (((field1>0)*field2) + self._fill_value * (field1==0)).astype(field2.dtype)
     elif code2 == 2080:
-      return ((field1*field2) + self._fill_value * (1-field2)).astype(field1.dtype)
+      return ((field1*(field2>0)) + self._fill_value * (field2==0)).astype(field1.dtype)
     else:
       # Don't know how to apply this typvar for masking purposes.
       return field1
