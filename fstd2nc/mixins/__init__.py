@@ -399,7 +399,7 @@ class BufferBase (object):
         matches[infile] += 0
 
     # Decode all the headers
-    headers = [h for h in headers if h is not None]
+    headers = [h for h in headers if h is not None and len(h) > 0]
     # Remember indices in the headers (needed for reconstructing keys)
     indices = [range(len(h)) for h in headers]
     if len(headers) > 0:
