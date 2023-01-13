@@ -68,6 +68,8 @@ class RemoveStuff (BufferBase):
           shape = var.record_id.shape
           shape = shape[:i] + shape[i+1:]
           var.record_id = var.record_id.reshape(shape)
+    # Remove other dependencies.
+    var.deps = [d for d in var.deps if d.name not in self._exclude]
 
     # Remove all references to excluded vars from the metadata.
     for key,val in list(var.atts.items()):
