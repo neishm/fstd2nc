@@ -241,8 +241,7 @@ def decode_headers (raw):
 def raw_headers (filename):
   '''
   Extract record headers from the specified file.
-  Returns a dictionary similar to fstprm, only the entries are
-  vectorized over all records instead of 1 record at a time.
+  Returns a raw byte array with shape (nrec,72).
   NOTE: This includes deleted records as well.  You can filter them out using
         the 'dltf' flag.
 
