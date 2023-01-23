@@ -1,0 +1,618 @@
+# French translations for fstd2nc package
+# Traductions françaises du paquet fstd2nc.
+# Copyright (C) 2022 THE fstd2nc'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the fstd2nc package.
+# Automatically generated, 2022.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: fstd2nc\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-01-17 17:45+0000\n"
+"PO-Revision-Date: 2022-11-25 17:40+0000\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: fr_CA\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=ISO-8859-1\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#, python-format
+msgid "Warning: %s"
+msgstr "Avertissement: %s"
+
+#, python-format
+msgid "Error: %s"
+msgstr "Erreur: %s"
+
+#, python-format
+msgid "Display %s metadata in a structured format."
+msgstr "Afficher les métadonnées %s dans un format structuré."
+
+#, python-format
+msgid "The %s to query."
+msgstr "Le %s à interroger."
+
+msgid "Display the values for the specified variable."
+msgstr "Afficher les valeurs pour la variable spécifiée."
+
+msgid "problem opening one or more input files."
+msgstr "problème d'ouverture d'un ou plusieurs fichiers d'entrée."
+
+#, python-format
+msgid "Converts %s to netCDF format."
+msgstr "Convertit %s au format netCDF."
+
+#, python-format
+msgid "The %s to convert."
+msgstr "Le %s à convertir."
+
+msgid "The name of the netCDF file to create."
+msgstr "Le nom du fichier netCDF à créer."
+
+#, python-format
+msgid ""
+"How much information to print to stdout during the conversion.  Default is "
+"%(default)s."
+msgstr "Combien d'informations à imprimer sur stdout pendant de la conversion.  Le défaut est %(default)s"
+
+#, python-format
+msgid "Which variant of netCDF to write.  Default is %(default)s."
+msgstr "Quelle variante de netCDF écrire.  Le défaut est %(default)s."
+
+msgid ""
+"Turn on compression for the netCDF file.  Only works for NETCDF4 and "
+"NETCDF4_CLASSIC formats."
+msgstr "Activer la compression pour le fichier netCDF.  Ne Fonctionne que pour les formats NETCDF4 et NETCDF4_CLASSIC."
+
+#, python-format
+msgid ""
+"Compression level for the netCDF file. Only used if --zlib is set. Default: "
+"%(default)s."
+msgstr "Niveau de compression du fichier netCDF.  Ne utilisé que si --zlib est specifié.  Le défaut est %(default)s."
+
+msgid "Overwrite the output file if it already exists."
+msgstr "Remplacer le fichier de sortie s'il existe déjà."
+
+msgid "Don't put the command-line invocation in the netCDF metadata."
+msgstr "Ne placer pas l'invocation de la ligne de commande dans les métadonnées netCDF"
+
+msgid ""
+"Don't display any information except for critical error messages.  Implies --"
+"no-progress."
+msgstr "N'afficher pas quelque information moins les messages d'erreur critiques.  Implique --no-progress"
+
+#, python-format
+msgid "Warning: '%s' already exists!  Overwrite? (y/n):"
+msgstr "Avertissement: '%s' existe déjà!  Remplacer? (o/n):"
+
+msgid "Sorry, invalid response."
+msgstr "Désolé, réponse invalide."
+
+#, python-format
+msgid "Refusing to overwrite existing file '%s'."
+msgstr "Refus de remplacer le fichier existant '%s'."
+
+msgid "Aborted by user."
+msgstr "Annulé par l'utilisateur."
+
+msgid "NAME,NAME,..."
+msgstr "NOM,NOM,..."
+
+msgid ""
+"Exclude some axes, attributes,  or derived variables from the output.  For "
+"instance, excluding 'leadtime,reftime' can help for netCDF tools that don't "
+"recognize leadtime and reftime as valid coordinates.  Note that axes will "
+"only be excluded if they have a length of 1."
+msgstr "Exclure quelque axes, attributs, ou variables dérivées de la sortie.  Par exemple, l'exclusion de 'leadtime,reftime' peut aider les outils netCDF qui ne reconnaissent pas leadtime et reftime comme des coordonnées valides.  Notez que les axes ne seront exclus que s'ils ont une longueur de 1."
+
+#, python-format
+msgid ""
+"Subset %s records using the given criteria.  For example, to convert only 24-"
+"hour forecasts you could use --filter ip2==24"
+msgstr "Sous-ensemble d'enregistrements %s en utilisant les critères donnés.  Par exemple, pour convertir seulement les prévisions sur 24 heures, vous pouvez utiliser --filter ip2==24"
+
+#, python-format
+msgid "unable to apply the filter: %s"
+msgstr "impossible d'appliquer le filtre: %s"
+
+#, python-format
+msgid "unable to parse the filter: %s"
+msgstr "impossible d'analyser le filtre: %s"
+
+msgid "Define additional surface aggregate fields."
+msgstr "Définir des champs d'agrégats de surface additionnel."
+
+#, python-format
+msgid "Define custom depths for soil fields (%s).  Defaults are %%(default)s."
+msgstr "Définir des profondeurs personnalisée pour les champs de sol (%s).  Les défauts sont %%(default)s."
+
+msgid "Unable to parse soil-depths parameter."
+msgstr "Impossible d'analyser le paramètre 'soil-depths'."
+
+msgid ""
+"More than the expected number of soil depths were found.  No depth values "
+"will be encoded."
+msgstr "Plus que le nombre prévu de profondeurs de sol ont été trouvées.  Aucune valeur de profondeur ne sera encodée."
+
+msgid ""
+"For data on supergrids, split the subgrids along a \"subgrid\" axis.  The "
+"default is to leave the subgrids stacked together as they are in the RPN "
+"file."
+msgstr "Pour les données sur les 'supergrids', divisez les grilles sur une axe \"subgrid\".  Le défaut est garder les sous-grilles ensemble comme elles sont dans le fichier RPN."
+
+msgid "Include LA and LO records, even if they appear to be redundant."
+msgstr "Inclure les enregstrement LA et LO, même s'ils semblent redondants."
+
+msgid ""
+"For rotated grids, do NOT adjust rlon coordinate to keep the range in "
+"-180..180.  Allow the rlon value to be whatever librmn says it should be."
+msgstr "Pour les grilles tournées, n'ajustez PAS la coordonnée rlon pour conserver la plage entre -180..180.  Utilise la plage que vient de librmn."
+
+msgid "Include grid cell boundaries in the output."
+msgstr "Inclure les limites des cellules de grille dans la sortie."
+
+#, python-format
+msgid "Unable to get lat/lon coordinates for '%s'"
+msgstr "Impossible d'obtenir les coordonnées lat/lon pour '%s'"
+
+#, python-format
+msgid "Wrong shape of lat/lon for '%s'"
+msgstr "Mauvaise forme de lat/lon pour '%s'"
+
+#, python-format
+msgid "Unusual grid axes for '%s' - ignoring."
+msgstr "Axes de grille inhabituels pour '%s' - ignorés."
+
+msgid "Comma-separated list of variables that use momentum levels."
+msgstr "Liste de variables séparées par des virgules qui utilisent des niveaux thermodynamiques."
+
+msgid "Comma-separated list of variables that use thermodynamic levels."
+msgstr "Liste de variables séparées par des virgules qui utilisent des niveaux momentum."
+
+msgid "Assume the bottom level of the profile data is missing."
+msgstr "Supposer que le niveau final des données de profil est manquant."
+
+msgid "Wrong number of momentum levels found in the data."
+msgstr "Mauvais nombre de niveaux momentum trouvés dans les données."
+
+msgid "Wrong number of thermodynamic levels found in the data."
+msgstr "Mauvais nombre de niveaux thermodynamique trouvés dans les données."
+
+#, python-format
+msgid "Unable to find the vertical coordinates for %s."
+msgstr "Impossible de trouver les coordonnées verticales pour %s."
+
+msgid ""
+"Can't use datev for timeseries data with multiple dates of origin.  Try re-"
+"running with the --dateo option."
+msgstr "Impossible d'utiliser datev pour les données de séries temporelles avec plusieurs dates d'origine.  Assayez relancer avec l'option --dateo."
+
+#, python-format
+msgid ""
+"The fill value to use for masked (missing) data.  Gets stored as "
+"'_FillValue' attribute in the metadata.  Default is '%(default)s'."
+msgstr "La valeur de remplissage à utiliser pour les données masquées (manquantes).  Enregistré en tant qu'attribut '_FillValue' dans les métadonnées.  Le défaut est '%(default)s'."
+
+#, python-format
+msgid "Can't set fill value '%g' for %s."
+msgstr "Impossible de définir la valeur de replissage '%g' pour %s."
+
+msgid ""
+"Comma-separated list of variables to convert.  By default, all variables are "
+"converted."
+msgstr "Liste de variables séparées par des virgules à convertir.  Par défaut, toutes les variables sont converties."
+
+msgid "Will look for variables: "
+msgstr "Cherchera des variables: "
+
+msgid "Unable to find variable(s): "
+msgstr "Impossible de trouver la ou les variables: "
+
+msgid "Nothing to convert."
+msgstr "Rein à convertir."
+
+msgid ""
+"Use metadata from the specified file.  You can repeat this option multiple "
+"times to build metadata from different sources."
+msgstr "Utiliser les métadonnées du fichier spécifié."
+
+msgid "Apply the specified name changes to the variables."
+msgstr "Appliquer les changes de nom spécifiés aux variables."
+
+#, python-format
+msgid ""
+"Set the \"Conventions\" attribute for the netCDF file.  Default is "
+"\"%(default)s\".  Note that this has no effect on the structure of the file."
+msgstr "Définir l'attribut \"Conventions\" pour le fichier netCDF.  Le défaut est \"%(default)s\".  Notez que cela n'a aucun effet sur la structure du fichier."
+
+msgid ""
+"Omit the \"Conventions\" attribute from the netCDF file entirely.  This can "
+"help for netCDF tools that have trouble recognizing the CF conventions "
+"encoded in the file."
+msgstr "Omettre entièrement l'attribut \"Conventions\" du fichier netCDF."
+
+msgid "Unable to parse the rename arguments."
+msgstr "Impossible d'analyser les arguments de renommage."
+
+#, python-format
+msgid "The units for the output time axis.  Default is %(default)s."
+msgstr "Les unités de l'axe du temps de sortie.  Le défaut est %(default)s."
+
+msgid "YYYY-MM-DD"
+msgstr "AAAA-MM-JJ"
+
+#, python-format
+msgid ""
+"The reference date for the output time axis.  The default is the starting "
+"date in the %s."
+msgstr "La date de référence pour l'axe de temps de sortie.  Le défaut est la date de début dans le %s."
+
+#, python-format
+msgid "Unable to parse the reference date '%s'.  Expected format is '%s'"
+msgstr "Impossible d'analyser la date de référence '%s'.  Format attendu est '%s'"
+
+#, python-format
+msgid "Multiple %s axes.  Appending integer suffixes to their names."
+msgstr "Plusiers axes %s.  Ajout de suffixes entiers à leurs noms."
+
+#, python-format
+msgid "Multiple definitions of %s.  Adding unique suffixes %s."
+msgstr "Plusiers définitions de %s.  Ajout de suffixes unique %s."
+
+#, python-format
+msgid "Renaming '%s' to '_%s'."
+msgstr "Renommer '%s' en '_%s'."
+
+#, python-format
+msgid "netCDF3 does not support unsigned ints.  Converting %s to signed int."
+msgstr "netCDF3 ne prend pas en charge les entiers non signés.  Convertis %s en entier signé."
+
+msgid "No relevant FST records were found."
+msgstr "Aucun enregistrement FST pertinent n'a été trouvé."
+
+msgid "Saving netCDF file"
+msgstr "Enregistrement du fichier netCDF."
+
+#, python-format
+msgid "Internal problem with the script - unable to get data for '%s'"
+msgstr "Problème interne avec le script - impossible d'obtenir les données pour '%s'"
+
+msgid ""
+"Collect different etikets for the same variable together into an \"ensemble"
+"\" axis."
+msgstr "Rassembler différentes etikets pour la même variable ensemble dans une axe \"ensemble\"."
+
+msgid ""
+"Raw binary records detected.  The values may not be properly decoded if "
+"you're opening on a different platform."
+msgstr "Enregistrements binaires bruts détectés."
+
+msgid "RPN standard file"
+msgstr "fichier standard RPN"
+
+msgid "An RPN standard file"
+msgstr "Un fichier standard RPN"
+
+msgid "RPN standard file(s)"
+msgstr "fichier(s) standard"
+
+msgid ""
+"Tells the converter to ignore the typvar when deciding if two records are "
+"part of the same field.  Default is to split the variable on different "
+"typvars."
+msgstr "Indique au convertisseur d'ignorer la typvar lorsqu'il décide si deux enregistrements font partie du même champ.  Le défaut est de diviser la variable sur différents typvars."
+
+msgid ""
+"Tells the converter to ignore the etiket when deciding if two records are "
+"part of the same field.  Default is to split the variable on different "
+"etikets."
+msgstr "Indique au convertisseur d'ignorer l'etiket lorsqu'il décide si deux enregistrements font partie du même champ.  Le défaut est de diviser la variable sur différents etikets."
+
+msgid "Holy crap, how many coordinates do you have???"
+msgstr "Zut alors, combien de coordinnées avez-vous???"
+
+msgid ""
+"Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the "
+"IG1/IG2/IG3 paramters of the field in order to be used.  The default "
+"behaviour is to use the vertical record anyway if it's the only one in the "
+"file."
+msgstr "Exiger que les paramètres IP1/IP2/IP3 de la coordonnée verticale correspondent aux paramètres IG1/IG2/IG3 du champ afin d'être utilisés.  La comportement par défaut est d'utiliser l'enregistrement vertical de toute façon s'il est le seul dans le fichier."
+
+msgid ""
+"Treat diagnostic (near-surface) data as model level '1.0'.  This is the "
+"default behaviour."
+msgstr "Traiter les données diagnostic (près de la surface) comme niveau de modèle '1.0'. Ceci est la comportement par défaut."
+
+msgid ""
+"Put the diagnostic (near-surface) data in a separate variable, away from the "
+"3D model output.  Suffices will be added to distinguish the different types "
+"of levels (i.e. _diag_level and _model_levels for diagnostic height and "
+"hybrid levels respectively)."
+msgstr "Placer les données diagnostic (près de la surface) dans une variable séparée, loin de la sortie du modèle 3D."
+
+msgid "Ignore data on diagnostic (near-surface) height."
+msgstr "Ignorer les données sur la hauteur diagnostique (près de la surface)."
+
+msgid ""
+"Only use the diagnostic (near-surface) height, ignoring other atmospheric "
+"levels."
+msgstr "Utiliser seulement la hauteur diagnostique (près de la surface), en ignorant les autres niveaux atmosphériques."
+
+msgid "Only convert data that's on 'thermodynamic' vertical levels."
+msgstr "Convertir seulement les données qui se trouvent sur des niveaux verticaux 'thermodynamiques'."
+
+msgid "Only convert data that's on 'momentum' vertical levels."
+msgstr "Convertir seulement les données qui se trouvent sur des niveaux verticaux 'momentum'."
+
+msgid "Only convert data that's on 'vertical velocity' levels."
+msgstr "Convertir seulement les données qui se trouvent sur des niveaux 'vitesse verticale'."
+
+msgid "Unable to parse thermodynamic levels from the vertical coordinate"
+msgstr "Impossible d'analyser les niveaux thermodynamiques à partir de la coordonnée verticale"
+
+msgid "Unable to parse momentum levels from the vertical coordinate"
+msgstr "Impossible d'analyser les niveaux momentum à partir de la coordonnée verticale"
+
+msgid "Unable to parse vertical velocity levels from the vertical coordinate"
+msgstr "Impossible d'analyser les niveaux vitesse verticale à partir de la coordonnée verticale"
+
+msgid "Problem decoding !! record."
+msgstr "Problème de décodage de l'enregistrement !!."
+
+#, python-format
+msgid "Unable to get A/B coefficients for %s."
+msgstr "Impossible d'obtenir les coefficients A/B pour %s."
+
+msgid ""
+"Mixture of model / height levels found.  This will cause multiple "
+"definitions of variables in the output.  If this is undesired, you could try "
+"using --ignore-diag-level or --diag-as-model-level."
+msgstr "Mélange de niveaux de modèle / hauteur trouvés. Cela entraînera plusieurs définitions de variables dans la sortie.  Si cela est indésirable, vous pouvez essayer d'utiliser --ignore-diag-level ou --diag-as-model-level."
+
+#, python-format
+msgid ""
+"Having trouble treating %s diagnostic level as model level - splitting into "
+"a separate field."
+msgstr "Problème de traitement du niveau de diagnostic de %s comme niveau de modèle - le divise dans un champ séparé."
+
+msgid ""
+"Display a progress bar during the conversion, if the \"progress\" module is "
+"installed."
+msgstr "Affiche une barre de progression pendant de la conversion, si le module \"progress\" est installé."
+
+msgid "Disable the progress bar."
+msgstr "Désactiver la barre de progression."
+
+msgid ""
+"Disables multithreading/multiprocessing.  Useful for resource-limited "
+"machines."
+msgstr "Désactiver le multithreading/multitraitement.  Utile pour les machines à ressources limitées."
+
+msgid ""
+"Don't include internal record attributes and other internal information in "
+"the output metadata."
+msgstr "Ne pas inclure les attributs d'enregistrement internes et d'autres informations internes dans les métadonnées de sortie."
+
+msgid "This is the default behaviour."
+msgstr "Ceci est la comportement par défaut."
+
+msgid "Include all internal record attributes in the output metadata."
+msgstr "Inclure tous les attributs d'enregistrement internes dans les métadonnées de sortie."
+
+msgid ""
+"Specify a minimal set of internal record attributes to include in the output "
+"file."
+msgstr "Spécifier un ensemble minimal d'attributs d'enregistrement internes à inclure dans le fichier de sortie."
+
+#, python-format
+msgid "Unexpected arguments: %s"
+msgstr "Arguments inattendus: %s"
+
+msgid "Inspecting input files"
+msgstr "Inspection des fichiers d'entrée"
+
+#, python-format
+msgid "'%s' is not %s."
+msgstr "'%s' n'est pas %s."
+
+#, python-format
+msgid "Directory '%s' does not contain any %s."
+msgstr "Le répertoire '%s' ne contient aucun %s."
+
+#, python-format
+msgid "No %s match '%s'."
+msgstr "Aucun %s ne correspond à '%s'."
+
+#, python-format
+msgid "'%s' does not exist."
+msgstr "'%s' n'existe pas."
+
+#, python-format
+msgid "Problem with input file '%s'"
+msgstr "Probleme avec fichier d'entrée '%s'"
+
+msgid "no input files found!"
+msgstr "aucun fichier d'entrée sont trouvé!"
+
+#, python-format
+msgid "Found %d %s"
+msgstr "Trouve %s %s"
+
+#, python-format
+msgid "Missing some records for %s."
+msgstr "Quelque enregistrements manquants pour %s sont."
+
+msgid "Use metadata from the specified variable dictionary (XML format)."
+msgstr "Utiliser les métadonnées du dictionnaire de variables spécifié (format XML)."
+
+msgid "Similar to above, but use the standard CMC-RPN operational dictionary."
+msgstr "Similaire à ce qui précéde, mais utilise le dictionnaire opérationnel standard CMC-RPN."
+
+msgid "$AFSISIO undefined.  Can't find operational dictionary."
+msgstr "$AFSISIO non défini.  Impossible de trouver le dictionnaire opérationnel."
+
+msgid ""
+"Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary."
+"xml"
+msgstr "Impossible de trouver $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary."
+
+#, python-format
+msgid "Unable to find '%s'"
+msgstr "Impossible de trouver '%s'"
+
+#, python-format
+msgid "Invalid dictionary file '%s'"
+msgstr "Le fichier de dictionnare '%s' est invalide."
+
+msgid "Use the date of validity for the \"time\" axis.  This is the default."
+msgstr "Utiliser la date de validité pour l'axe \"time\".  Ceci est le défaut."
+
+msgid ""
+"Use the date of original analysis for the time axis, and put the forecast "
+"times into a separate \"forecast\" axis."
+msgstr "Utiliser la date d'analyse d'origine pour l'axe temporel, et placer les heurs de prévision dans un axe \"forecast\" séparé."
+
+msgid ""
+"Adds a compatibility layer to the netCDF output file, so it can also "
+"function as a valid FSTD file.  EXPERIMENTAL."
+msgstr "Ajoute une couche de compatibilité au fichier de sortie netCDF, qu'il puisse également fonctionner comme un fichier FSTD valide.  EXPÉRIMENTAL."
+
+#, python-format
+msgid ""
+"Problem writing compatible record for %s:%s.  Writing separate netCDF / FSTD "
+"versions instead."
+msgstr "Probleme d'ecriture d'enregistrement compatible pour %s:%s.  Écrire des versions distinct de netCDF / FSTD à la place."
+
+#, python-format
+msgid "Unknown grid '%s'"
+msgstr "Grille inconnue '%s'"
+
+msgid "Select first subgrid from a supergrid."
+msgstr "Sélectionner la première sous-grille d'une super grille."
+
+msgid "Select second subgrid from a supergrid."
+msgstr "Sélectionner la deuxième sous-grille d'une super grille."
+
+msgid "Crop grids to the smaller (inner core) domain for LAM outputs."
+msgstr "Couper les grilles au domaine plus petit (noyau interne) pours les sorties LAM."
+
+msgid "usage: "
+msgstr "usage: "
+
+msgid ".__call__() not defined"
+msgstr ".__call__() non défini"
+
+#, python-format
+msgid "unknown parser %(parser_name)r (choices: %(choices)s)"
+msgstr "Analyseur inconnue %(parser_name)r (choix: %(choices)s)"
+
+#, python-format
+msgid "argument \"-\" with mode %r"
+msgstr "argument \"-\" avec le mode %r"
+
+#, python-format
+msgid "can't open '%s': %s"
+msgstr "impossible d'ouvrir '%s': %s"
+
+#, python-format
+msgid "cannot merge actions - two groups are named %r"
+msgstr "impossible de fusionner les actions - deux groupes sont nommés %r"
+
+msgid "'required' is an invalid argument for positionals"
+msgstr "'required' est un argument invalide pour les positionnels"
+
+#, python-format
+msgid ""
+"invalid option string %(option)r: must start with a character "
+"%(prefix_chars)r"
+msgstr "chaîne d'option invalide %(option)r: doit commencer par un caractère %(prefix_chars)r."
+
+#, python-format
+msgid "dest= is required for options like %r"
+msgstr "dest= est requis pour les options comme %r"
+
+#, python-format
+msgid "invalid conflict_resolution value: %r"
+msgstr "valeur conflict_resolution invalide: %r"
+
+#, python-format
+msgid "conflicting option string: %s"
+msgid_plural "conflicting option strings: %s"
+msgstr[0] "chaîne d'option en conflit: %s"
+msgstr[1] "chaînes d'options en conflit: %s"
+
+msgid "mutually exclusive arguments must be optional"
+msgstr "les arguments mutuellement exclusifs doivent être optionnel."
+
+msgid "positional arguments"
+msgstr "arguments positionnels"
+
+msgid "optional arguments"
+msgstr "arguments optionnel"
+
+msgid "show this help message and exit"
+msgstr "afficher ce message d'aide et quitter"
+
+msgid "cannot have multiple subparser arguments"
+msgstr "impossible d'avoir plusiers arguments de sous-analyseur"
+
+#, python-format
+msgid "unrecognized arguments: %s"
+msgstr "arguments inconnus: %s"
+
+#, python-format
+msgid "not allowed with argument %s"
+msgstr "non autorisé avec l'argument %s"
+
+#, python-format
+msgid "ignored explicit argument %r"
+msgstr "ignoré l'argument explicite %r"
+
+#, python-format
+msgid "the following arguments are required: %s"
+msgstr "les arguments suivants sont requis: %s"
+
+#, python-format
+msgid "one of the arguments %s is required"
+msgstr "un des arguments %s est requis"
+
+msgid "expected one argument"
+msgstr "attendu un argument"
+
+msgid "expected at most one argument"
+msgstr "attendu au plus un argument"
+
+msgid "expected at least one argument"
+msgstr "attendu au moins un argument"
+
+#, python-format
+msgid "expected %s argument"
+msgid_plural "expected %s arguments"
+msgstr[0] "attendu %s argument"
+msgstr[1] "attendu %s arguments"
+
+#, python-format
+msgid "ambiguous option: %(option)s could match %(matches)s"
+msgstr "option ambiguë: %(option)s peut correspondre à %(matches)s"
+
+#, python-format
+msgid "unexpected option string: %s"
+msgstr "chaîne d'option inattendu: %s"
+
+#, python-format
+msgid "%r is not callable"
+msgstr "%r n'est pas appelable"
+
+#, python-format
+msgid "invalid %(type)s value: %(value)r"
+msgstr "valeur de %(type)s invalide: %(value)r"
+
+#, python-format
+msgid "invalid choice: %(value)r (choose from %(choices)s)"
+msgstr "choix invalide: %(value)r (choisissez entre %(choices)s)"
+
+#, python-format
+msgid "%(prog)s: error: %(message)s\n"
+msgstr "%(prog)s: erreur: %(message)s\n"

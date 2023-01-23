@@ -165,7 +165,7 @@ class netCDF_IO (BufferBase):
       try:
         datetime.strptime(args.reference_date,'%Y-%m-%d')
       except ValueError:
-        parser.error(_("Unable to to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
+        parser.error(_("Unable to parse the reference date '%s'.  Expected format is '%s'")%(args.reference_date,_('YYYY-MM-DD')))
 
   def __init__ (self, *args, **kwargs):
     self._time_units = kwargs.pop('time_units','hours')

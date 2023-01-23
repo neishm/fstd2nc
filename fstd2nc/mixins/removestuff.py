@@ -30,7 +30,7 @@ class RemoveStuff (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(RemoveStuff,cls)._cmdline_args(parser)
-    parser.add_argument('--exclude', metavar='NAME,NAME,...', help=_("Exclude some axes, attributes,  or derived variables from the output.  For instance, excluding 'leadtime,reftime' can help for netCDF tools that don't recognize leadtime and reftime as valid coordinates.  Note that axes will only be excluded if they have a length of 1."))
+    parser.add_argument('--exclude', metavar=_('NAME,NAME,...'), help=_("Exclude some axes, attributes,  or derived variables from the output.  For instance, excluding 'leadtime,reftime' can help for netCDF tools that don't recognize leadtime and reftime as valid coordinates.  Note that axes will only be excluded if they have a length of 1."))
 
   def __init__ (self, *args, **kwargs):
     """

@@ -63,7 +63,7 @@ class Sfc_Codes (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(Sfc_Codes,cls)._cmdline_args(parser)
-    parser.add_argument('--sfc-agg-vars', metavar='NAME,NAME,...', help=_('Define additional surface aggregate fields.'))
+    parser.add_argument('--sfc-agg-vars', metavar=_('NAME,NAME,...'), help=_('Define additional surface aggregate fields.'))
     parser.add_argument('--soil-depths', default=default_soil_depths, help=_('Define custom depths for soil fields (%s).  Defaults are %%(default)s.')%(','.join(soil_depth_nomvars)))
 
   def __init__ (self, *args, **kwargs):
