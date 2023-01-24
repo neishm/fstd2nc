@@ -21,6 +21,18 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+# Override dtype_numpy2fst to work around issue with numpy >= 1.20.
+# TODO: remove this once public release of Pyton-RPN is updated.
+def dtype_numpy2fst (dtype, compress=False, missing=False):
+  import rpnpy.librmn.all as rmn
+  from rpnpy.librmn.const import FST_DATYP2NUMPY_LIST, FST_DATYP2NUMPY_LIST64
+  assert compress is False and missing is False
+  for (i, d) in FST_DATYP2NUMPY_LIST.items():
+    if dtype == d: return i
+  for (i, d) in FST_DATYP2NUMPY_LIST64.items():
+    if dtype == d: return i
+  return 0
+
 #################################################
 # Mixin for adding a compatibility layer to the netCDF output file, so it can
 # also function as a valid FSTD file.
@@ -141,7 +153,8 @@ class FSTD_Compat (BufferBase):
         # big-endian variables (https://github.com/Unidata/netcdf-c/issues/1802).
         # The current approach of writing attributes wastes more space (a few
         # dozen kilobytes?) but it seems to do the job.
-        f.setncattr('_pad%05d'%npad[0], np.zeros(4096+(8-alignment),dtype='B'))
+        #f.setncattr('_pad%05d'%npad[0], np.zeros(4096+(8-alignment),dtype='B'))
+        f.setncattr('_pad%05d'%npad[0], np.zeros(0+(npad[0]%7),dtype='B'))
         npad[0] += 1
       # Next, write the data
       address = getsize(filename)
@@ -159,7 +172,7 @@ class FSTD_Compat (BufferBase):
           if not np.all(test==array):
             return None
       # Determine which FST datyp would decode this data.
-      datyp = rmn.dtype_numpy2fst(v.dtype.newbyteorder('='), compress=False, missing=False)
+      datyp = dtype_numpy2fst(v.dtype.newbyteorder('='), compress=False, missing=False)
       # Floating-point must be IEEE, which is what netCDF4 would have written.
       if datyp == 1:
         datyp = 5
@@ -307,7 +320,13 @@ class FSTD_Compat (BufferBase):
       # If not, then write it using the original FSTD parameters.
       # This data wasn't used for the netCDF4 interface, so don't have to worry
       # about making it netCDF-compatible.
+
+      #TODO: clean up this hack once public release of Python-RPN is updated.
+      from rpnpy.librmn import fstd98
+      backup = fstd98.dtype_numpy2fst
+      fstd98.dtype_numpy2fst = dtype_numpy2fst
       rmn.fstecr(iun,d)
+      fstd98.dtype_numpy2fst = backup
       # Keep track of where the data was written.
       prm = rmn.fstprm(rmn.fstinl(iun)[-1])
       chunk_addresses[rec_id] = (prm['swa']-1)*8+72, (prm['lng']*4)-96, d['datyp'], d['nbits']
@@ -450,5 +469,7 @@ class FSTD_Compat (BufferBase):
       f.seek(0x10,0)
       np.array([filesize//8],'>i4').tofile(f)
       # Update file size info (netCDF header)
-      f.seek(0x8028,0)
-      np.array([filesize],'<i4').tofile(f)
+      # (disabled, since it seems to corrupt the netCDF file under some circumstances?)
+      # (could be related to deletion of pad attributes)
+      #f.seek(0x8028,0)
+      #np.array([filesize],'<i4').tofile(f)
