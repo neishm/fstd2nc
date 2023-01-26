@@ -1,3 +1,17 @@
+Version 0.20221124.1 (Jan 26, 2023)
+	* Allow fstd2nc to be "pip install"ed from an environment that doesn't
+	  yet have numpy installed.  Installation no longer fails with a weird
+	  error message.
+	* Fix buggy behaviour when there's a mask field with values > 1.
+	  E.g., values of "2" sometimes represent partially submerged points.
+	  Now treat such points the same as mask value "1" (keep grid point).
+	* Handle edge case where one of multiple FST input files does not
+	  contain any records.
+	* Fix --exclude option to properly remove leadtime/reftime again. These
+	  stopped being excludable after some recent code updates in previous
+	  release.
+	* Fix various bugs in --fstd-compat option.
+
 Version 0.20221124.0 (Nov 24, 2022)
 	* New .to_xarray_list() method to return list of variables wrapped in
 	  individual Datasets.
