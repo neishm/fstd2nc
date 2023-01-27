@@ -63,14 +63,24 @@ class Sfc_Codes (BufferBase):
   @classmethod
   def _cmdline_args (cls, parser):
     super(Sfc_Codes,cls)._cmdline_args(parser)
+    parser.add_argument('--sfc-agg-vars', metavar='NAME,NAME,...', help=_('Define additional surface aggregate fields.'))
     parser.add_argument('--soil-depths', default=default_soil_depths, help=_('Define custom depths for soil fields (%s).  Defaults are %%(default)s.')%(','.join(soil_depth_nomvars)))
 
   def __init__ (self, *args, **kwargs):
     """
+    sfc_agg_vars : str or list, optional
+        Define additional surface aggregate fields.
     soil_depths : str or list, optional
         Define custom depths for soil fields.
     """
     import numpy as np
+    sfc_agg_vars = kwargs.pop('sfc_agg_vars',None)
+    if sfc_agg_vars is None:
+      sfc_agg_vars = []
+    if isinstance(sfc_agg_vars,str):
+      sfc_agg_vars = sfc_agg_vars.replace(',', ' ')
+      sfc_agg_vars = sfc_agg_vars.split()
+    self._sfc_agg_nomvars = sfc_agg_nomvars + tuple(sfc_agg_vars)
     soil_depths = kwargs.pop('soil_depths',default_soil_depths)
     try:
       if isinstance(soil_depths,str):
@@ -101,7 +111,7 @@ class Sfc_Codes (BufferBase):
       coordinates = []
 
       # Handle surface type codes.
-      if var.name in sfc_agg_nomvars:
+      if var.name in self._sfc_agg_nomvars:
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
           codenames = tuple(sfc_agg_codes.get(code,"unknown") for code in codes)
