@@ -51,6 +51,7 @@ sfc_agg_nomvars = (
   'DQST','DQSZ','TDST','TDSZ','TJST','TJSZ','UDST','UDSZ',
   'VDST','VDSZ','RTSU','RTHD','DXSU','DXHD','GXSU','GXHD',
   'GTSU','GTHD','WBT','QSSU','QSSK','QLSK','QSRD','QLRD',
+  'SWE',
 )
 
 # List of variables that use a soil depth coordinate.
