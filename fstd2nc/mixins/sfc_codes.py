@@ -47,7 +47,10 @@ sfc_agg_codes = {
 #  git grep 'ON=.*nagg' | sed 's/.*ON=//;s/ .*//'
 sfc_agg_nomvars = (
   'AL','BT','FC','B5','FT','FV','HF','H1','IO','J9','Z0',
-  'ZT','WT','SD','7A','TRAF'
+  'ZT','WT','SD','7A','TRAF',
+  'DQST','DQSZ','TDST','TDSZ','TJST','TJSZ','UDST','UDSZ',
+  'VDST','VDSZ','RTSU','RTHD','DXSU','DXHD','GXSU','GXHD',
+  'GTSU','GTHD','WBT','QSSU','QSSK','QLSK','QSRD','QLRD',
 )
 
 # List of variables that use a soil depth coordinate.
