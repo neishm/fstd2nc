@@ -1,3 +1,5 @@
+[Version française](README_fr.md)
+
 Overview
 ========
 This module provides a mechanism for converting between FSTD and netCDF file formats, either through Python or the command-line.
@@ -18,7 +20,7 @@ Basic Usage
 From the command-line
 ---------------------
 ```
-python -m fstd2nc [options] <infile> <outfile>
+python -m fstd2nc [options] <infile(s)> <outfile>
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -174,7 +176,7 @@ data = fstd2nc.Buffer("myfile.fst")
 data.to_netcdf("myfile.nc")
 ```
 
-You can control `fstd2nc.Buffer` using parameters similar to the command-line arguments.  The usual convention is *--arg-name* from the command-line would be passed as *arg_name* from Python.
+You can control `fstd2nc.Buffer` using parameters similar to the command-line arguments.  The convention is that *--arg-name* from the command-line would be passed as *arg_name* from Python.
 
 For example:
 ```python
