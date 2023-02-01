@@ -160,12 +160,12 @@ class FSTD (BufferBase):
         
   # Control the pickling / unpickling of BufferBase objects.
   def __getstate__ (self):
-    state = super(self,FSTD).__getstate__()
+    state = super(FSTD,self).__getstate__()
     state.pop('_lock',None)  # librmn lock will be defined upon unpickling.
     state.pop('_meta_funit',None) # Same with librmn file handles.
     return state
   def __setstate__ (self, state):
-    super(self,FSTD).__setstate__(state)
+    super(FSTD,self).__setstate__(state)
     self._lock = _lock
     self._open_meta_funit()
 
