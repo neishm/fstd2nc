@@ -20,7 +20,10 @@
 
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
-import collections
+try:
+  from collections import Callable
+except ImportError:  # Python 3.10
+  from collections.abc import Callable
 
 #################################################
 # Provide various external array interfaces for the FSTD data.
@@ -38,7 +41,7 @@ class _RecordOrder (object):
         new_work = []
         for w in work:
             typ = type(w)
-            if typ is tuple and w and isinstance(w[0], collections.Callable):  # istask(w)
+            if typ is tuple and w and isinstance(w[0], Callable):  # istask(w)
                 if w[0] is _read_block:
                   return w[1], w[2]
                 else:
