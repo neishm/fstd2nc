@@ -313,6 +313,7 @@ class BufferBase (object):
     from glob import glob, has_magic
     import os
     from multiprocessing import Pool
+    from pathlib import Path
     try:
       from itertools import imap  # Python 2
     except ImportError:
@@ -323,7 +324,7 @@ class BufferBase (object):
 
     self._serial = serial
 
-    if isinstance(filename,str):
+    if isinstance(filename,(str,Path)):
       infiles = [filename]
     else:
       infiles = list(filename)
@@ -331,6 +332,8 @@ class BufferBase (object):
     # Apply wildcard and directory expansion to filenames.
     expanded_infiles = []
     for infile in infiles:
+      if isinstance(infile,Path):
+        infile = str(infile)
       for f in sorted(glob(infile)) or [infile]:
         if os.path.isdir(f):
           for dirpath, dirnames, filenames in os.walk(f,followlinks=True):
