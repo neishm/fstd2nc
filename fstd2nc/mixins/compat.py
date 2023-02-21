@@ -53,26 +53,30 @@ class FSTD_Compat (BufferBase):
     """
 
     # Check if compatibility interface should be activated.
-    self._fstd_compat = kwargs.pop('fstd_compat', False)
-    if self._fstd_compat:
+    fstd_compat = kwargs.pop('fstd_compat', False)
+    if fstd_compat:
       self.to_netcdf = self._to_netcdf_compat
     super(FSTD_Compat,self).__init__(*args,**kwargs)
 
-  # Override fstluk to keep track of which FST records were used in the
+  # Simulate 'fstluk' call (returning data + parameters).
+  # This will also keep track of which FST records were used in the
   # conversion.  The header information for these records will be added to the
   # output file.
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
-    import numpy as np
-    if not self._fstd_compat:
-      return super(FSTD_Compat,self)._fstluk(rec_id, dtype, rank, dataArray)
-    if not hasattr(self,'_used_rec_ids'):
-      self._used_rec_ids = []
-    # If rec_id is a dict from rpnpy, then convert it to an index.
-    if isinstance(rec_id,dict):
-      key = rec_id['key']>>10
-      rec_id = int(np.where(self._headers['key']==key)[0])
-    self._used_rec_ids.append(rec_id)
-    return super(FSTD_Compat,self)._fstluk (rec_id, dtype=dtype, rank=rank, dataArray=dataArray)
+    from rpnpy.librmn.fstd98 import fstluk
+
+    # Lock the opened file so another thread doesn't close it.
+    with self._lock:
+      # Open the file and get the proper key.
+      file_id = self._headers['file_id'][rec_id]
+      self._open(file_id)
+      key = int(self._headers['key'][rec_id]<<10) + self._opened_librmn_index
+
+      if not hasattr(self,'_used_rec_ids'):
+        self._used_rec_ids = []
+      self._used_rec_ids.append(rec_id)
+
+      return fstluk (key, dtype, rank, dataArray)
 
   def _to_netcdf_compat (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False, turbo=False):
     """

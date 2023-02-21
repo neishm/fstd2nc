@@ -97,12 +97,12 @@ def _fstdump (buffer_type=Buffer):
           values = var.array
         elif hasattr(var,'record_id'):
           import numpy as np
-          values = np.array([buf._fstluk(rec)['d'].T for rec in var.record_id.flatten()])
+          values = np.array([buf._read_record(rec) for rec in var.record_id.flatten()])
         elif hasattr(var,'chunks'):
           import numpy as np
           values = np.zeros(var.shape,var.dtype)
           for ind, rec in var.items():
-            values[ind] = buf._fstluk(rec)['d'].T
+            values[ind] = buf._read_record(rec)
         else:
            continue
         # Build string values?

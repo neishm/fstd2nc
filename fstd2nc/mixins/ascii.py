@@ -39,7 +39,7 @@ class ASCII (BufferBase):
 
       # Decode GenPhysX META record and MLDPn INFO record.
       if isinstance(var,_iter_type) and var.name in ("META","INFO") and var.dtype == np.uint32 and var.record_id.size == 1 and var.atts['nj'] == 1:
-        array = self._fstluk(var.record_id.flatten()[0])['d'].flatten()
+        array = self._read_record(var.record_id.flatten()[0]).flatten()
         dim = _dim_type(var.name+'_strlen',array.size)
         array = np.asarray(array,'uint8').view('|S1')
         self._varlist[i] = _var_type(var.name,{},[dim],array)

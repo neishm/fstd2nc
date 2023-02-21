@@ -407,23 +407,6 @@ class ExternInput (BufferBase):
 
     return b
 
-  # Handle external data sources.
-  # Overrides the usual reading of data from a file.
-  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
-    import numpy as np
-    # Check if there is custom data enabled for this Buffer.
-    if hasattr(self, '_extern_table'):
-      # Make sure we are looking for something in our list of records.
-      # (could be a key pointing into something else?)
-      if not isinstance(rec_id,dict):
-        # Extract the record info from the table.
-        rec = self._extern_table.iloc[rec_id].to_dict()
-        # Load the data (if delayed).
-        rec['d'] = np.asarray(rec['d'])
-        return rec
-    # Otherwise, continue as usual.
-    return super(ExternInput,self)._fstluk (rec_id, dtype, rank, dataArray)
-
   # Handle external data for _decode method.
   # In this case, the first argument is ignored (no file data was read).
   def _decode (self, maybe_data, rec_id):

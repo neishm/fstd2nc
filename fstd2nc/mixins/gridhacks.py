@@ -97,36 +97,6 @@ class Interp (BufferBase):
         if isinstance(var,_iter_type):
           var.atts['_FillValue'] = var.dtype.type(self._fill_value)
 
-  # Handle grid interpolation
-  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None, _grid_cache={}):
-    import rpnpy.librmn.all as rmn
-    import numpy as np
-    grid_params = ('ni','nj','grtyp','ig1','ig2','ig3','ig4')
-    if not hasattr(self,'_interp_grid') or self._headers['ismeta'][rec_id] == 1:
-      return super(Interp,self)._fstluk (rec_id, dtype, rank, dataArray)
-    with self._lock:
-      prm = super(Interp,self)._fstluk(rec_id, dtype, rank, dataArray)
-      cache_key = tuple(prm[k] for k in grid_params)
-      # Check if we've already defined the input grid in a previous call.
-      if cache_key in _grid_cache:
-        ingrid = _grid_cache[cache_key]
-      else:
-        ingrid = dict((k,prm[k]) for k in grid_params)
-        if hasattr(self,'_meta_funit'):
-          ingrid['iunit'] = self._meta_funit
-        ingrid = rmn.ezqkdef (**ingrid)
-        _grid_cache[cache_key] = ingrid
-      # Propogate any fill values to the interpolated grid.
-      in_mask = np.zeros(prm['d'].shape, order='F', dtype='float32')
-      in_mask[prm['d']==self._fill_value] = 1.0
-      d = rmn.ezsint (self._interp_grid, ingrid, prm['d'])
-      out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
-    d[out_mask!=0] = self._fill_value
-    # Return the data and metadata for the interpolated field.
-    prm = dict((k,self._interp_grid[k]) for k in prm.keys() if k in self._interp_grid)
-    prm['d'] = d
-    return prm
-
   # Handle grid interpolations from raw binary array.
   def _decode (self, data, unused, _grid_cache={}):
     import rpnpy.librmn.all as rmn
@@ -239,19 +209,6 @@ class YinYang (BufferBase):
     self._meta_filenames.append(gridfile)
     self._meta_funit = rmn.fstopenall(self._meta_filenames,rmn.FST_RO)
 
-  # Handle grid interpolation
-  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
-    import rpnpy.librmn.all as rmn
-    import numpy as np
-    out = super(YinYang,self)._fstluk (rec_id, dtype, rank, dataArray)
-    # Check original grtyp to see if need to split.
-    if out['grtyp'] == 'U':
-      if self._yin:
-        out['d'] = out['d'][:,:out['nj']//2]
-      elif self._yang:
-        out['d'] = out['d'][:,out['nj']//2:]
-    return out
-
   # Handle grid interpolations from raw binary array.
   def _decode (self, data, unused):
     if not self._yin and not self._yang:
@@ -358,22 +315,6 @@ class Crop (BufferBase):
       self._headers['iN'][submask] = iN
       self._headers['j0'][submask] = j0
       self._headers['jN'][submask] = jN
-
-  # Handle cropping
-  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
-    out = super(Crop,self)._fstluk (rec_id, dtype, rank, dataArray)
-    if not self._crop_to_smallest_grid: return out
-    if self._headers['ismeta'][rec_id] == 1: return out
-    # Check if cropping necessary.
-    ni = self._headers['ni'][rec_id]
-    nj = self._headers['nj'][rec_id]
-    if out['d'].shape == (ni,nj): return out
-    i0 = self._headers['i0'][rec_id]
-    iN = self._headers['iN'][rec_id]
-    j0 = self._headers['j0'][rec_id]
-    jN = self._headers['jN'][rec_id]
-    out['d'] = out['d'][i0:iN,j0:jN]
-    return out
 
   # Handle cropping from raw binary array.
   def _decode (self, data, rec_id):

@@ -894,6 +894,16 @@ class BufferBase (object):
   def _raw_headers (filename):
     raise NotImplementedError("No decoder found.")
 
+  # Shortcut for reading a record, given a record id.
+  def _read_record (self, rec):
+    import numpy as np
+    with open(self._files[self._headers['file_id'][rec]],'rb') as f:
+      f.seek(self._headers['address'][rec],0)
+      data = np.fromfile(f,'B',self._headers['length'][rec])
+      data = self._decode(data,rec)
+    return data
+
+
   #
   ###############################################
 

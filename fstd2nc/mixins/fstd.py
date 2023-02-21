@@ -246,29 +246,6 @@ class FSTD (BufferBase):
     self._headers['dtype'] = np.array(fast_dtype_fst2numpy(self._headers['datyp'],self._headers['nbits']))
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 
-
-  # How to read the data.
-  # Override fstluk so it takes a record index instead of a key/handle.
-  def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
-    from rpnpy.librmn.fstd98 import fstluk
-    # Use local overrides for dtype.
-    if dtype is None and isinstance(rec_id,dict):
-      if 'datyp' in rec_id and 'nbits' in rec_id:
-        dtype = dtype_fst2numpy(rec_id['datyp'],rec_id['nbits'])
-
-    # Lock the opened file so another thread doesn't close it.
-    with self._lock:
-      if isinstance(rec_id,dict):
-        # If we were given a dict, assume it's for a valid open file.
-        key = rec_id['key']
-      else:
-        # Otherwise, need to open the file and get the proper key.
-        file_id = self._headers['file_id'][rec_id]
-        self._open(file_id)
-        key = int(self._headers['key'][rec_id]<<10) + self._opened_librmn_index
-
-      return fstluk (key, dtype, rank, dataArray)
-
   # How to decode the data from a raw binary array.
   def _decode (self, data, unused):
     from fstd2nc.extra import decode
