@@ -35,7 +35,10 @@ if environ.get('CMCLNG') == 'francais':
 del gettext, path, environ
 
 # Module-level variable to control the amount of information printed.
-streams=('info','warn','error')
+# For Python invocation, only warning and error messages are displayed.
+# This is overridden in _fstd2nc_cmdline to include 'info' messages.
+streams=('warn','error')
+_python = True  # Becomes False for command-line invocation.
 
 from textwrap import TextWrapper
 w = TextWrapper(subsequent_indent='    ', break_on_hyphens=False)
@@ -49,14 +52,20 @@ def info (msg):
 # How to handle warning messages.
 # E.g., can either pass them through warnings.warn, or simply print them.
 def warn (msg, _printed=set()):
-  if msg not in _printed and 'warn' in streams:
+  from warnings import warn
+  if 'warn' not in streams: return
+  if _python:
+    warn(msg)
+  elif msg not in _printed:
     print (_("Warning: %s")%w.fill(msg))
     _printed.add(msg)
 
 # Error messages
 def error (msg):
   from sys import exit
-  if 'error' in streams:
+  if _python:
+    raise Exception(msg)
+  elif 'error' in streams:
     print (_("Error: %s")%w.fill(msg))
   exit(1)
 

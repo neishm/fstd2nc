@@ -54,6 +54,9 @@ def _fstdump (buffer_type=Buffer):
   fstopt ('MSGLVL',6)
   fstd2nc.stdout.streams = ('error',)
 
+  # Turn off Python warning / exception handling, use stdio for communication.
+  fstd2nc.stdout._python = False
+
   try:
     buf = buffer_type(infile, **args)
   except FSTDError:
@@ -170,6 +173,8 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     fstopt ('MSGLVL',6)
     fstd2nc.stdout.streams = ('error',)
     args['progress'] = False
+  else:
+    fstd2nc.stdout.streams = ('info','warn','error',)
   progress = args.get('progress',False)
   if use_pandas:
     fstd2nc.mixins._pandas_needed = True
@@ -180,6 +185,9 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   except ValueError:
     msglvl = {'DEBUG':0,'INFORM':2,'WARNIN':4,'ERRORS':6,'FATALE':8,'SYSTEM':10,'CATAST':10}[msglvl]
   fstopt ('MSGLVL',msglvl)
+
+  # Turn off Python warning / exception handling, use stdio for communication.
+  fstd2nc.stdout._python = False
 
   try:
     buf = buffer_type(infiles, **args)
