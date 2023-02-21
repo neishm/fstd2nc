@@ -317,7 +317,7 @@ msgid "No relevant FST records were found."
 msgstr "Aucun enregistrement FST pertinent n'a été trouvé."
 
 msgid "Saving netCDF file"
-msgstr "Enregistrement du fichier netCDF."
+msgstr "Ecriture du fichier netCDF."
 
 #, python-format
 msgid "Internal problem with the script - unable to get data for '%s'"
