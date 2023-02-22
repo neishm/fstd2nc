@@ -24,7 +24,7 @@ python -m fstd2nc [options] <fichier(s) d'entrée> <fichier de sortie>
 
 arguments optionnel:
   -h, --help            afficher ce message d'aide et quitter
-  --version             show program's version number and exit
+  --version             afficher le numéro de version du programme et quitter
   --no-progress         Désactiver la barre de progression.
   --serial              Désactiver le multithreading/multitraitement. Utile
                         pour les machines à ressources limitées.
