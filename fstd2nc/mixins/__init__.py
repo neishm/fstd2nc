@@ -249,7 +249,7 @@ class BufferBase (object):
     from fstd2nc import __version__
     from argparse import SUPPRESS
     from sys import stdout
-    parser.add_argument('--version', action='version', version=__version__)
+    parser.add_argument('--version', action='version', version=__version__, help=_("show program's version number and exit"))
     group = parser.add_mutually_exclusive_group()
     _('Display a progress bar during the conversion, if the "progress" module is installed.')
     group.add_argument('--progress', action='store_true', default=stdout.isatty(), help=SUPPRESS)
