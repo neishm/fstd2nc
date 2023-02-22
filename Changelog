@@ -1,3 +1,18 @@
+Version 0.20230222.0 (Feb 22, 2023)
+	* Detect newer surface aggregate fields from GEM 5.1 / 5.2 (assign
+	  "sfctype" categories on those fields).
+	* Detect SWE (from CalDAS) as a surface aggregate field as well.
+	* New command-line option --sfc-agg-vars to allow the user to specify
+	  additional fields that should be treated as surface-type fields.
+	* Fix pickling of Buffer objects.
+	* Fix compatibility issue when using .to_xarray() on Python 3.10.
+	* Add support for pathlib.Path objects.
+	* When invoking this module from a Python script, re-route warning and
+	  error messages through the warnings.warn and Exception interfaces
+	  respectively.  This will make it easier for the calling script to
+	  filter the warnings and implement exception handling.
+	* Traduire en (mauvais) français.
+
 Version 0.20221124.1 (Jan 26, 2023)
 	* Allow fstd2nc to be "pip install"ed from an environment that doesn't
 	  yet have numpy installed.  Installation no longer fails with a weird
