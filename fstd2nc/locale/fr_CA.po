@@ -457,6 +457,9 @@ msgstr ""
 "Problème de traitement du niveau de diagnostic de %s comme niveau de modèle "
 "- le divise dans un champ séparé."
 
+msgid "show program's version number and exit"
+msgstr "afficher le numéro de version du programme et quitter"
+
 msgid ""
 "Display a progress bar during the conversion, if the \"progress\" module is "
 "installed."
