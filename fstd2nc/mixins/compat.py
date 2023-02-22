@@ -63,20 +63,21 @@ class FSTD_Compat (BufferBase):
   # conversion.  The header information for these records will be added to the
   # output file.
   def _fstluk (self, rec_id, dtype=None, rank=None, dataArray=None):
-    from rpnpy.librmn.fstd98 import fstluk
 
-    # Lock the opened file so another thread doesn't close it.
-    with self._lock:
-      # Open the file and get the proper key.
-      file_id = self._headers['file_id'][rec_id]
-      self._open(file_id)
-      key = int(self._headers['key'][rec_id]<<10) + self._opened_librmn_index
+    # Extract record parameters.
+    prm = {k:v[rec_id] for k,v in self._headers.items()}
 
-      if not hasattr(self,'_used_rec_ids'):
-        self._used_rec_ids = []
-      self._used_rec_ids.append(rec_id)
+    # Add data.
+    prm['d'] = self._read_record(rec_id).T
+    if dtype is not None:
+      prm['d'] = prm['d'].astype(dtype)
 
-      return fstluk (key, dtype, rank, dataArray)
+    # Keep track of which records were used.
+    if not hasattr(self,'_used_rec_ids'):
+      self._used_rec_ids = []
+    self._used_rec_ids.append(rec_id)
+
+    return prm
 
   def _to_netcdf_compat (self, filename, nc_format='NETCDF4', global_metadata=None, zlib=False, compression=4, progress=False, turbo=False):
     """
