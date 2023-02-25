@@ -46,7 +46,7 @@ class netCDF_Atts (BufferBase):
   def _cmdline_args (cls, parser):
     import argparse
     super(netCDF_Atts,cls)._cmdline_args(parser)
-    parser.add_argument('--metadata-file', type=argparse.FileType('r'), action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
+    parser.add_argument('--metadata-file', action='append', help=_('Use metadata from the specified file.  You can repeat this option multiple times to build metadata from different sources.'))
     parser.add_argument('--rename', metavar="OLDNAME=NEWNAME,...", help=_('Apply the specified name changes to the variables.'))
     parser.add_argument('--conventions', default='CF-1.6', help=_('Set the "Conventions" attribute for the netCDF file.  Default is "%(default)s".  Note that this has no effect on the structure of the file.'))
     parser.add_argument('--no-conventions', action='store_true', help=_('Omit the "Conventions" attribute from the netCDF file entirely.  This can help for netCDF tools that have trouble recognizing the CF conventions encoded in the file.'))
@@ -86,8 +86,6 @@ class netCDF_Atts (BufferBase):
       metafiles = [metadata_file]
     else:
       metafiles = metadata_file
-    # Open the files if only the filename is provided.
-    metafiles = [open(m,'r') if isinstance(m,str) else m for m in metafiles]
     metadata = OrderedDict()
     # Set some global defaults.
     # We need to explicitly state that we're using CF conventions in our
@@ -100,7 +98,7 @@ class netCDF_Atts (BufferBase):
     configparser = ConfigParser.SafeConfigParser()
     configparser.optionxform = str # Make the attribute names case sensitive.
     for metafile in metafiles:
-      configparser.readfp(metafile)
+      configparser.read(metafile,encoding='utf-8')
     for varname in configparser.sections():
       metadata.setdefault(varname,OrderedDict()).update(configparser.items(varname))
       # Detect numerical values

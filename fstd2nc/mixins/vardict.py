@@ -67,12 +67,9 @@ class VarDict (BufferBase):
     vardicts = kwargs.pop('vardict',None) or []
     if kwargs.pop('opdict',False):
       f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
-      vardicts.append(open(f,'r'))
+      vardicts.append(f)
 
     super(VarDict,self).__init__(*args, **kwargs)
-
-    # Open the files if only the filename is provided.
-    vardicts = [open(v,'r') if isinstance(v,str) else v for v in vardicts]
 
     metadata = OrderedDict()
     ip1_axis = OrderedDict()
