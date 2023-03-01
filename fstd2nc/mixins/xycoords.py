@@ -254,13 +254,11 @@ class RotLatLon(GridMap):
     self._lonatts['long_name'] = 'longitude'
     self._lonatts['standard_name'] = 'longitude'
     self._lonatts['units'] = 'degrees_east'
-    self._lonatts['axis'] = 'X'
     self._latarray = ll['lat'].transpose() # Switch from Fortran to C order.
     self._latatts = OrderedDict()
     self._latatts['long_name'] = 'latitude'
     self._latatts['standard_name'] = 'latitude'
     self._latatts['units'] = 'degrees_north'
-    self._latatts['axis'] = 'Y'
     self.lon = _var_type('lon',self._lonatts,self.gridaxes,self._lonarray)
     self.lat = _var_type('lat',self._latatts,self.gridaxes,self._latarray)
     # Get boundary info.
@@ -338,13 +336,11 @@ class PolarStereo(GridMap):
     self._lonatts['long_name'] = 'longitude'
     self._lonatts['standard_name'] = 'longitude'
     self._lonatts['units'] = 'degrees_east'
-    self._lonatts['axis'] = 'X'
     self._latarray = ll['lat'].transpose() # Switch from Fortran to C order.
     self._latatts = OrderedDict()
     self._latatts['long_name'] = 'latitude'
     self._latatts['standard_name'] = 'latitude'
     self._latatts['units'] = 'degrees_north'
-    self._latatts['axis'] = 'Y'
     xy = gdxyfll(self._grd['id'],ll['lat'],ll['lon'])
     # Scale grid coordinates back to actual coordinates in projection plane   
     self._ax = ( np.rint(xy['x'][:,0]) - 1) * self._res   # metres
@@ -558,12 +554,10 @@ class XYCoords (BufferBase):
           latatts['long_name'] = 'latitude'
           latatts['standard_name'] = 'latitude'
           latatts['units'] = 'degrees_north'
-          latatts['axis'] = 'Y'
           lonatts = OrderedDict()
           lonatts['long_name'] = 'longitude'
           lonatts['standard_name'] = 'longitude'
           lonatts['units'] = 'degrees_east'
-          lonatts['axis'] = 'X'
 
           latarray = lonarray = None
           try:
@@ -684,6 +678,12 @@ class XYCoords (BufferBase):
         if lat is None or lon is None:
           warn(_("Unable to get lat/lon coordinates for '%s'")%var.name)
           continue
+
+        # If lat/lon are 1D axes, then add an 'axis' attribute.
+        if isinstance(lat,_axis_type):
+          lat.atts = dict(lat.atts, axis='Y')
+        if isinstance(lon,_axis_type):
+          lon.atts = dict(lon.atts, axis='X')
 
         # Sanity check on lat/lon - make sure we have something of the right size.
         if lat.array.shape == lat.shape and lon.array.shape == lon.shape:
