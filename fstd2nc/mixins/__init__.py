@@ -287,14 +287,14 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, _headers=None, progress=False, serial=False, **kwargs):
+  def __init__ (self, filename, progress=False, serial=False, **kwargs):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
 
     Parameters
     ----------
-    filename : str or list
+    filename : str or list or existing Buffer object
         The input files to convert.
     progress : bool, optional
         Display a progress bar during the conversion, if the "progress"
@@ -323,6 +323,13 @@ class BufferBase (object):
     Bar = _ProgressBar if progress is True else _FakeBar
 
     self._serial = serial
+
+    # Detect if an existing Buffer object was provided.
+    if hasattr(filename,'_headers') and hasattr(filename,'_files'):
+      existing_buffer = filename
+      filename = []
+    else:
+      existing_buffer = None
 
     if isinstance(filename,(str,Path)):
       infiles = [filename]
@@ -428,6 +435,11 @@ class BufferBase (object):
         else:
           warn(_("Problem with input file '%s'")%infile)
 
+    # Use existing Buffer object data, if that was provided instead of files.
+    if existing_buffer is not None:
+      self._files = list(existing_buffer._files)
+      headers = {k:v.copy() for k,v in existing_buffer._headers.items()}
+
     nfiles = len(self._files)
     if nfiles == 0:
       error(_("no input files found!"))
@@ -435,13 +447,6 @@ class BufferBase (object):
       global _pandas_needed
       _pandas_needed = True
     info(_("Found %d %s"%(nfiles,self._format_plural)))
-
-    # Add extra headers? (hack for generating Buffer objects from external
-    # sources (not FSTD files)
-    if _headers is not None:
-      headers = dict(_headers)
-      # Keep link to first file for metadata purposes below?
-      headers['file_id'] = np.zeros(len(headers['nomvar']), dtype='int32')
 
     self._headers = headers
     self._nrecs = max(len(self._headers[key]) for key in self._headers.keys())

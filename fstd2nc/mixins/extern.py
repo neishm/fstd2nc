@@ -396,9 +396,15 @@ class ExternInput (BufferBase):
         rec['d'] = np.asarray(rec['d'])
         rmn.fstecr(iun, rec)
     rmn.fstcloseall(iun)
+    files = [gridfile]
+    headers['file_id'] = np.zeros(len(headers['nomvar']), dtype='int32')
+    # Encapsulate this info in a structure.
+    fake_buffer = cls.__new__(cls)
+    fake_buffer._files = files
+    fake_buffer._headers = headers
 
-    # Initialize the Buffer object with this info.
-    b = cls(gridfile, _headers=headers, **kwargs)
+    # Initialize a Buffer object with this info.
+    b = cls(fake_buffer, **kwargs)
     b._grid_tmpdir = grid_tmpdir  # Save tmpdir until cleanup.
 
     # Save the dataframe for reference.
