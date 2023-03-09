@@ -306,3 +306,46 @@ def maybeFST(filename):
     # Same check as c_wkoffit in librmn
     return buf[12:] == b'STDR'
 
+# Helper method to get cartopy projection information for a dataset.
+# Note: this will be obsolete once cartopy's from_cf function is fixed.
+# (https://github.com/SciTools/cartopy/issues/2099)
+def get_crs (dataset):
+  """
+  Generate a cartopy crs object for the given data.
+
+  Parameters
+  ----------
+  dataset : xarray.Dataset
+      The data to find the crs projection for.
+      Only data generated via the .to_xarray() method is supported.
+
+  Returns
+  -------
+  cartopy.crs.Projection object
+  """
+  from fstd2nc.stdout import _, info, warn, error
+  import cartopy.crs as ccrs
+  # Find the grid mapping variable in the dataset.
+  gmap = set(varname for varname,var in dataset.variables.items() if 'grid_mapping_name' in var.attrs)
+  # Must have exactly one unique grid projection in the Dataset.
+  if len(gmap) == 0:
+    warn(_("No grid mapping found"))
+    return None
+  if len(gmap) > 1:
+    warn(_("Multiple grid mappings found: %s")%gmap)
+    return None
+  gmap = dataset[gmap.pop()]
+  gname = gmap.attrs['grid_mapping_name']
+  if gname == 'latitude_longitude':
+    proj = ccrs.PlateCarree()
+  elif gname == 'rotated_latitude_longitude':
+    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'])
+  elif gname == 'polar_stereographic':
+    # May fail for South Pole projections (would maybe need to change sign of
+    # true_scale_latitude?)
+    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=60)
+  else:
+    warn(_("Unhandled grid mapping: %s")%gname)
+    return None
+  return proj
+
