@@ -53,8 +53,11 @@ class FilterRecords (BufferBase):
     for key, value in records_with_strings.items():
       if value.dtype.char == 'S':
         new_dtype = 'U'+str(value.dtype.itemsize)
-        value = value.view('B').astype('i4')
-        value[value==32] = 0  # rstrip
+        value = value[:,None].view('B').astype('i4')
+        # rstrip
+        mask = np.cumsum(value[:,::-1]-32, axis=1)[:,::-1] == 0
+        value[mask] = 0
+        value = value.flatten()
         records_with_strings[key] = value.view(new_dtype)
     bytestrings_pattern = re.compile("b['\"]")
     # Loop over each filter and apply.
