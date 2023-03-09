@@ -36,6 +36,16 @@ try:
 except ImportError:
   pass
 
+# Turn off annoying messages from librmn.
+# Usually unwanted when using this code from Python.
+# Can be turned back on from the command-line with --msglvl option.
+try:
+  import rpnpy.librmn.all as rmn
+  rmn.fstopt("MSGLVL","ERRORS")
+  del rmn
+except ImportError:
+  pass
+
 # Combine all the mixins to create a final interface for I/O.
 from fstd2nc.mixins.fstd import FSTD
 from fstd2nc.mixins.select import SelectVars
