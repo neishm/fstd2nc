@@ -325,7 +325,12 @@ class ExternOutput (BufferBase):
     table['shape'] = list(zip(table['ni'],table['nj']))
     filenames = dict((i,f) for i,f in enumerate(self._files))
     table['path'] = pd.Series(self._headers['file_id'][mask]).map(filenames)
-    table['key'] = (self._headers['key'][mask] << 10)
+    key = np.zeros(len(self._headers['name']),'int32')
+    for file_id in range(len(self._files)):
+      selection = self._headers['file_id'] == file_id
+      indices = np.arange(np.sum(selection), dtype='int32')
+      key[selection] = (indices % 256) | ((indices//256)<<9)
+    table['key'] = key[mask] << 10
     # Generate dask objects
     #TODO: use our own, in case we modified the data?
     # (doesn't normally happen, but you never know...)

@@ -163,7 +163,7 @@ class FSTD (BufferBase):
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj','nk') + self._var_id
     self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s', '%(nk)sL') + self._human_var_id
-    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','key','shape','d','i','j','k','ismeta') + self._ignore_atts
+    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','ismeta') + self._ignore_atts
 
     ignore_typvar = kwargs.pop('ignore_typvar',False)
     ignore_etiket = kwargs.pop('ignore_etiket',False)

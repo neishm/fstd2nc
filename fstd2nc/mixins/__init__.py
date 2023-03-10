@@ -241,7 +241,7 @@ class BufferBase (object):
 
   # Record parameters which should not be used as nc variable attributes.
   # (They're either internal to the file, or part of the data, not metadata).
-  _ignore_atts = ('file_id','key','name','address','length','dtype','selected')
+  _ignore_atts = ('file_id','name','address','length','dtype','selected')
 
   # Define any command-line arguments for reading FSTD files.
   @classmethod
@@ -417,7 +417,6 @@ class BufferBase (object):
       indices = np.concatenate(indices)
       headers = self._decode_headers(headers)
       # Encode the keys without the file index info.
-      headers['key'] = (indices % 256) | ((indices//256)<<9)
       headers['file_id'] = np.array(file_ids, dtype='int32')
       headers['selected'] = np.ones(len(file_ids),'bool')
 
