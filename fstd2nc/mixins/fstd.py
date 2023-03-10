@@ -83,44 +83,11 @@ class FSTD (BufferBase):
   # Clean up a buffer (close any attached files, etc.)
   def __del__ (self):
     try:
-      self._close()
       from rpnpy.librmn.fstd98 import fstcloseall
       fstcloseall(self._meta_funit)
     except (ImportError, AttributeError):
       pass  # May fail if Python is doing a final cleanup of everything.
             # Or, if buffer wasn't fully initialized yet.
-
-  # Open the specified file (by index)
-  def _open (self, file_id):
-    from rpnpy.librmn.base import fnom
-    from rpnpy.librmn.fstd98 import fstouv
-    from rpnpy.librmn.const import FST_RO
-    from rpnpy.librmn import librmn
-    opened_file_id = getattr(self,'_opened_file_id',-1)
-    # Check if this file already opened.
-    if opened_file_id == file_id:
-      return self._opened_funit
-    # Close any open files before continuing.
-    self._close()
-    filename = self._files[file_id]
-    # Open the file.
-    self._opened_file_id = file_id
-    self._opened_funit = fnom(filename,FST_RO)
-    fstouv(self._opened_funit,FST_RO)
-    self._opened_librmn_index = librmn.file_index(self._opened_funit)
-    return self._opened_funit
-
-  # Close any currently opened file.
-  def _close (self):
-    from rpnpy.librmn.base import fclos
-    from rpnpy.librmn.fstd98 import fstfrm
-    opened_funit = getattr(self,'_opened_funit',-1)
-    if opened_funit >= 0:
-      fstfrm(opened_funit)
-      fclos(opened_funit)
-    self._opened_file_id = -1
-    self._opened_funit = -1
-    self._opened_librmn_index = -1
 
   # Open metadata funit (done once during init of object).
   def _open_meta_funit (self):
