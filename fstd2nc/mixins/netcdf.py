@@ -339,6 +339,12 @@ class netCDF_IO (BufferBase):
       if not var.name[0].isalpha() and var.name[0] != '_':
         warn(_("Renaming '%s' to '_%s'.")%(var.name,var.name))
         var.name = '_'+var.name
+      # Names can't contain a slash (or netCDF library thinks we're
+      # creating groups).
+      newname = var.name.replace('/','_')
+      if newname != var.name:
+        warn(_("Renaming '%s' to '%s'.")%(var.name,newname))
+        var.name = newname
 
       # Strip out internal metadata?
       if not hasattr(var,'atts'): continue

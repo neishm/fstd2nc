@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-03-09 15:46+0000\n"
+"POT-Creation-Date: 2023-03-10 02:37+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -317,6 +317,10 @@ msgstr "Plusiers définitions de %s.  Ajout de suffixes unique %s."
 #, python-format
 msgid "Renaming '%s' to '_%s'."
 msgstr "Renommer '%s' en '_%s'."
+
+#, python-format
+msgid "Renaming '%s' to '%s'."
+msgstr "Renommer '%s' en '%s'."
 
 #, python-format
 msgid "netCDF3 does not support unsigned ints.  Converting %s to signed int."
