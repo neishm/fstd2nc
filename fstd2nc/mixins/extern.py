@@ -309,8 +309,8 @@ class ExternOutput (BufferBase):
     # Put all the header info into a dictionary.
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
-    # Create a mask to exclude deleted / overwritten records.
-    mask = self._headers['dltf'] == 0
+    # Create a mask to exclude deleted / overwritten / unselected records.
+    mask = self._headers['selected']
     for field in fields:
       col = self._headers[field][mask]
       # Convert byte arrays to strings, which is what fstpy expects.
