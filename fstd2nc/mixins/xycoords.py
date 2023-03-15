@@ -452,20 +452,19 @@ class XYCoords (BufferBase):
   # them?
   def _find_coord (self, var, coordname):
     from fstd2nc.mixins.fstd import dtype_fst2numpy
-    from rpnpy.librmn.fstd98 import fstlir
     # Special case for series data - match any of the lat/lon grids.
     if var.atts['grtyp'] in ('+','Y'):
-      header = fstlir (self._meta_funit, nomvar=coordname, rank=3)
+      header = self._fstlir (nomvar=coordname)
       # Make sure this actually matches a grid of the correct shape.
       if header['ni'] != var.atts['ni'] or header['nj'] != var.atts['nj']:
         header = None
     else:
-      header = fstlir (self._meta_funit, nomvar=coordname, ip1=var.atts['ig1'],
-                             ip2=var.atts['ig2'], ip3=var.atts['ig3'], rank=3)
+      header = self._fstlir (nomvar=coordname, ip1=var.atts['ig1'],
+                             ip2=var.atts['ig2'], ip3=var.atts['ig3'])
     if header is not None:
       # Override output dtype
-      dtype = dtype_fst2numpy(header['datyp'],header['nbits'])
-      header['d'] = header['d'].view(dtype)
+      dtype = dtype_fst2numpy(int(header['datyp']),int(header['nbits']))
+      header['d'] = header['d'][:,:,None].view(dtype)
       return header
     raise KeyError("Unable to find matching '%s' for '%s'"%(coordname,var.name))
 
@@ -475,7 +474,7 @@ class XYCoords (BufferBase):
     from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
-    from rpnpy.librmn.all import readGrid, RMNError
+    from rpnpy.librmn.all import cxgaig, ezgdef_fmem, ezgdef_supergrid, ezqkdef, decodeGrid, RMNError
     import numpy as np
 
     # Scan through the data, and look for any use of horizontal coordinates.
@@ -539,7 +538,23 @@ class XYCoords (BufferBase):
               atts['ig3'] = 1
               atts['ig4'] = 1
           try:
-            grd = readGrid(self._meta_funit, atts)
+            # Get grid object from librmn.
+            # Avoid readGrid, because it requires its own access to the
+            # files(s), which may not be readily available on disk.
+            if grtyp in ('Z','#'):
+              ref = self._find_coord(var,b'>>  ')
+              grd = atts.copy()
+              grd['grref'] = ref['grtyp'].decode()
+              grd['ig1'] = int(ref['ig1'])
+              grd['ig2'] = int(ref['ig2'])
+              grd['ig3'] = int(ref['ig3'])
+              grd['ig4'] = int(ref['ig4'])
+              grd['ax'] = ref['d'].squeeze()
+              grd['ay'] = self._find_coord(var,b'^^  ')['d'].squeeze()
+              grd = ezgdef_fmem(grd)
+            else:
+              grd = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4)
+            grd = decodeGrid(grd)
             gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon)
             gmapvar = gmap.gen_gmapvar()
             gridmaps[key] = gmapvar
@@ -563,11 +578,36 @@ class XYCoords (BufferBase):
           try:
             # First, handle non-ezqkdef grids.
             if grtyp in self._direct_grids:
-              latarray = self._find_coord(var,'^^')['d'].squeeze(axis=2)
-              lonarray = self._find_coord(var,'>>')['d'].squeeze(axis=2)
+              latarray = self._find_coord(var,b'^^  ')['d'].squeeze(axis=2)
+              lonarray = self._find_coord(var,b'>>  ')['d'].squeeze(axis=2)
             # Handle ezqkdef grids.
             else:
-              gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, getattr(self,'_meta_funit',0))
+              ###
+              # U grids aren't yet supported by in-memory ezqkdef
+              # (requires ext
+              if grtyp == 'U':
+                ref = self._find_coord(var,b'^>  ')
+                data = ref['d'].flatten()
+                nsubgrids = int(data[2])
+                subgrids = []
+                subdata = data[5:]
+                for i in range(nsubgrids):
+                  sub_ni = int(subdata[0])
+                  sub_nj = int(subdata[1])
+                  # Loosely based on steps in Lire_enrUvercode1 of librmn.
+                  sub_ig1, sub_ig2, sub_ig3, sub_ig4 = cxgaig('E',*subdata[6:10])
+                  sub_ax = subdata[10:10+sub_ni]
+                  sub_ay = subdata[10+sub_ni:10+sub_ni+sub_nj]
+                  subgrids.append(ezgdef_fmem(sub_ni, sub_nj, 'Z', 'E', sub_ig1, sub_ig2, sub_ig3, sub_ig4, sub_ax, sub_ay))
+                  subdata = subdata[10+sub_ni+sub_nj:]
+                gdid = ezgdef_supergrid(ni, nj, 'U', 'F', 1, subgrids)
+              else:
+                #TODO: check if this case still gets triggered?
+                # GridMap grids (N,S,A,B,L,G,Z,E) are already handled.
+                # Direct grids (X,Y,T,+,O,M) are already handled.
+                # Supergrids (U) are already handled.
+                # What's left?
+                gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, 0)
               ll = gdll(gdid)
               latarray = ll['lat']
               lonarray = ll['lon']

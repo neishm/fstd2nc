@@ -124,7 +124,38 @@ class FSTD (BufferBase):
     # Open these files and link them together
     self._meta_filenames = filenames  # Store this for further hacking.
     self._meta_funit = fstopenall(filenames, FST_RO)
-        
+
+  # Helper method - find all records with the given criteria.
+  # Mimics fstinl, but returns table indices instead of record handles.
+  def _fstinl (self, **criteria):
+    import numpy as np
+    mask = True
+    for k, v in criteria.items():
+      mask &= (self._headers[k]==v)
+    return np.where(mask)[0]
+
+  # Helper method - get metadata of the given record.
+  def _fstprm (self, rec):
+    return dict((k,v[rec]) for k,v in self._headers.items())
+
+  # Helper method - read the specified record.
+  # Mimics the behaviour of fstluk.
+  def _fstluk (self, rec):
+    prm = _fstprm(rec)
+    ni = prm['ni']
+    nj = prm['nj']
+    prm['d'] = self._read_record(rec).T.reshape(ni,nj)
+    return d
+
+  # Helper method - read a record with the specified criteria.
+  # Mimics the behaviour of fstlir.
+  # Note: not the fastest method.  Should be used sparingly.
+  def _fstlir (self, **criteria):
+    recs = self._fstinl(**criteria)
+    if len(recs) == 0: return None
+    rec = recs[0]
+    return self._fstluk(rec)
+
   # Control the pickling / unpickling of BufferBase objects.
   def __getstate__ (self):
     state = super(FSTD,self).__getstate__()
@@ -163,7 +194,7 @@ class FSTD (BufferBase):
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj','nk') + self._var_id
     self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s', '%(nk)sL') + self._human_var_id
-    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','ismeta') + self._ignore_atts
+    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','ismeta','d') + self._ignore_atts
 
     ignore_typvar = kwargs.pop('ignore_typvar',False)
     ignore_etiket = kwargs.pop('ignore_etiket',False)

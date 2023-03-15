@@ -129,7 +129,6 @@ class Series (BufferBase):
     from fstd2nc.mixins.dates import stamp2datetime_scalar
     from collections import OrderedDict
     import numpy as np
-    from rpnpy.librmn.fstd98 import fstlir
 
     forecast_axis = None       # To attach the forecast axis.
     station = None             # To attach the station names as coordinates.
@@ -140,8 +139,7 @@ class Series (BufferBase):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    if not hasattr(self,'_meta_funit'): return
-    station_header = fstlir(self._meta_funit, nomvar='STNS')
+    station_header = self._fstlir(nomvar=b'STNS')
     if station_header is not None:
       array = station_header['d'].transpose()
       # Re-cast array as string.
@@ -163,7 +161,7 @@ class Series (BufferBase):
       # Encode it as 2D character array for netCDF file output.
       station = _var_type('station',{},[station_id,station_strlen],array)
     # Create forecast axis.
-    forecast_header = fstlir (self._meta_funit, nomvar='HH')
+    forecast_header = self._fstlir (nomvar=b'HH  ')
     if forecast_header is not None:
       atts = OrderedDict(units='hours')
       # Note: the information in 'HH' is actually the hour of validity.
@@ -174,8 +172,8 @@ class Series (BufferBase):
       forecast_timedelta = np.array(array*3600,'timedelta64[s]')
       forecast_axis = _axis_type('forecast',atts,array)
     # Extract vertical coordinates.
-    for vertvar in ('SH','SV'):
-      header = fstlir (self._meta_funit, nomvar=vertvar)
+    for vertvar in (b'SH  ',b'SV  '):
+      header = self._fstlir (nomvar=vertvar)
       if header is None: continue
       array = header['d'].squeeze()
       # Drop the top or bottom levels to match the profile data?
