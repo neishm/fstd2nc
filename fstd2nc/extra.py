@@ -58,6 +58,7 @@ def decode (data):
   ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
   nelm = ni*nj*nk
   datyp = int(data[4]%256) & 191  # Ignore +64 mask.
+  if datyp == 8: nelm = nelm * 2  # For complex, have double the elements.
   nbits = int(data[2]%256)
   dtype = dtype_fst2numpy (datyp, nbits)
   if nbits <= 32:
@@ -106,7 +107,7 @@ def decode (data):
     ier = librmn.compact_char(work, None, data, nelm, 8, 0, 1, 10)
     work = work.view('B')[:len(work)] #& 127
   elif datyp == 8:
-    raise Exception
+    librmn.ieeepak_(work, data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
   elif datyp == 129:
     librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
     librmn.compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
