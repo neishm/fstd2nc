@@ -136,16 +136,19 @@ class FSTD (BufferBase):
 
   # Helper method - get metadata of the given record.
   def _fstprm (self, rec):
-    return dict((k,v[rec]) for k,v in self._headers.items())
+    prm = dict((k,v[rec]) for k,v in self._headers.items())
+    for k in ('typvar','nomvar','grtyp','etiket'):
+      prm[k] = prm[k].decode()
+    return prm
 
   # Helper method - read the specified record.
   # Mimics the behaviour of fstluk.
   def _fstluk (self, rec):
-    prm = _fstprm(rec)
+    prm = self._fstprm(rec)
     ni = prm['ni']
     nj = prm['nj']
     prm['d'] = self._read_record(rec).T.reshape(ni,nj)
-    return d
+    return prm
 
   # Helper method - read a record with the specified criteria.
   # Mimics the behaviour of fstlir.
