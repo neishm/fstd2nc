@@ -21,6 +21,69 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+############################################################
+# Mixin for questionable modifications to the headers table.
+#
+
+class GridHacks (BufferBase):
+  # Switch on hacks.
+  def _enable_hacks (self):
+    if not hasattr(self,'_hacks'):
+      self._hacks = dict()
+      self._read_record = self.__read_record
+      self._fstluk = self.__fstluk
+
+  # Hack in record data that doesn't actually exist in the source file.
+  def __read_record (self, rec_id):
+    if rec_id not in getattr(self,'_hacks',{}):
+      return super(GridHacks,self)._read_record(rec_id)
+    return self._hacks[rec_id]['d'].T
+
+  def __fstluk (self, rec_id):
+    if rec_id not in getattr(self,'_hacks',{}):
+      return super(GridHacks,self)._fstluk(rec_id)
+    return self._hacks[rec_id]
+
+  # Helper method - "write" a grid descriptor into the headers table.
+  # Based loosely on writeGrid from rpnpy.
+  def _writeGrid (self, gid):
+    import numpy as np
+    if gid['grtyp'] not in ('Z','#','Y','U'): return None
+    # Define some parameters for the grid.
+    prm = dict()
+    prm['typvar'] = 'X '
+    prm['ip1'] = gid['tag1']
+    prm['ip2'] = gid['tag2']
+    prm['ip3'] = gid.get('tag3',0)
+    prm['grtyp'] = gid['grref']
+    prm['ig1'] = gid['ig1ref']
+    prm['ig2'] = gid['ig2ref']
+    prm['ig3'] = gid['ig3ref']
+    prm['ig4'] = gid['ig4ref']
+    prm['datyp'] = gid.get('datyp',5)
+    prm['nbits'] = gid.get('nbits',32)
+    prm['etiket'] = gid.get('etiket','ETIKET').ljust(12)
+    prm['ni'] = 1; prm['nj'] = 1; prm['nk'] = 1
+    prm['ismeta'] = True
+    nrecs = len(self._headers['name'])
+    new_recs = []
+    if 'ax' in gid:
+      new_recs.append(dict(prm, nomvar='>>  ', ni=gid['ni'], d=gid['ax']))
+    if 'ay' in gid:
+      new_recs.append(dict(prm, nomvar='^^  ', nj=gid['nj'], d=gid['ay']))
+    if 'axy' in gid:
+      new_recs.append(dict(prm, nomvar='^>  ', ni=gid['ni'], nj=gid['nj'], d=gid['axy']))
+    for k,v in self._headers.items():
+      self._headers[k] = np.zeros_like(v, shape=nrecs + len(new_recs))
+      self._headers[k][:nrecs] = v[:]
+    for i in range(len(new_recs)):
+      for k,v in new_recs[i].items():
+        if k in self._headers:
+          if isinstance(v,str): v = v.encode()
+          self._headers[k][nrecs+i] = v
+      self._hacks[nrecs+i] = new_recs[i]
+    self._nrecs += len(new_recs)
+
 
 #################################################
 # Mixin for on-the-fly grid interpolation.
@@ -44,11 +107,13 @@ class Interp (BufferBase):
     from os import path
     import numpy as np
     interp = kwargs.pop('interp',None)
+    super(Interp,self).__init__(*args,**kwargs)
     # Extract interpolation grid.
     def number(x):
       try: return int(x)
       except ValueError: return float(x)
     if interp is not None:
+      self._enable_hacks()
       interp = interp.split(',')
       grtyp = interp[0]
       grid_args = [number(v) for v in interp[1:] if '=' not in v]
@@ -57,33 +122,16 @@ class Interp (BufferBase):
       if not hasattr(rmn,'defGrid_'+grtyp):
         error(_("Unknown grid '%s'")%grtyp)
       self._interp_grid = getattr(rmn,'defGrid_'+grtyp)(*grid_args,**grid_kwargs)
-      # Generate temporary file with target grid info.
-      try: # Python 3
-        self._interp_tmpdir = tempfile.TemporaryDirectory()
-        gridfile = path.join(self._interp_tmpdir.name,"grid.fst")
-      except AttributeError: # Python 2 (no auto cleanup)
-        self._interp_tmpdir = tempfile.mkdtemp()
-        gridfile = path.join(self._interp_tmpdir,"grid.fst")
-      iun = rmn.fstopenall(gridfile, rmn.FST_RW)
-      rmn.writeGrid (iun, self._interp_grid)
-      rmn.fstcloseall (iun)
-      # Handle case where a single file was passed from the Python interface.
-      if isinstance(args[0],str):
-        args = list(args)
-        args[0] = [args[0]]
-        args = tuple(args)
-      # Add this grid file to the inputs.
-      args[0].append(gridfile)
-      super(Interp,self).__init__(*args,**kwargs)
+
       # Update records to use this grid.
       ismeta = self._headers['ismeta']
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][:] = np.where(ismeta, self._headers[key], self._interp_grid[key])
+      # Hack the new grid descriptors into the headers.
+      self._writeGrid (self._interp_grid)
       # Set up some options for ezsint.
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_DEGREE, rmn.EZ_EXTRAP_VALUE)
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_VALUE, self._fill_value)
-    else:
-      super(Interp,self).__init__(*args,**kwargs)
 
   # Add fill value to the data.
   # Modified from code in from mask mixin.
@@ -98,15 +146,15 @@ class Interp (BufferBase):
           var.atts['_FillValue'] = var.dtype.type(self._fill_value)
 
   # Handle grid interpolations from raw binary array.
-  def _decode (self, data, unused, _grid_cache={}):
+  def _decode (self, data, rec_id, _grid_cache={}):
     import rpnpy.librmn.all as rmn
     import numpy as np
-    if not hasattr(self,'_interp_grid'):
-      return super(Interp,self)._decode (data, unused)
+    if self._headers['ismeta'][rec_id] or not hasattr(self,'_interp_grid'):
+      return super(Interp,self)._decode (data, rec_id)
     grid_params = ('ni','nj','grtyp','ig1','ig2','ig3','ig4')
     prm = self._decode_headers(data[:72])
     prm = dict((k,v[0]) for k,v in prm.items())
-    prm['d'] = super(Interp,self)._decode (data, unused).T
+    prm['d'] = super(Interp,self)._decode (data, rec_id).T
     with self._lock:
       cache_key = tuple(prm[k] for k in grid_params)
       # Check if we've already defined the input grid in a previous call.
