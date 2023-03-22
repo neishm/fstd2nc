@@ -477,9 +477,14 @@ class XYCoords (BufferBase):
     from rpnpy.librmn.all import cxgaig, ezgdef_fmem, ezgdef_supergrid, ezqkdef, decodeGrid, RMNError
     import numpy as np
 
+    # Save a copy of librmn grid ids, which might be useful for other mixins.
+    self._gids = np.empty(self._nrecs,dtype=int)
+    self._gids[:] = -1
+
     # Scan through the data, and look for any use of horizontal coordinates.
     grids = OrderedDict()
     gridmaps = OrderedDict()
+    gids = OrderedDict()
     lats = OrderedDict()
     lons = OrderedDict()
     # Only output 1 copy of 1D coords (e.g. could have repetitions with
@@ -554,6 +559,7 @@ class XYCoords (BufferBase):
               grd = ezgdef_fmem(grd)
             else:
               grd = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4)
+            gids[key] = grd
             grd = decodeGrid(grd)
             gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon)
             gmapvar = gmap.gen_gmapvar()
@@ -608,6 +614,7 @@ class XYCoords (BufferBase):
                 # Supergrids (U) are already handled.
                 # What's left?
                 gdid = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4, 0)
+              gids[key] = gdid
               ll = gdll(gdid)
               latarray = ll['lat']
               lonarray = ll['lon']
@@ -739,6 +746,12 @@ class XYCoords (BufferBase):
       gridaxes = grids[key]
       lat = lats[key]
       lon = lons[key]
+      # Store librmn grid ids for possible use in other parts of code.
+      if key in gids and isinstance(var,_iter_type):
+        ind = var.record_id.flatten()
+        ind = ind[ind>=0]
+        if len(ind) > 0:
+          self._gids[ind] = gids[key]
 
       # Update the var's horizontal coordinates.
       newaxes = []
