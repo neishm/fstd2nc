@@ -544,7 +544,7 @@ class XYCoords (BufferBase):
             if grtyp in ('Z','#'):
               ref = self._find_coord(var,b'>>  ')
               grd = atts.copy()
-              grd['grref'] = ref['grtyp'].decode()
+              grd['grref'] = ref['grtyp']
               grd['ig1'] = int(ref['ig1'])
               grd['ig2'] = int(ref['ig2'])
               grd['ig3'] = int(ref['ig3'])
