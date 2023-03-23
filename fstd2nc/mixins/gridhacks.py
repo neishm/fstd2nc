@@ -205,8 +205,6 @@ class YinYang (BufferBase):
         Select second subgrid from a supergrid.
     """
     import rpnpy.librmn.all as rmn
-    import tempfile
-    from os import path
     import numpy as np
     from fstd2nc.extra import structured_array
     from collections import OrderedDict
@@ -221,48 +219,29 @@ class YinYang (BufferBase):
       return
 
     # Find all unique YY input grids.
-    mask = (self._headers['ismeta']==0) & (self._headers['grtyp']==b'U')
-    grids = OrderedDict((key,self._headers[key][mask]) for key in ('ig1','ig2','ig3','ig4'))
-    grids, rec_ids = np.unique(structured_array(grids), return_index=True)
-    rec_ids = np.where(mask)[0][rec_ids]
-    nomvars = self._headers['nomvar'][rec_ids]
-    source_grids = dict()
-    for nomvar, grid in zip(nomvars,grids):
-      ig1 = grid['ig1']
-      ig2 = grid['ig2']
-      ig3 = grid['ig3']
-      ig4 = grid['ig4']
-      for handle in rmn.fstinl(self._meta_funit, nomvar=nomvar.decode()):
-        prm = rmn.fstprm(handle)
-        if prm['grtyp'] == b'U' and prm['ig1'] == ig1 and prm['ig2'] == ig2 and prm['ig3'] == ig3 and prm['ig4'] == ig4:
-          break
-      source_grids[(ig1,ig2,ig3,ig4)] = rmn.readGrid (self._meta_funit, prm)
-
-    # Generate temporary file with target grid info.
-    try: # Python 3
-      self._yy_tmpdir = tempfile.TemporaryDirectory()
-      gridfile = path.join(self._yy_tmpdir.name,"grid.fst")
-    except AttributeError: # Python 2 (no auto cleanup)
-      self._yy_tmpdir = tempfile.mkdtemp()
-      gridfile = path.join(self._yy_tmpdir,"grid.fst")
-    iun = rmn.fstopenall(gridfile, rmn.FST_RW)
-
+    # Do an early call to _makevars to get this info from xycoords.
+    self._makevars()
+    gids = self._gids
+    # Get the Z grid for one half of the YY input.
     if self._yin: yy_ind = 0
     else: yy_ind = 1
-
-    # Write all target grids and set the headers appropriately.
-    for (ig1,ig2,ig3,ig4), source_grid in source_grids.items():
+    for gid in np.unique(gids):
+      if gid<0: continue
+      source_grid = rmn.decodeGrid(int(gid))
       dest_grid = source_grid['subgrid'][yy_ind]
-      rmn.writeGrid (iun, dest_grid)
+      self._writeGrid (dest_grid)
+      mask = (self._headers['ismeta']==0) & (self._headers['grtyp']==b'U')
+      # Need to get ig1/ig2/ig3/ig4 from a sample record, because apparently
+      # these values get mangles in librmn?
+      rec_id = np.where(gids==gid)[0][0]
+      ig1 = int(self._headers['ig1'][rec_id])
+      ig2 = int(self._headers['ig2'][rec_id])
+      ig3 = int(self._headers['ig3'][rec_id])
+      ig4 = int(self._headers['ig4'][rec_id])
       submask = mask & (self._headers['ig1'] == ig1) & (self._headers['ig2'] == ig2) & (self._headers['ig3'] == ig3) & (self._headers['ig4'] == ig4)
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][submask] = dest_grid[key]
-    rmn.fstcloseall (iun)
 
-    # Hack in these extra coordinate records, and refresh metadata file unit.
-    rmn.fstcloseall (self._meta_funit)
-    self._meta_filenames.append(gridfile)
-    self._meta_funit = rmn.fstopenall(self._meta_filenames,rmn.FST_RO)
 
   # Handle grid interpolations from raw binary array.
   def _decode (self, data, unused):
