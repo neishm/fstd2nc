@@ -49,6 +49,7 @@ class GridHacks (BufferBase):
   def _writeGrid (self, gid):
     import numpy as np
     if gid['grtyp'] not in ('Z','#','Y','U'): return None
+    self._enable_hacks()
     # Define some parameters for the grid.
     prm = dict()
     prm['typvar'] = 'X '
@@ -103,8 +104,6 @@ class Interp (BufferBase):
         Interpolate to the specified grid.
     """
     import rpnpy.librmn.all as rmn
-    import tempfile
-    from os import path
     import numpy as np
     interp = kwargs.pop('interp',None)
     super(Interp,self).__init__(*args,**kwargs)
@@ -113,7 +112,6 @@ class Interp (BufferBase):
       try: return int(x)
       except ValueError: return float(x)
     if interp is not None:
-      self._enable_hacks()
       interp = interp.split(',')
       grtyp = interp[0]
       grid_args = [number(v) for v in interp[1:] if '=' not in v]
@@ -122,28 +120,46 @@ class Interp (BufferBase):
       if not hasattr(rmn,'defGrid_'+grtyp):
         error(_("Unknown grid '%s'")%grtyp)
       self._interp_grid = getattr(rmn,'defGrid_'+grtyp)(*grid_args,**grid_kwargs)
-
-      # Update records to use this grid.
-      ismeta = self._headers['ismeta']
-      for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
-        self._headers[key][:] = np.where(ismeta, self._headers[key], self._interp_grid[key])
       # Hack the new grid descriptors into the headers.
       self._writeGrid (self._interp_grid)
+
+      # Store original and modified versions of the grid descriptors.
+      ismeta = self._headers['ismeta']
+      self._original_grid = dict()
+      self._modified_grid = dict()
+      for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
+        self._original_grid[key] = self._headers[key]
+        self._modified_grid[key] = np.array(self._headers[key])
+        self._modified_grid[key][:] = np.where(ismeta, self._headers[key], self._interp_grid[key])
+
       # Set up some options for ezsint.
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_DEGREE, rmn.EZ_EXTRAP_VALUE)
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_VALUE, self._fill_value)
 
-  # Add fill value to the data.
-  # Modified from code in from mask mixin.
-  # Set this fill value for any interpolated data, since it may contain
-  # points outside the original boundary.
+
   def _makevars (self):
     from fstd2nc.mixins import _iter_type
+    import numpy as np
+
+    if not hasattr(self,'_interp_grid'):
+      return super(Interp,self)._makevars()
+
+    # Run _makevars chain with original grid descriptors to allow
+    # xycoords to give us source grid ids,
+    # switch out the grid descriptors in the table, then let xycoords
+    # construct the target grid axes for us.
     super(Interp,self)._makevars()
-    if hasattr(self,'_interp_grid'):
-      for var in self._varlist:
-        if isinstance(var,_iter_type):
-          var.atts['_FillValue'] = var.dtype.type(self._fill_value)
+    self._source_gids = np.array(self._gids)
+    self._headers.update(self._modified_grid)
+    super(Interp,self)._makevars()
+
+    # Add fill value to the data.
+    # Modified from code in from mask mixin.
+    # Set this fill value for any interpolated data, since it may contain
+    # points outside the original boundary.
+    for var in self._varlist:
+      if isinstance(var,_iter_type):
+        var.atts['_FillValue'] = var.dtype.type(self._fill_value)
 
   # Handle grid interpolations from raw binary array.
   def _decode (self, data, rec_id, _grid_cache={}):
@@ -151,26 +167,17 @@ class Interp (BufferBase):
     import numpy as np
     if self._headers['ismeta'][rec_id] or not hasattr(self,'_interp_grid'):
       return super(Interp,self)._decode (data, rec_id)
-    grid_params = ('ni','nj','grtyp','ig1','ig2','ig3','ig4')
-    prm = self._decode_headers(data[:72])
-    prm = dict((k,v[0]) for k,v in prm.items())
-    prm['d'] = super(Interp,self)._decode (data, rec_id).T
+    # Retrieve an active librmn grid id associated with this grid.
+    # (must be supplied by xycoords mixin).
+    ingrid = int(self._source_gids[rec_id])
+    if ingrid < 0:
+      raise ValueError("Source data is not on a recognized grid.  Unable to interpolate.")
+    d = super(Interp,self)._decode (data, rec_id).T
     with self._lock:
-      cache_key = tuple(prm[k] for k in grid_params)
-      # Check if we've already defined the input grid in a previous call.
-      if cache_key in _grid_cache:
-        ingrid = _grid_cache[cache_key]
-      else:
-        ingrid = dict((k,(str(prm[k].decode()) if k=='grtyp' else int(prm[k]))) for k in grid_params)
-        if hasattr(self,'_meta_funit'):
-          ingrid['iunit'] = self._meta_funit
-        ingrid = rmn.ezqkdef (**ingrid)
-        _grid_cache[cache_key] = ingrid
-
       # Propogate any fill values to the interpolated grid.
-      in_mask = np.zeros(prm['d'].shape, order='F', dtype='float32')
-      in_mask[prm['d']==self._fill_value] = 1.0
-      d = rmn.ezsint (self._interp_grid, ingrid, prm['d'])
+      in_mask = np.zeros(d.shape, order='F', dtype='float32')
+      in_mask[d==self._fill_value] = 1.0
+      d = rmn.ezsint (self._interp_grid, ingrid, d)
       out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
       d[out_mask!=0] = self._fill_value
       # Return the data for the interpolated field.
