@@ -206,8 +206,6 @@ class YinYang (BufferBase):
     """
     import rpnpy.librmn.all as rmn
     import numpy as np
-    from fstd2nc.extra import structured_array
-    from collections import OrderedDict
     self._yin = kwargs.pop('yin',False)
     self._yang = kwargs.pop('yang',False)
 
@@ -218,10 +216,16 @@ class YinYang (BufferBase):
     if not self._yin and not self._yang:
       return
 
-    # Find all unique YY input grids.
-    # Do an early call to _makevars to get this info from xycoords.
+    # Run _makevars early to generate grid ids with xycoords mixin.
+    # Silence warnings from makevars, which might not be relevant to the final
+    # state after we make our grid modifications.
+    import fstd2nc
+    streams = fstd2nc.stdout.streams
+    fstd2nc.stdout.streams = ()
     self._makevars()
+    fstd2nc.stdout.streams = streams
     gids = self._gids
+
     # Get the Z grid for one half of the YY input.
     if self._yin: yy_ind = 0
     else: yy_ind = 1
@@ -232,7 +236,7 @@ class YinYang (BufferBase):
       self._writeGrid (dest_grid)
       mask = (self._headers['ismeta']==0) & (self._headers['grtyp']==b'U')
       # Need to get ig1/ig2/ig3/ig4 from a sample record, because apparently
-      # these values get mangles in librmn?
+      # these values get mangles in librmn for U grids?
       rec_id = np.where(gids==gid)[0][0]
       ig1 = int(self._headers['ig1'][rec_id])
       ig2 = int(self._headers['ig2'][rec_id])
@@ -274,8 +278,6 @@ class Crop (BufferBase):
     """
     import rpnpy.librmn.all as rmn
     import numpy as np
-    from fstd2nc.extra import structured_array
-    from collections import OrderedDict
     self._crop_to_smallest_grid = kwargs.pop('crop_to_smallest_grid',False)
 
     # Load the metadata from the file(s).
@@ -290,31 +292,24 @@ class Crop (BufferBase):
     self._headers['j0'] = np.zeros(self._nrecs,'uint16')
     self._headers['jN'] = np.array(self._headers['nj'],'uint16')
 
-    # Find all unique grids.
-    ###
-    # Skip supergrids.
-    mask = (self._headers['ismeta']==0) & (self._headers['grtyp'] != b'U')
-    grids = OrderedDict((key,self._headers[key][mask]) for key in ('ig1','ig2','ig3','ig4'))
-    grids, rec_ids = np.unique(structured_array(grids), return_index=True)
-    rec_ids = np.where(mask)[0][rec_ids]
-    source_grids = dict()
-    for rec_id in rec_ids:
-      prm = dict()
-      prm['grtyp'] = self._headers['grtyp'][rec_id].decode()
-      prm['ni'] = int(self._headers['ni'][rec_id])
-      prm['nj'] = int(self._headers['nj'][rec_id])
-      prm['ig1'] = int(self._headers['ig1'][rec_id])
-      prm['ig2'] = int(self._headers['ig2'][rec_id])
-      prm['ig3'] = int(self._headers['ig3'][rec_id])
-      prm['ig4'] = int(self._headers['ig4'][rec_id])
-      key = tuple(prm[k] for k in ('ig1','ig2','ig3','ig4'))
-      source_grids[key] = rmn.readGrid (self._meta_funit, prm)
+    # Run _makevars early to generate grid ids with xycoords mixin.
+    # Silence warnings from makevars, which might not be relevant to the final
+    # state after we make our grid modifications.
+    import fstd2nc
+    streams = fstd2nc.stdout.streams
+    fstd2nc.stdout.streams = ()
+    self._makevars()
+    fstd2nc.stdout.streams = streams
+    gids = self._gids
 
-    ###
-
-    # Group by ig1ref, etc.
+    # Find all available grids, group them by their projection parameters.
+    # I.e., lump together all grids that only differ in their x/y extent.
     matches = dict()
-    for grid in source_grids.values():
+    for gid in np.unique(gids):
+      if gid<0: continue
+      grid = rmn.decodeGrid(int(gid))
+      # Skip supergrids.
+      if grid['grtyp'] == 'U': continue
       key = (grid['ig1ref'],grid['ig2ref'],grid['ig3ref'],grid['ig4ref'])
       matches.setdefault(key,[]).append(grid)
 
@@ -327,28 +322,29 @@ class Crop (BufferBase):
 
     # Ok, now look at all the source grids, and figure out which ones are
     # candidates for cropping.
-    for (ig1,ig2,ig3,ig4), grid in source_grids.items():
-      key = (grid['ig1ref'],grid['ig2ref'],grid['ig3ref'],grid['ig4ref'])
+    for key in smallest.keys():
       smallest_grid = matches[key][smallest[key]]
-      # Nothing to do if already the smallest grid.
-      if grid['id'] == smallest_grid['id']: continue
-      # Make sure the coordinates are actually compatible.
-      ind = np.searchsorted(grid['ax'].flatten(), smallest_grid['ax'].flatten())
-      i0, iN = ind[0], ind[-1]+1
-      ind = np.searchsorted(grid['ay'].flatten(), smallest_grid['ay'].flatten())
-      j0, jN = ind[0], ind[-1]+1
-      if iN-i0 != smallest_grid['ni']: continue
-      if jN-j0 != smallest_grid['nj']: continue
-      if np.any(grid['ax'].flatten()[i0:iN] != smallest_grid['ax'].flatten()): continue
-      if np.any(grid['ay'].flatten()[j0:jN] != smallest_grid['ay'].flatten()): continue
-      # Able to crop, so update the headers to point to the cropped coordinates.
-      submask = mask & (self._headers['ig1'] == ig1) & (self._headers['ig2'] == ig2) & (self._headers['ig3'] == ig3) & (self._headers['ig4'] == ig4)
-      for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
-        self._headers[key][submask] = smallest_grid[key]
-      self._headers['i0'][submask] = i0
-      self._headers['iN'][submask] = iN
-      self._headers['j0'][submask] = j0
-      self._headers['jN'][submask] = jN
+      for grid in matches[key]:
+        # Nothing to do if already the smallest grid.
+        if grid['id'] == smallest_grid['id']: continue
+        # Make sure the coordinates are actually compatible.
+        ind = np.searchsorted(grid['ax'].flatten(), smallest_grid['ax'].flatten())
+        i0, iN = ind[0], ind[-1]+1
+        ind = np.searchsorted(grid['ay'].flatten(), smallest_grid['ay'].flatten())
+        j0, jN = ind[0], ind[-1]+1
+        if iN-i0 != smallest_grid['ni']: continue
+        if jN-j0 != smallest_grid['nj']: continue
+        if np.any(grid['ax'].flatten()[i0:iN] != smallest_grid['ax'].flatten()): continue
+        if np.any(grid['ay'].flatten()[j0:jN] != smallest_grid['ay'].flatten()): continue
+        # Able to crop, so update the headers to point to the cropped coordinates.
+        submask = (self._headers['ig1'] == grid['tag1']) & (self._headers['ig2'] == grid['tag2']) & (self._headers['ig3'] == grid['tag3'])
+        for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
+          self._headers[key][submask] = smallest_grid[key]
+        self._headers['i0'][submask] = i0
+        self._headers['iN'][submask] = iN
+        self._headers['j0'][submask] = j0
+        self._headers['jN'][submask] = jN
+
 
   # Handle cropping from raw binary array.
   def _decode (self, data, rec_id):
