@@ -134,7 +134,7 @@ class VCoords (BufferBase):
         header = self._fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.
-        if header['nomvar'] == b'HY  ': key = 'HY'
+        if header['nomvar'] == 'HY  ': key = 'HY'
         if key in vrecs: continue
         prm = self._fstluk(handle)
         vrecs[key] = prm
