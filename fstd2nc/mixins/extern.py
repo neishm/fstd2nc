@@ -310,7 +310,8 @@ class ExternOutput (BufferBase):
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
     # Create a mask to exclude deleted / overwritten / unselected records.
-    mask = self._headers['selected']
+    # Include all meta (coordinate) records in the output.
+    mask = self._headers['selected'] | self._headers['ismeta']
     for field in fields:
       col = self._headers[field][mask]
       # Convert byte arrays to strings, which is what fstpy expects.
@@ -357,6 +358,10 @@ def _fix_to_pygeode (fixed=[False]):
   fixed[0] = True
 
 class ExternInput (BufferBase):
+  def __init__ (self, *args, **kwargs):
+    if '_extern_table' in kwargs:
+      self._extern_table = kwargs.pop('_extern_table')
+    super(ExternInput,self).__init__(*args,**kwargs)
   @classmethod
   def from_fstpy (cls, table, **kwargs):
     import numpy as np
@@ -391,13 +396,25 @@ class ExternInput (BufferBase):
     fake_buffer._headers = headers
 
     # Initialize a Buffer object with this info.
-    b = cls(fake_buffer, **kwargs)
-
-    # Save the dataframe for reference.
+    # Also save the dataframe for reference.
     # Will need the dask objects for getting the data.
-    b._extern_table = table
+    b = cls(fake_buffer, _extern_table=table, **kwargs)
 
     return b
+
+  # Handle external data for read_record method.
+  # Use data from _extern_table.
+  def _read_record (self, rec_id):
+    import numpy as np
+    # Check if there is custom data enabled for this Buffer.
+    if hasattr(self, '_extern_table'):
+      # Extract the record info from the table.
+      rec = self._extern_table.iloc[rec_id].to_dict()
+      # Load the data (if delayed).
+      rec['d'] = np.asarray(rec['d'])
+      return rec['d'].T
+    # Otherwise, continue as usual.
+    return super(ExternInput,self)._read_record (rec_id)
 
   # Handle external data for _decode method.
   # In this case, the first argument is ignored (no file data was read).
@@ -405,14 +422,11 @@ class ExternInput (BufferBase):
     import numpy as np
     # Check if there is custom data enabled for this Buffer.
     if hasattr(self, '_extern_table'):
-      # Make sure we are looking for something in our list of records.
-      # (could be a key pointing into something else?)
-      if not isinstance(rec_id,dict):
-        # Extract the record info from the table.
-        rec = self._extern_table.iloc[rec_id].to_dict()
-        # Load the data (if delayed).
-        rec['d'] = np.asarray(rec['d'])
-        return rec['d'].T
+      # Extract the record info from the table.
+      rec = self._extern_table.iloc[rec_id].to_dict()
+      # Load the data (if delayed).
+      rec['d'] = np.asarray(rec['d'])
+      return rec['d'].T
     # Otherwise, continue as usual.
     return super(ExternInput,self)._decode (maybe_data, rec_id)
 
