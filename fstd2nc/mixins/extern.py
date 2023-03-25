@@ -359,9 +359,6 @@ def _fix_to_pygeode (fixed=[False]):
 class ExternInput (BufferBase):
   @classmethod
   def from_fstpy (cls, table, **kwargs):
-    import tempfile
-    from os import path
-    import rpnpy.librmn.all as rmn
     import numpy as np
     if hasattr(table,'to_pandas'):
       table = table.to_pandas()
@@ -385,32 +382,16 @@ class ExternInput (BufferBase):
       # any subroutine is looking for this info.
       headers['address'] = np.empty(len(headers['nomvar']), dtype=object)
       headers['length'] = np.empty(len(headers['nomvar']), dtype=object)
-    # Generate temporary file with target grid info.
-    try: # Python 3
-      grid_tmpdir = tempfile.TemporaryDirectory()
-      gridfile = path.join(grid_tmpdir.name,"grid.fst")
-    except AttributeError: # Python 2 (no auto cleanup)
-      grid_tmpdir = tempfile.mkdtemp()
-      gridfile = path.join(grid_tmpdir,"grid.fst")
-    # Write all grid records to a temporary file, so they are accessible to
-    # the vgrid / librmn helper functions.
-    iun = rmn.fstopenall(gridfile, rmn.FST_RW)
-    for nomvar in (b'!!  ',b'>>  ',b'^^  ',b'^>  ',b'!!SF'):
-      for ind in np.where(headers['nomvar'] == nomvar)[0]:
-        rec = table.iloc[ind].to_dict()
-        rec['d'] = np.asarray(rec['d'])
-        rmn.fstecr(iun, rec)
-    rmn.fstcloseall(iun)
-    files = [gridfile]
+    # Fake file id (just so netcdf mixin _quick_load function doesn't crash).
     headers['file_id'] = np.zeros(len(headers['nomvar']), dtype='int32')
+
     # Encapsulate this info in a structure.
     fake_buffer = cls.__new__(cls)
-    fake_buffer._files = files
+    fake_buffer._files = [None]
     fake_buffer._headers = headers
 
     # Initialize a Buffer object with this info.
     b = cls(fake_buffer, **kwargs)
-    b._grid_tmpdir = grid_tmpdir  # Save tmpdir until cleanup.
 
     # Save the dataframe for reference.
     # Will need the dask objects for getting the data.
