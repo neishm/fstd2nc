@@ -350,7 +350,7 @@ class VCoords (BufferBase):
           # Add in metadata from the coordinate.
           atts.update(self._get_header_atts(header))
           # Add type-specific metadata.
-          if header['nomvar'] == b'!!  ':
+          if header['nomvar'].strip() == '!!':
             # Get A and B info.
             try:
               vgd_id = vgd_fromlist(header['d'][:,:,None])
@@ -489,7 +489,7 @@ class VCoords (BufferBase):
           # hybrid coordinates [hy] (0.0->1.0)
           atts['positive'] = 'down'
           if key in vrecs:
-            if header['nomvar'] == b'!!  ':
+            if header['nomvar'].strip() == '!!':
               if internal_atts['LOGP']:
                 # Not really a "standard" name, but there's nothing in the
                 # CF conventions document on how to encode this.
