@@ -103,7 +103,6 @@ class VCoords (BufferBase):
     import numpy as np
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
     self._strict_vcoord_match = kwargs.pop('strict_vcoord_match',False)
     self._diag_as_model_level = kwargs.pop('diag_as_model_level',False)
     self._split_diag_level = kwargs.pop('split_diag_level',False)
@@ -130,21 +129,19 @@ class VCoords (BufferBase):
     vrecs = OrderedDict()
     # Keep track of any diagnostic levels, e.g. from GEM.
     diag_ip1 = []
-    for vcoord_nomvar in ('HY','!!'):
-      # Can only do this if we have metadata records.
-      if not hasattr(self,'_meta_funit'): continue
-      for handle in fstinl(self._meta_funit, nomvar=vcoord_nomvar):
-        header = fstprm(handle)
+    for vcoord_nomvar in (b'HY  ',b'!!  '):
+      for handle in self._fstinl(nomvar=vcoord_nomvar):
+        header = self._fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.
-        if header['nomvar'].strip() == 'HY': key = 'HY'
+        if header['nomvar'] == 'HY  ': key = 'HY'
         if key in vrecs: continue
-        vrecs[key] = header
+        prm = self._fstluk(handle)
+        vrecs[key] = prm
         # Extract diagnostic-level value from vertical coordinate.
         if key == 'HY': continue  # not applicable for HY coordinates.
-        prm = fstluk(header,rank=3)
         try:
-          vgd_id = vgd_fromlist(prm['d'])
+          vgd_id = vgd_fromlist(prm['d'][:,:,None])
         except VGDError:
           # Problems opening this vertical coordinate?
           continue
@@ -168,7 +165,7 @@ class VCoords (BufferBase):
       unique_vrecs = OrderedDict()
       handled = set()
       for key, header in self._vrecs.items():
-        coords = tuple(fstluk(header)['d'].flatten())
+        coords = tuple(header['d'].flatten())
         if coords in handled: continue
         handled.add(coords)
         unique_vrecs[key] = header
@@ -205,8 +202,7 @@ class VCoords (BufferBase):
     if self._thermodynamic_levels:
       for key, header in self._vrecs.items():
         if key == 'HY': continue  # not applicable for HY coordinates.
-        prm = fstluk(header,rank=3)
-        vgd_id = vgd_fromlist(prm['d'])
+        vgd_id = vgd_fromlist(header['d'][:,:,None])
         try:
           # Don't touch non-model levels.
           mask = (fields['kind'] != 5) & (fields['kind'] != 21)
@@ -221,8 +217,7 @@ class VCoords (BufferBase):
     if self._momentum_levels:
       for key, header in self._vrecs.items():
         if key == 'HY': continue  # not applicable for HY coordinates.
-        prm = fstluk(header,rank=3)
-        vgd_id = vgd_fromlist(prm['d'])
+        vgd_id = vgd_fromlist(header['d'][:,:,None])
         try:
           # Don't touch non-model levels.
           mask = (fields['kind'] != 5) & (fields['kind'] != 21)
@@ -237,8 +232,7 @@ class VCoords (BufferBase):
     if self._vertical_velocity_levels:
       for key, header in self._vrecs.items():
         if key == 'HY': continue  # not applicable for HY coordinates.
-        prm = fstluk(header,rank=3)
-        vgd_id = vgd_fromlist(prm['d'])
+        vgd_id = vgd_fromlist(header['d'][:,:,None])
         try:
           # Don't touch non-model levels.
           mask = (fields['kind'] != 5) & (fields['kind'] != 21)
@@ -289,7 +283,6 @@ class VCoords (BufferBase):
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS, VGD_OPR_KEYS
     from rpnpy.vgd import VGDError
-    from rpnpy.librmn.fstd98 import fstinl, fstprm, fstluk
 
     vrecs = self._vrecs
 
@@ -360,7 +353,7 @@ class VCoords (BufferBase):
           if header['nomvar'].strip() == '!!':
             # Get A and B info.
             try:
-              vgd_id = vgd_fromlist(fstluk(header,rank=3)['d'])
+              vgd_id = vgd_fromlist(header['d'][:,:,None])
               # Check if SLEVE coordinate.
               try:
                 vgd_get(vgd_id, 'RFLS')

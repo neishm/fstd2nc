@@ -80,61 +80,48 @@ class FSTD (BufferBase):
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
 
-  # Clean up a buffer (close any attached files, etc.)
-  def __del__ (self):
-    try:
-      from rpnpy.librmn.fstd98 import fstcloseall
-      fstcloseall(self._meta_funit)
-    except (ImportError, AttributeError):
-      pass  # May fail if Python is doing a final cleanup of everything.
-            # Or, if buffer wasn't fully initialized yet.
-
-  # Open metadata funit (done once during init of object).
-  def _open_meta_funit (self):
-    from rpnpy.librmn.fstd98 import fstopenall
-    from rpnpy.librmn.const import FST_RO
+  # Helper method - find all records with the given criteria.
+  # Mimics fstinl, but returns table indices instead of record handles.
+  def _fstinl (self, **criteria):
     import numpy as np
-    import warnings
-    meta_mask = self._headers['ismeta'][:]
-    meta_recids = np.where(meta_mask)[0]
-    _var_id = ('nomvar','ni','nj','nk')
-    # Use the same unique parameters as regular variables.
-    # Plus, ig1,ig2,ig3,ig4.
-    # Suppress FutureWarning from numpy about doing this.  Probably benign...
-    with warnings.catch_warnings():
-      warnings.simplefilter("ignore")
-      from fstd2nc.extra import structured_array
-      headers = dict()
-      for key in list(_var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']:
-        headers[key] = self._headers[key]
-      headers = structured_array(headers)
-      meta_keys = headers.data[meta_mask][list(_var_id)+['ip1','ip2','ip3','ig1','ig2','ig3','ig4']]
-    meta_keys, ind = np.unique(meta_keys, return_index=True)
-    meta_recids = meta_recids[ind]
-    # Find the files that give these unique coord records.
-    file_ids = sorted(set(self._headers['file_id'][meta_recids]))
-    filenames = [self._files[f] for f in file_ids]
-    if len(filenames) > 500:
-      error(_("Holy crap, how many coordinates do you have???"))
-    # If no coordinates found, just open the first file as a dummy file.
-    # Less error-prone than checking if _meta_funit is defined every time
-    # an FSTD function is called.
-    if len(filenames) == 0:
-      filenames = self._files[0:1]
-    # Open these files and link them together
-    self._meta_filenames = filenames  # Store this for further hacking.
-    self._meta_funit = fstopenall(filenames, FST_RO)
-        
+    mask = True
+    for k, v in criteria.items():
+      mask &= (self._headers[k]==v)
+    return np.where(mask)[0]
+
+  # Helper method - get metadata of the given record.
+  def _fstprm (self, rec):
+    prm = dict((k,v[rec]) for k,v in self._headers.items())
+    for k in ('typvar','nomvar','grtyp','etiket'):
+      prm[k] = prm[k].decode()
+    return prm
+
+  # Helper method - read the specified record.
+  # Mimics the behaviour of fstluk.
+  def _fstluk (self, rec):
+    prm = self._fstprm(rec)
+    ni = prm['ni']
+    nj = prm['nj']
+    prm['d'] = self._read_record(rec).T.reshape(ni,nj)
+    return prm
+
+  # Helper method - read a record with the specified criteria.
+  # Mimics the behaviour of fstlir.
+  # Note: not the fastest method.  Should be used sparingly.
+  def _fstlir (self, **criteria):
+    recs = self._fstinl(**criteria)
+    if len(recs) == 0: return None
+    rec = recs[0]
+    return self._fstluk(rec)
+
   # Control the pickling / unpickling of BufferBase objects.
   def __getstate__ (self):
     state = super(FSTD,self).__getstate__()
     state.pop('_lock',None)  # librmn lock will be defined upon unpickling.
-    state.pop('_meta_funit',None) # Same with librmn file handles.
     return state
   def __setstate__ (self, state):
     super(FSTD,self).__setstate__(state)
     self._lock = _lock
-    self._open_meta_funit()
 
 
   ###############################################
@@ -163,7 +150,7 @@ class FSTD (BufferBase):
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj','nk') + self._var_id
     self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s', '%(nk)sL') + self._human_var_id
-    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','ismeta') + self._ignore_atts
+    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','ismeta','d') + self._ignore_atts
 
     ignore_typvar = kwargs.pop('ignore_typvar',False)
     ignore_etiket = kwargs.pop('ignore_etiket',False)
@@ -193,9 +180,6 @@ class FSTD (BufferBase):
     # Store this metadata identification in case it's useful for some mixins.
     self._headers['ismeta'] = np.empty(self._nrecs, dtype='bool')
     self._headers['ismeta'][:] = meta_mask
-
-    # Make metadata records available for FSTD-related mixins.
-    self._open_meta_funit()
 
     # Aliases for iner dimensions
     self._headers['k'] = self._headers['nk']
