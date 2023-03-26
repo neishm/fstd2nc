@@ -65,15 +65,14 @@ class FSTD_Compat (BufferBase):
   # output file.
   def _fstluk_compat (self, rec_id, dtype=None, rank=None, dataArray=None):
 
+    # Keep track of which records were used.
+    if not hasattr(self,'_used_rec_ids'):
+      self._used_rec_ids = []
     self._used_rec_ids.append(rec_id)
 
     prm = super(FSTD_Compat,self)._fstluk(rec_id)
     if dtype is not None:
       prm['d'] = prm['d'].astype(dtype)
-
-    # Keep track of which records were used.
-    if not hasattr(self,'_used_rec_ids'):
-      self._used_rec_ids = []
 
     return prm
 
