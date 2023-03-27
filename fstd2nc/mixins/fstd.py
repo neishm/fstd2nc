@@ -217,6 +217,23 @@ class FSTD (BufferBase):
     from fstd2nc.extra import raw_headers
     return raw_headers(filename)
 
+  def to_fstd (self, filename):
+    """
+    Write data to an FSTD file.
+    """
+    from os.path import exists
+    from os import remove
+    import rpnpy.librmn.all as rmn
+    import numpy as np
+    if exists(filename): remove(filename)
+    outfile = rmn.fstopenall(filename, rmn.FST_RW)
+    for i in np.where(self._headers['selected'] | self._headers['ismeta'])[0]:
+      rec = self._fstluk(i)
+      # Ensure data is Fortran-contiguous for librmn.
+      rec['d'] = np.ascontiguousarray(rec['d'].T).T
+      rmn.fstecr(outfile, rec)
+    rmn.fstcloseall(outfile)
+
   #
   ###############################################
 
