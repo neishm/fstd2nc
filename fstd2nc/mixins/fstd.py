@@ -65,7 +65,7 @@ del RLock
 # Define a class for encoding / decoding FSTD data.
 class FSTD (BufferBase):
   _format = _("RPN standard file")
-  _format_singular = _("An RPN standard file")
+  _format_singular = _("an RPN standard file")
   _format_plural = _("RPN standard file(s)")
 
   # Keep a reference to fstd98 so it's available during cleanup.
