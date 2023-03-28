@@ -1,3 +1,24 @@
+Version 0.20230328.0 (Mar 28, 2023)
+	* Fix handling of accented characters from vardicts and metadata
+	  files.
+	* Removed 'axis' attribute from 2D lat/lon fields, since they are not
+	  truly axes in that case.
+	* New Python helper function (fstd2nc.extra.get_crs) for getting
+	  projection information from an xarray dataset.
+	* Turned off annoying librmn messages when using this module from
+	  Python.
+	* Some support for creating a new Buffer object by instantiating from
+	  an existing Buffer, allowing more specific filtering options.
+	* Fix filtering for etikets that contain spaces.
+	* Detect and transform netCDF variable names that contain a '/'.
+	  This can happen, for instance if there are multiple typvars and one
+	  of them contains a '/' character.
+	* Some support for complex data (datyp=8) from Python interface.
+	  Note: not supported for writing to netCDF, just xarray interface.
+	* New to_fstd() method to write back to FSTD format instead of netCDF.
+	* Use only "current" definitions for --opdict and --vardict options,
+	  ignore the obsolete ones.
+
 Version 0.20230222.0 (Feb 22, 2023)
 	* Detect newer surface aggregate fields from GEM 5.1 / 5.2 (assign
 	  "sfctype" categories on those fields).
