@@ -82,6 +82,7 @@ class VarDict (BufferBase):
         error (_("Invalid dictionary file '%s'"%vardict.name))
 
       for metvar in metvars:
+        if metvar.attrib.get('usage','current') != 'current': continue
         nomvar = metvar.findtext('nomvar')
         if nomvar is None: continue
         var = metadata.setdefault(nomvar,OrderedDict())
