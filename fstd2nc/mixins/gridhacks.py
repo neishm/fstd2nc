@@ -75,7 +75,7 @@ class GridHacks (BufferBase):
     if 'axy' in gid:
       new_recs.append(dict(prm, nomvar='^>  ', ni=gid['ni'], nj=gid['nj'], d=gid['axy']))
     for k,v in self._headers.items():
-      self._headers[k] = np.zeros_like(v, shape=nrecs + len(new_recs))
+      self._headers[k] = np.zeros(shape=nrecs + len(new_recs), dtype=v.dtype)
       self._headers[k][:nrecs] = v[:]
     for i in range(len(new_recs)):
       for k,v in new_recs[i].items():
