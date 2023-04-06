@@ -49,11 +49,13 @@ class Masks (BufferBase):
         '_FillValue' attribute in the metadata.  Default is 1e30.
     """
     import numpy as np
+    from fstd2nc.extra import structured_array
+    from collections import OrderedDict
+
     self._fill_value = kwargs.pop('fill_value',1e30)
+    self._ignore_atts = ('mask_offset','mask_rec') + self._ignore_atts
     super(Masks,self).__init__(*args,**kwargs)
-    # Modify 'lng' to overlap the data and mask fields (where they are stored
-    # consecutively).
-    # This will allow the _decode method to apply the mask directly.
+
     nomvar = self._headers['nomvar']
     typvar = self._headers['typvar']
     etiket = self._headers['etiket']
@@ -63,30 +65,66 @@ class Masks (BufferBase):
     ip3 = self._headers['ip3']
     dltf = self._headers['dltf']
     uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
+    if not np.any(uses_mask): return
 
-    # Expect mask record to immediately follow the data record.
-    # This is the case in all data I've encountered so far, and is necessary
-    # for reading the data/mask together (for decode to work).
-    # Find all such pairings in the headers.
-    has_mask = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
-    has_mask = np.where(has_mask)[0]
-
-    # If data is from an FSTD file on disk, then try overlapping the read of
-    # the data and mask.
-    self._headers['length'][has_mask] = self._headers['address'][has_mask+1] + self._headers['length'][has_mask+1] - self._headers['address'][has_mask]
-
-    # Add a column in the headers to keep track of where to find the mask data
-    # from the combined fields.
-    try:
-      self._headers['mask_offset'] = np.empty(len(self._headers['name']),dtype='int32')
-      self._headers['mask_offset'][:] = -1
-      self._headers['mask_offset'][has_mask] = self._headers['address'][has_mask+1] - self._headers['address'][has_mask]
-    except KeyError:
-      pass  # Not our data from disk (maybe from fstpy?) so can't do that.
     # Remove all mask records from the table, they should not become variables
     # themselves.
     is_mask = (self._headers['typvar'] == b'@@')
     self._headers['selected'][is_mask] = False
+
+    nrecs = len(self._headers['name'])
+
+    # Easy case - masks appear immediately following the data.
+    # Find all such pairings in the headers.
+    has_mask = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
+    has_mask = np.where(has_mask)[0]
+    # If data is from an FSTD file on disk, then try overlapping the read of
+    # the data and mask.
+    self._headers['length'][has_mask] = self._headers['address'][has_mask+1] + self._headers['length'][has_mask+1] - self._headers['address'][has_mask]
+    # Add a column in the headers to keep track of where to find the mask data
+    # from the combined fields.
+    #TODO: check how this interacts with externally generated records.
+    # (from_fstpy)
+    try:
+      self._headers['mask_offset'] = np.empty(nrecs,dtype='int32')
+      self._headers['mask_offset'][:] = -1
+      if len(has_mask) > 0:
+        self._headers['mask_offset'][has_mask] = self._headers['address'][has_mask+1] - self._headers['address'][has_mask]
+    except KeyError:
+      pass  # Not our data from disk (maybe from fstpy?) so can't do that.
+
+    # Harder case - masks are in the file, but in random order.
+    unordered_mask = np.zeros(nrecs,dtype='bool')
+    unordered_mask[(typvar==b'@@')&(dltf==0)] = True
+    if len(has_mask) > 0:
+      unordered_mask[has_mask+1] = False
+    if not np.any(unordered_mask): return
+
+    # Figure out how to pair up the data and mask.
+    # Requires O(n log n) time, which is better than O(n^2) for naive lookup
+    # on each record.
+    keys = OrderedDict([('dltf',dltf),('nomvar',nomvar),('etiket',etiket),('datev',datev),('ip1',ip1),('ip2',ip2),('ip3',ip3),('typvar',typvar)])
+    ind = np.argsort(structured_array(keys))
+    # Find mask / data pairs.
+    # (In this case, with the above sort, masks will appear before the data)
+    # Use similar comparisons as with the easy case.
+    nomvar = nomvar[ind]
+    typvar = typvar[ind]
+    etiket = etiket[ind]
+    datev = datev[ind]
+    ip1 = ip1[ind]
+    ip2 = ip2[ind]
+    ip3 = ip3[ind]
+    dltf = dltf[ind]
+    uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
+    has_mask = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
+    has_mask = np.where(has_mask)[0]
+    has_mask += 1  # Data appears after mask in this case.
+    rec_id = np.arange(nrecs)[ind]
+    self._headers['mask_rec'] = np.empty(nrecs,'int32')
+    self._headers['mask_rec'][:] = -1
+    self._headers['mask_rec'][rec_id[has_mask]] = rec_id[has_mask-1]
+    del nomvar, typvar, etiket, datev, ip1, ip2, ip3, dltf, uses_mask, has_mask
 
   # Apply the fill value to the data.
   def _makevars (self):
@@ -120,12 +158,14 @@ class Masks (BufferBase):
     # If typvar doesn't end in '@', then nothing to do here.
     if prm['typvar'][1:] != b'@':
       return field1
-    # If no mask was found, then nothing to do here.
-    if 'mask_offset' not in self._headers:
-      return field1
-    mask_offset = self._headers['mask_offset'][rec_id]
-    if mask_offset < 0:
-      return field1
-    field2 = super(Masks,self)._decode(data[mask_offset:], rec_id+1)
-    # Apply the mask.
-    return ((field1*(field2>0)) + self._fill_value * (field2==0)).astype(field1.dtype)
+    if 'mask_offset' in self._headers:
+      mask_offset = self._headers['mask_offset'][rec_id]
+      if mask_offset >= 0:
+        field2 = super(Masks,self)._decode(data[mask_offset:], rec_id+1)
+        return ((field1*(field2>0)) + self._fill_value * (field2==0)).astype(field1.dtype)
+    if 'mask_rec' in self._headers:
+      mask_rec = self._headers['mask_rec'][rec_id]
+      if mask_rec >= 0:
+        field2 = self._read_record(mask_rec)
+        return ((field1*(field2>0)) + self._fill_value * (field2==0)).astype(field1.dtype)
+    return field1
