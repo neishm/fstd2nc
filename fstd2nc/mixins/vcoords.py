@@ -290,6 +290,12 @@ class VCoords (BufferBase):
     # again with updated information.
     rerun = False
 
+    # Check if cell boundaries are requested.
+    # This is controlled from the xycoords mixin, but we can also add
+    # vertical bounds as well.
+    bounds = self._bounds
+    from fstd2nc.mixins.xycoords import bnds2
+
     # Scan through the data, and look for any use of vertical coordinates.
     vaxes = OrderedDict()
     prefs = dict()  # Reference pressure scalar variables.
@@ -343,6 +349,7 @@ class VCoords (BufferBase):
         atts = OrderedDict()
         name = 'level'
         new_axis = _axis_type(name, atts, level_axis.array)
+        new_bnds = _var_type(name+'_bnds', {}, [new_axis,bnds2], None)
 
         # Check if we have a vertical coordinate record to use.
         if key in vrecs:
@@ -367,6 +374,10 @@ class VCoords (BufferBase):
             coordA = _var_type('a', {}, [new_axis], None)
             coordB = _var_type('b', {}, [new_axis], None)
             coordC = _var_type('c', {}, [new_axis], None)
+            # Partial definition of a/b boundaries.
+            coordA_bnds = _var_type('a_bnds', {}, [new_axis,bnds2], None)
+            coordB_bnds = _var_type('b_bnds', {}, [new_axis,bnds2], None)
+            coordC_bnds = _var_type('c_bnds', {}, [new_axis,bnds2], None)
 
             # First, patch up VGD_OPR_KEYS to include SLEVE coordinates?
             #TODO: remove this once rpnpy has full support for this.
@@ -432,11 +443,42 @@ class VCoords (BufferBase):
               coordA.array = np.asarray(A)
               coordB.array = np.asarray(B)
               coordC.array = np.asarray(C)
+              # Find vertical layer boundaries.
+              if bounds:
+                A_bnds1, A_bnds2 = [], []
+                B_bnds1, B_bnds2 = [], []
+                C_bnds1, C_bnds2 = [], []
+                z_bnds1, z_bnds2 = [], []
+                all_z_sorted = sorted(all_z)
+                for z in levels:
+                  ind = all_z_sorted.index(z)
+                  z1 = all_z_sorted[ind-1]
+                  z2 = all_z_sorted[ind+1]
+                  ind1 = all_z.index(z1)
+                  ind2 = all_z.index(z2)
+                  A_bnds1.append(all_a[ind1])
+                  A_bnds2.append(all_a[ind2])
+                  B_bnds1.append(all_b[ind1])
+                  B_bnds2.append(all_b[ind2])
+                  z_bnds1.append(all_z[ind1])
+                  z_bnds2.append(all_z[ind2])
+                  if sleve:
+                    C_bnds1.append(all_c[ind1])
+                    C_bnds2.append(all_c[ind2])
+                coordA_bnds.array = np.array(np.asarray([A_bnds1,A_bnds2]).T)
+                coordB_bnds.array = np.array(np.asarray([B_bnds1,B_bnds2]).T)
+                new_bnds.array = np.array(np.asarray([z_bnds1,z_bnds2]).T)
+                if sleve:
+                  coordC_bnds.array = np.array(np.asarray([C_bnds1,C_bnds2]).T)
             except (KeyError,ValueError,VGDError):
               warn (_("Unable to get A/B coefficients for %s.")%var.name)
               coordA = None
               coordB = None
               coordC = None
+              coordA_bnds = None
+              coordB_bnds = None
+              coordC_bnds = None
+              new_bnds = None
             vgd_free (vgd_id)
         ###
 
@@ -519,6 +561,7 @@ class VCoords (BufferBase):
                 atts['standard_name'] = 'atmosphere_hybrid_sigma_pressure_coordinate'
                 if None not in (coordA,coordB):
                   coordA.array /= 100.0  # Use hPa for final units.
+                  if coordA_bnds is not None and coordA_bnds.array is not None: coordA_bnds.array /= 100.0
                   atts['formula'] = 'p = ap + b*ps'
                   coordA.name = 'ap'
                   atts['formula_terms'] = OrderedDict([('ap',coordA),('b',coordB),('ps','P0')])
@@ -575,6 +618,25 @@ class VCoords (BufferBase):
               atts['formula_terms'] = OrderedDict([('a',coordA),('b',coordB),('orog','ME')])
               coordinates.extend([coordA,coordB])
 
+        # Attach vertical boundaries?
+        if bounds and new_bnds is not None:
+          atts['bounds'] = new_bnds
+          # Attach a/b bounds
+          if 'formula_terms' in atts:
+            new_bnds.atts['formula_terms'] = atts['formula_terms'].copy()
+            for k, v in new_bnds.atts['formula_terms'].items():
+              if v is coordA:
+                new_bnds.atts['formula_terms'][k] = coordA_bnds
+                coordA.atts['bounds'] = coordA_bnds
+                coordA_bnds.name = coordA.name+'_bnds'
+              if v is coordB:
+                new_bnds.atts['formula_terms'][k] = coordB_bnds
+                coordB.atts['bounds'] = coordB_bnds
+                coordB_bnds.name = coordB.name+'_bnds'
+              if v is coordC:
+                new_bnds.atts['formula_terms'][k] = coordC_bnds
+                coordC.atts['bounds'] = coordC_bnds
+                coordC_bnds.name = coordC.name+'_bnds'
         # Add this vertical axis.
         if len(coordinates) > 0:
           atts['coordinates'] = coordinates
