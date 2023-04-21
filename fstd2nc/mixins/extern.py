@@ -223,6 +223,11 @@ class ExternOutput (BufferBase):
     # Make the time dimension unlimited when writing to netCDF.
     out.encoding['unlimited_dims'] = ('time',)
 
+    # Remove coordinates from encoding, so that xarray can determine the
+    # appropriate values upon writing to netCDF4.
+    for var in out.variables:
+      out[var].encoding.pop('coordinates',None)
+
     return out
 
   def to_xarray_list (self):
