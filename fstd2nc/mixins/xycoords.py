@@ -830,3 +830,30 @@ class XYCoords (BufferBase):
       self._varlist = [list(lats.values())[0], list(lons.values())[0]]
       # Add grid mapping info.
       self._varlist.extend(gridmaps.values())
+
+  # Decode horizontal grid metadata from variables back into table.
+  def _unmakevars (self):
+    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
+    import numpy as np
+    for var_ind, var in enumerate(self._varlist):
+      # Skip variables already processed into records.
+      if isinstance(var, _iter_type): continue
+      axis_codes = [a.atts.get('axis','') for a in var.axes]
+      # Skip records without any geophysical connection.
+      if 'X' not in axis_codes or 'Y' not in axis_codes: continue
+      # Transpose to expected order.
+      xind = axis_codes.index('X')
+      yind = axis_codes.index('Y')
+      order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
+      order = order + [yind, xind]
+      if order != list(range(len(var.axes))):
+        var.axes = [var.axes[i] for i in order]
+        var.array = var.array.transpose(*order)
+      # Process the variable.
+      outer_shape = [len(a) for a in var.axes[:-2]]
+      record_id = np.zeros(outer_shape, dtype=object)
+      for ind in np.ndindex(tuple(outer_shape)):
+        record_id[ind] = var.array[ind]
+      var = _iter_type (var.name, var.atts, var.axes, var.array.dtype, record_id)
+      self._varlist[var_ind] = var
+    super(XYCoords,self)._unmakevars()

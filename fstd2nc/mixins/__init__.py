@@ -193,6 +193,22 @@ try:
 except ImportError:
   _ProgressBar = _FakeBar
 
+# Special version of dictionary that keeps track of unaccessed keys.
+class AccessCountDict (object):
+  def __init__ (self, **items):
+    from collections import Counter
+    self._dict = dict(items)
+    self._counter = Counter()
+  def __getitem__ (self, key):
+    self._counter[key] += 1
+    return self._dict[key]
+  def __setitem__ (self, key, value):
+    self._counter[key] += 1
+    self._dict[key] = value
+  def __getattr__ (self, name): return getattr(self._dict, name)
+  def __str__ (self): return self._dict.__str__()
+  def __repr__ (self): return self._dict.__repr__()
+
 # Define a class for encoding / decoding the data.
 # Each step is placed in its own "mixin" class, to make it easier to patch in 
 # new behaviour if more exotic files are encountered in the future.
@@ -814,6 +830,57 @@ class BufferBase (object):
       self._makevars_pandas()
     else:
       self._makevars_slow()
+
+  # Inverse operation - determine record structure from a varlist.
+  def _unmakevars (self):
+    from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
+    import numpy as np
+    # By the time we get to this base method, the mixins should have filtered
+    # out all variables that shouldn't be in the record table.
+    varlist = []
+    for var in self._varlist:
+      if isinstance(var,_iter_type):
+        varlist.append(var)
+      else:
+        warn (_("Unable to encode %s.")%var.name)
+    self._varlist = varlist
+    self._nrecs = sum(np.product(var.shape) for var in varlist)
+    # Start constructing header information.
+    # The initial columns will be the outer axes of the variables.
+    # plus the name and data columns.
+    headers = dict()
+    for var in self._varlist:
+      for axis in var.axes[:var.record_id.ndim]:
+        if axis.name in headers: continue
+        headers[axis.name] = np.ma.masked_all(self._nrecs, dtype=axis.array.dtype)
+    namesize = max(len(var.name) for var in varlist)
+    headers['name'] = np.ma.masked_all(self._nrecs, dtype='|S%d'%namesize)
+    headers['d'] = np.empty(self._nrecs, dtype=object)
+    offset = 0
+    for var in varlist:
+      axes = var.axes[:var.record_id.ndim]
+      # Add outer axes.
+      for i,axis in enumerate(axes):
+        shape = [1]*len(axes)
+        shape[i] = len(axis)
+        array = np.empty(var.record_id.shape, dtype=axis.array.dtype)
+        array[()] = axis.array.reshape(shape)
+        headers[axis.name][offset:offset+var.record_id.size] = array.flatten()
+      # Add coordinate info as well.
+      for coord in var.atts.get('coordinates',[]):
+        shape = [len(axis) if axis in coord.axes else 1 for axis in axes]
+        #array = np.empty(var.record_id.shape, dtype=axis.array.dtype)
+        #array[()] = axis.array.reshape(shape)
+        #headers[axis.name][offset:offset+var.record_id.size] = array.flatten()
+      headers['name'][offset:offset+var.record_id.size] = var.name
+      headers['d'][offset:offset+var.record_id.size] = var.record_id.flatten()
+      offset = offset + var.record_id.size
+    # Use special dictionary to keep track of which columns were used.
+    # It would be a problem if the columns were never processed!
+    self._headers = AccessCountDict(**headers)
+    # Pre-access name and 'd' columns, because we don't care if those are accessed.
+    self._headers['name'], self._headers['d']
+    # From here, the mixins will start processing the header info
 
   # Iterate over all unique axes found in the variables.
   # Requires _makevars() to have already been called.

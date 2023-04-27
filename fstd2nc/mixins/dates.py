@@ -137,3 +137,43 @@ class Dates (BufferBase):
         axis.name = 'forecast'
         axis.atts['units'] = 'hours'
 
+  def _unmakevars (self):
+    # Re-attach leadtime, reftime as coordinates for variables.
+    # First, find all leadtime/reftime coordinates.
+    leadtimes = dict()
+    reftimes = dict()
+    for var in self._varlist:
+      if var.name == 'leadtime':
+        if 'time' in var.dims:
+          i = var.dims.index('time')
+          leadtimes[id(var.axes[i])] = var
+        else:
+          # Scalar case
+          leadtimes[None] = var
+      if var.name == 'reftime':
+        if 'time' in var.dims:
+          i = var.dims.index('time')
+          reftimes[id(var.axes[i])] = var
+        else:
+          # Scalar case
+          reftimes[None] = var
+    # Remove these from the varlist.
+    self._varlist = [var for var in self._varlist if var.name not in ('leadtime','reftime')]
+    # Now, add these coordinates into the vars.
+    for var in self._varlist:
+      if 'time' in var.dims:
+        time = id(var.axes[var.dims.index('time')])
+      else:
+        time = None
+      if time in leadtimes:
+        var.atts.setdefault('coordinates',[]).append(leadtimes[time])
+      elif None in leadtimes:
+        var.atts.setdefault('coordinates',[]).append(leadtimes[None])
+      if time in reftimes:
+        var.atts.setdefault('coordinates',[]).append(reftimes[time])
+      elif None in reftimes:
+        var.atts.setdefault('coordinates',[]).append(reftimes[None])
+    # Continue processing the variables.
+    super (Dates,self)._unmakevars()
+
+    #TODO: now, decode leadtime/reftime info.
