@@ -1,4 +1,3 @@
-__version__ = "0.20221219.0"
 
 # Combine all the mixins to create a final interface for I/O.
 from fstd2nc.mixins.select import SelectVars
