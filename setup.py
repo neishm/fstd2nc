@@ -58,6 +58,8 @@ setup (
     'console_scripts': [
       'fstd2nc = fstd2nc.__main__:_fstd2nc_cmdline_trapped',
       'fstdump = fstd2nc.__main__:_fstdump',
+      'ccc2nc = cccbuffer.__main__:run',
+      'cccdump = cccbuffer.cccdump:run',
     ],
   },
 
