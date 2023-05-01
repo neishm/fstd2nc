@@ -68,12 +68,15 @@ try:
         ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
         state['ready'] = ready[::-1]
       except TypeError: pass  # Not applicable for this graph.
-  _FSTD_Callback().register()
   del Callback
-
 except ImportError:
   pass
 
+# Only turn on this callback if explicitly requested by the user.
+# It may cause problems when there are large graphs being communicated
+# to a dask cluster environment.
+def force_strict_ordering ():
+  _FSTD_Callback().register()
 
 # Method for reading a block from a file.
 def _read_block (filename, offset, length):
