@@ -130,24 +130,15 @@ class _iter_type (_base_type):
 # Similar to above, but more general.
 # Can allow for multiple records along the inner axes.
 class _chunk_type (_base_type):
-  __slots__ = ('name','atts','axes','dtype','chunks','chunksize','deps')
-  def __init__ (self, name, atts, axes, dtype, chunks, chunksize):
+  __slots__ = ('name','atts','axes','dtype','chunks','record_id','deps')
+  def __init__ (self, name, atts, axes, dtype, chunks, record_id):
     self.name = name
     self.atts = atts
     self.axes = axes
     self.dtype = dtype
     self.chunks = chunks
-    self.chunksize = chunksize
+    self.record_id = record_id
     self.deps = []
-  def items(self):
-    for key, value in self.chunks.items():
-      key = tuple(k if isinstance(k,int) else slice(*k) for k in key)
-      yield key, value
-  def keys(self):
-    for key, value in self.items():
-      yield key
-  def values(self):
-    return self.chunks.values()
 
 # Fake progress bar - does nothing.
 class _FakeBar (object):

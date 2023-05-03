@@ -399,10 +399,10 @@ class netCDF_IO (BufferBase):
         continue
       # Hard case: only have the record indices, need to loop over the records.
       # Get the shape of a single record for the variable.
-      if hasattr(var,'record_id'):
+      if hasattr(var, 'chunks'):
+        continue  #TODO
+      elif hasattr(var,'record_id'):
         record_shape = var.shape[var.record_id.ndim:]
-      elif hasattr(var,'chunksize'):
-        record_shape = var.chunksize
       else:
         continue
       # Use this as the "chunk size" for the netCDF file, to improve I/O
