@@ -124,7 +124,7 @@ class ExternOutput (BufferBase):
     out[active] = g
     return out
 
-  def _iter_dask (self, include_coords=True):
+  def _iter_dask (self, include_coords=True, fused=True):
     """
     Iterate over all the variables, and convert to dask arrays.
     """
@@ -134,7 +134,7 @@ class ExternOutput (BufferBase):
     import numpy as np
     from itertools import product
     unique_token = tokenize(self._files,id(self))
-    graphs = self._graphs()
+    files = np.array(self._files, dtype=object)
     self._makevars()
     for var in self._iter_objects():
       if not include_coords:
@@ -153,30 +153,98 @@ class ExternOutput (BufferBase):
         chunks = [(1,)*n for n in shape[:ndim_outer]] + [(n,) for n in shape[ndim_outer:]]
         record_id = var.record_id.reshape(shape[:ndim_outer] + (1,)*ndim_inner)
         var = _chunk_type (var.name, var.atts, var.axes, var.dtype, chunks, record_id)
-      # Convert _chunk_type to dask Array objects.
-      if isinstance(var,_chunk_type):
-        chunk_indices = [np.cumsum((0,)+c)[:-1] for c in var.chunks]
-        # Loop over all indices, generate dask graph.
-        dsk = dict()
-        for ind, rec_id, chunk_shape in zip(product(*chunk_indices), var.record_id.flatten(), product(*var.chunks)):
-          # Unique key for this graph member.
-          key = (name,) + ind
-          # Add this record as a chunk in the dask Array.
-          if rec_id >= 0:
-            graph = graphs[rec_id]
-            dsk[key] = (np.reshape, graph, chunk_shape)
-          else:
-            # Fill missing chunks with fill value or NaN.
-            if hasattr(self,'_fill_value'):
-              var.atts['_FillValue'] = self._fill_value
-              dsk[key] = (np.full, chunk_shape, self._fill_value, var.dtype)
+
+      # Fuse the records to make larger (and more dask-friendly) chunks.
+      # TODO: Check if 'd' is used in the var (and if so, disable fusing).
+      if fused:
+        file_ids = self._headers['file_id'][var.record_id]
+        # Find dimension to fuse.
+        dim = var.record_id.ndim-1
+        while dim >= 0 and len(var.chunks[dim]) == 1:
+          dim -= 1
+        # Check if there is something available to fuse.
+        if dim >= 0:
+          # Look at part of record to guess at number of records to chunk.
+          # Can only chunk within a file.
+          sample = file_ids[(0,)*dim].squeeze()
+          dx = sum(sample==sample[0])
+          # Check if this guessed chunk size works for the data shape.
+          if var.record_id.shape[dim] % dx == 0 and dx > 1:
+            dy = var.record_id.shape[dim] // dx
+            # Check if we always stay within file bounds.
+            shape = var.record_id.shape[:dim] + (dy, dx)
+            check = file_ids.reshape(shape)
+            if np.all(check[...,:] == check[...,0:1]):
+              chunks = list(var.chunks)
+              chunks[dim] = (dx,)*dy
+              shape = var.record_id.shape[:dim] + (dy,) + var.record_id.shape[dim+1:] + (dx,)
+              # Put chunks record ids in extra dimension at end.
+              record_id = var.record_id.reshape(shape)
+              var = _chunk_type (var.name, var.atts, var.axes, var.dtype, chunks, record_id)
             else:
-              dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
-        array = da.Array(dsk, name, var.chunks, var.dtype)
-        var = _var_type(var.name,var.atts,var.axes,array)
+              warn(_("Unable to fuse some variables."))
+          else:
+            warn(_("Unable to fuse some variables."))
+
+      # Transform _chunk_type data from record indices to graphs.
+      # For fused data, use 2D record_id array (chunk, ids).
+      # For unfused data, use 1D record_id array.
+      if var.record_id.ndim > len(var.chunks):
+        record_id = var.record_id.reshape(-1,var.record_id.shape[-1])
+      else:
+        record_id = var.record_id.flatten()
+      file_ids = self._headers['file_id'][record_id]
+      file_ids[record_id<0] = -1
+      # Assume same file within chunk.
+      if file_ids.ndim > 1: file_ids = file_ids[:,0]
+      nchunks = record_id.shape[0]
+      args = []
+      # Add data sources (primary data plus possible secondary like mask).
+      for key, (addr_col, len_col, dname) in self._decoder_data:
+        fname = files[file_ids]
+        addr = self._headers[addr_col][record_id]
+        if addr.ndim > 1: addr = map(list,addr)
+        length = self._headers[len_col][record_id]
+        if length.ndim > 1: length = map(list,length)
+        rb = zip([_read_block]*nchunks, fname, addr, length)
+        arg_data = zip([key]*nchunks, rb)
+        #TODO: 'd' column.
+        args.append(arg_data)
+      for key, value in self._decoder_args().items():
+        arg = zip([key]*nchunks, [value]*nchunks)
+        args.append(arg)
+      args = zip(*args)
+      graphs = zip([self._decode]*nchunks, args)
+      array = np.empty(nchunks, dtype=object)
+      array[:] = list(graphs)
+      # Handle missing records.
+      array[file_ids<0] = None
+      shape = tuple(len(c) for c in var.chunks)
+      array = array.reshape(shape)
+
+      # Create dask array from this info.
+      chunk_indices = [np.cumsum((0,)+c)[:-1] for c in var.chunks]
+      # Loop over all indices, generate dask graph.
+      dsk = dict()
+      for ind, chunk_coord, chunk_shape in zip(np.ndindex(array.shape), product(*chunk_indices), product(*var.chunks)):
+        # Unique key for this graph member.
+        key = (name,) + chunk_coord
+        # Add this record as a chunk in the dask Array.
+        graph = array[ind]
+        if graph is not None:
+          dsk[key] = (np.reshape, graph, chunk_shape)
+        else:
+          # Fill missing chunks with fill value or NaN.
+          if hasattr(self,'_fill_value'):
+            var.atts['_FillValue'] = self._fill_value
+            dsk[key] = (np.full, chunk_shape, self._fill_value, var.dtype)
+          else:
+            dsk[key] = (np.full, chunk_shape, float('nan'), var.dtype)
+      array = da.Array(dsk, name, var.chunks, var.dtype)
+      var = _var_type(var.name,var.atts,var.axes,array)
       yield var
 
-  def to_xarray (self):
+  def to_xarray (self, fused=True):
     """
     Create an xarray interface for the RPN data.
     Requires the xarray and dask packages.
@@ -184,7 +252,7 @@ class ExternOutput (BufferBase):
     from collections import OrderedDict
     import xarray as xr
     out = OrderedDict()
-    for var in self._iter_dask():
+    for var in self._iter_dask(fused=fused):
       if not hasattr(var,'array'): continue
       out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)
       # Preserve chunking information for writing to netCDF4.
@@ -208,7 +276,7 @@ class ExternOutput (BufferBase):
 
     return out
 
-  def to_xarray_list (self):
+  def to_xarray_list (self, fused=True):
     """
     Similar to the to_xarray method, but returns a list of xarray Datasets,
     one for each variable, instead of a single Dataset object.
@@ -221,7 +289,7 @@ class ExternOutput (BufferBase):
     import xarray as xr
     from fstd2nc.mixins import _axis_type
     out_list = []
-    for var in self._iter_dask(include_coords=False):
+    for var in self._iter_dask(include_coords=False, fused=fused):
       if not hasattr(var,'array'): continue
       out = OrderedDict()
       out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)

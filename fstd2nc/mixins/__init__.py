@@ -234,6 +234,18 @@ class BufferBase (object):
   # (They're either internal to the file, or part of the data, not metadata).
   _ignore_atts = ('file_id','name','address','length','dtype','selected')
 
+  # Header columns which contain extra data that should be passed to _decode.
+  # Tuple of (offset, length, d) where:
+  # - offset is the address in the file where the data is located.
+  # - length is how much data to read.
+  # - d is an alternate source (dask graph?) for case where data is not
+  #   stored in a file.
+  _decoder_data = (('data',('address','length','d')),)
+
+  # Extra (scalar) arguments needed for the decoder at runtime.
+  def _decoder_args (self):
+    return {}
+
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
