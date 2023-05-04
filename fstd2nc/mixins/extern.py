@@ -81,48 +81,38 @@ def force_strict_ordering ():
 # Method for reading a block from a file.
 def _read_block (filename, offset, length):
   import numpy as np
+  # Scalar version first.
+  if not hasattr(offset,'__len__'):
+    with open(filename,'rb') as f:
+      f.seek (offset,0)
+      return np.fromfile(f,'B',length)
+  # Vectorized version.
+  out = []
   with open(filename,'rb') as f:
-    f.seek (offset,0)
-    return np.fromfile(f,'B',length)
+    for o, l in zip(offset, length):
+      f.seek (o,0)
+      out.append(np.fromfile(f,'B',l))
+  return out
 
 
 class ExternOutput (BufferBase):
 
-  # Helper method to get graph for raw input data.
-  def _graphs (self):
+  # Helper method to call decode routine using the given inputs.
+  def _dasked_decode (self, *args):
+    keys = args[:-1:2]
+    values = args[1::2]
+    # Scalar case (decoding single record)
+    if not isinstance(values[0], list):
+      kwargs = dict(zip(keys,values))
+      return self._decode(**kwargs)
+    # Vectorized case (decoding multiple records into a single fused array)
+    out = []
+    for i in range(len(values[0])):
+      kwargs = dict((k,v[i]) for k,v in zip(keys,values))
+      print (self._decode)
+      out.append(self._decode(**kwargs))
     import numpy as np
-    import pandas as pd
-    graphs = [None] * self._nrecs
-    ###
-    # Special case: already have a dask object from external source.
-    # (E.g., from fstpy)
-    if hasattr(self, '_extern_table'):
-      for rec_id in range(self._nrecs):
-        d = self._extern_table['d'].iloc[rec_id]
-        if hasattr(d,'compute'):
-          # Start a dask graph using the external dask array as the source.
-          graph = (d.compute,)
-          graph = (np.ravel, graph, 'K')
-        else:  # Special case: have a numpy array in memory.
-          graph = d
-          graph = np.ravel(graph, 'K')
-        graphs[rec_id] = graph
-      return graphs
-    ###
-    # Otherwise, construct graphs with our own dask wrapper.
-    files = np.array(self._files, dtype=object)
-    # Only construct graphs for records that will ultimately appear in the
-    # dask objects.
-    active = self._headers['selected'] == True
-    nrecs = np.sum(active)
-    filenames = files[self._headers['file_id'][active]]
-    graphs = zip([_read_block]*nrecs, filenames, self._headers['address'][active], self._headers['length'][active])
-    graphs = zip([self._decode]*nrecs, graphs, np.where(active)[0])
-    g = np.empty(nrecs, dtype=object)
-    g[:] = list(graphs)
-    out = np.empty(self._nrecs, dtype=object)
-    out[active] = g
-    return out
+    return np.concatenate(out)
 
   def _iter_dask (self, include_coords=True, fused=True):
     """
@@ -207,14 +197,11 @@ class ExternOutput (BufferBase):
         length = self._headers[len_col][record_id]
         if length.ndim > 1: length = map(list,length)
         rb = zip([_read_block]*nchunks, fname, addr, length)
-        arg_data = zip([key]*nchunks, rb)
+        args.extend([[key]*nchunks, rb])
         #TODO: 'd' column.
-        args.append(arg_data)
       for key, value in self._decoder_args().items():
-        arg = zip([key]*nchunks, [value]*nchunks)
-        args.append(arg)
-      args = zip(*args)
-      graphs = zip([self._decode]*nchunks, args)
+        args.extend([[key]*nchunks, [value]*nchunks])
+      graphs = zip([self._dasked_decode]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
       array[:] = list(graphs)
       # Handle missing records.
