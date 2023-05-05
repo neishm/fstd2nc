@@ -249,17 +249,22 @@ class YinYang (BufferBase):
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][submask] = dest_grid[key]
 
+  def _decoder_scalar_args (self):
+    kwargs = super(YinYang,self)._decoder_scalar_args()
+    if self._yin: kwargs['yin'] = True
+    if self._yang: kwargs['yang'] = True
+    return kwargs
 
   # Handle grid interpolations from raw binary array.
-  def _decode (self, data, unused):
-    if not self._yin and not self._yang:
-      return super(YinYang,self)._decode (data, unused)
+  def _decode (self, data, yin=False, yang=False, **kwargs):
+    if not yin and not yang:
+      return super(YinYang,self)._decode (data, **kwargs)
     prm = self._decode_headers(data[:72])
     prm = dict((k,v[0]) for k,v in prm.items())
-    d = super(YinYang,self)._decode (data, unused).T
-    if prm['grtyp'] == b'U' and self._yin:
+    d = super(YinYang,self)._decode (data, **kwargs).T
+    if prm['grtyp'] == b'U' and yin:
       d = d[:,:prm['nj']//2]
-    elif prm['grtyp'] == b'U' and self._yang:
+    elif prm['grtyp'] == b'U' and yang:
       d = d[:,prm['nj']//2:]
     return d.T
 
@@ -290,10 +295,10 @@ class Crop (BufferBase):
       return
 
     # Keep track of cropping regions for the data.
-    self._headers['i0'] = np.zeros(self._nrecs,'uint16')
-    self._headers['iN'] = np.array(self._headers['ni'],'uint16')
-    self._headers['j0'] = np.zeros(self._nrecs,'uint16')
-    self._headers['jN'] = np.array(self._headers['nj'],'uint16')
+    self._decoder_extra_args = self._decoder_extra_args + ('crop_j','crop_i')
+    self._headers['crop_j'] = np.empty(self._nrecs,object)
+    self._headers['crop_i'] = np.empty(self._nrecs,object)
+    self._ignore_atts = self._ignore_atts + ('crop_j','crop_i')
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
@@ -343,25 +348,16 @@ class Crop (BufferBase):
         submask = (self._headers['ig1'] == grid['tag1']) & (self._headers['ig2'] == grid['tag2']) & (self._headers['ig3'] == grid['tag3'])
         for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
           self._headers[key][submask] = smallest_grid[key]
-        self._headers['i0'][submask] = i0
-        self._headers['iN'][submask] = iN
-        self._headers['j0'][submask] = j0
-        self._headers['jN'][submask] = jN
-
+        self._headers['crop_j'][submask] = slice(j0,jN)
+        self._headers['crop_i'][submask] = slice(i0,iN)
 
   # Handle cropping from raw binary array.
-  def _decode (self, data, rec_id):
-    import numpy as np
-    d = super(Crop,self)._decode (data, rec_id)
-    if not self._crop_to_smallest_grid: return d
-    # Check if cropping necessary.
-    ni = self._headers['ni'][rec_id]
-    nj = self._headers['nj'][rec_id]
-    if d.shape == (nj,ni): return d
-    i0 = self._headers['i0'][rec_id]
-    iN = self._headers['iN'][rec_id]
-    j0 = self._headers['j0'][rec_id]
-    jN = self._headers['jN'][rec_id]
-    d = d[j0:jN,i0:iN]
+  def _decode (self, data, crop_j=None, crop_i=None, **kwargs):
+    d = super(Crop,self)._decode (data, **kwargs)
+    if crop_j is not None:
+      d = d[crop_j,:]
+    if crop_i is not None:
+      d = d[:,crop_i]
     return d
+
 

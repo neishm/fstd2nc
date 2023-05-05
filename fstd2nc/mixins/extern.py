@@ -102,14 +102,15 @@ class ExternOutput (BufferBase):
     keys = args[:-1:2]
     values = args[1::2]
     # Scalar case (decoding single record)
-    if not isinstance(values[0], list):
+    if not any(isinstance(v,list) for v in values):
       kwargs = dict(zip(keys,values))
       return self._decode(**kwargs)
     # Vectorized case (decoding multiple records into a single fused array)
+    nrec = [len(v) for v in values if isinstance(v,list)][0]
+    values = [v if isinstance(v,list) else [v]*nrec for v in values]
     out = []
-    for i in range(len(values[0])):
+    for i in range(nrec):
       kwargs = dict((k,v[i]) for k,v in zip(keys,values))
-      print (self._decode)
       out.append(self._decode(**kwargs))
     import numpy as np
     return np.concatenate(out)
@@ -191,6 +192,7 @@ class ExternOutput (BufferBase):
       args = []
       # Add data sources (primary data plus possible secondary like mask).
       for key, (addr_col, len_col, dname) in self._decoder_data:
+        if addr_col not in self._headers: continue # Skip inactive arguments.
         fname = files[file_ids]
         addr = self._headers[addr_col][record_id]
         if addr.ndim > 1: addr = map(list,addr)
@@ -199,7 +201,14 @@ class ExternOutput (BufferBase):
         rb = zip([_read_block]*nchunks, fname, addr, length)
         args.extend([[key]*nchunks, rb])
         #TODO: 'd' column.
-      for key, value in self._decoder_args().items():
+      # Add extra arguments from columns.
+      for key in self._decoder_extra_args:
+        if key not in self._headers: continue  # Skip inactive arguments.
+        values = self._headers[key][record_id]
+        if values.ndim > 1: values = map(list,values)
+        args.extend([[key]*nchunks, values])
+      # Add scalar arguments.
+      for key, value in self._decoder_scalar_args().items():
         args.extend([[key]*nchunks, [value]*nchunks])
       graphs = zip([self._dasked_decode]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
@@ -454,17 +463,4 @@ class ExternInput (BufferBase):
     # Otherwise, continue as usual.
     return super(ExternInput,self)._read_record (rec_id)
 
-  # Handle external data for _decode method.
-  # In this case, the first argument is ignored (no file data was read).
-  def _decode (self, maybe_data, rec_id):
-    import numpy as np
-    # Check if there is custom data enabled for this Buffer.
-    if hasattr(self, '_extern_table'):
-      # Extract the record info from the table.
-      rec = self._extern_table.iloc[rec_id].to_dict()
-      # Load the data (if delayed).
-      rec['d'] = np.asarray(rec['d'])
-      return rec['d'].T
-    # Otherwise, continue as usual.
-    return super(ExternInput,self)._decode (maybe_data, rec_id)
 

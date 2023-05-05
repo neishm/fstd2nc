@@ -242,8 +242,11 @@ class BufferBase (object):
   #   stored in a file.
   _decoder_data = (('data',('address','length','d')),)
 
+  # Extra arguments to pull from columns of the table.
+  _decoder_extra_args = ()
+
   # Extra (scalar) arguments needed for the decoder at runtime.
-  def _decoder_args (self):
+  def _decoder_scalar_args (self):
     return {}
 
   # Define any command-line arguments for reading FSTD files.
@@ -902,13 +905,32 @@ class BufferBase (object):
     raise NotImplementedError("No decoder found.")
 
   # Shortcut for reading a record, given a record id.
+  #TODO: support for extra args
   def _read_record (self, rec):
     import numpy as np
+    kwargs = {}
+    # Add file-based data.
     with open(self._files[self._headers['file_id'][rec]],'rb') as f:
-      f.seek(self._headers['address'][rec],0)
-      data = np.fromfile(f,'B',self._headers['length'][rec])
-      data = self._decode(data,rec)
-    return data
+      for key, (addr_key, len_key, d_key) in self._decoder_data:
+        if addr_key not in self._headers: continue
+        # Special case: have dask array to read.
+        if d_key in self._headers:
+          d = self._headers[d_key]
+          if d is not None:
+            kwargs[key] = np.array(d).T
+            continue
+        address = self._headers[addr_key][rec]
+        length = self._headers[len_key][rec]
+        if address == -1 or length == -1: continue
+        f.seek(address,0)
+        data = np.fromfile(f,'B',length)
+        kwargs[key] = data
+      for key in self._decoder_extra_args:
+        if key in self._headers:
+          value = self._headers[key][rec]
+          kwargs[key] = value
+      kwargs.update(self._decoder_scalar_args())
+    return self._decode(**kwargs)
 
 
   #
