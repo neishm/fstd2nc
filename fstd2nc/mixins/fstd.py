@@ -114,14 +114,6 @@ class FSTD (BufferBase):
     rec = recs[0]
     return self._fstluk(rec)
 
-  # Control the pickling / unpickling of BufferBase objects.
-  def __getstate__ (self):
-    state = super(FSTD,self).__getstate__()
-    state.pop('_lock',None)  # librmn lock will be defined upon unpickling.
-    return state
-  def __setstate__ (self, state):
-    super(FSTD,self).__setstate__(state)
-    self._lock = _lock
 
 
   ###############################################
@@ -139,11 +131,6 @@ class FSTD (BufferBase):
         variable on different etikets.
     """
     import numpy as np
-
-    # Set up lock for threading.
-    # The same lock is shared for all Buffer objects, to synchronize access to
-    # librmn.
-    self._lock = _lock
 
     self._inner_axes = ('k','j','i')
 
