@@ -23,10 +23,10 @@ class Char(BufferBase):
         var.dtype = np.dtype('|S1')
 
   # Modify the decoder to return character arrays for CHAR records.
-  def _decode (self, data, unused):
+  def _decode (self, data):
     import numpy as np
     kind = data[4:68].view('|S8')[0]
-    data = super(Char,self)._decode(data,unused)
+    data = super(Char,self)._decode(data)
     if kind == b'CHAR    ':
       data = data.view('|S1')
     return data
