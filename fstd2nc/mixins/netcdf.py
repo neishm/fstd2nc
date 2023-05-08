@@ -450,17 +450,17 @@ class netCDF_IO (BufferBase):
       import numpy as np
       io = sorted(io)
       with Pool() as p:
-        raw = p.imap (_quick_load, ((self._files[self._headers['file_id'][r]], self._headers['address'][r], self._headers['length'][r]) for r,shape,v,ind in io))
+        raw = p.imap (_quick_load, ((self, r) for r,shape,v,ind in io))
         raw = bar.iter(raw)
         for (r,shape,v,ind), stuff in zip(io, raw):
-          data = self._decode (stuff, r)
+          data = self._decode (**stuff)
           v[ind] = data.astype(v.dtype).reshape(shape)
         bar.finish()
     else:
       for r,shape,v,ind in bar.iter(sorted(io)):
         try:
-          stuff = _quick_load ((self._files[self._headers['file_id'][r]], self._headers['address'][r], self._headers['length'][r]))
-          data = self._decode (stuff, r)
+          stuff = _quick_load ((self, r))
+          data = self._decode (**stuff)
           v[ind] = data.astype(v.dtype).reshape(shape)
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
@@ -474,17 +474,25 @@ class netCDF_IO (BufferBase):
 # Internal helper method for delegating the load to a multiprocessing Pool.
 def _quick_load (args):
   import numpy as np
-  filename, address, length = args
-  # Check if this was from an external source, in which case we have no file
-  # data to provide.  The _decode method will have to find the data from the
-  # other argument (record index).
-  if address is None or length is None:
-    # Return some minimal amount of empty data, in case a mixin tries to
-    # access this data.  This is probably a bad idea (in case the mixin
-    # does something weird with the zero values).
-    #TODO: fix the mixins so they don't try to read these values directly.
-    return np.zeros(256,'B')
-  with open (filename, 'rb') as f:
-    f.seek (address, 0)
-    return np.fromfile(f,'B',length)
+  b, r = args
+  out = dict()
+  # Load data array(s).
+  file_id = b._headers['file_id'][r]
+  if file_id >= 0:
+    filename = b._files[file_id]
+    with open (filename, 'rb') as f:
+      for key, (addr_col,len_col,d_col) in b._decoder_data:
+        if d_col in b._headers and b._headers[d_col][r] is not None:
+          raise Exception ("Dask arrays not supported yet.")
+        elif addr_col in b._headers and len_col in b._headers:
+          address = int(b._headers[addr_col][r])
+          length = int(b._headers[len_col][r])
+          f.seek (address, 0)
+          out[key] = np.fromfile(f,'B',length)
+  # Get other arguments
+  for key in b._decoder_extra_args:
+    if key in self._headers:
+      out[key] = self._headers[key][r]
+  out.update(b._decoder_scalar_args())
+  return out
 
