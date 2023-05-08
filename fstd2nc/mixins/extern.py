@@ -147,8 +147,12 @@ class ExternOutput (BufferBase):
         var = _chunk_type (var.name, var.atts, var.axes, var.dtype, chunks, record_id)
 
       # Fuse the records to make larger (and more dask-friendly) chunks.
-      # TODO: Check if 'd' is used in the var (and if so, disable fusing).
-      if fused:
+      # Disable fusing for dask-based arrays.
+      # Could make it work, but would need more explicit looping over
+      # records to see where dask arrays are available (slower?)
+      if 'd' in self._headers and any(d is not None for d in self._headers['d'][var.record_id].flatten()):
+        pass # Shut off fusion.
+      elif fused:
         file_ids = self._headers['file_id'][var.record_id]
         # Find dimension to fuse.
         dim = var.record_id.ndim-1
@@ -201,8 +205,13 @@ class ExternOutput (BufferBase):
         length = self._headers[len_col][record_id]
         if length.ndim > 1: length = map(list,length)
         rb = zip([_read_block]*nchunks, fname, addr, length)
+        # Skip the _read_blocks construct where we don't have file data.
+        # (e.g. for missing records or where data coming from dask).
+        rb = [_rb if fid >= 0 else None for _rb,fid in zip(rb,file_ids)]
+        # Inject dask array data where it's available.
+        if dname in self._headers:
+          rb = [d if d is not None else _rb for d,_rb in zip(self._headers[dname][record_id].flatten(),rb)]
         args.extend([[key]*nchunks, rb])
-        #TODO: 'd' column.
       # Add extra arguments from columns.
       for key in self._decoder_extra_args:
         if key not in self._headers: continue  # Skip inactive arguments.
@@ -215,8 +224,6 @@ class ExternOutput (BufferBase):
       graphs = zip([self._dasked_decode]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
       array[:] = list(graphs)
-      # Handle missing records.
-      array[file_ids<0] = None
       shape = tuple(len(c) for c in var.chunks)
       array = array.reshape(shape)
 
