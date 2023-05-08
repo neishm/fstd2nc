@@ -408,10 +408,6 @@ def _fix_to_pygeode (fixed=[False]):
   fixed[0] = True
 
 class ExternInput (BufferBase):
-  def __init__ (self, *args, **kwargs):
-    if '_extern_table' in kwargs:
-      self._extern_table = kwargs.pop('_extern_table')
-    super(ExternInput,self).__init__(*args,**kwargs)
   @classmethod
   def from_fstpy (cls, table, **kwargs):
     import numpy as np
@@ -438,7 +434,11 @@ class ExternInput (BufferBase):
       headers['address'] = np.empty(len(headers['nomvar']), dtype=object)
       headers['length'] = np.empty(len(headers['nomvar']), dtype=object)
     # Fake file id (just so netcdf mixin _quick_load function doesn't crash).
-    headers['file_id'] = np.zeros(len(headers['nomvar']), dtype='int32')
+    headers['file_id'] = np.empty(len(headers['nomvar']), dtype='int32')
+    headers['file_id'][:] = -1
+    # Add in data.
+    headers['d'] = np.empty(len(headers['nomvar']), dtype=object)
+    headers['d'][:] = table['d']
 
     # Encapsulate this info in a structure.
     fake_buffer = cls.__new__(cls)
@@ -446,24 +446,7 @@ class ExternInput (BufferBase):
     fake_buffer._headers = headers
 
     # Initialize a Buffer object with this info.
-    # Also save the dataframe for reference.
-    # Will need the dask objects for getting the data.
-    b = cls(fake_buffer, _extern_table=table, **kwargs)
+    b = cls(fake_buffer, **kwargs)
 
     return b
-
-  # Handle external data for read_record method.
-  # Use data from _extern_table.
-  def _read_record (self, rec_id):
-    import numpy as np
-    # Check if there is custom data enabled for this Buffer.
-    if hasattr(self, '_extern_table'):
-      # Extract the record info from the table.
-      rec = self._extern_table.iloc[rec_id].to_dict()
-      # Load the data (if delayed).
-      rec['d'] = np.asarray(rec['d'])
-      return rec['d'].T
-    # Otherwise, continue as usual.
-    return super(ExternInput,self)._read_record (rec_id)
-
 

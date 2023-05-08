@@ -906,31 +906,36 @@ class BufferBase (object):
     raise NotImplementedError("No decoder found.")
 
   # Shortcut for reading a record, given a record id.
-  #TODO: support for extra args
   def _read_record (self, rec):
     import numpy as np
     kwargs = {}
     # Add file-based data.
-    with open(self._files[self._headers['file_id'][rec]],'rb') as f:
-      for key, (addr_key, len_key, d_key) in self._decoder_data:
-        if addr_key not in self._headers: continue
-        # Special case: have dask array to read.
-        if d_key in self._headers:
-          d = self._headers[d_key]
-          if d is not None:
-            kwargs[key] = np.array(d).T
-            continue
-        address = self._headers[addr_key][rec]
-        length = self._headers[len_key][rec]
-        if address == -1 or length == -1: continue
-        f.seek(address,0)
-        data = np.fromfile(f,'B',length)
-        kwargs[key] = data
-      for key in self._decoder_extra_args:
-        if key in self._headers:
-          value = self._headers[key][rec]
-          kwargs[key] = value
-      kwargs.update(self._decoder_scalar_args())
+    file_id = self._headers['file_id'][rec]
+    if file_id >= 0:
+      f = open(self._files[file_id], 'rb')
+    else:
+      f = None
+    for key, (addr_key, len_key, d_key) in self._decoder_data:
+      if addr_key not in self._headers: continue
+      # Special case: have dask array to read.
+      if d_key in self._headers:
+        d = self._headers[d_key][rec]
+        if d is not None:
+          kwargs[key] = d.T
+          continue
+      address = self._headers[addr_key][rec]
+      length = self._headers[len_key][rec]
+      if address == -1 or length == -1: continue
+      f.seek(address,0)
+      data = np.fromfile(f,'B',length)
+      kwargs[key] = data
+    for key in self._decoder_extra_args:
+      if key in self._headers:
+        value = self._headers[key][rec]
+        kwargs[key] = value
+    kwargs.update(self._decoder_scalar_args())
+    if f is not None:
+      f.close()
     return self._decode(**kwargs)
 
 

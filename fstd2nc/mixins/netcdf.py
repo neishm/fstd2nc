@@ -483,16 +483,21 @@ def _quick_load (args):
     with open (filename, 'rb') as f:
       for key, (addr_col,len_col,d_col) in b._decoder_data:
         if d_col in b._headers and b._headers[d_col][r] is not None:
-          raise Exception ("Dask arrays not supported yet.")
+          out[key] = b._headers[d_col][r]
         elif addr_col in b._headers and len_col in b._headers:
           address = int(b._headers[addr_col][r])
           length = int(b._headers[len_col][r])
           f.seek (address, 0)
           out[key] = np.fromfile(f,'B',length)
+  else:
+    for key, (addr_col,len_col,d_col) in b._decoder_data:
+      if d_col in b._headers and b._headers[d_col][r] is not None:
+        out[key] = b._headers[d_col][r]
+
   # Get other arguments
   for key in b._decoder_extra_args:
-    if key in self._headers:
-      out[key] = self._headers[key][r]
+    if key in b._headers:
+      out[key] = b._headers[key][r]
   out.update(b._decoder_scalar_args())
   return out
 
