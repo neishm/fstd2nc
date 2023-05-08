@@ -161,20 +161,21 @@ class ExternOutput (BufferBase):
           sample = file_ids[(0,)*dim].squeeze()
           dx = sum(sample==sample[0])
           # Check if this guessed chunk size works for the data shape.
-          if var.record_id.shape[dim] % dx == 0 and dx > 1:
-            dy = var.record_id.shape[dim] // dx
-            # Check if we always stay within file bounds.
-            shape = var.record_id.shape[:dim] + (dy, dx)
-            check = file_ids.reshape(shape)
-            if np.all(check[...,:] == check[...,0:1]):
-              chunks = list(var.chunks)
-              chunks[dim] = (dx,)*dy
-              shape = var.record_id.shape[:dim] + (dy,) + var.record_id.shape[dim+1:] + (dx,)
-              # Put chunks record ids in extra dimension at end.
-              record_id = var.record_id.reshape(shape)
-              var = _chunk_type (var.name, var.atts, var.axes, var.dtype, chunks, record_id)
-            else:
-              warn(_("Unable to fuse some variables."))
+          if var.record_id.shape[dim] % dx == 0:
+            if dx > 1:
+              dy = var.record_id.shape[dim] // dx
+              # Check if we always stay within file bounds.
+              shape = var.record_id.shape[:dim] + (dy, dx)
+              check = file_ids.reshape(shape)
+              if np.all(check[...,:] == check[...,0:1]):
+                chunks = list(var.chunks)
+                chunks[dim] = (dx,)*dy
+                shape = var.record_id.shape[:dim] + (dy,) + var.record_id.shape[dim+1:] + (dx,)
+                # Put chunks record ids in extra dimension at end.
+                record_id = var.record_id.reshape(shape)
+                var = _chunk_type (var.name, var.atts, var.axes, var.dtype, chunks, record_id)
+              else:
+                warn(_("Unable to fuse some variables."))
           else:
             warn(_("Unable to fuse some variables."))
 
