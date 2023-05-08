@@ -151,9 +151,6 @@ class Interp (BufferBase):
       self._decoder_extra_args = self._decoder_extra_args + ('source_gid','dest_gid')
       self._ignore_atts = self._ignore_atts + ('source_gid','dest_gid')
       self._headers['source_gid'] = np.empty(self._nrecs,dtype=object)
-      self._headers['dest_gid'] = np.empty(self._nrecs,dtype=object)
-      ismeta = self._headers['ismeta']
-      self._headers['dest_gid'][~ismeta] = interp_grid['id']
 
       # Set up some options for ezsint.
       import rpnpy.librmn.all as rmn
@@ -188,6 +185,12 @@ class Interp (BufferBase):
     for var in self._varlist:
       if isinstance(var,_iter_type):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
+
+  def _decoder_scalar_args (self):
+    args = super(Interp,self)._decoder_scalar_args()
+    if hasattr(self,'_interp_grid'):
+      args['dest_gid'] = self._interp_grid['id']
+    return args
 
   # Handle grid interpolations from raw binary array.
   @classmethod
