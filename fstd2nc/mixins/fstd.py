@@ -53,15 +53,6 @@ def fast_dtype_fst2numpy (datyp, nbits):
   args += np.asarray(nbits,'uint64')
   return packed_dtype_fst2numpy(args)
 
-# Define a lock for controlling threaded access to the RPN file(s).
-# This is necessary because we can only open a limited number of files
-# at a time, so need to control which ones are opened and available in
-# a thread-safe way.
-from threading import RLock
-_lock = RLock()
-del RLock
-
-
 # Define a class for encoding / decoding FSTD data.
 class FSTD (BufferBase):
   _format = _("RPN standard file")

@@ -21,6 +21,13 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+
+# Define a lock for controlling threaded access to ezscint, etc.
+from threading import RLock
+_lock = RLock()
+del RLock
+
+
 ############################################################
 # Mixin for questionable modifications to the headers table.
 #
@@ -97,7 +104,6 @@ class GridHacks (BufferBase):
 # Helper method - given an interpolation grid string, return a grid id.
 def _get_interp_grid (interp):
   import rpnpy.librmn.all as rmn
-  from fstd2nc.mixins.fstd import _lock
   # Extract interpolation grid.
   def number(x):
     try: return int(x)
@@ -188,7 +194,6 @@ class Interp (BufferBase):
   def _decode (cls, data, source_gid=None, dest_gid=None, **kwargs):
     import rpnpy.librmn.all as rmn
     import numpy as np
-    from fstd2nc.mixins.fstd import _lock
     if source_gid is None or dest_gid is None:
       return super(Interp,cls)._decode (data, **kwargs)
     if source_gid not in _valid_gids or dest_gid not in _valid_gids:
