@@ -892,7 +892,8 @@ class BufferBase (object):
         yield o
 
   # How to decode the data from a raw binary array.
-  def _decode (self, data, unused):
+  @classmethod
+  def _decode (cls, data):
     raise NotImplementedError("No decoder found.")
 
   # Shortcuts to header decoding functions.

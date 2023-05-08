@@ -98,20 +98,21 @@ def _read_block (filename, offset, length):
 class ExternOutput (BufferBase):
 
   # Helper method to call decode routine using the given inputs.
-  def _dasked_decode (self, *args):
+  @classmethod
+  def _dasked_decode (cls, *args):
     keys = args[:-1:2]
     values = args[1::2]
     # Scalar case (decoding single record)
     if not any(isinstance(v,list) for v in values):
       kwargs = dict(zip(keys,values))
-      return self._decode(**kwargs)
+      return cls._decode(**kwargs)
     # Vectorized case (decoding multiple records into a single fused array)
     nrec = [len(v) for v in values if isinstance(v,list)][0]
     values = [v if isinstance(v,list) else [v]*nrec for v in values]
     out = []
     for i in range(nrec):
       kwargs = dict((k,v[i]) for k,v in zip(keys,values))
-      out.append(self._decode(**kwargs))
+      out.append(cls._decode(**kwargs))
     import numpy as np
     return np.concatenate(out)
 

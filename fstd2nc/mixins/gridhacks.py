@@ -184,25 +184,27 @@ class Interp (BufferBase):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
 
   # Handle grid interpolations from raw binary array.
-  def _decode (self, data, source_gid=None, dest_gid=None, **kwargs):
+  @classmethod
+  def _decode (cls, data, source_gid=None, dest_gid=None, **kwargs):
     import rpnpy.librmn.all as rmn
     import numpy as np
     from fstd2nc.mixins.fstd import _lock
     if source_gid is None or dest_gid is None:
-      return super(Interp,self)._decode (data, **kwargs)
+      return super(Interp,cls)._decode (data, **kwargs)
     if source_gid not in _valid_gids or dest_gid not in _valid_gids:
       error(_("Problem finding grid id.  It's possible that you're running this in a multi-processing environment, which does not support the 'interp' option."))
     # Retrieve an active librmn grid id associated with this grid.
     if source_gid < 0:
       raise ValueError("Source data is not on a recognized grid.  Unable to interpolate.")
-    d = super(Interp,self)._decode (data, **kwargs).T
+    d = super(Interp,cls)._decode (data, **kwargs).T
     with _lock:
       # Propogate any fill values to the interpolated grid.
+      fill_value = kwargs.get('fill_value')
       in_mask = np.zeros(d.shape, order='F', dtype='float32')
-      in_mask[d==self._fill_value] = 1.0
+      in_mask[d==fill_value] = 1.0
       d = rmn.ezsint (dest_gid, source_gid, d)
       out_mask = rmn.ezsint (dest_gid, source_gid, in_mask)
-      d[out_mask!=0] = self._fill_value
+      d[out_mask!=0] = fill_value
       # Return the data for the interpolated field.
       return d.T
 
@@ -276,12 +278,13 @@ class YinYang (BufferBase):
     return kwargs
 
   # Handle grid interpolations from raw binary array.
-  def _decode (self, data, yin=False, yang=False, **kwargs):
+  @classmethod
+  def _decode (cls, data, yin=False, yang=False, **kwargs):
     if not yin and not yang:
-      return super(YinYang,self)._decode (data, **kwargs)
-    prm = self._decode_headers(data[:72])
+      return super(YinYang,cls)._decode (data, **kwargs)
+    prm = cls._decode_headers(data[:72])
     prm = dict((k,v[0]) for k,v in prm.items())
-    d = super(YinYang,self)._decode (data, **kwargs).T
+    d = super(YinYang,cls)._decode (data, **kwargs).T
     if prm['grtyp'] == b'U' and yin:
       d = d[:,:prm['nj']//2]
     elif prm['grtyp'] == b'U' and yang:
@@ -372,8 +375,9 @@ class Crop (BufferBase):
         self._headers['crop_i'][submask] = slice(i0,iN)
 
   # Handle cropping from raw binary array.
-  def _decode (self, data, crop_j=None, crop_i=None, **kwargs):
-    d = super(Crop,self)._decode (data, **kwargs)
+  @classmethod
+  def _decode (cls, data, crop_j=None, crop_i=None, **kwargs):
+    d = super(Crop,cls)._decode (data, **kwargs)
     if crop_j is not None:
       d = d[crop_j,:]
     if crop_i is not None:
