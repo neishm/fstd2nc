@@ -348,13 +348,9 @@ class ExternOutput (BufferBase):
     """
     import pandas as pd
     import numpy as np
-    from fstpy.dataframe import add_grid_column
-    from fstpy.std_io import add_dask_column
-    # Special case: our data is already from an fstpy table, not from an FSTD
-    # file in our control.
-    # E.g., if some smartass does Buffer.from_fstpy(df).to_fstpy()
-    if hasattr(self, '_extern_table'):
-      return self._extern_table
+    from fstd2nc.extra import decode
+    from dask import delayed
+    import dask.array as da
     # Put all the header info into a dictionary.
     fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
@@ -369,25 +365,30 @@ class ExternOutput (BufferBase):
       table[field] = col
     # Convert to pandas table.
     table = pd.DataFrame.from_dict(table)
-    # Add grid info.
-    add_grid_column (table)
-    # Temporarily insert some extra columns needed for the data.
-    table['shape'] = list(zip(table['ni'],table['nj']))
-    filenames = dict((i,f) for i,f in enumerate(self._files))
-    table['path'] = pd.Series(self._headers['file_id'][mask]).map(filenames)
-    key = np.zeros(len(self._headers['name']),'int32')
-    for file_id in range(len(self._files)):
-      selection = self._headers['file_id'] == file_id
-      indices = np.arange(np.sum(selection), dtype='int32')
-      key[selection] = (indices % 256) | ((indices//256)<<9)
-    table['key'] = key[mask] << 10
-    # Generate dask objects
-    #TODO: use our own, in case we modified the data?
-    # (doesn't normally happen, but you never know...)
-    # For instance could happen if interp is used.
-    add_dask_column(table)
-    # Clean up temporary columns and return.
-    table.drop(columns=['shape','path','key'], inplace=True)
+    # Generate dask objects.
+    # NOTE: using raw (records for this, no transformations / masking applied).
+    if 'file_id' in self._headers and 'address' in self._headers and 'length' in self._headers:
+      filenames = np.array(self._files+[None])
+      filenames = filenames[self._headers['file_id']]
+      arrays = map(delayed(_read_block), filenames, self._headers['address'], self._headers['length'])
+      arrays = map(delayed(decode), arrays)
+      shape = zip(self._headers['nj'], self._headers['ni'])
+      arrays = map(delayed(np.reshape), arrays, shape)
+      arrays = map(delayed(np.transpose), arrays)
+      shape = zip(self._headers['ni'], self._headers['nj'])
+      arrays = map(da.from_delayed, arrays, shape, self._headers['dtype'])
+      arrays = list(arrays)
+      d = np.empty(self._nrecs, dtype=object)
+      d[:] = arrays
+      isvalid = self._headers['file_id'] >= 0
+      d = np.where(isvalid, d, None)
+    else:
+      d = np.empty(self._nrecs, dtype=object)
+    # Check if we already have dask arrays to use.
+    if 'd' in self._headers:
+      isvalid = self._headers['d'] != None
+      d = np.where(isvalid, self._headers['d'], d)
+    table['d'] = d
     return table
 
 # Workaround for recent xarray (>0.10.0) which changed the methods in the
