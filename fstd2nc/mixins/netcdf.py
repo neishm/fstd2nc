@@ -487,8 +487,9 @@ def _quick_load (args):
         elif addr_col in b._headers and len_col in b._headers:
           address = int(b._headers[addr_col][r])
           length = int(b._headers[len_col][r])
-          f.seek (address, 0)
-          out[key] = np.fromfile(f,'B',length)
+          if address >= 0 and length >= 0:
+            f.seek (address, 0)
+            out[key] = np.fromfile(f,'B',length)
   else:
     for key, (addr_col,len_col,d_col) in b._decoder_data:
       if d_col in b._headers and b._headers[d_col][r] is not None:
