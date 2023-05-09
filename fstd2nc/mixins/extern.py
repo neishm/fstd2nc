@@ -216,7 +216,10 @@ class ExternOutput (BufferBase):
       for key in self._decoder_extra_args:
         if key not in self._headers: continue  # Skip inactive arguments.
         values = self._headers[key][record_id]
-        if values.ndim > 1: values = map(list,values)
+        if values.ndim > 1:
+          values = map(list,values)
+          # For case where all values are identical, reduce to scalar.
+          values = [v[0] if len(set(v)) == 1 else v for v in values]
         args.extend([[key]*nchunks, values])
       # Add scalar arguments.
       for key, value in self._decoder_scalar_args().items():
