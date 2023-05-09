@@ -807,19 +807,21 @@ class XYCoords (BufferBase):
         tiles.setdefault(key,[]).append(var)
     self._varlist = [v for v in self._varlist if v.atts.get('grtyp',None) != '#']
     for key, vars in tiles.items():
-      # Get dimensions of a single (untruncated) chunk.
-      chunk_i = max(v.atts['ni'] for v in vars)
-      chunk_j = max(v.atts['nj'] for v in vars)
-      nj, ni = var.shape[-2:]
-      chunks = OrderedDict()
-      for var in vars:
-        for sl in np.ndindex(var.record_id.shape):
-          i1 = var.atts['ig3'] - 1
-          j1 = var.atts['ig4'] - 1
-          i2 = min(i1+chunk_i,ni)
-          j2 = min(j1+chunk_j,nj)
-          chunks[sl+((j1,j2),(i1,i2))] = var.record_id[sl]
-      var = _chunk_type (vars[0].name, vars[0].atts, vars[0].axes, vars[0].dtype, chunks, (chunk_j,chunk_i))
+      #TODO
+      # Get i/j coordinates.
+      ig3_list = sorted(set([v.atts['ig3'] for v in vars]))
+      ig4_list = sorted(set([v.atts['ig4'] for v in vars]))
+      # Arrange the tiles in their natural 2D order.
+      var_tiles = np.empty((len(ig4_list),len(ig3_list)), dtype='object')
+      for v in vars:
+        ind = (ig4_list.index(v.atts['ig4']), ig3_list.index(v.atts['ig3']))
+        var_tiles[ind] = v
+      chunks = [(1,)*n for n in vars[0].record_id.shape] + [tuple(v.atts['nj'] for v in var_tiles[:,0])] + [tuple(v.atts['ni'] for v in var_tiles[0,:])]
+      record_id = np.empty(vars[0].shape[:-2]+var_tiles.shape, dtype=int)
+      record_id[()] = -1
+      for ind in np.ndindex(var_tiles.shape):
+        record_id[...,ind] = var_tiles[ind].record_id
+      var = _chunk_type (vars[0].name, vars[0].atts, vars[0].axes, vars[0].dtype, chunks, record_id)
       self._varlist.append(var)
 
     # Special case - there are no data records, ONLY a pair of lat/lon

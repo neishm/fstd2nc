@@ -130,24 +130,15 @@ class _iter_type (_base_type):
 # Similar to above, but more general.
 # Can allow for multiple records along the inner axes.
 class _chunk_type (_base_type):
-  __slots__ = ('name','atts','axes','dtype','chunks','chunksize','deps')
-  def __init__ (self, name, atts, axes, dtype, chunks, chunksize):
+  __slots__ = ('name','atts','axes','dtype','chunks','record_id','deps')
+  def __init__ (self, name, atts, axes, dtype, chunks, record_id):
     self.name = name
     self.atts = atts
     self.axes = axes
     self.dtype = dtype
     self.chunks = chunks
-    self.chunksize = chunksize
+    self.record_id = record_id
     self.deps = []
-  def items(self):
-    for key, value in self.chunks.items():
-      key = tuple(k if isinstance(k,int) else slice(*k) for k in key)
-      yield key, value
-  def keys(self):
-    for key, value in self.items():
-      yield key
-  def values(self):
-    return self.chunks.values()
 
 # Fake progress bar - does nothing.
 class _FakeBar (object):
@@ -242,6 +233,21 @@ class BufferBase (object):
   # Record parameters which should not be used as nc variable attributes.
   # (They're either internal to the file, or part of the data, not metadata).
   _ignore_atts = ('file_id','name','address','length','dtype','selected')
+
+  # Header columns which contain extra data that should be passed to _decode.
+  # Tuple of (offset, length, d) where:
+  # - offset is the address in the file where the data is located.
+  # - length is how much data to read.
+  # - d is an alternate source (dask graph?) for case where data is not
+  #   stored in a file.
+  _decoder_data = (('data',('address','length','d')),)
+
+  # Extra arguments to pull from columns of the table.
+  _decoder_extra_args = ()
+
+  # Extra (scalar) arguments needed for the decoder at runtime.
+  def _decoder_scalar_args (self):
+    return {}
 
   # Define any command-line arguments for reading FSTD files.
   @classmethod
@@ -886,7 +892,8 @@ class BufferBase (object):
         yield o
 
   # How to decode the data from a raw binary array.
-  def _decode (self, data, unused):
+  @classmethod
+  def _decode (cls, data):
     raise NotImplementedError("No decoder found.")
 
   # Shortcuts to header decoding functions.
@@ -901,11 +908,35 @@ class BufferBase (object):
   # Shortcut for reading a record, given a record id.
   def _read_record (self, rec):
     import numpy as np
-    with open(self._files[self._headers['file_id'][rec]],'rb') as f:
-      f.seek(self._headers['address'][rec],0)
-      data = np.fromfile(f,'B',self._headers['length'][rec])
-      data = self._decode(data,rec)
-    return data
+    kwargs = {}
+    # Add file-based data.
+    file_id = self._headers['file_id'][rec]
+    if file_id >= 0:
+      f = open(self._files[file_id], 'rb')
+    else:
+      f = None
+    for key, (addr_key, len_key, d_key) in self._decoder_data:
+      if addr_key not in self._headers: continue
+      # Special case: have dask array to read.
+      if d_key in self._headers:
+        d = self._headers[d_key][rec]
+        if d is not None:
+          kwargs[key] = d.T
+          continue
+      address = self._headers[addr_key][rec]
+      length = self._headers[len_key][rec]
+      if address == -1 or length == -1: continue
+      f.seek(address,0)
+      data = np.fromfile(f,'B',length)
+      kwargs[key] = data
+    for key in self._decoder_extra_args:
+      if key in self._headers:
+        value = self._headers[key][rec]
+        kwargs[key] = value
+    kwargs.update(self._decoder_scalar_args())
+    if f is not None:
+      f.close()
+    return self._decode(**kwargs)
 
 
   #

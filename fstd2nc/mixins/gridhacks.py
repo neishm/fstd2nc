@@ -21,6 +21,13 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+
+# Define a lock for controlling threaded access to ezscint, etc.
+from threading import RLock
+_lock = RLock()
+del RLock
+
+
 ############################################################
 # Mixin for questionable modifications to the headers table.
 #
@@ -93,7 +100,29 @@ class GridHacks (BufferBase):
 # Mixin for on-the-fly grid interpolation.
 #
 
+
+# Helper method - given an interpolation grid string, return a grid id.
+def _get_interp_grid (interp):
+  import rpnpy.librmn.all as rmn
+  # Extract interpolation grid.
+  def number(x):
+    try: return int(x)
+    except ValueError: return float(x)
+  with _lock:
+    interp = interp.split(',')
+    grtyp = interp[0]
+    grid_args = [number(v) for v in interp[1:] if '=' not in v]
+    grid_kwargs = dict(v.split('=') for v in interp[1:] if '=' in v)
+    grid_kwargs = dict((k,number(v)) for k,v in grid_kwargs.items())
+    if not hasattr(rmn,'defGrid_'+grtyp):
+      error(_("Unknown grid '%s'")%grtyp)
+    return getattr(rmn,'defGrid_'+grtyp)(*grid_args,**grid_kwargs)
+
+# Keep track of valid grid ids (to detect if we have a problem with grid ids)
+_valid_gids = set()
+
 class Interp (BufferBase):
+
   @classmethod
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
@@ -111,31 +140,20 @@ class Interp (BufferBase):
     interp = kwargs.pop('interp',None)
     super(Interp,self).__init__(*args,**kwargs)
     # Extract interpolation grid.
-    def number(x):
-      try: return int(x)
-      except ValueError: return float(x)
     if interp is not None:
-      interp = interp.split(',')
-      grtyp = interp[0]
-      grid_args = [number(v) for v in interp[1:] if '=' not in v]
-      grid_kwargs = dict(v.split('=') for v in interp[1:] if '=' in v)
-      grid_kwargs = dict((k,number(v)) for k,v in grid_kwargs.items())
-      if not hasattr(rmn,'defGrid_'+grtyp):
-        error(_("Unknown grid '%s'")%grtyp)
-      self._interp_grid = getattr(rmn,'defGrid_'+grtyp)(*grid_args,**grid_kwargs)
+      interp_grid = _get_interp_grid(interp)
+      self._interp_grid = interp_grid
       # Hack the new grid descriptors into the headers.
-      self._writeGrid (self._interp_grid)
+      self._writeGrid (interp_grid)
+      _valid_gids.add(interp_grid['id'])
 
       # Store original and modified versions of the grid descriptors.
-      ismeta = self._headers['ismeta']
-      self._original_grid = dict()
-      self._modified_grid = dict()
-      for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
-        self._original_grid[key] = self._headers[key]
-        self._modified_grid[key] = np.array(self._headers[key])
-        self._modified_grid[key][:] = np.where(ismeta, self._headers[key], self._interp_grid[key])
+      self._decoder_extra_args = self._decoder_extra_args + ('source_gid','dest_gid')
+      self._ignore_atts = self._ignore_atts + ('source_gid','dest_gid')
+      self._headers['source_gid'] = np.empty(self._nrecs,dtype=object)
 
       # Set up some options for ezsint.
+      import rpnpy.librmn.all as rmn
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_DEGREE, rmn.EZ_EXTRAP_VALUE)
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_VALUE, self._fill_value)
 
@@ -152,8 +170,12 @@ class Interp (BufferBase):
     # switch out the grid descriptors in the table, then let xycoords
     # construct the target grid axes for us.
     super(Interp,self)._makevars()
-    self._source_gids = np.array(self._gids)
-    self._headers.update(self._modified_grid)
+    self._headers['source_gid'][:] = np.array(self._gids)
+    _valid_gids.update(g for g in self._gids if g >= 0)
+    # Now, use interpolated grid descriptors.
+    ismeta = self._headers['ismeta']
+    for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
+      self._headers[key][:] = np.where(ismeta, self._headers[key], self._interp_grid[key])
     super(Interp,self)._makevars()
 
     # Add fill value to the data.
@@ -164,25 +186,33 @@ class Interp (BufferBase):
       if isinstance(var,_iter_type):
         var.atts['_FillValue'] = var.dtype.type(self._fill_value)
 
+  def _decoder_scalar_args (self):
+    args = super(Interp,self)._decoder_scalar_args()
+    if hasattr(self,'_interp_grid'):
+      args['dest_gid'] = self._interp_grid['id']
+    return args
+
   # Handle grid interpolations from raw binary array.
-  def _decode (self, data, rec_id, _grid_cache={}):
+  @classmethod
+  def _decode (cls, data, source_gid=None, dest_gid=None, **kwargs):
     import rpnpy.librmn.all as rmn
     import numpy as np
-    if self._headers['ismeta'][rec_id] or not hasattr(self,'_interp_grid'):
-      return super(Interp,self)._decode (data, rec_id)
+    if source_gid is None or dest_gid is None:
+      return super(Interp,cls)._decode (data, **kwargs)
+    if source_gid not in _valid_gids or dest_gid not in _valid_gids:
+      error(_("Problem finding grid id.  It's possible that you're running this in a multi-processing environment, which does not support the 'interp' option."))
     # Retrieve an active librmn grid id associated with this grid.
-    # (must be supplied by xycoords mixin).
-    ingrid = int(self._source_gids[rec_id])
-    if ingrid < 0:
+    if source_gid < 0:
       raise ValueError("Source data is not on a recognized grid.  Unable to interpolate.")
-    d = super(Interp,self)._decode (data, rec_id).T
-    with self._lock:
+    d = super(Interp,cls)._decode (data, **kwargs).T
+    with _lock:
       # Propogate any fill values to the interpolated grid.
+      fill_value = kwargs.get('fill_value')
       in_mask = np.zeros(d.shape, order='F', dtype='float32')
-      in_mask[d==self._fill_value] = 1.0
-      d = rmn.ezsint (self._interp_grid, ingrid, d)
-      out_mask = rmn.ezsint (self._interp_grid, ingrid, in_mask)
-      d[out_mask!=0] = self._fill_value
+      in_mask[d==fill_value] = 1.0
+      d = rmn.ezsint (dest_gid, source_gid, d)
+      out_mask = rmn.ezsint (dest_gid, source_gid, in_mask)
+      d[out_mask!=0] = fill_value
       # Return the data for the interpolated field.
       return d.T
 
@@ -249,17 +279,23 @@ class YinYang (BufferBase):
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][submask] = dest_grid[key]
 
+  def _decoder_scalar_args (self):
+    kwargs = super(YinYang,self)._decoder_scalar_args()
+    if self._yin: kwargs['yin'] = True
+    if self._yang: kwargs['yang'] = True
+    return kwargs
 
   # Handle grid interpolations from raw binary array.
-  def _decode (self, data, unused):
-    if not self._yin and not self._yang:
-      return super(YinYang,self)._decode (data, unused)
-    prm = self._decode_headers(data[:72])
+  @classmethod
+  def _decode (cls, data, yin=False, yang=False, **kwargs):
+    if not yin and not yang:
+      return super(YinYang,cls)._decode (data, **kwargs)
+    prm = cls._decode_headers(data[:72])
     prm = dict((k,v[0]) for k,v in prm.items())
-    d = super(YinYang,self)._decode (data, unused).T
-    if prm['grtyp'] == b'U' and self._yin:
+    d = super(YinYang,cls)._decode (data, **kwargs).T
+    if prm['grtyp'] == b'U' and yin:
       d = d[:,:prm['nj']//2]
-    elif prm['grtyp'] == b'U' and self._yang:
+    elif prm['grtyp'] == b'U' and yang:
       d = d[:,prm['nj']//2:]
     return d.T
 
@@ -290,10 +326,10 @@ class Crop (BufferBase):
       return
 
     # Keep track of cropping regions for the data.
-    self._headers['i0'] = np.zeros(self._nrecs,'uint16')
-    self._headers['iN'] = np.array(self._headers['ni'],'uint16')
-    self._headers['j0'] = np.zeros(self._nrecs,'uint16')
-    self._headers['jN'] = np.array(self._headers['nj'],'uint16')
+    self._decoder_extra_args = self._decoder_extra_args + ('crop_j','crop_i')
+    self._headers['crop_j'] = np.empty(self._nrecs,object)
+    self._headers['crop_i'] = np.empty(self._nrecs,object)
+    self._ignore_atts = self._ignore_atts + ('crop_j','crop_i')
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
@@ -343,25 +379,17 @@ class Crop (BufferBase):
         submask = (self._headers['ig1'] == grid['tag1']) & (self._headers['ig2'] == grid['tag2']) & (self._headers['ig3'] == grid['tag3'])
         for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
           self._headers[key][submask] = smallest_grid[key]
-        self._headers['i0'][submask] = i0
-        self._headers['iN'][submask] = iN
-        self._headers['j0'][submask] = j0
-        self._headers['jN'][submask] = jN
-
+        self._headers['crop_j'][submask] = slice(j0,jN)
+        self._headers['crop_i'][submask] = slice(i0,iN)
 
   # Handle cropping from raw binary array.
-  def _decode (self, data, rec_id):
-    import numpy as np
-    d = super(Crop,self)._decode (data, rec_id)
-    if not self._crop_to_smallest_grid: return d
-    # Check if cropping necessary.
-    ni = self._headers['ni'][rec_id]
-    nj = self._headers['nj'][rec_id]
-    if d.shape == (nj,ni): return d
-    i0 = self._headers['i0'][rec_id]
-    iN = self._headers['iN'][rec_id]
-    j0 = self._headers['j0'][rec_id]
-    jN = self._headers['jN'][rec_id]
-    d = d[j0:jN,i0:iN]
+  @classmethod
+  def _decode (cls, data, crop_j=None, crop_i=None, **kwargs):
+    d = super(Crop,cls)._decode (data, **kwargs)
+    if crop_j is not None:
+      d = d[crop_j,:]
+    if crop_i is not None:
+      d = d[:,crop_i]
     return d
+
 

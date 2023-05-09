@@ -53,15 +53,6 @@ def fast_dtype_fst2numpy (datyp, nbits):
   args += np.asarray(nbits,'uint64')
   return packed_dtype_fst2numpy(args)
 
-# Define a lock for controlling threaded access to the RPN file(s).
-# This is necessary because we can only open a limited number of files
-# at a time, so need to control which ones are opened and available in
-# a thread-safe way.
-from threading import RLock
-_lock = RLock()
-del RLock
-
-
 # Define a class for encoding / decoding FSTD data.
 class FSTD (BufferBase):
   _format = _("RPN standard file")
@@ -114,14 +105,6 @@ class FSTD (BufferBase):
     rec = recs[0]
     return self._fstluk(rec)
 
-  # Control the pickling / unpickling of BufferBase objects.
-  def __getstate__ (self):
-    state = super(FSTD,self).__getstate__()
-    state.pop('_lock',None)  # librmn lock will be defined upon unpickling.
-    return state
-  def __setstate__ (self, state):
-    super(FSTD,self).__setstate__(state)
-    self._lock = _lock
 
 
   ###############################################
@@ -139,11 +122,6 @@ class FSTD (BufferBase):
         variable on different etikets.
     """
     import numpy as np
-
-    # Set up lock for threading.
-    # The same lock is shared for all Buffer objects, to synchronize access to
-    # librmn.
-    self._lock = _lock
 
     self._inner_axes = ('k','j','i')
 
@@ -198,8 +176,13 @@ class FSTD (BufferBase):
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 
   # How to decode the data from a raw binary array.
-  def _decode (self, data, unused):
+  @classmethod
+  def _decode (cls, data):
     from fstd2nc.extra import decode
+    # Degenerate case: decoding handled in opaque dask layer, nothing to do.
+    if hasattr(data,'dask'):
+      import numpy as np
+      return np.array(data.T)
     nbits = int(data[0x0b])
     datyp = int(data[0x13])
     dtype = dtype_fst2numpy(datyp, nbits)
