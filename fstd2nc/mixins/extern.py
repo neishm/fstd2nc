@@ -386,16 +386,19 @@ class ExternOutput (BufferBase):
       arrays = map(da.from_delayed, arrays, shape, self._headers['dtype'])
       arrays = list(arrays)
       d = np.empty(self._nrecs, dtype=object)
-      d[:] = arrays
       isvalid = self._headers['file_id'] >= 0
-      d = np.where(isvalid, d, None)
+      for i in range(self._nrecs):
+        if isvalid[i]:
+          d[i] = arrays[i]
     else:
       d = np.empty(self._nrecs, dtype=object)
     # Check if we already have dask arrays to use.
     if 'd' in self._headers:
       isvalid = self._headers['d'] != None
-      d = np.where(isvalid, self._headers['d'], d)
-    table['d'] = d
+      for i in range(self._nrecs):
+        if isvalid[i]:
+          d[i] = self._headers['d'][i]
+    table['d'] = d[mask]
     return table
 
 # Workaround for recent xarray (>0.10.0) which changed the methods in the
