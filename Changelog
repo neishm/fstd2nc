@@ -1,3 +1,16 @@
+Version 0.20230315.0 (May 15, 2023)
+	* Added vertical bounds information to --bounds option.
+	* Removed "coordinates" from internal encoding of xarray DataArray
+	  objects.  This makes it easier for the user to remove it from the
+	  attributes in xarray to_netcdf routine.
+	* Added CCC file interface to the project (work in progress).
+	* Refactored internal _decode routines to be class methods, which
+	  means the full Buffer object no longer needs to be included in
+	  dask graphs (greatly reducing the size of dask graphs).
+	* Automatically "fuse" records together in xarray interface, which
+	  increases the chunk sizes in the dask graphs (making operations work
+	  more efficiently in dask).
+
 Version 0.20230328.1 (Mar 29, 2023)
 	* Fix compatibility issue with older versions of numpy, triggered
 	  when using gridhacks options.
