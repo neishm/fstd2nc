@@ -76,11 +76,11 @@ class GridHacks (BufferBase):
     nrecs = len(self._headers['name'])
     new_recs = []
     if 'ax' in gid:
-      new_recs.append(dict(prm, nomvar='>>  ', ni=gid['ni'], d=gid['ax']))
+      new_recs.append(dict(prm, nomvar='>>  ', ni=gid['ni'], d=gid['ax'], dtype=gid['ax'].dtype))
     if 'ay' in gid:
-      new_recs.append(dict(prm, nomvar='^^  ', nj=gid['nj'], d=gid['ay']))
+      new_recs.append(dict(prm, nomvar='^^  ', nj=gid['nj'], d=gid['ay'], dtype=gid['ay'].dtype))
     if 'axy' in gid:
-      new_recs.append(dict(prm, nomvar='^>  ', ni=gid['ni'], nj=gid['nj'], d=gid['axy']))
+      new_recs.append(dict(prm, nomvar='^>  ', ni=gid['ni'], nj=gid['nj'], d=gid['axy'], dtype=gid['axy'].dtype))
     for k,v in self._headers.items():
       if hasattr(v,'mask'):
         self._headers[k] = np.ma.zeros(shape=nrecs + len(new_recs), dtype=v.dtype)
