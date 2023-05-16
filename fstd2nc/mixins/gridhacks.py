@@ -326,10 +326,12 @@ class Crop (BufferBase):
       return
 
     # Keep track of cropping regions for the data.
-    self._decoder_extra_args = self._decoder_extra_args + ('crop_j','crop_i')
-    self._headers['crop_j'] = np.empty(self._nrecs,object)
-    self._headers['crop_i'] = np.empty(self._nrecs,object)
-    self._ignore_atts = self._ignore_atts + ('crop_j','crop_i')
+    self._decoder_extra_args = self._decoder_extra_args + ('crop_j0','crop_jN','crop_i0','crop_iN')
+    self._headers['crop_j0'] = np.empty(self._nrecs,'int32')
+    self._headers['crop_jN'] = np.empty(self._nrecs,'int32')
+    self._headers['crop_i0'] = np.empty(self._nrecs,'int32')
+    self._headers['crop_iN'] = np.empty(self._nrecs,'int32')
+    self._ignore_atts = self._ignore_atts + ('crop_j0','crop_jN','crop_i0','crop_iN')
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
@@ -379,17 +381,19 @@ class Crop (BufferBase):
         submask = (self._headers['ig1'] == grid['tag1']) & (self._headers['ig2'] == grid['tag2']) & (self._headers['ig3'] == grid['tag3'])
         for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
           self._headers[key][submask] = smallest_grid[key]
-        self._headers['crop_j'][submask] = slice(j0,jN)
-        self._headers['crop_i'][submask] = slice(i0,iN)
+        self._headers['crop_j0'][submask] = j0
+        self._headers['crop_jN'][submask] = jN
+        self._headers['crop_i0'][submask] = i0
+        self._headers['crop_iN'][submask] = iN
 
   # Handle cropping from raw binary array.
   @classmethod
-  def _decode (cls, data, crop_j=None, crop_i=None, **kwargs):
+  def _decode (cls, data, crop_j0=None, crop_jN=None, crop_i0=None, crop_iN=None, **kwargs):
     d = super(Crop,cls)._decode (data, **kwargs)
-    if crop_j is not None:
-      d = d[crop_j,:]
-    if crop_i is not None:
-      d = d[:,crop_i]
+    if crop_j0 is not None and crop_jN is not None:
+      d = d[crop_j0:crop_jN,:]
+    if crop_i0 is not None and crop_iN is not None:
+      d = d[:,crop_i0:crop_iN]
     return d
 
 
