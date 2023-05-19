@@ -423,6 +423,14 @@ def _fix_to_pygeode (fixed=[False]):
 class ExternInput (BufferBase):
   @classmethod
   def from_fstpy (cls, table, **kwargs):
+    """
+    Create a Buffer object from an fstpy table of records.
+
+    Parameters
+    ----------
+    table : pandas DataFrame
+        The table of records from fstpy.
+    """
     import numpy as np
     if hasattr(table,'to_pandas'):
       table = table.to_pandas()
