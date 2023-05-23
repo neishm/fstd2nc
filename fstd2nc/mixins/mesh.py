@@ -30,7 +30,7 @@ from fstd2nc.mixins import BufferBase
 class Mesh (BufferBase):
   def __init__ (self, *args, **kwargs):
     # Tell the decoder not to process horizontal records as variables.
-    #self._maybe_meta_records = self._maybe_meta_records + (b'##',)
+    self._maybe_meta_records = self._maybe_meta_records + (b'##',)
     super(Mesh,self).__init__(*args,**kwargs)
 
   # Add horizontal coordinate info to the data.
@@ -47,31 +47,24 @@ class Mesh (BufferBase):
     lats = OrderedDict()
     lons = OrderedDict()
     for var in self._varlist:
-      # Look for face node indices ('##' field).
-      if var.name == '##':
-        var.name = 'mesh_face_nodes'
-        # Reshape to (nFaces,3)
-        if 'i' in var.dims:
-          ind = var.dims.index('i')
-          faces = _dim_type ('nFaces', var.shape[ind]//3)
-          if var.shape[ind] % 3 == 0:
-            var.axes = var.axes[:ind] + [faces, three] + var.axes[ind+1:]
-            shape = var.record_id.shape
-        # Remove degenerate height dimension.
-        if 'height' in var.dims:
-          ind = var.dims.index('height')
-          var.axes = var.axes[:ind] + var.axes[ind+1:]
-          var.record_id = var.record_id.reshape(shape[:ind]+shape[ind+1:])
-        mesh_indices[(var.atts['ip1'],var.atts['ip2'])] = var
-        # Remove coordinate arrays.
-        var.atts.pop('coordinates',None)
+      if var.atts.get('grtyp',None) != 'M': continue
+      key = (var.atts['ig1'], var.atts['ig2'])
+      if key not in mesh_indices:
+        # Look for face node indices ('##' field).
+        mesh = self._find_coord(var,b'##  ')  # Borrowed from xycoords.
+        d = mesh['d'].transpose().squeeze()
+        if (d.ndim == 1):
+          faces = _dim_type ('nFaces', len(d)//3)
+          d = d.reshape(len(d)//3,-1)
+          atts = OrderedDict([("long_name","Vertices index of triangular meshe (TIN)"),("description","Index of the vertices position encoded in the ^^ >> fields which constitutes a triangular mesh")])
+          mesh = _var_type('mesh_face_nodes',atts, [faces,three], d)
+          mesh_indices[key] = mesh
       # Look for lat/lon coordinates.
-      if var.atts.get('grtyp',None) == 'M':
-        for coord in var.atts.get('coordinates',[]):
-          if coord.name == 'lat':
-            lats[var.atts['ig1'],var.atts['ig2']] = coord
-          if coord.name == 'lon':
-            lons[var.atts['ig1'],var.atts['ig2']] = coord
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name == 'lat':
+          lats[key] = coord
+        if coord.name == 'lon':
+          lons[key] = coord
 
     if len(mesh_indices) == 0: return
 
@@ -83,7 +76,7 @@ class Mesh (BufferBase):
       if key in lons: coordinates.append(lons[key])
       atts = OrderedDict()
       atts['cf_role'] = 'mesh_topology'
-      atts['topology_dimension'] = 2
+      atts['topology_dimension'] = np.int32(2)
       atts['node_coordinates'] = coordinates
       atts['face_node_connectivity'] = mesh_indices[key]
       topo = _var_type ('Mesh', atts, (), np.int32(0))
@@ -109,17 +102,4 @@ class Mesh (BufferBase):
               reftimes[key] = coord
           if 'time' in var.dims:
             times[key] = var.axes[var.dims.index('time')]
-
-    # Need to fix the time axis for the lat / lon / triangle indices
-    # (from '^^', '>>', '##' records).
-    # They may not include the forecast period.
-    for key in topos.keys():
-      if key in times and key in reftimes:
-        for category in mesh_indices, lats, lons:
-          if key in category:
-            var = category[key]
-            if 'time' in var.dims:
-              ind = var.dims.index('time')
-              if np.all(var.axes[ind].array == reftimes[key].array):
-                var.axes[ind] = times[key]
 
