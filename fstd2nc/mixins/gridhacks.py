@@ -331,6 +331,11 @@ class Crop (BufferBase):
     self._headers['crop_jN'] = np.empty(self._nrecs,'int32')
     self._headers['crop_i0'] = np.empty(self._nrecs,'int32')
     self._headers['crop_iN'] = np.empty(self._nrecs,'int32')
+    # Initialize with default values, to avoid processing garbage indices.
+    self._headers['crop_j0'][:] = 0
+    self._headers['crop_jN'][:] = self._headers['nj']
+    self._headers['crop_i0'][:] = 0
+    self._headers['crop_iN'][:] = self._headers['ni']
     self._ignore_atts = self._ignore_atts + ('crop_j0','crop_jN','crop_i0','crop_iN')
 
     # Run _makevars early to generate grid ids with xycoords mixin.
