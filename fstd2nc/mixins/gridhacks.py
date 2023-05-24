@@ -118,8 +118,62 @@ def _get_interp_grid (interp):
       error(_("Unknown grid '%s'")%grtyp)
     return getattr(rmn,'defGrid_'+grtyp)(*grid_args,**grid_kwargs)
 
-# Keep track of valid grid ids (to detect if we have a problem with grid ids)
-_valid_gids = set()
+# Helper method - pack up grid id for transport to other processes.
+# Converts to a dictionary, then to a tuple of key/value pairs.
+from fstd2nc.mixins import vectorize
+@vectorize
+def _pack_grid (gid):
+  import rpnpy.librmn.all as rmn
+  def _pack_item (item):
+    k, v = item
+    if k == 'subgrid':
+      return (k,tuple(map(_pack_dict,v)))
+    if hasattr(v,'dumps'):  # Numpy array
+      return (k,v.dumps())
+    return (k,v)
+  def _pack_dict (d):
+    d = d.copy()
+    d.pop('id',None)
+    d.pop('subgridid',None)
+    return tuple(map(_pack_item,d.items()))
+  if gid < 0: return None
+  with _lock:
+    grid = rmn.decodeGrid(int(gid))
+    return _pack_dict(grid)
+del vectorize
+
+# Helper method - unpack a grid after transport to another processor.
+# Returns an active grid id that's valid for this processor.
+_grid_lookup = {}
+def _unpack_grid (grid):
+  import rpnpy.librmn.all as rmn
+  from pickle import loads
+  def _unpack_item (item):
+    k, v = item
+    if k == 'subgrid':
+      return (k,list(map(_unpack_dict,v)))
+    if isinstance(v,bytes):  # Numpy array
+      return (k,loads(v))
+    return (k,v)
+  def _unpack_dict (d):
+    return dict(map(_unpack_item,d))
+  if grid is None: return -1
+  # Check if grid already handled.
+  for gid, g in _grid_lookup.items():
+    if g is grid: return gid
+  # Otherwise, start unpacking it.
+  packed_grid = grid
+  grid = _unpack_dict(grid)
+  with _lock:
+    # Special case: super grid
+    if 'subgrid' in grid:
+      subgrids = [rmn.encodeGrid(subgrid)['id'] for subgrid in grid['subgrid']]
+      gid = rmn.ezgdef_supergrid(grid['ni'], grid['nj'], grid['grtyp'], grid['grref'], grid['version'], subgrids)
+    else:
+      gid = rmn.encodeGrid(grid)['id']
+  _grid_lookup[gid] = packed_grid
+  return gid
+
 
 class Interp (BufferBase):
 
@@ -145,12 +199,11 @@ class Interp (BufferBase):
       self._interp_grid = interp_grid
       # Hack the new grid descriptors into the headers.
       self._writeGrid (interp_grid)
-      _valid_gids.add(interp_grid['id'])
 
       # Store original and modified versions of the grid descriptors.
-      self._decoder_extra_args = self._decoder_extra_args + ('source_gid','dest_gid')
-      self._ignore_atts = self._ignore_atts + ('source_gid','dest_gid')
-      self._headers['source_gid'] = np.empty(self._nrecs,dtype=object)
+      self._decoder_extra_args = self._decoder_extra_args + ('source_grid','dest_grid')
+      self._ignore_atts = self._ignore_atts + ('source_grid','dest_grid')
+      self._headers['source_grid'] = np.empty(self._nrecs,dtype=object)
 
       # Set up some options for ezsint.
       import rpnpy.librmn.all as rmn
@@ -170,8 +223,7 @@ class Interp (BufferBase):
     # switch out the grid descriptors in the table, then let xycoords
     # construct the target grid axes for us.
     super(Interp,self)._makevars()
-    self._headers['source_gid'][:] = np.array(self._gids)
-    _valid_gids.update(g for g in self._gids if g >= 0)
+    self._headers['source_grid'][:] = _pack_grid(self._gids)
     # Now, use interpolated grid descriptors.
     ismeta = self._headers['ismeta']
     for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
@@ -189,20 +241,20 @@ class Interp (BufferBase):
   def _decoder_scalar_args (self):
     args = super(Interp,self)._decoder_scalar_args()
     if hasattr(self,'_interp_grid'):
-      args['dest_gid'] = self._interp_grid['id']
+      args['dest_grid'] = _pack_grid(self._interp_grid['id'])
     return args
 
   # Handle grid interpolations from raw binary array.
   @classmethod
-  def _decode (cls, data, source_gid=None, dest_gid=None, **kwargs):
+  def _decode (cls, data, source_grid=None, dest_grid=None, **kwargs):
     import rpnpy.librmn.all as rmn
     import numpy as np
-    if source_gid is None or dest_gid is None:
+    # If no interpolation requested, nothing to do.
+    if source_grid is None or dest_grid is None:
       return super(Interp,cls)._decode (data, **kwargs)
-    if source_gid not in _valid_gids or dest_gid not in _valid_gids:
-      error(_("Problem finding grid id.  It's possible that you're running this in a multi-processing environment, which does not support the 'interp' option."))
-    # Retrieve an active librmn grid id associated with this grid.
-    if source_gid < 0:
+    source_grid = _unpack_grid(source_grid)
+    dest_grid = _unpack_grid(dest_grid)
+    if source_grid < 0:
       raise ValueError("Source data is not on a recognized grid.  Unable to interpolate.")
     d = super(Interp,cls)._decode (data, **kwargs).T
     with _lock:
@@ -210,8 +262,8 @@ class Interp (BufferBase):
       fill_value = kwargs.get('fill_value')
       in_mask = np.zeros(d.shape, order='F', dtype='float32')
       in_mask[d==fill_value] = 1.0
-      d = rmn.ezsint (dest_gid, source_gid, d)
-      out_mask = rmn.ezsint (dest_gid, source_gid, in_mask)
+      d = rmn.ezsint (dest_grid, source_grid, d)
+      out_mask = rmn.ezsint (dest_grid, source_grid, in_mask)
       d[out_mask!=0] = fill_value
       # Return the data for the interpolated field.
       return d.T
