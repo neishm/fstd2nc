@@ -446,7 +446,7 @@ class BufferBase (object):
       headers = {k:v.copy() for k,v in existing_buffer._headers.items()}
 
     nfiles = len(self._files)
-    if nfiles == 0 and len(infiles) > 0:
+    if nfiles == 0 and existing_buffer is None:
       error(_("no input files found!"))
     elif nfiles > 10:
       global _pandas_needed
