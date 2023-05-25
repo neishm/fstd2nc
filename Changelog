@@ -1,4 +1,14 @@
-Version 0.20230315.0 (May 15, 2023)
+Version 0.20230515.1 (May 25, 2023)
+	* Fixed crop_to_smallest_grid option, which was broken in .to_xarray()
+	  after fused records were implemented.
+	* Added doc string in .from_fstpy().
+	* Improved support for mesh grids (grtyp='M').  Removed extra
+	  dimensions from mesh_face_nodes variable that shouldn't be there,
+	  and got rid of warning message about decoding '##' record.
+	* Fixed interp option so it now works in dask clusters.
+	* Better error message when an empty list of files is passed in.
+
+Version 0.20230515.0 (May 15, 2023)
 	* Added vertical bounds information to --bounds option.
 	* Removed "coordinates" from internal encoding of xarray DataArray
 	  objects.  This makes it easier for the user to remove it from the
