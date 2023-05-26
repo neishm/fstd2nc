@@ -108,6 +108,14 @@ def _get_interp_grid (interp):
   def number(x):
     try: return int(x)
     except ValueError: return float(x)
+  # Degenerate case: already have the grid info in a dictionary.
+  if hasattr(interp,'keys'):
+    return interp
+  # Degenerate case: have a grid id, just need to look up the info.
+  if isinstance(interp,int):
+    with _lock:
+      return rmn.decodeGrid(interp)
+  # Main case: Have grid info encoded as a string.
   with _lock:
     interp = interp.split(',')
     grtyp = interp[0]
