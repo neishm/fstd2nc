@@ -83,6 +83,9 @@ def _read_block (filename, offset, length):
   import numpy as np
   # Scalar version first.
   if not hasattr(offset,'__len__'):
+    # Skip addresses that are -1 (indicates no data available).
+    # E.g. for masked data, if no corresponding mask available
+    if offset < 0: return None
     with open(filename,'rb') as f:
       f.seek (offset,0)
       return np.fromfile(f,'B',length)
@@ -90,6 +93,11 @@ def _read_block (filename, offset, length):
   out = []
   with open(filename,'rb') as f:
     for o, l in zip(offset, length):
+      # Skip addresses that are -1 (indicates no data available).
+      # E.g. for masked data, if no corresponding mask available
+      if o < 0:
+        out.append(None)
+        continue
       f.seek (o,0)
       out.append(np.fromfile(f,'B',l))
   return out
