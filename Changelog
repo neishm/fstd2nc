@@ -1,3 +1,9 @@
+Version 0.20230515.2 (May 30, 2023)
+	* From Python interface, allow interp parameter to accept existing
+	  grid ids as input.
+	* Fixed a crash when converting masked data when some of the mask
+	  records are missing.
+
 Version 0.20230515.1 (May 25, 2023)
 	* Fixed crop_to_smallest_grid option, which was broken in .to_xarray()
 	  after fused records were implemented.
