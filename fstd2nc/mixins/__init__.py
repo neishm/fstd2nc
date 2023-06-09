@@ -853,6 +853,10 @@ class BufferBase (object):
       for axis in var.axes[:var.record_id.ndim]:
         if axis.name in headers: continue
         headers[axis.name] = np.ma.masked_all(self._nrecs, dtype=axis.array.dtype)
+      # Add coordinates as well.
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name in headers: continue
+        headers[coord.name] = np.ma.masked_all(self._nrecs, dtype=coord.array.dtype)
     namesize = max(len(var.name) for var in varlist)
     headers['name'] = np.ma.masked_all(self._nrecs, dtype='|S%d'%namesize)
     headers['d'] = np.empty(self._nrecs, dtype=object)
@@ -869,9 +873,9 @@ class BufferBase (object):
       # Add coordinate info as well.
       for coord in var.atts.get('coordinates',[]):
         shape = [len(axis) if axis in coord.axes else 1 for axis in axes]
-        #array = np.empty(var.record_id.shape, dtype=axis.array.dtype)
-        #array[()] = axis.array.reshape(shape)
-        #headers[axis.name][offset:offset+var.record_id.size] = array.flatten()
+        array = np.empty(var.record_id.shape, dtype=coord.array.dtype)
+        array[()] = coord.array.reshape(shape)
+        headers[coord.name][offset:offset+var.record_id.size] = array.flatten()
       headers['name'][offset:offset+var.record_id.size] = var.name
       headers['d'][offset:offset+var.record_id.size] = var.record_id.flatten()
       offset = offset + var.record_id.size

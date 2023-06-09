@@ -42,7 +42,11 @@ def stamp2datetime64 (date):
     return np.asarray(date, dtype='datetime64[s]')[()]
   else:
     return None
-
+# Convert datetime64 objects back to an RPN date stamp.
+@vectorize
+def datetime2stamp (date):
+  if date is None: return 0
+  return RPNDate(date).datev
 
 #################################################
 # Mixin for handling dates/times.
@@ -138,6 +142,7 @@ class Dates (BufferBase):
         axis.atts['units'] = 'hours'
 
   def _unmakevars (self):
+    import numpy as np
     # Re-attach leadtime, reftime as coordinates for variables.
     # First, find all leadtime/reftime coordinates.
     leadtimes = dict()
@@ -176,4 +181,11 @@ class Dates (BufferBase):
     # Continue processing the variables.
     super (Dates,self)._unmakevars()
 
-    #TODO: now, decode leadtime/reftime info.
+    # Get leadtime column (may be coming from forecast axis).
+    if 'forecast' in self._headers.keys():
+      self._headers['leadtime'] = self._headers['forecast']
+    # Convert leadtime to units of hours if it's a timedelta64.
+    if 'leadtime' in self._headers.keys():
+      if self._headers['leadtime'].dtype == 'timedelta64[ns]':
+        self._headers['leadtime'] = self._headers['leadtime'] / np.timedelta64(3600,'s')
+
