@@ -45,7 +45,14 @@ def stamp2datetime64 (date):
 # Convert datetime64 objects back to an RPN date stamp.
 @vectorize
 def datetime2stamp (date):
+  from rpnpy.rpndate import RPNDate
+  import numpy as np
+  from datetime import datetime
   if date is None: return 0
+  if not isinstance(date,datetime):
+    stamp = date - np.datetime64('1970-01-01T00:00:00')
+    stamp /= np.timedelta64(1,'s')
+    date = datetime.utcfromtimestamp(stamp)
   return RPNDate(date).datev
 
 #################################################
@@ -188,4 +195,23 @@ class Dates (BufferBase):
     if 'leadtime' in self._headers.keys():
       if self._headers['leadtime'].dtype == 'timedelta64[ns]':
         self._headers['leadtime'] = self._headers['leadtime'] / np.timedelta64(3600,'s')
+
+    # Get datev, dateo, npas, using time, leadtime, deet.
+    if 'deet' not in self._headers.keys():
+      self._headers['deet'] = np.empty(self._nrecs, dtype='int32')
+      self._headers['deet'][:] = 60  # Set default value of 60s
+    self._headers['npas'] = np.ma.array(self._headers['leadtime']*3600 / self._headers['deet'], dtype='int32')
+    if 'time' in self._headers.keys():
+      if 'forecast' in self._headers.keys():
+        self._headers['dateo'] = self._headers['time']
+        self._headers['datev'] = self._headers['time'] + self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
+      else:
+        self._headers['dateo'] = self._headers['time']
+        self._headers['datev'] = self._headers['time']
+
+    # Convert dateo and datev into RPN date stamps.
+    if 'datev' in self._headers.keys():
+      self._headers['datev'] = datetime2stamp(self._headers['datev'])
+    if 'dateo' in self._headers.keys():
+      self._headers['dateo'] = datetime2stamp(self._headers['dateo'])
 

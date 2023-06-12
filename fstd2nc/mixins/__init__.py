@@ -844,7 +844,7 @@ class BufferBase (object):
       else:
         warn (_("Unable to encode %s.")%var.name)
     self._varlist = varlist
-    self._nrecs = sum(np.product(var.shape) for var in varlist)
+    self._nrecs = sum(np.product(var.record_id.shape) for var in varlist)
     # Start constructing header information.
     # The initial columns will be the outer axes of the variables.
     # plus the name and data columns.
