@@ -399,9 +399,10 @@ class PolarStereo(GridMap):
 # Mixin for handling lat/lon coordinates.
 
 class XYCoords (BufferBase):
-  # Special records that contain coordinate info.
-  # We don't want to output these directly as variables, need to decode first.
-  _xycoord_nomvars = (b'^^',b'>>',b'^>')
+  # Tell the decoder not to process horizontal records as variables.
+  @classmethod
+  def _meta_records (cls):
+    return super(XYCoords,cls)._meta_records() + (b'^^',b'>>',b'^>')
   # Grids that can be read directly from '^^','>>' records, instead of going
   # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
   _direct_grids = ('X','Y','T','+','O','M')
@@ -436,8 +437,6 @@ class XYCoords (BufferBase):
     self._keep_LA_LO = kwargs.pop('keep_LA_LO',False)
     self._no_adjust_rlon = kwargs.pop('no_adjust_rlon',False)
     self._bounds = kwargs.pop('bounds',False)
-    # Tell the decoder not to process horizontal records as variables.
-    self._meta_records = self._meta_records + self._xycoord_nomvars
     super(XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)

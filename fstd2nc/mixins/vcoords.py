@@ -72,6 +72,14 @@ class VCoords (BufferBase):
     parser.add_argument('--momentum-levels', '--mlev', action='store_true', help=_("Only convert data that's on 'momentum' vertical levels."))
     parser.add_argument('--vertical-velocity-levels', '--wlev', action='store_true', help=_("Only convert data that's on 'vertical velocity' levels."))
 
+  # Tell the decoder not to process vertical records as variables.
+  @classmethod
+  def _meta_records(cls):
+    return super(VCoords,cls)._meta_records() + (b'!!',b'!!SF')
+  @classmethod
+  def _maybe_meta_records(cls):
+    return super(VCoords,cls)._maybe_meta_records() + (b'HY',)
+
   def __init__ (self, *args, **kwargs):
     """
     strict_vcoord_match : bool, optional
@@ -114,9 +122,6 @@ class VCoords (BufferBase):
 
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
-    # Tell the decoder not to process vertical records as variables.
-    self._meta_records = self._meta_records + (b'!!',b'!!SF')
-    self._maybe_meta_records = self._maybe_meta_records + (b'HY',)
     super(VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).

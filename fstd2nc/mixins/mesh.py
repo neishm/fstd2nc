@@ -28,9 +28,12 @@ from fstd2nc.mixins import BufferBase
 #
 
 class Mesh (BufferBase):
+  # Tell the decoder not to process horizontal records as variables.
+  @classmethod
+  def _maybe_meta_records(cls):
+    return super(Mesh,cls)._maybe_meta_records() + (b'##',)
+
   def __init__ (self, *args, **kwargs):
-    # Tell the decoder not to process horizontal records as variables.
-    self._maybe_meta_records = self._maybe_meta_records + (b'##',)
     super(Mesh,self).__init__(*args,**kwargs)
 
   # Add horizontal coordinate info to the data.

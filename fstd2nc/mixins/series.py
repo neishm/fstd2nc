@@ -58,6 +58,14 @@ class Series (BufferBase):
     group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
     group.add_argument('--missing-bottom-profile-level', action='store_true', help=_('Assume the bottom level of the profile data is missing.'))
 
+  # Don't process series time/station/height records as variables.
+  @classmethod
+  def _meta_records(cls):
+    return super(Series,cls)._meta_records() + (b'STNS',)
+  @classmethod
+  def _maybe_meta_records(cls):
+    return super(Series,cls)._maybe_meta_records() + (b'HH',b'SV',b'SH')
+
   def __init__ (self, *args, **kwargs):
     """
     profile_momentum_vars : str or list, optional
@@ -84,9 +92,6 @@ class Series (BufferBase):
     self._thermo_vars = thermo_vars
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
 
-    # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + (b'STNS',)
-    self._maybe_meta_records = self._maybe_meta_records + (b'HH',b'SV',b'SH')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)

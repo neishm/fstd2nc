@@ -216,11 +216,15 @@ class BufferBase (object):
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
-  _meta_records = ()
+  @classmethod
+  def _meta_records(cls):
+    return ()
   # Other records that should also be kept separate, but only if they are
   # 1-dimensional.  If they are 2D, then they should be processed as a normal
   # variable.
-  _maybe_meta_records = ()
+  @classmethod
+  def _maybe_meta_records(cls):
+    return ()
 
   # Attributes which could potentially be used as outer axes.
   # The values from the attribute will become the axis values.
