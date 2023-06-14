@@ -59,6 +59,8 @@ class FSTD (BufferBase):
   _format_singular = _("an RPN standard file")
   _format_plural = _("RPN standard file(s)")
 
+  _inner_axes = ('k','j','i')
+
   # Keep a reference to fstd98 so it's available during cleanup.
   try:
     from rpnpy.librmn import fstd98 as _fstd98
@@ -123,8 +125,6 @@ class FSTD (BufferBase):
     """
     import numpy as np
 
-    self._inner_axes = ('k','j','i')
-
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj','nk') + self._var_id
     self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s', '%(nk)sL') + self._human_var_id
@@ -159,7 +159,7 @@ class FSTD (BufferBase):
     self._headers['ismeta'] = np.empty(self._nrecs, dtype='bool')
     self._headers['ismeta'][:] = meta_mask
 
-    # Aliases for iner dimensions
+    # Aliases for inner dimensions
     self._headers['k'] = self._headers['nk']
     self._headers['j'] = self._headers['nj']
     self._headers['i'] = self._headers['ni']
@@ -205,6 +205,10 @@ class FSTD (BufferBase):
     import numpy as np
     # Generate a table of records (with incomplete information).
     super(FSTD,self)._unmakevars()
+    # Aliases for inner dimensions
+    self._headers['nk'] = self._headers['k']
+    self._headers['nj'] = self._headers['j']
+    self._headers['ni'] = self._headers['i']
     # Add other FSTD-related columns that are expected to be there.
     self._headers['nomvar'] = np.empty(self._nrecs,dtype='|S4')
     self._headers['nomvar'][:] = self._headers['name']

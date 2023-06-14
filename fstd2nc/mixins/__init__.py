@@ -851,7 +851,7 @@ class BufferBase (object):
     self._nrecs = sum(np.product(var.record_id.shape) for var in varlist)
     # Start constructing header information.
     # The initial columns will be the outer axes of the variables.
-    # plus the name and data columns.
+    # plus the name and data columns, and inner dimensions.
     headers = dict()
     for var in self._varlist:
       for axis in var.axes[:var.record_id.ndim]:
@@ -861,6 +861,13 @@ class BufferBase (object):
       for coord in var.atts.get('coordinates',[]):
         if coord.name in headers: continue
         headers[coord.name] = np.ma.masked_all(self._nrecs, dtype=coord.array.dtype)
+      # Add inner axes.
+      for dimname in self._inner_axes:
+        headers[dimname] = np.ma.ones(self._nrecs, dtype='int32')
+      for axis in var.axes[var.record_id.ndim:]:
+        if axis.name not in self._inner_axes:
+          error (_("Unhandled inner axis %s.")%axis.name)
+
     namesize = max(len(var.name) for var in varlist)
     headers['name'] = np.ma.masked_all(self._nrecs, dtype='|S%d'%namesize)
     headers['d'] = np.empty(self._nrecs, dtype=object)
@@ -880,6 +887,9 @@ class BufferBase (object):
         array = np.empty(var.record_id.shape, dtype=coord.array.dtype)
         array[()] = coord.array.reshape(shape)
         headers[coord.name][offset:offset+var.record_id.size] = array.flatten()
+      # Add inner axes.
+      for axis in var.axes[var.record_id.ndim:]:
+        headers[axis.name][offset:offset+var.record_id.size] = len(axis)
       headers['name'][offset:offset+var.record_id.size] = var.name
       headers['d'][offset:offset+var.record_id.size] = var.record_id.flatten()
       offset = offset + var.record_id.size

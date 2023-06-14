@@ -848,6 +848,10 @@ class XYCoords (BufferBase):
       if order != list(range(len(var.axes))):
         var.axes = [var.axes[i] for i in order]
         var.array = var.array.transpose(*order)
+      #TODO: decode projection info.
+      # Identify inner axes.
+      var.axes[-2] = _dim_type('j',len(var.axes[-2]))
+      var.axes[-1] = _dim_type('i',len(var.axes[-1]))
       # Process the variable.
       outer_shape = [len(a) for a in var.axes[:-2]]
       record_id = np.zeros(outer_shape, dtype=object)
