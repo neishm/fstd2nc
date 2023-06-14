@@ -200,6 +200,19 @@ class FSTD (BufferBase):
     from fstd2nc.extra import raw_headers
     return raw_headers(filename)
 
+  # Reconstructing FSTD records from external data.
+  def _unmakevars (self):
+    import numpy as np
+    # Generate a table of records (with incomplete information).
+    super(FSTD,self)._unmakevars()
+    # Add other FSTD-related columns that are expected to be there.
+    self._headers['nomvar'] = np.empty(self._nrecs,dtype='|S4')
+    self._headers['nomvar'][:] = self._headers['name']
+    self._headers['ismeta'] = np.zeros(self._nrecs,'bool')
+    self._headers['ismeta'] |= np.isin(self._headers['nomvar'],self._meta_records())
+    self._headers['ismeta'] |= np.isin(self._headers['nomvar'],self._maybe_meta_records()) & ((self._headers['ni']==1)|(self._headers['nj']==1))
+    self._headers['selected'] = ~self._headers['ismeta']
+
   def to_fstd (self, filename):
     """
     Write data to an FSTD file.
