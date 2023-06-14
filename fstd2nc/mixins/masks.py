@@ -37,6 +37,10 @@ except ImportError:  # rpnpy not available, so nothing to do here.
 # Mixin for handling masks.
 
 class Masks (BufferBase):
+
+  # Default fill value (overridden at init time).
+  _fill_value = 1e30
+
   @classmethod
   def _cmdline_args (cls, parser):
     super(Masks,cls)._cmdline_args(parser)

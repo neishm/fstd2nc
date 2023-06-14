@@ -871,6 +871,8 @@ class BufferBase (object):
     namesize = max(len(var.name) for var in varlist)
     headers['name'] = np.ma.masked_all(self._nrecs, dtype='|S%d'%namesize)
     headers['d'] = np.empty(self._nrecs, dtype=object)
+    headers['file_id'] = np.empty(self._nrecs,dtype='int32')
+    headers['file_id'][:] = -1
     offset = 0
     for var in varlist:
       axes = var.axes[:var.record_id.ndim]
@@ -897,7 +899,7 @@ class BufferBase (object):
     # It would be a problem if the columns were never processed!
     self._headers = AccessCountDict(**headers)
     # Pre-access name and 'd' columns, because we don't care if those are accessed.
-    self._headers['name'], self._headers['d']
+    self._headers['name'], self._headers['d'], self._headers['file_id']
     # From here, the mixins will start processing the header info
 
   # Iterate over all unique axes found in the variables.
