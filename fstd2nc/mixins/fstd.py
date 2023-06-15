@@ -244,7 +244,7 @@ class FSTD (BufferBase):
       rec = self._fstluk(i)
       # Ensure data is Fortran-contiguous for librmn.
       rec['d'] = np.ascontiguousarray(rec['d'].T).T
-      rmn.fstecr(outfile, rec)
+      rmn.fstecr(outfile, rec, rewrite=False)
     rmn.fstcloseall(outfile)
 
   #
