@@ -849,11 +849,15 @@ class BufferBase (object):
         warn (_("Unable to encode %s.")%var.name)
     self._varlist = varlist
     self._nrecs = sum(np.product(var.record_id.shape) for var in varlist)
+    # Keep track of columns that we don't need to worry about.
+    # (don't care if they get used or not).
+    dontcare = set()
     # Start constructing header information.
     # The initial columns will be the outer axes of the variables.
     # plus the name and data columns, and inner dimensions.
     headers = dict()
     for var in self._varlist:
+      # Add outer axes.
       for axis in var.axes[:var.record_id.ndim]:
         if axis.name in headers: continue
         headers[axis.name] = np.ma.masked_all(self._nrecs, dtype=axis.array.dtype)
@@ -867,6 +871,16 @@ class BufferBase (object):
       for axis in var.axes[var.record_id.ndim:]:
         if axis.name not in self._inner_axes:
           error (_("Unhandled inner axis %s.")%axis.name)
+      # Add extra metadata.
+      for attname, attval in var.atts.items():
+        if attname in headers: continue
+        # For simple structures, create array with appropriate dtype.
+        # For complicated structures, use object dtype.
+        sample = np.array(attval)
+        if sample.ndim == 0:
+          headers[attname] = np.ma.masked_all(self._nrecs, dtype=sample.dtype)
+        else:
+          headers[attname] = np.ma.masked_all(self._nrecs, dtype=object)
 
     namesize = max(len(var.name) for var in varlist)
     headers['name'] = np.ma.masked_all(self._nrecs, dtype='|S%d'%namesize)
@@ -892,14 +906,21 @@ class BufferBase (object):
       # Add inner axes.
       for axis in var.axes[var.record_id.ndim:]:
         headers[axis.name][offset:offset+var.record_id.size] = len(axis)
+      # Add extra metadata.
+      for attname, attval in var.atts.items():
+        headers[attname][offset:offset+var.record_id.size] = attval
       headers['name'][offset:offset+var.record_id.size] = var.name
       headers['d'][offset:offset+var.record_id.size] = var.record_id.flatten()
       offset = offset + var.record_id.size
+
     # Use special dictionary to keep track of which columns were used.
     # It would be a problem if the columns were never processed!
     self._headers = AccessCountDict(**headers)
-    # Pre-access name and 'd' columns, because we don't care if those are accessed.
-    self._headers['name'], self._headers['d'], self._headers['file_id']
+    # Pre-access certain columns, so they don't get flagged as unhandled.
+    # (columns that aren't important).
+    dontcare |= set(('name','d','file_id'))
+    for col in dontcare:
+      self._headers[col]
     # From here, the mixins will start processing the header info
 
   # Iterate over all unique axes found in the variables.

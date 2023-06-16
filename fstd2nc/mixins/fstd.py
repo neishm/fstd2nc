@@ -220,15 +220,19 @@ class FSTD (BufferBase):
     self._headers['address'][:] = -1
     # Some columns may not have a specific value to put in the table, so put
     # in some placeholder value.
-    self._headers['typvar'] = np.empty(self._nrecs,dtype='|S2')
-    self._headers['typvar'][:] = 'A'
+    if 'typvar' in self._headers.keys():
+      self._headers['typvar'] = self._headers['typvar'].astype('|S2')
+    else:
+      self._headers['typvar'] = np.empty(self._nrecs,dtype='|S2')
+      self._headers['typvar'][:] = 'A'
     #TODO: remove this - should be handled by xycoords!
     self._headers['grtyp'] = np.empty(self._nrecs,dtype='|S1')
     self._headers['grtyp'][:] = 'X'
-    self._headers['etiket'] = np.empty(self._nrecs,dtype='|S12')
-    self._headers['etiket'][:] = ''
-    # Fill in metadata with updates from user.
-    #TODO
+    if 'etiket' in self._headers.keys():
+      self._headers['etiket'] = self._headers['etiket'].astype('|S12')
+    else:
+      self._headers['etiket'] = np.empty(self._nrecs,dtype='|S12')
+      self._headers['etiket'][:] = ''
 
   def to_fstd (self, filename):
     """
