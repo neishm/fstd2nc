@@ -334,12 +334,7 @@ class ExternOutput (BufferBase):
     """
     from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
     import numpy as np
-    # Encapsulate this info in a structure.
-    # Adapted from 'fake_buffer' object created in from_fstpy method.
-    # TODO: simpler way of making empty buffer?
-    b = cls.__new__(cls)
-    b._files = [None]
-    b._varlist = []
+    varlist = []
     # Handle FSTD parameters passed in the method call.
     ds = ds.copy()
     ds.attrs.update(params)
@@ -360,17 +355,9 @@ class ExternOutput (BufferBase):
     # Construct the varlist.
     for varname, var in ds.variables.items():
       if varname in dims: continue
-      b._varlist.append(_var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data))
+      varlist.append(_var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data))
     # Decode the varlist into a table.
-    b._unmakevars()
-    # Check for unused columns.
-    for colname in b._headers.keys():
-      if b._headers._counter[colname] == 0:
-        warn(_("Unknown axis '%s'.  Encoding not complete.")%colname)
-    # Convert headers to regular dictionary.
-    b._headers = dict(b._headers)
-    # Return the result.
-    return b
+    return cls._deserialize(varlist)
 
   def to_iris (self):
     """

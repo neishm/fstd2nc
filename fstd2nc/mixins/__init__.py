@@ -835,6 +835,31 @@ class BufferBase (object):
     else:
       self._makevars_slow()
 
+  # Decode variable structures into a format-independent structure.
+  def _serialize (self):
+    self._makevars()
+    return self._varlist
+
+  # Re-encode format-independent info into a format-specific table.
+  @classmethod
+  def _deserialize (cls, data):
+    # Encapsulate this info in a structure.
+    # Adapted from 'fake_buffer' object created in from_fstpy method.
+    # TODO: simpler way of making empty buffer?
+    b = cls.__new__(cls)
+    b._files = [None]
+    b._varlist = data
+    b._unmakevars()
+    # Check for unused columns.
+    for colname in b._headers.keys():
+      if b._headers._counter[colname] == 0:
+        warn(_("Unknown axis '%s'.  Encoding not complete.")%colname)
+    # Convert headers to regular dictionary.
+    b._headers = dict(b._headers)
+    # Return the result.
+    return b
+
+
   # Inverse operation - determine record structure from a varlist.
   def _unmakevars (self):
     from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
