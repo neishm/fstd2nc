@@ -328,7 +328,7 @@ class ExternOutput (BufferBase):
     return out_list
 
   @classmethod
-  def from_xarray (cls, ds):
+  def from_xarray (cls, ds, **params):
     """
     Create a Buffer object from the given xarray object.
     """
@@ -340,6 +340,15 @@ class ExternOutput (BufferBase):
     b = cls.__new__(cls)
     b._files = [None]
     b._varlist = []
+    # Handle FSTD parameters passed in the method call.
+    ds = ds.copy()
+    ds.attrs.update(params)
+    # Handle FSTD parameters passed in as global attributes of the Dataset.
+    for varname, var in ds.variables.items():
+      var.attrs.update(ds.attrs)
+    # Handle FSTD parameters set as variable attributes.
+    for varname, var in ds.variables.items():
+      var.encoding.update(fstd_attrs=var.attrs)
     # Collect dimensions and coordinates into a separate structure.
     dims = {}
     for dimname in ds.dims.keys():
@@ -352,7 +361,6 @@ class ExternOutput (BufferBase):
     for varname, var in ds.variables.items():
       if varname in dims: continue
       b._varlist.append(_var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data))
-    #TODO: decode existing coordinates from strings into list of objects.
     # Decode the varlist into a table.
     b._unmakevars()
     # Check for unused columns.
