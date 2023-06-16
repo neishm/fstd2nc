@@ -899,6 +899,8 @@ class BufferBase (object):
       # Add extra metadata.
       for attname, attval in var.atts.items():
         if attname in headers: continue
+        # It's ok if these values are never actually referenced.
+        dontcare.add(attname)
         # For simple structures, create array with appropriate dtype.
         # For complicated structures, use object dtype.
         sample = np.array(attval)
