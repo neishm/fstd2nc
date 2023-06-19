@@ -154,37 +154,41 @@ class Dates (BufferBase):
     # First, find all leadtime/reftime coordinates.
     leadtimes = dict()
     reftimes = dict()
+    # Helper method - find the time dimension of a variable.
+    # Returned as an id.
+    def get_time (var):
+      time = [axis for axis in var.axes if axis.name.startswith('time')]
+      if len(time) == 0:
+        return None
+      else:
+        return id(time[0])
+
     for var in self._varlist:
-      if var.name == 'leadtime':
-        if 'time' in var.dims:
-          i = var.dims.index('time')
-          leadtimes[id(var.axes[i])] = var
-        else:
-          # Scalar case
-          leadtimes[None] = var
-      if var.name == 'reftime':
-        if 'time' in var.dims:
-          i = var.dims.index('time')
-          reftimes[id(var.axes[i])] = var
-        else:
-          # Scalar case
-          reftimes[None] = var
+      time = get_time(var)
+      if var.name.startswith('leadtime'):
+        var.name = 'leadtime'
+        leadtimes[time] = var
+      if var.name.startswith('reftime'):
+        var.name = 'reftime'
+        reftimes[time] = var
+
     # Remove these from the varlist.
-    self._varlist = [var for var in self._varlist if var.name not in ('leadtime','reftime')]
+    self._varlist = [var for var in self._varlist if not var.name.startswith('leadtime') and not var.name.startswith('reftime')]
     # Now, add these coordinates into the vars.
     for var in self._varlist:
-      if 'time' in var.dims:
-        time = id(var.axes[var.dims.index('time')])
-      else:
-        time = None
+      time = get_time(var)
       if time in leadtimes:
         var.atts.setdefault('coordinates',[]).append(leadtimes[time])
-      elif None in leadtimes:
-        var.atts.setdefault('coordinates',[]).append(leadtimes[None])
       if time in reftimes:
         var.atts.setdefault('coordinates',[]).append(reftimes[time])
-      elif None in reftimes:
-        var.atts.setdefault('coordinates',[]).append(reftimes[None])
+
+    # Normalize time / forecast axis names.
+    for axis in self._iter_axes():
+      if axis.name.startswith('time'):
+        axis.name = 'time'
+      if axis.name.startswith('forecast'):
+        axis.name = 'forecast'
+
     # Continue processing the variables.
     super (Dates,self)._unmakevars()
 
@@ -215,3 +219,5 @@ class Dates (BufferBase):
     if 'dateo' in self._headers.keys():
       self._headers['dateo'] = datetime2stamp(self._headers['dateo'])
 
+    # Set ip2 values.
+    self._headers['ip2'] = self._headers['npas'] * self._headers['deet'] // 3600
