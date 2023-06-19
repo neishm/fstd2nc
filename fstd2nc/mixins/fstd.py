@@ -225,9 +225,6 @@ class FSTD (BufferBase):
     else:
       self._headers['typvar'] = np.empty(self._nrecs,dtype='|S2')
       self._headers['typvar'][:] = 'A'
-    #TODO: remove this - should be handled by xycoords!
-    self._headers['grtyp'] = np.empty(self._nrecs,dtype='|S1')
-    self._headers['grtyp'][:] = 'X'
     if 'etiket' in self._headers.keys():
       self._headers['etiket'] = self._headers['etiket'].astype('|S12')
     else:

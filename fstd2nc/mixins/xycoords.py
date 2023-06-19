@@ -858,5 +858,11 @@ class XYCoords (BufferBase):
       for ind in np.ndindex(tuple(outer_shape)):
         record_id[ind] = var.array[ind]
       var = _iter_type (var.name, var.atts, var.axes, var.array.dtype, record_id)
+      #TODO: determine appropriate grtyp
+      if 'grtyp' not in var.atts:
+        var.atts['grtyp'] = 'X'
       self._varlist[var_ind] = var
     super(XYCoords,self)._unmakevars()
+
+    self._headers['grtyp'] = self._headers['grtyp'].astype('|S1')
+
