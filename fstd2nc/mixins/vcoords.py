@@ -787,6 +787,13 @@ class VCoords (BufferBase):
           var.axes[i] = axis
           if 'KIND' in axis.atts:
             var.atts['kind'] = axis.atts['KIND']
+
+    # Strip off any suffixes added to the variable name that are coming from
+    # the vertical axis type (e.g. _model_levels, _diag_level)
+    for var in self._varlist:
+      if var.name.endswith('_level') or var.name.endswith('_levels'):
+        var.name = '_'.join(var.name.split('_')[:-2])
+
     super(VCoords,self)._unmakevars()
 
     # Generate ip1 values from level, kind pairs.
