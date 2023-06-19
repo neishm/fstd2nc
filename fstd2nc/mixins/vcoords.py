@@ -52,6 +52,31 @@ def decode_ip1_level (ip1):
   else:
     return r1.v1
 
+# Internal helper function - take packed (kind,level) info and convert to
+# ip1 value.
+@vectorize
+def _encode_ip1 (kind_level):
+  import rpnpy.librmn.all as rmn
+  import numpy as np
+  # Decode kind and level information (was packed in single 64-bit value).
+  kind_level = np.array([kind_level],dtype='uint64').view([('kind','int32'),('level','float32')])
+  kind = int(kind_level['kind'][0])
+  level = float(kind_level['level'][0])
+  rip1 = rmn.FLOAT_IP(level,level,kind)
+  rip2 = rmn.FLOAT_IP(0,0,rmn.KIND_HOURS)
+  rip3 = rmn.FLOAT_IP(0,0,rmn.KIND_ARBITRARY)
+  ip1, ip2, ip3 = rmn.EncodeIp(rip1,rip2,rip3)
+  return ip1
+
+# Helper function - take arrays of kind, level and encode as array of ip1 values.
+def encode_ip1 (kind, level):
+  import numpy as np
+  # Hack the kind and level information into something that's hashable.
+  kind_level = np.empty(kind.shape, dtype=[('kind','int32'),('level','float32')])
+  kind_level['kind'] = kind
+  kind_level['level'] = level
+  kind_level = kind_level.view('uint64')
+  return _encode_ip1(kind_level)
 
 
 #################################################
@@ -701,3 +726,74 @@ class VCoords (BufferBase):
 
     if rerun:
       raise ValueError
+
+  # Re-encode vertical coordinate info back into FSTD metadata.
+  def _unmakevars (self):
+    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
+    import numpy as np
+    axis_map = dict()
+    # Detect special case where depth could be encoded as height
+    depth_as_height = any(var.atts.get('typvar',None) == 'P@' for var in self._varlist)
+    # Look for vertical coordinates, annotate accordingly.
+    for axis in self._iter_axes():
+      # Skip dimensions that have no coordinate system / attributes
+      # (those are not going to be vertical levels).
+      if not hasattr(axis,'atts'): continue
+      standard_name = axis.atts.get('standard_name',None)
+      kind = None
+      if standard_name == 'height' or (standard_name == 'depth' and depth_as_height):
+        kind = 0
+      elif standard_name == 'atmosphere_sigma_coordinate':
+        kind = 1
+      elif standard_name == 'air_pressure' or axis.name.startswith('pres') or axis.atts.get('units',None) == 'hPa':
+        #TODO: unit conversion from Pa?
+        kind = 2
+      elif standard_name == 'model_level_number':
+        kind = 3
+      elif standard_name == 'height' or axis.name.startswith('height'):
+        kind = 4
+      elif standard_name == 'atmosphere_hybrid_sigma_ln_pressure_coordinate':
+        kind = 5
+      elif standard_name == 'atmosphere_hybrid_sigma_pressure_coordinate':
+        kind = 5
+      elif standard_name == 'air_potential_temperature':
+        kind = 6
+      elif standard_name == 'depth' or axis.name.startswith('depth'):
+        kind = 7
+      elif standard_name == 'atmosphere_sleve_coordinate':
+        kind = 21
+      elif standard_name == 'atmosphere_hybrid_height_coordinate':
+        kind = 21
+      elif axis.atts.get('axis',None) == 'Z' or axis.name.startswith('level'):
+        kind = 3  # Arbitrary level?
+      # Nothing to do for non-vertical axes.
+      if kind is None: continue
+
+      atts = axis.atts.copy()
+      # Add the detected vertical coordinate kind.
+      # Overwrite any exising 'KIND', which may be conflicting.
+      # (e.g., for diagnostic level, still have KIND 5 which causes problems
+      # with ip1 encoding).
+      atts['KIND'] = kind
+
+      # Map to a generic 'level' axis which will be transformed into a 'level' column in the table.
+      axis_map[id(axis)] = _axis_type('level',atts,axis.array)
+
+    # Update the vertical axis to the generic one.
+    for var in self._varlist:
+      for i,axis in enumerate(var.axes):
+        if id(axis) in axis_map:
+          axis = axis_map[id(axis)]
+          var.axes[i] = axis
+          if 'KIND' in axis.atts:
+            var.atts['kind'] = axis.atts['KIND']
+    super(VCoords,self)._unmakevars()
+
+    # Generate ip1 values from level, kind pairs.
+    if 'ip1' not in self._headers.keys():
+      self._headers['ip1'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    if 'kind' not in self._headers.keys():  # Force generic level type?
+      self._headers['kind'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    if 'level' in self._headers.keys():
+      self._headers['ip1'][:] = encode_ip1(self._headers['kind'],self._headers['level'])
+
