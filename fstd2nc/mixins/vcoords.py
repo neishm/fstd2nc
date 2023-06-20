@@ -803,4 +803,5 @@ class VCoords (BufferBase):
       self._headers['kind'] = np.ma.masked_all(self._nrecs,dtype='int32')
     if 'level' in self._headers.keys():
       self._headers['ip1'][:] = encode_ip1(self._headers['kind'],self._headers['level'])
-
+    # Use default value where ip1 is not used.
+    self._headers['ip1'] = self._headers['ip1'].filled(0)
