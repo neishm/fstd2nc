@@ -190,6 +190,10 @@ class Dates (BufferBase):
     if 'leadtime' in self._headers.keys():
       if self._headers['leadtime'].dtype == 'timedelta64[ns]':
         self._headers['leadtime'] = self._headers['leadtime'] / np.timedelta64(3600,'s')
+    # Look at reftime column, just so it's acknowledged and not flagged as
+    # unhandled.
+    if 'reftime' in self._headers.keys():
+      self._headers['reftime']
 
     # Get datev, dateo, npas, using time, leadtime, deet.
     if 'deet' not in self._headers.keys():
