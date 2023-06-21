@@ -334,6 +334,11 @@ class ExternOutput (BufferBase):
     """
     from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
     import numpy as np
+    # Helper method - strip integer indices from dimension names.
+    def strip_numbers (name):
+      while name[-1] in '_0123456789':
+        name = name[:-1]
+      return name
     varlist = []
     # Handle FSTD parameters passed in the method call.
     ds = ds.copy()
@@ -348,12 +353,12 @@ class ExternOutput (BufferBase):
     dims = {}
     for dimname,dimsize in ds.dims.items():
       if dimname in ds.variables:
-        dims[dimname] = _axis_type(dimname,dict(ds[dimname].attrs),np.array(ds[dimname]))
+        dims[dimname] = _axis_type(strip_numbers(dimname),dict(ds[dimname].attrs),np.array(ds[dimname]))
       else:
-        dims[dimname] = _dim_type(dimname,dimsize)
+        dims[dimname] = _dim_type(strip_numbers(dimname),dimsize)
     for coordname, coord in ds.coords.items():
       if coordname in dims: continue  # Already counted as a dimension.
-      dims[coordname] = _var_type(coordname, dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
+      dims[coordname] = _var_type(strip_numbers(coordname), dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
     # Construct the varlist.
     for varname, var in ds.variables.items():
       if varname in dims: continue

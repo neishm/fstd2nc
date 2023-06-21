@@ -157,7 +157,7 @@ class Dates (BufferBase):
     # Helper method - find the time dimension of a variable.
     # Returned as an id.
     def get_time (var):
-      time = [axis for axis in var.axes if axis.name.startswith('time')]
+      time = [axis for axis in var.axes if axis.name == 'time']
       if len(time) == 0:
         return None
       else:
@@ -165,15 +165,13 @@ class Dates (BufferBase):
 
     for var in self._varlist:
       time = get_time(var)
-      if var.name.startswith('leadtime'):
-        var.name = 'leadtime'
+      if var.name == 'leadtime':
         leadtimes[time] = var
-      if var.name.startswith('reftime'):
-        var.name = 'reftime'
+      if var.name == 'reftime':
         reftimes[time] = var
 
     # Remove these from the varlist.
-    self._varlist = [var for var in self._varlist if not var.name.startswith('leadtime') and not var.name.startswith('reftime')]
+    self._varlist = [var for var in self._varlist if var.name not in ('leadtime','reftime')]
     # Now, add these coordinates into the vars.
     for var in self._varlist:
       time = get_time(var)
@@ -181,13 +179,6 @@ class Dates (BufferBase):
         var.atts.setdefault('coordinates',[]).append(leadtimes[time])
       if time in reftimes:
         var.atts.setdefault('coordinates',[]).append(reftimes[time])
-
-    # Normalize time / forecast axis names.
-    for axis in self._iter_axes():
-      if axis.name.startswith('time'):
-        axis.name = 'time'
-      if axis.name.startswith('forecast'):
-        axis.name = 'forecast'
 
     # Continue processing the variables.
     super (Dates,self)._unmakevars()

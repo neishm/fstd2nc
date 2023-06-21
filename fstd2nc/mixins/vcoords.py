@@ -745,12 +745,12 @@ class VCoords (BufferBase):
         kind = 0
       elif standard_name == 'atmosphere_sigma_coordinate':
         kind = 1
-      elif standard_name == 'air_pressure' or axis.name.startswith('pres') or axis.atts.get('units',None) == 'hPa':
+      elif standard_name == 'air_pressure' or axis.name == 'pres' or axis.atts.get('units',None) == 'hPa':
         #TODO: unit conversion from Pa?
         kind = 2
       elif standard_name == 'model_level_number':
         kind = 3
-      elif standard_name == 'height' or axis.name.startswith('height'):
+      elif standard_name == 'height' or axis.name == 'height':
         kind = 4
       elif standard_name == 'atmosphere_hybrid_sigma_ln_pressure_coordinate':
         kind = 5
@@ -758,13 +758,13 @@ class VCoords (BufferBase):
         kind = 5
       elif standard_name == 'air_potential_temperature':
         kind = 6
-      elif standard_name == 'depth' or axis.name.startswith('depth'):
+      elif standard_name == 'depth' or axis.name == 'depth':
         kind = 7
       elif standard_name == 'atmosphere_sleve_coordinate':
         kind = 21
       elif standard_name == 'atmosphere_hybrid_height_coordinate':
         kind = 21
-      elif axis.atts.get('axis',None) == 'Z' or axis.name.startswith('level'):
+      elif axis.atts.get('axis',None) == 'Z' or axis.name == 'level':
         kind = 3  # Arbitrary level?
       # Nothing to do for non-vertical axes.
       if kind is None: continue

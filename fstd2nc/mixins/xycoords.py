@@ -851,8 +851,8 @@ class XYCoords (BufferBase):
       yaxis = var.axes[yind]
       ni = len(xaxis)
       nj = len(yaxis)
-      have_lon = xaxis.name.startswith('lon') or xaxis.atts.get('standard_name',None) == 'longitude'
-      have_lat = yaxis.name.startswith('lat') or yaxis.atts.get('standard_name',None) == 'latitude'
+      have_lon = xaxis.name == 'lon' or xaxis.atts.get('standard_name',None) == 'longitude'
+      have_lat = yaxis.name == 'lat' or yaxis.atts.get('standard_name',None) == 'latitude'
       # Pre-compute Gaussian latitudes?
       if nj not in gauss_table:
         gid = rmn.defGrid_G(ni,nj)
