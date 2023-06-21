@@ -834,15 +834,66 @@ class XYCoords (BufferBase):
   def _unmakevars (self):
     from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
     import numpy as np
+    import rpnpy.librmn.all as rmn
+    gauss_table = {}
+    lgrid_table = {}
+    zegrid_table = {}
     for var_ind, var in enumerate(self._varlist):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
       axis_codes = [a.atts.get('axis','') for a in var.axes]
       # Skip records without any geophysical connection.
       if 'X' not in axis_codes or 'Y' not in axis_codes: continue
-      # Transpose to expected order.
       xind = axis_codes.index('X')
       yind = axis_codes.index('Y')
+      # Detect lat/lon axes.
+      xaxis = var.axes[xind]
+      yaxis = var.axes[yind]
+      ni = len(xaxis)
+      nj = len(yaxis)
+      have_lon = xaxis.name.startswith('lon') or xaxis.atts.get('standard_name',None) == 'longitude'
+      have_lat = yaxis.name.startswith('lat') or yaxis.atts.get('standard_name',None) == 'latitude'
+      # Pre-compute Gaussian latitudes?
+      if nj not in gauss_table:
+        gid = rmn.defGrid_G(ni,nj)
+        gauss_table[nj] = rmn.gdll(gid)['lat']
+      # Find L grid parameters.
+      lat0 = yaxis.array[0]
+      lon0 = xaxis.array[0]
+      dlat = np.mean(yaxis.array[1:] - yaxis.array[:-1])
+      dlon = np.mean(xaxis.array[1:] - xaxis.array[:-1])
+      lgrid_key = (lat0,lon0,dlat,dlon)
+      if lgrid_key not in lgrid_table:
+        lgrid_code = rmn.cxgaig('L',*lgrid_key)
+        # Check if 'L' grid has sufficient resolution to capture this
+        # set of lat/lon.
+        if np.allclose(rmn.cigaxg('L',*lgrid_code),lgrid_key,atol=1e-5):
+          lgrid_table[lgrid_key] = lgrid_code
+      # Find best grtyp to use.
+      # Use the specified one, if it works for the data.
+      grtyp = var.atts.get('grtyp',None)
+      grref = var.atts.get('grref',None)
+      # Case 1: data is on lat/lon grid.
+      if have_lon and have_lat:
+        # 'A' grid
+        #TODO: hemispheric
+        if np.allclose(yaxis.array,(np.arange(nj)+0.5)/nj*180-90,atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp not in ('L','Z'):
+          var.atts.update(grtyp='A',ig1=0,ig2=0,ig3=0,ig4=0)
+        # 'B' grid
+        #TODO: hemispheric
+        elif np.allclose(yaxis.array,np.linspace(-90,90,nj),atol=1e-5) and np.allclose(xaxis.array,np.linspace(0,360,ni),atol=1e-5) and grtyp not in ('L','Z'):
+          var.atts.update(grtyp='B',ig1=0,ig2=0,ig3=0,ig4=0)
+        # 'G' grid
+        #TODO: hemispheric
+        elif np.allclose(yaxis.array,gauss_table[nj],atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp != 'Z':
+          var.atts.update(grtyp='G',ig1=0,ig2=0,ig3=0,ig4=0)
+        # 'L' grid
+        elif lgrid_key in lgrid_table and np.allclose(np.linspace(yaxis.array[0],yaxis.array[-1],nj),yaxis.array,atol=1e-5) and np.allclose(np.linspace(xaxis.array[0],xaxis.array[-1],ni),xaxis.array,atol=1e-5) and grtyp != 'Z':
+          ig1, ig2, ig3, ig4 = lgrid_table[(lat0,lon0,dlat,dlon)]
+          var.atts.update(grtyp='L',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
+        #TODO: 'Z' grid (with degenerate rotation)
+
+      # Transpose to expected order.
       order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
       order = order + [yind, xind]
       if order != list(range(len(var.axes))):
@@ -850,8 +901,8 @@ class XYCoords (BufferBase):
         var.array = var.array.transpose(*order)
       #TODO: decode projection info.
       # Identify inner axes.
-      var.axes[-2] = _dim_type('j',len(var.axes[-2]))
-      var.axes[-1] = _dim_type('i',len(var.axes[-1]))
+      var.axes[-2] = _dim_type('j',nj)
+      var.axes[-1] = _dim_type('i',ni)
       # Process the variable.
       outer_shape = [len(a) for a in var.axes[:-2]]
       record_id = np.zeros(outer_shape, dtype=object)
