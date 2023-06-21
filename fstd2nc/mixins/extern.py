@@ -346,9 +346,11 @@ class ExternOutput (BufferBase):
       var.encoding.update(fstd_attrs=var.attrs)
     # Collect dimensions and coordinates into a separate structure.
     dims = {}
-    for dimname in ds.dims.keys():
+    for dimname,dimsize in ds.dims.items():
       if dimname in ds.variables:
         dims[dimname] = _axis_type(dimname,dict(ds[dimname].attrs),np.array(ds[dimname]))
+      else:
+        dims[dimname] = _dim_type(dimname,dimsize)
     for coordname, coord in ds.coords.items():
       if coordname in dims: continue  # Already counted as a dimension.
       dims[coordname] = _var_type(coordname, dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))

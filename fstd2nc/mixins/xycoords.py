@@ -841,7 +841,7 @@ class XYCoords (BufferBase):
     for var_ind, var in enumerate(self._varlist):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
-      axis_codes = [a.atts.get('axis','') for a in var.axes]
+      axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else None for a in var.axes]
       # Skip records without any geophysical connection.
       if 'X' not in axis_codes or 'Y' not in axis_codes: continue
       xind = axis_codes.index('X')
