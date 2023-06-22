@@ -861,26 +861,7 @@ class XYCoords (BufferBase):
       yaxis = var.axes[yind]
       ni = len(xaxis)
       nj = len(yaxis)
-      have_lon = xaxis.name == 'lon' or xaxis.atts.get('standard_name',None) == 'longitude'
-      have_lat = yaxis.name == 'lat' or yaxis.atts.get('standard_name',None) == 'latitude'
-      # Pre-compute Gaussian latitudes?
-      if nj not in gauss_table:
-        gid = rmn.defGrid_G(ni,nj)
-        gauss_table[nj] = rmn.gdll(gid)['lat']
-      # Find L grid parameters.
-      lat0 = yaxis.array[0]
-      lon0 = xaxis.array[0]
-      dlat = np.mean(yaxis.array[1:] - yaxis.array[:-1])
-      dlon = np.mean(xaxis.array[1:] - xaxis.array[:-1])
-      lgrid_key = (lat0,lon0,dlat,dlon)
-      if lgrid_key not in lgrid_table:
-        lgrid_code = rmn.cxgaig('L',*lgrid_key)
-        # Check if 'L' grid has sufficient resolution to capture this
-        # set of lat/lon.
-        if np.allclose(rmn.cigaxg('L',*lgrid_code),lgrid_key,atol=1e-5):
-          lgrid_table[lgrid_key] = lgrid_code
 
-      ###
       # Transpose to expected order.
       order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
       order = order + [yind, xind]
@@ -897,30 +878,53 @@ class XYCoords (BufferBase):
         record_id[ind] = var.array[ind]
       var = _iter_type (var.name, var.atts, var.axes, var.array.dtype, record_id)
       self._varlist[var_ind] = var
-      ###
+
       # Find best grtyp to use.
       # Use the specified one, if it works for the data.
       grtyp = var.atts.get('grtyp',None)
       grref = var.atts.get('grref',None)
+
       # Case 1: data is on lat/lon grid (no coordinate records)
+      have_lon = xaxis.name == 'lon' or xaxis.atts.get('standard_name',None) == 'longitude'
+      have_lat = yaxis.name == 'lat' or yaxis.atts.get('standard_name',None) == 'latitude'
       if have_lon and have_lat:
         # 'A' grid
         #TODO: hemispheric
-        if np.allclose(yaxis.array,(np.arange(nj)+0.5)/nj*180-90,atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp not in ('L','Z'):
+        agrid_lat = (np.arange(nj)+0.5)/nj*180-90
+        agrid_lon = np.arange(ni)/ni*360
+        if np.allclose(yaxis.array,agrid_lat,atol=1e-5) and np.allclose(xaxis.array,agrid_lon,atol=1e-5) and grtyp not in ('L','Z'):
           var.atts.update(grtyp='A',ig1=0,ig2=0,ig3=0,ig4=0)
           continue
         # 'B' grid
         #TODO: hemispheric
-        if np.allclose(yaxis.array,np.linspace(-90,90,nj),atol=1e-5) and np.allclose(xaxis.array,np.linspace(0,360,ni),atol=1e-5) and grtyp not in ('L','Z'):
+        bgrid_lat = np.linspace(-90,90,nj)
+        bgrid_lon = np.linspace(0,360,ni)
+        if np.allclose(yaxis.array,bgrid_lat,atol=1e-5) and np.allclose(xaxis.array,bgrid_lon,atol=1e-5) and grtyp not in ('L','Z'):
           var.atts.update(grtyp='B',ig1=0,ig2=0,ig3=0,ig4=0)
           continue
         # 'G' grid
         #TODO: hemispheric
-        if np.allclose(yaxis.array,gauss_table[nj],atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp != 'Z':
+        if nj not in gauss_table:
+          gid = rmn.defGrid_G(ni,nj)
+          gauss_table[nj] = rmn.gdll(gid)['lat']
+        if np.allclose(yaxis.array,gauss_table[nj],atol=1e-5) and np.allclose(xaxis.array,agrid_lon,atol=1e-5) and grtyp != 'Z':
           var.atts.update(grtyp='G',ig1=0,ig2=0,ig3=0,ig4=0)
           continue
         # 'L' grid
-        if lgrid_key in lgrid_table and np.allclose(np.linspace(yaxis.array[0],yaxis.array[-1],nj),yaxis.array,atol=1e-5) and np.allclose(np.linspace(xaxis.array[0],xaxis.array[-1],ni),xaxis.array,atol=1e-5) and grtyp != 'Z':
+        lat0 = yaxis.array[0]
+        lon0 = xaxis.array[0]
+        dlat = np.mean(yaxis.array[1:] - yaxis.array[:-1])
+        dlon = np.mean(xaxis.array[1:] - xaxis.array[:-1])
+        lgrid_key = (lat0,lon0,dlat,dlon)
+        if lgrid_key not in lgrid_table:
+          lgrid_code = rmn.cxgaig('L',*lgrid_key)
+          # Check if 'L' grid has sufficient resolution to capture this
+          # set of lat/lon.
+          if np.allclose(rmn.cigaxg('L',*lgrid_code),lgrid_key,atol=1e-5):
+            lgrid_table[lgrid_key] = lgrid_code
+        lgrid_lat = np.linspace(yaxis.array[0],yaxis.array[-1],nj)
+        lgrid_lon = np.linspace(xaxis.array[0],xaxis.array[-1],ni)
+        if lgrid_key in lgrid_table and np.allclose(lgrid_lat,yaxis.array,atol=1e-5) and np.allclose(lgrid_lon,xaxis.array,atol=1e-5) and grtyp != 'Z':
           ig1, ig2, ig3, ig4 = lgrid_table[(lat0,lon0,dlat,dlon)]
           var.atts.update(grtyp='L',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
           continue
