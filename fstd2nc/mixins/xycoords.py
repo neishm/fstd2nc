@@ -838,6 +838,16 @@ class XYCoords (BufferBase):
     gauss_table = {}
     lgrid_table = {}
     zegrid_table = {}
+    projection_table = {}
+    # Pull out projection variables.
+    for var in self._varlist:
+      if 'grid_mapping' in var.atts:
+        projection_table[var.atts['grid_mapping']] = None
+    for var in self._varlist:
+      if var.name in projection_table.keys():
+        projection_table[var.name] = var
+    self._varlist = [v for v in self._varlist if v.name not in projection_table.keys()]
+    # Loop over all variables, encode grid info.
     for var_ind, var in enumerate(self._varlist):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
@@ -869,37 +879,14 @@ class XYCoords (BufferBase):
         # set of lat/lon.
         if np.allclose(rmn.cigaxg('L',*lgrid_code),lgrid_key,atol=1e-5):
           lgrid_table[lgrid_key] = lgrid_code
-      # Find best grtyp to use.
-      # Use the specified one, if it works for the data.
-      grtyp = var.atts.get('grtyp',None)
-      grref = var.atts.get('grref',None)
-      # Case 1: data is on lat/lon grid.
-      if have_lon and have_lat:
-        # 'A' grid
-        #TODO: hemispheric
-        if np.allclose(yaxis.array,(np.arange(nj)+0.5)/nj*180-90,atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp not in ('L','Z'):
-          var.atts.update(grtyp='A',ig1=0,ig2=0,ig3=0,ig4=0)
-        # 'B' grid
-        #TODO: hemispheric
-        elif np.allclose(yaxis.array,np.linspace(-90,90,nj),atol=1e-5) and np.allclose(xaxis.array,np.linspace(0,360,ni),atol=1e-5) and grtyp not in ('L','Z'):
-          var.atts.update(grtyp='B',ig1=0,ig2=0,ig3=0,ig4=0)
-        # 'G' grid
-        #TODO: hemispheric
-        elif np.allclose(yaxis.array,gauss_table[nj],atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp != 'Z':
-          var.atts.update(grtyp='G',ig1=0,ig2=0,ig3=0,ig4=0)
-        # 'L' grid
-        elif lgrid_key in lgrid_table and np.allclose(np.linspace(yaxis.array[0],yaxis.array[-1],nj),yaxis.array,atol=1e-5) and np.allclose(np.linspace(xaxis.array[0],xaxis.array[-1],ni),xaxis.array,atol=1e-5) and grtyp != 'Z':
-          ig1, ig2, ig3, ig4 = lgrid_table[(lat0,lon0,dlat,dlon)]
-          var.atts.update(grtyp='L',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
-        #TODO: 'Z' grid (with degenerate rotation)
 
+      ###
       # Transpose to expected order.
       order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
       order = order + [yind, xind]
       if order != list(range(len(var.axes))):
         var.axes = [var.axes[i] for i in order]
         var.array = var.array.transpose(*order)
-      #TODO: decode projection info.
       # Identify inner axes.
       var.axes[-2] = _dim_type('j',nj)
       var.axes[-1] = _dim_type('i',ni)
@@ -909,10 +896,40 @@ class XYCoords (BufferBase):
       for ind in np.ndindex(tuple(outer_shape)):
         record_id[ind] = var.array[ind]
       var = _iter_type (var.name, var.atts, var.axes, var.array.dtype, record_id)
+      self._varlist[var_ind] = var
+      ###
+      # Find best grtyp to use.
+      # Use the specified one, if it works for the data.
+      grtyp = var.atts.get('grtyp',None)
+      grref = var.atts.get('grref',None)
+      # Case 1: data is on lat/lon grid (no coordinate records)
+      if have_lon and have_lat:
+        # 'A' grid
+        #TODO: hemispheric
+        if np.allclose(yaxis.array,(np.arange(nj)+0.5)/nj*180-90,atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp not in ('L','Z'):
+          var.atts.update(grtyp='A',ig1=0,ig2=0,ig3=0,ig4=0)
+          continue
+        # 'B' grid
+        #TODO: hemispheric
+        if np.allclose(yaxis.array,np.linspace(-90,90,nj),atol=1e-5) and np.allclose(xaxis.array,np.linspace(0,360,ni),atol=1e-5) and grtyp not in ('L','Z'):
+          var.atts.update(grtyp='B',ig1=0,ig2=0,ig3=0,ig4=0)
+          continue
+        # 'G' grid
+        #TODO: hemispheric
+        if np.allclose(yaxis.array,gauss_table[nj],atol=1e-5) and np.allclose(xaxis.array,np.arange(ni)/ni*360,atol=1e-5) and grtyp != 'Z':
+          var.atts.update(grtyp='G',ig1=0,ig2=0,ig3=0,ig4=0)
+          continue
+        # 'L' grid
+        if lgrid_key in lgrid_table and np.allclose(np.linspace(yaxis.array[0],yaxis.array[-1],nj),yaxis.array,atol=1e-5) and np.allclose(np.linspace(xaxis.array[0],xaxis.array[-1],ni),xaxis.array,atol=1e-5) and grtyp != 'Z':
+          ig1, ig2, ig3, ig4 = lgrid_table[(lat0,lon0,dlat,dlon)]
+          var.atts.update(grtyp='L',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
+          continue
+        #TODO: 'Z' grid (with degenerate rotation)
+
+    for var in self._varlist:
       #TODO: determine appropriate grtyp
       if 'grtyp' not in var.atts:
         var.atts['grtyp'] = 'X'
-      self._varlist[var_ind] = var
     super(XYCoords,self)._unmakevars()
 
     self._headers['grtyp'] = self._headers['grtyp'].astype('|S1')
