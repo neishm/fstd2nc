@@ -326,6 +326,7 @@ def get_crs (dataset):
   """
   from fstd2nc.stdout import _, info, warn, error
   import cartopy.crs as ccrs
+  from math import asin, pi
   # Find the grid mapping variable in the dataset.
   gmap = set(varname for varname,var in dataset.variables.items() if 'grid_mapping_name' in var.attrs)
   # Must have exactly one unique grid projection in the Dataset.
@@ -344,7 +345,12 @@ def get_crs (dataset):
   elif gname == 'polar_stereographic':
     # May fail for South Pole projections (would maybe need to change sign of
     # true_scale_latitude?)
-    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=60)
+    if 'scale_factor_at_projection_origin' in gmap.attrs:
+      k = gmap.attrs['scale_factor_at_projection_origin']
+      lat = abs(asin(2*k-1)) / pi * 180
+    else:
+      lat = gmap.attrs['standard_parallel']
+    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=lat)
   else:
     warn(_("Unhandled grid mapping: %s")%gname)
     return None

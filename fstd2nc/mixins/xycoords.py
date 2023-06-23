@@ -835,6 +835,7 @@ class XYCoords (BufferBase):
     from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
     import numpy as np
     import rpnpy.librmn.all as rmn
+    from math import sin, asin, pi
     gauss_table = {}
     lgrid_table = {}
     zegrid_table = {}
@@ -884,7 +885,7 @@ class XYCoords (BufferBase):
       grtyp = var.atts.get('grtyp',None)
       grref = var.atts.get('grref',None)
 
-      # Case 1: data is on lat/lon grid (no coordinate records)
+      # Case 1: data is on lat/lon grid (and no coordinate records needed)
       have_lon = xaxis.name == 'lon' or xaxis.atts.get('standard_name',None) == 'longitude'
       have_lat = yaxis.name == 'lat' or yaxis.atts.get('standard_name',None) == 'latitude'
       if have_lon and have_lat:
@@ -930,6 +931,43 @@ class XYCoords (BufferBase):
           continue
         #TODO: 'Z' grid (with degenerate rotation)
 
+      # Case 2: other standard projections.
+      projection = var.atts.get('grid_mapping',None)
+      projection = projection_table.get(projection,None)
+      projection_name = getattr(projection,'atts',{}).get('grid_mapping_name',None)
+      # Polar stereographic
+      if projection_name == 'polar_stereographic':
+        origin = projection.atts.get('latitude_of_projection_origin',None)
+        if 'standard_parallel' in projection.atts:
+          stdlat = projection.atts['standard_parallel']
+        else:
+          k = projection.atts['scale_factor_at_projection_origin']
+          stdlat = abs(asin(2*k-1)) / pi * 180
+        if not np.allclose(stdlat,60.,atol=1e-5):
+          warn(_('Standard parallel must be 60 deg to encoder polar stereographic projections.  Found %s instead.')%stdlat)
+          continue
+        if 'straight_vertical_longitude_from_pole' not in projection.atts:
+          warn(_('Sterographic projection missing attribute "straight_vertical_longitude_from_pole"'))
+          continue
+        dgrw = -(projection.atts['straight_vertical_longitude_from_pole']+90)
+        dgrw %= 360.0
+        d60 = np.mean(xaxis.array[1:]-xaxis.array[:-1])
+        east = projection.atts.get('false_easting',0)
+        north = projection.atts.get('false_northing',0)
+        px = xaxis.array[0] + east
+        py = yaxis.array[0] + north
+        pi = px / d60 + 1
+        pj = py / d60 + 1
+        # 'N' grid
+        if origin == 90:
+          ig1, ig2, ig3, ig4 = rmn.cxgaig('N',pi,pj,d60,dgrw)
+        elif origin == -90:
+          ig1, ig2, ig3, ig4 = rmn.cxgaig('S',pi,pj,d60,dgrw)
+        else:
+          warn(_("latitude_of_projection_origin must be 90 or -90.  Found %s")%origin)
+          continue
+        var.atts.update(grtyp='N',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
+        continue
     for var in self._varlist:
       #TODO: determine appropriate grtyp
       if 'grtyp' not in var.atts:
