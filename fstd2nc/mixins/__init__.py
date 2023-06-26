@@ -935,6 +935,7 @@ class BufferBase (object):
         headers[axis.name][offset:offset+var.record_id.size] = len(axis)
       # Add extra metadata.
       for attname, attval in var.atts.items():
+        if attname in ('coordinates',): continue
         headers[attname][offset:offset+var.record_id.size] = attval
       headers['name'][offset:offset+var.record_id.size] = var.name
       headers['d'][offset:offset+var.record_id.size] = var.record_id.flatten()
