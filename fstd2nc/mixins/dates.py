@@ -225,7 +225,11 @@ class Dates (BufferBase):
     self._headers['dateo'] = datetime2stamp(self._headers['dateo'])
 
     # Set ip2 values.
-    self._headers['ip2'] = self._headers['npas'] * self._headers['deet'] // 3600
+    if 'ip2' not in self._headers.keys():
+      self._headers['ip2'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    # Skip entries that are already using ip2 for something.
+    ip2_as_forecast = np.ma.getmaskarray(self._headers['ip2'])
+    self._headers['ip2'][ip2_as_forecast] = (self._headers['npas'] * self._headers['deet'] // 3600)[ip2_as_forecast]
 
     # Set default values.
     self._headers['npas'] = self._headers['npas'].filled(0)
