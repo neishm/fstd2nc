@@ -220,16 +220,20 @@ class FSTD (BufferBase):
     self._headers['address'][:] = -1
     # Some columns may not have a specific value to put in the table, so put
     # in some placeholder value.
-    if 'typvar' in self._headers.keys():
-      self._headers['typvar'] = self._headers['typvar'].astype('|S2')
-    else:
-      self._headers['typvar'] = np.empty(self._nrecs,dtype='|S2')
-      self._headers['typvar'][:] = 'A'
-    if 'etiket' in self._headers.keys():
-      self._headers['etiket'] = self._headers['etiket'].astype('|S12')
-    else:
-      self._headers['etiket'] = np.empty(self._nrecs,dtype='|S12')
-      self._headers['etiket'][:] = ''
+    def add_column (colname, dtype, default):
+      if colname in self._headers.keys():
+        self._headers[colname] = self._headers[colname].astype(dtype)
+      else:
+        self._headers[colname] = np.empty(self._nrecs,dtype=dtype)
+        self._headers[colname][:] = default
+      if hasattr(self._headers[colname],'mask'):
+        self._headers[colname] = self._headers[colname].filled(default)
+
+    add_column ('typvar', '|S2', default='A')
+    add_column ('etiket', '|S12', default='')
+    add_column ('datyp', 'int32', default=5)
+    add_column ('nbits', 'int32', default=32)
+    add_column ('ip3', 'int32', default=0)
 
   def to_fstd (self, filename):
     """
