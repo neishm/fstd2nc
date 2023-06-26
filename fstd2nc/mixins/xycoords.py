@@ -945,8 +945,8 @@ class XYCoords (BufferBase):
           ay = np.empty(1,dtype=object)
           ay[0] = da.from_array(yaxis.array, chunks=-1)
           ay = ay.squeeze()
-          self._varlist.append(_iter_type('>>',dict(typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1'],ig2=grid['ig2'],ig3=grid['ig3']),[i],'float32',ax))
-          self._varlist.append(_iter_type('^^',dict(typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1'],ig2=grid['ig2'],ig3=grid['ig3']),[j],'float32',ay))
+          self._varlist.append(_iter_type('>>',dict(typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref']),[i],'float32',ax))
+          self._varlist.append(_iter_type('^^',dict(typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref']),[j],'float32',ay))
           zlgrid_table[lgrid_key] = grid
           continue
 
