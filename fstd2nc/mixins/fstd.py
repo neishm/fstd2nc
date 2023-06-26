@@ -231,7 +231,7 @@ class FSTD (BufferBase):
 
     add_column ('typvar', '|S2', default='A')
     add_column ('etiket', '|S12', default='')
-    add_column ('datyp', 'int32', default=5)
+    add_column ('datyp', 'int32', default=133)
     add_column ('nbits', 'int32', default=32)
     add_column ('ip3', 'int32', default=0)
 
