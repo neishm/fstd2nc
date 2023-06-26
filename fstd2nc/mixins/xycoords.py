@@ -836,8 +836,10 @@ class XYCoords (BufferBase):
     import numpy as np
     import rpnpy.librmn.all as rmn
     from math import sin, asin, pi
+    import dask.array as da
     gauss_table = {}
     lgrid_table = {}
+    zlgrid_table = {}
     zegrid_table = {}
     projection_table = {}
     # Pull out projection variables.
@@ -912,10 +914,10 @@ class XYCoords (BufferBase):
           var.atts.update(grtyp='G',ig1=0,ig2=0,ig3=0,ig4=0)
           continue
         # 'L' grid
-        lat0 = yaxis.array[0]
-        lon0 = xaxis.array[0]
-        dlat = np.mean(yaxis.array[1:] - yaxis.array[:-1])
-        dlon = np.mean(xaxis.array[1:] - xaxis.array[:-1])
+        lat0 = float(yaxis.array[0])
+        lon0 = float(xaxis.array[0])
+        dlat = float(np.mean(yaxis.array[1:] - yaxis.array[:-1]))
+        dlon = float(np.mean(xaxis.array[1:] - xaxis.array[:-1]))
         lgrid_key = (lat0,lon0,dlat,dlon)
         if lgrid_key not in lgrid_table:
           lgrid_code = rmn.cxgaig('L',*lgrid_key)
@@ -929,7 +931,24 @@ class XYCoords (BufferBase):
           ig1, ig2, ig3, ig4 = lgrid_table[(lat0,lon0,dlat,dlon)]
           var.atts.update(grtyp='L',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
           continue
-        #TODO: 'Z' grid (with degenerate rotation)
+        # 'Z' grid (with degenerate rotation)
+        if lgrid_key not in zlgrid_table:
+          grid = rmn.defGrid_ZL(ni,nj,lat0=lat0,lon0=lon0,dlat=dlat,dlon=dlon)
+          var.atts.update(grtyp='Z',ig1=grid['tag1'],ig2=grid['tag2'],ig3=grid['tag3'])
+          # Add extra positional records.
+          i = _dim_type('i',ni)
+          j = _dim_type('j',nj)
+          # Need to carefully encode the arrays so they are scalar object containing the data.
+          ax = np.empty(1,dtype=object)
+          ax[0] = da.from_array(xaxis.array, chunks=-1)
+          ax = ax.squeeze()
+          ay = np.empty(1,dtype=object)
+          ay[0] = da.from_array(yaxis.array, chunks=-1)
+          ay = ay.squeeze()
+          self._varlist.append(_iter_type('>>',dict(typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1'],ig2=grid['ig2'],ig3=grid['ig3']),[i],'float32',ax))
+          self._varlist.append(_iter_type('^^',dict(typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1'],ig2=grid['ig2'],ig3=grid['ig3']),[j],'float32',ay))
+          zlgrid_table[lgrid_key] = grid
+          continue
 
       # Case 2: other standard projections.
       projection = var.atts.get('grid_mapping',None)
@@ -968,6 +987,9 @@ class XYCoords (BufferBase):
           continue
         var.atts.update(grtyp='N',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
         continue
+      # Rotated lat/lon
+      #TODO
+
     for var in self._varlist:
       #TODO: determine appropriate grtyp
       if 'grtyp' not in var.atts:
