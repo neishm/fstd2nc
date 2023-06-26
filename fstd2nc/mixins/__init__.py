@@ -924,8 +924,9 @@ class BufferBase (object):
         array = np.empty(var.record_id.shape, dtype=axis.array.dtype)
         array[()] = axis.array.reshape(shape)
         headers[axis.name][offset:offset+var.record_id.size] = array.flatten()
-      # Add coordinate info as well.
+      # Add coordinate info as well (only if defined on outer axes).
       for coord in var.atts.get('coordinates',[]):
+        if not all(axis in axes for axis in coord.axes): continue
         shape = [len(axis) if axis in coord.axes else 1 for axis in axes]
         array = np.empty(var.record_id.shape, dtype=coord.array.dtype)
         array[()] = coord.array.reshape(shape)
