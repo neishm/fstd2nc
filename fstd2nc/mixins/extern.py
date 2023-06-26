@@ -260,7 +260,7 @@ class ExternOutput (BufferBase):
       var = _var_type(var.name,var.atts,var.axes,array)
       yield var
 
-  def to_xarray (self, fused=True):
+  def to_xarray (self, fused=False):
     """
     Create an xarray interface for the RPN data.
     Requires the xarray and dask packages.
