@@ -351,6 +351,7 @@ class ExternOutput (BufferBase):
       var.encoding.update(fstd_attrs=var.attrs)
     # Collect dimensions and coordinates into a separate structure.
     dims = {}
+    coords = {}
     for dimname,dimsize in ds.dims.items():
       if dimname in ds.variables:
         dims[dimname] = _axis_type(strip_numbers(dimname),dict(ds[dimname].attrs),np.array(ds[dimname]))
@@ -358,11 +359,15 @@ class ExternOutput (BufferBase):
         dims[dimname] = _dim_type(strip_numbers(dimname),dimsize)
     for coordname, coord in ds.coords.items():
       if coordname in dims: continue  # Already counted as a dimension.
-      dims[coordname] = _var_type(strip_numbers(coordname), dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
+      coords[coordname] = _var_type(strip_numbers(coordname), dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
     # Construct the varlist.
     for varname, var in ds.variables.items():
       if varname in dims: continue
-      varlist.append(_var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data))
+      if varname in coords: continue
+      encoded = _var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data)
+      # Add coordinates.
+      encoded.atts.setdefault('coordinates',[coords[coordname] for coordname in ds[varname].coords if coordname in coords])
+      varlist.append(encoded)
     # Decode the varlist into a table.
     return cls._deserialize(varlist)
 
