@@ -186,6 +186,8 @@ class Dates (BufferBase):
     # Get leadtime column (may be coming from forecast axis).
     if 'forecast' in self._headers.keys():
       self._headers['leadtime'] = self._headers['forecast']
+    else:
+      self._headers['leadtime'] = np.ma.masked_all(self._nrecs, dtype=int)
     # Convert leadtime to units of hours if it's a timedelta64.
     if 'leadtime' in self._headers.keys():
       if self._headers['leadtime'].dtype == 'timedelta64[ns]':
