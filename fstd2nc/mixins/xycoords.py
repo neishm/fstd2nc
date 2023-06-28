@@ -211,6 +211,7 @@ class RotLatLon(GridMap):
     # in some software (e.g. IDV, Panoply, Iris)
     if adjust_rlon:
       self._ax = self._ax - self._north_pole_grid_longitude 
+      self._north_pole_grid_longitude = 0
       # Make sure rlon axis is still in range.
       if self._ax.max() >= 360.: self._ax -= 360.
       if self._ax.min() <= -180.: self._ax += 360.
@@ -222,7 +223,7 @@ class RotLatLon(GridMap):
     self._atts['earth_radius'] = self._earth_radius
     self._atts['grid_north_pole_latitude'] = self._grid_north_pole_latitude
     self._atts['grid_north_pole_longitude'] = self._grid_north_pole_longitude
-#    self._atts['north_pole_grid_longitude'] = self._north_pole_grid_longitude 
+    self._atts['north_pole_grid_longitude'] = self._north_pole_grid_longitude 
 #   Set the optional grid mapping parameter 'north_pole_grid_longitude' to 0 to avoid 
 #   some problems, such as the conversion from netcdf to grib performed by some tools
 #    self._atts['north_pole_grid_longitude'] = 0.
