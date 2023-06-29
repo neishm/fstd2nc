@@ -889,6 +889,8 @@ class BufferBase (object):
       # Add coordinates as well.
       for coord in var.atts.get('coordinates',[]):
         if coord.name in headers: continue
+        # It's ok if these values are never actually referenced.
+        dontcare.add(coord.name)
         headers[coord.name] = np.ma.masked_all(self._nrecs, dtype=coord.array.dtype)
       # Add inner axes.
       for dimname in self._inner_axes:
