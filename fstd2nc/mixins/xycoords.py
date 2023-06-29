@@ -1046,10 +1046,38 @@ class XYCoords (BufferBase):
             xlon2 = xlon[1] * 180/pi
             gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
             zegrid_table[zegrid_key] = gid
+          # Case 2: Rotated grid from external source (general case)
+          else:
+            # Make sure rotated longitudes are from 0..360
+            if xaxis.array[0] < 0:
+              ax = xaxis.array - xaxis.array[0]
+              npole -= xaxis.array[0]
+            else:
+              ax = xaxis.array
+            # Get coordinates of grid centre.
+            cosp = cos(npole*pi/180)
+            sinp = sin(npole*pi/180)
+            X = cosp * sin(gpole_lat) * cos(gpole_lon) + sinp * sin(gpole_lon)
+            Y = cosp * sin(gpole_lat) * sin(gpole_lon) - sinp * cos(gpole_lon)
+            Z = -cosp * cos(gpole_lat)
+            xlat1 = asin(Z) * 180 / pi
+            xlon1 = atan2(Y,X) * 180 / pi
+            # Get coordinates of another point on grid equator, east of centre.
+            X = sinp * sin(gpole_lat) * cos(gpole_lon) - cosp * sin(gpole_lon)
+            Y = sinp * sin(gpole_lat) * sin(gpole_lon) + cosp * cos(gpole_lon)
+            Z = -sinp * cos(gpole_lat)
+            xlat2 = asin(Z) * 180 / pi
+            xlon2 = atan2(Y,X) * 180 / pi
+            # Encode this grid (will probably lose some precision here.)
+            gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+            zegrid_table[zegrid_key] = gid
+
         # Set grid descriptors to link to coordinate records.
         if zegrid_key in zegrid_table:
           gid = zegrid_table[zegrid_key]
           var.atts.update(grtyp='Z',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
+          continue
+
     # Add rotated grid coordinates.
     for grid in zegrid_table.values():
       add_coord('>>',1,ni,grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
