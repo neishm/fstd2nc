@@ -838,6 +838,18 @@ class XYCoords (BufferBase):
     import rpnpy.librmn.all as rmn
     from math import sin, asin, pi
     import dask.array as da
+
+    # Helper - add a coordinate record
+    def add_coord (name,nj,ni,values,**atts):
+      dims = []
+      if nj > 1: dims.append(_dim_type('j',nj))
+      if ni > 1: dims.append(_dim_type('i',ni))
+      # Need to carefully encode the arrays so they are scalar object containing the data.
+      array = np.empty(1,dtype=object)
+      array[0] = da.from_array(values, chunks=-1)
+      array = array.squeeze()
+      self._varlist.append(_iter_type(name,atts,dims,'float32',array))
+
     gauss_table = {}
     lgrid_table = {}
     zlgrid_table = {}
@@ -937,17 +949,8 @@ class XYCoords (BufferBase):
           grid = rmn.defGrid_ZL(ni,nj,lat0=lat0,lon0=lon0,dlat=dlat,dlon=dlon)
           var.atts.update(grtyp='Z',ig1=grid['tag1'],ig2=grid['tag2'],ig3=grid['tag3'])
           # Add extra positional records.
-          i = _dim_type('i',ni)
-          j = _dim_type('j',nj)
-          # Need to carefully encode the arrays so they are scalar object containing the data.
-          ax = np.empty(1,dtype=object)
-          ax[0] = da.from_array(xaxis.array, chunks=-1)
-          ax = ax.squeeze()
-          ay = np.empty(1,dtype=object)
-          ay[0] = da.from_array(yaxis.array, chunks=-1)
-          ay = ay.squeeze()
-          self._varlist.append(_iter_type('>>',dict(typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref']),[i],'float32',ax))
-          self._varlist.append(_iter_type('^^',dict(typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref']),[j],'float32',ay))
+          add_coord('>>',1,ni,xaxis.array,typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'])
+          add_coord('^^',nj,1,yaxis.array,typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'])
           zlgrid_table[lgrid_key] = grid
           continue
 
