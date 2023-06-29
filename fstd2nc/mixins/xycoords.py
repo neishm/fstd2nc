@@ -1094,6 +1094,6 @@ class XYCoords (BufferBase):
     self._headers['grtyp'] = self._headers['grtyp'].astype('|S1')
     for key in 'ig1','ig2','ig3','ig4':
       if key not in self._headers.keys():
-        self._headers[key] = np.ma.masked_all(self._nrecs)
+        self._headers[key] = np.ma.masked_all(self._nrecs,dtype='int32')
       if hasattr(self._headers[key],'mask'):
         self._headers[key] = self._headers[key].filled(0)
