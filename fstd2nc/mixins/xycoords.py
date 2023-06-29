@@ -836,7 +836,7 @@ class XYCoords (BufferBase):
     from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
     import numpy as np
     import rpnpy.librmn.all as rmn
-    from math import sin, asin, pi
+    from math import sin, cos, asin, atan2, pi, sqrt
     import dask.array as da
 
     # Helper - add a coordinate record
@@ -992,13 +992,80 @@ class XYCoords (BufferBase):
         var.atts.update(grtyp='N',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
         continue
       # Rotated lat/lon
-      #TODO
+      if projection_name == 'rotated_latitude_longitude':
+        gpole_lat = projection.atts['grid_north_pole_latitude'] * pi / 180
+        gpole_lon = projection.atts['grid_north_pole_longitude'] * pi / 180
+        npole = projection.atts.get('north_pole_grid_longitude',0.)
+        zegrid_key = (gpole_lat,gpole_lon,npole,id(xaxis),id(yaxis))
+        if zegrid_key not in zegrid_table:
+          # Case 1: Can reverse out integer xlat1,xlon1,xlat2,xlon2 coordinates.
+          # Assume geographic north pole is in northern hemisphere of numeric
+          # grid.
+          intlat = np.linspace(-90,90,181).reshape((181,1)) * pi / 180
+          intlon = np.linspace(0,359,360).reshape((1,360)) * pi / 180
+          seps = cos(gpole_lat)*cos(gpole_lon)*np.cos(intlat)*np.cos(intlon) \
+               + cos(gpole_lat)*sin(gpole_lon)*np.cos(intlat)*np.sin(intlon) \
+               + sin(gpole_lat)*np.sin(intlat)
+          xlat = []
+          xlon = []
+          while len(xlat) < 2:
+            ind = np.argmin(abs(seps))
+            ind = np.unravel_index(ind,seps.shape)
+            xlat1 = intlat[ind[0],0]
+            xlon1 = intlon[0,ind[1]]
+            if xlat1 >= 0:
+              xlat.append(xlat1)
+              xlon.append(xlon1)
+            seps[ind] = 1.0
+          # Double-check if these points lie on rotated equator.
+          c0 = [cos(xlat[0])*cos(xlon[0]),cos(xlat[0])*sin(xlon[0]),sin(xlat[0])]
+          c1 = [cos(xlat[1])*cos(xlon[1]),cos(xlat[1])*sin(xlon[1]),sin(xlat[1])]
+          cpole = [c0[1]*c1[2]-c1[1]*c0[2],c0[2]*c1[0]-c1[2]*c0[0],c0[0]*c1[1]-c1[0]*c0[1]]
+          n = sqrt(np.dot(cpole,cpole))
+          cpole = np.array(cpole)/n
+          check = [cos(gpole_lat)*cos(gpole_lon), cos(gpole_lat)*sin(gpole_lon), sin(gpole_lat)]
+          # Check if we have reversed order of xlat1,xlon1 and xlat2,xlon2
+          if np.allclose(-cpole,check,atol=1e-5):
+            xlat = xlat[::-1]
+            xlon = xlon[::-1]
+            cpole = -cpole
+          # If we have a good match, then encode this.
+          if np.allclose(cpole,check,atol=1e-5):
+            # Check for grid rotation, adjust if necessary.
+            # Determine location of geographic pole in model coordinates.
+            X = sin(gpole_lat)*cos(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
+              + sin(gpole_lat)*sin(gpole_lon)*cos(xlat[0])*sin(xlon[0]) \
+              - cos(gpole_lat)*sin(xlat[0])
+            Y = sin(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
+              - cos(gpole_lon)*cos(xlat[0])*sin(xlon[0])
+            # De-adjust ax if it had previously been adjusted.
+            ax = xaxis.array + atan2(Y,X)*180/pi - npole
+            xlat1 = xlat[0] * 180/pi
+            xlon1 = xlon[0] * 180/pi
+            xlat2 = xlat[1] * 180/pi
+            xlon2 = xlon[1] * 180/pi
+            gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+            zegrid_table[zegrid_key] = gid
+        # Set grid descriptors to link to coordinate records.
+        if zegrid_key in zegrid_table:
+          gid = zegrid_table[zegrid_key]
+          var.atts.update(grtyp='Z',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
+    # Add rotated grid coordinates.
+    for grid in zegrid_table.values():
+      add_coord('>>',1,ni,grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+      add_coord('^^',nj,1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
 
+    # Set default grtyp if no better one found.
     for var in self._varlist:
       #TODO: determine appropriate grtyp
       if 'grtyp' not in var.atts:
         var.atts['grtyp'] = 'X'
     super(XYCoords,self)._unmakevars()
 
+    # Fill in columns with default values.
     self._headers['grtyp'] = self._headers['grtyp'].astype('|S1')
-
+    for key in 'ig1','ig2','ig3','ig4':
+      if key not in self._headers.keys():
+        self._headers[key] = np.ma.masked_all(self._nrecs)
+      if hasattr(self._headers[key],'mask'):
+        self._headers[key] = self._headers[key].filled(0)
