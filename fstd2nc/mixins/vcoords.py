@@ -76,7 +76,7 @@ def encode_ip1 (kind, level):
   kind_level['kind'] = kind
   kind_level['level'] = level
   kind_level = kind_level.view('uint64')
-  return _encode_ip1(kind_level)
+  return np.array(_encode_ip1(kind_level))
 
 
 #################################################
@@ -802,6 +802,8 @@ class VCoords (BufferBase):
     if 'kind' not in self._headers.keys():  # Force generic level type?
       self._headers['kind'] = np.ma.masked_all(self._nrecs,dtype='int32')
     if 'level' in self._headers.keys():
-      self._headers['ip1'][:] = encode_ip1(self._headers['kind'],self._headers['level'])
+      # Skip encoding ip1 if it's already been encoded elsewhere.
+      have_level = ~np.ma.getmaskarray(self._headers['level'])
+      self._headers['ip1'][have_level] = encode_ip1(self._headers['kind'],self._headers['level'])[have_level]
     # Use default value where ip1 is not used.
     self._headers['ip1'] = self._headers['ip1'].filled(0)
