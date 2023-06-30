@@ -1154,10 +1154,10 @@ class XYCoords (BufferBase):
 
     # Add coordinate records to the table.
     for grid in zegrid_table.values():
-      add_coord('>>',1,ni,grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
-      add_coord('^^',nj,1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+      add_coord('>>',1,grid['ni'],grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+      add_coord('^^',grid['nj'],1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
     for grid in yygrid_table.values():
-      add_coord('^>',1,25+2*ni+nj,grid['axy'],typvar='X',etiket='POSXY',datyp=5,nbits=32,grtyp='F',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+      add_coord('^>',1,25+2*grid['ni']+2*grid['nj'],grid['axy'],typvar='X',etiket='POSXY',datyp=5,nbits=32,grtyp='F',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
 
 
     # Set default grtyp if no better one found.
