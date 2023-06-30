@@ -878,7 +878,90 @@ class XYCoords (BufferBase):
       # Find coordinates of north pole in grid space.
       x, y, z = np.dot(transform.T,[0,0,1])
       npole = (atan2(y,x) * 180/pi) % 360
-      return (gpole_lat, gpole_lon, npole)
+      return dict(
+        grid_north_pole_latitude=gpole_lat,
+        grid_north_pole_longitude=gpole_lon,
+        north_pole_grid_longitude=npole
+      )
+
+    # Helper method - get best xlat1/xlon1/xlat2/xlon2 rotation parameters
+    # for the given CF rotation attributes.
+    def get_rotation_params (atts):
+      gpole_lat = atts['grid_north_pole_latitude'] * pi / 180
+      gpole_lon = atts['grid_north_pole_longitude'] * pi / 180
+      npole = atts.get('north_pole_grid_longitude',0.)
+      # Case 1: Can reverse out integer xlat1,xlon1,xlat2,xlon2 coordinates.
+      # Assume geographic north pole is in northern hemisphere of numeric
+      # grid.
+      intlat = np.linspace(-90,90,181).reshape((181,1)) * pi / 180
+      intlon = np.linspace(0,359,360).reshape((1,360)) * pi / 180
+      seps = cos(gpole_lat)*cos(gpole_lon)*np.cos(intlat)*np.cos(intlon) \
+           + cos(gpole_lat)*sin(gpole_lon)*np.cos(intlat)*np.sin(intlon) \
+           + sin(gpole_lat)*np.sin(intlat)
+      xlat = []
+      xlon = []
+      while len(xlat) < 2:
+        ind = np.argmin(abs(seps))
+        ind = np.unravel_index(ind,seps.shape)
+        xlat1 = intlat[ind[0],0]
+        xlon1 = intlon[0,ind[1]]
+        if xlat1 >= 0:
+          xlat.append(xlat1)
+          xlon.append(xlon1)
+        seps[ind] = 1.0
+      # Double-check if these points lie on rotated equator.
+      c0 = [cos(xlat[0])*cos(xlon[0]),cos(xlat[0])*sin(xlon[0]),sin(xlat[0])]
+      c1 = [cos(xlat[1])*cos(xlon[1]),cos(xlat[1])*sin(xlon[1]),sin(xlat[1])]
+      cpole = [c0[1]*c1[2]-c1[1]*c0[2],c0[2]*c1[0]-c1[2]*c0[0],c0[0]*c1[1]-c1[0]*c0[1]]
+      n = sqrt(np.dot(cpole,cpole))
+      cpole = np.array(cpole)/n
+      check = [cos(gpole_lat)*cos(gpole_lon), cos(gpole_lat)*sin(gpole_lon), sin(gpole_lat)]
+      # Check if we have reversed order of xlat1,xlon1 and xlat2,xlon2
+      if np.allclose(-cpole,check,atol=1e-5):
+        xlat = xlat[::-1]
+        xlon = xlon[::-1]
+        cpole = -cpole
+      # If we have a good match, then encode this.
+      if np.allclose(cpole,check,atol=1e-5):
+        # Check for grid rotation, adjust if necessary.
+        # Determine location of geographic pole in model coordinates.
+        X = sin(gpole_lat)*cos(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
+          + sin(gpole_lat)*sin(gpole_lon)*cos(xlat[0])*sin(xlon[0]) \
+          - cos(gpole_lat)*sin(xlat[0])
+        Y = sin(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
+          - cos(gpole_lon)*cos(xlat[0])*sin(xlon[0])
+        # Check if adjustment needed for ax.
+        # (if it had been rotated from the expected values).
+        ax_adjust = atan2(Y,X)*180/pi - npole
+        # Get grid parameters.
+        xlat1 = xlat[0] * 180/pi
+        xlon1 = xlon[0] * 180/pi
+        xlat2 = xlat[1] * 180/pi
+        xlon2 = xlon[1] * 180/pi
+        return xlat1, xlon1, xlat2, xlon2, ax_adjust
+      # Case 2: Rotated grid from external source (general case)
+      else:
+        # Make sure rotated longitudes are from 0..360
+        if xaxis.array[0] < 0:
+          ax_adjust = -xaxis.array[0]
+          npole -= xaxis.array[0]
+        else:
+          ax_adjust = 0.
+        # Get coordinates of grid centre.
+        cosp = cos(npole*pi/180)
+        sinp = sin(npole*pi/180)
+        X = cosp * sin(gpole_lat) * cos(gpole_lon) + sinp * sin(gpole_lon)
+        Y = cosp * sin(gpole_lat) * sin(gpole_lon) - sinp * cos(gpole_lon)
+        Z = -cosp * cos(gpole_lat)
+        xlat1 = asin(Z) * 180 / pi
+        xlon1 = atan2(Y,X) * 180 / pi
+        # Get coordinates of another point on grid equator, east of centre.
+        X = sinp * sin(gpole_lat) * cos(gpole_lon) - cosp * sin(gpole_lon)
+        Y = sinp * sin(gpole_lat) * sin(gpole_lon) + cosp * cos(gpole_lon)
+        Z = -sinp * cos(gpole_lat)
+        xlat2 = asin(Z) * 180 / pi
+        xlon2 = atan2(Y,X) * 180 / pi
+        return xlat1, xlon1, xlat2, xlon2, ax_adjust
 
     gauss_table = {}
     lgrid_table = {}
@@ -1029,79 +1112,10 @@ class XYCoords (BufferBase):
         npole = projection.atts.get('north_pole_grid_longitude',0.)
         zegrid_key = (gpole_lat,gpole_lon,npole,id(xaxis),id(yaxis))
         if zegrid_key not in zegrid_table:
-          # Case 1: Can reverse out integer xlat1,xlon1,xlat2,xlon2 coordinates.
-          # Assume geographic north pole is in northern hemisphere of numeric
-          # grid.
-          intlat = np.linspace(-90,90,181).reshape((181,1)) * pi / 180
-          intlon = np.linspace(0,359,360).reshape((1,360)) * pi / 180
-          seps = cos(gpole_lat)*cos(gpole_lon)*np.cos(intlat)*np.cos(intlon) \
-               + cos(gpole_lat)*sin(gpole_lon)*np.cos(intlat)*np.sin(intlon) \
-               + sin(gpole_lat)*np.sin(intlat)
-          xlat = []
-          xlon = []
-          while len(xlat) < 2:
-            ind = np.argmin(abs(seps))
-            ind = np.unravel_index(ind,seps.shape)
-            xlat1 = intlat[ind[0],0]
-            xlon1 = intlon[0,ind[1]]
-            if xlat1 >= 0:
-              xlat.append(xlat1)
-              xlon.append(xlon1)
-            seps[ind] = 1.0
-          # Double-check if these points lie on rotated equator.
-          c0 = [cos(xlat[0])*cos(xlon[0]),cos(xlat[0])*sin(xlon[0]),sin(xlat[0])]
-          c1 = [cos(xlat[1])*cos(xlon[1]),cos(xlat[1])*sin(xlon[1]),sin(xlat[1])]
-          cpole = [c0[1]*c1[2]-c1[1]*c0[2],c0[2]*c1[0]-c1[2]*c0[0],c0[0]*c1[1]-c1[0]*c0[1]]
-          n = sqrt(np.dot(cpole,cpole))
-          cpole = np.array(cpole)/n
-          check = [cos(gpole_lat)*cos(gpole_lon), cos(gpole_lat)*sin(gpole_lon), sin(gpole_lat)]
-          # Check if we have reversed order of xlat1,xlon1 and xlat2,xlon2
-          if np.allclose(-cpole,check,atol=1e-5):
-            xlat = xlat[::-1]
-            xlon = xlon[::-1]
-            cpole = -cpole
-          # If we have a good match, then encode this.
-          if np.allclose(cpole,check,atol=1e-5):
-            # Check for grid rotation, adjust if necessary.
-            # Determine location of geographic pole in model coordinates.
-            X = sin(gpole_lat)*cos(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
-              + sin(gpole_lat)*sin(gpole_lon)*cos(xlat[0])*sin(xlon[0]) \
-              - cos(gpole_lat)*sin(xlat[0])
-            Y = sin(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
-              - cos(gpole_lon)*cos(xlat[0])*sin(xlon[0])
-            # De-adjust ax if it had previously been adjusted.
-            ax = xaxis.array + atan2(Y,X)*180/pi - npole
-            xlat1 = xlat[0] * 180/pi
-            xlon1 = xlon[0] * 180/pi
-            xlat2 = xlat[1] * 180/pi
-            xlon2 = xlon[1] * 180/pi
-            gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
-            zegrid_table[zegrid_key] = gid
-          # Case 2: Rotated grid from external source (general case)
-          else:
-            # Make sure rotated longitudes are from 0..360
-            if xaxis.array[0] < 0:
-              ax = xaxis.array - xaxis.array[0]
-              npole -= xaxis.array[0]
-            else:
-              ax = xaxis.array
-            # Get coordinates of grid centre.
-            cosp = cos(npole*pi/180)
-            sinp = sin(npole*pi/180)
-            X = cosp * sin(gpole_lat) * cos(gpole_lon) + sinp * sin(gpole_lon)
-            Y = cosp * sin(gpole_lat) * sin(gpole_lon) - sinp * cos(gpole_lon)
-            Z = -cosp * cos(gpole_lat)
-            xlat1 = asin(Z) * 180 / pi
-            xlon1 = atan2(Y,X) * 180 / pi
-            # Get coordinates of another point on grid equator, east of centre.
-            X = sinp * sin(gpole_lat) * cos(gpole_lon) - cosp * sin(gpole_lon)
-            Y = sinp * sin(gpole_lat) * sin(gpole_lon) + cosp * cos(gpole_lon)
-            Z = -sinp * cos(gpole_lat)
-            xlat2 = asin(Z) * 180 / pi
-            xlon2 = atan2(Y,X) * 180 / pi
-            # Encode this grid (will probably lose some precision here.)
-            gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
-            zegrid_table[zegrid_key] = gid
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(projection.atts)
+          ax = xaxis.array + ax_adjust
+          gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+          zegrid_table[zegrid_key] = gid
 
         # Set grid descriptors to link to coordinate records.
         if zegrid_key in zegrid_table:
