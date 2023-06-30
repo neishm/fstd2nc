@@ -1131,11 +1131,10 @@ class XYCoords (BufferBase):
       for coord in var.atts.get('coordinates',[]):
         if coord.name == 'lat': lat = coord
         if coord.name == 'lon': lon = coord
-      if lat is not None and lon is not None and nj%2==0:
+      if lat is not None and lon is not None and nj%2==0 and np.all(yaxis.array[:nj//2]==yaxis.array[nj//2:]):
         yygrid_key = (id(xaxis),id(yaxis),id(lat),id(lon))
         if yygrid_key not in yygrid_table:
           # Get params for yin grid.
-          #TODO: verify that we actually have a yin-yang grid!
           yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat.array[:nj//2,:],lon.array[:nj//2,:])
           yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat.array[nj//2:,:],lon.array[nj//2:,:])
           # Encode yin grid
