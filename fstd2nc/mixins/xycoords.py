@@ -933,6 +933,9 @@ class XYCoords (BufferBase):
         # Check if adjustment needed for ax.
         # (if it had been rotated from the expected values).
         ax_adjust = atan2(Y,X)*180/pi - npole
+        if ax_adjust <= -360: ax_adjust += 360
+        if ax_adjust >= 360: ax_adjust -= 360
+        if np.allclose(ax_adjust,0.,atol=1e-5): ax_adjust = 0.
         # Get grid parameters.
         xlat1 = xlat[0] * 180/pi
         xlon1 = xlon[0] * 180/pi
@@ -1129,16 +1132,50 @@ class XYCoords (BufferBase):
         if coord.name == 'lat': lat = coord
         if coord.name == 'lon': lon = coord
       if lat is not None and lon is not None and nj%2==0:
-        # Get params for yin grid.
-        yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat.array[:nj//2,:],lon.array[:nj//2,:])
-        print (yin_params)
-        yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat.array[nj//2:,:],lon.array[nj//2:,:])
-        print (yang_params)
+        yygrid_key = (id(xaxis),id(yaxis),id(lat),id(lon))
+        if yygrid_key not in yygrid_table:
+          # Get params for yin grid.
+          #TODO: verify that we actually have a yin-yang grid!
+          yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat.array[:nj//2,:],lon.array[:nj//2,:])
+          yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat.array[nj//2:,:],lon.array[nj//2:,:])
+          # Encode into an array.
+          axy = np.empty(5+10+ni+nj//2+10+ni+nj//2, dtype='float32')
+          axy[:5] = ord('F'), 1, 2, 1, 1
+          # Encode yin grid
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params)
+          # Truncate to encoding precision.
+          ig1, ig2, ig3, ig4 = rmn.cxgaig('E', xlat1, xlon1, xlat2, xlon2)
+          xlat1, xlon1, xlat2, xlon2 = rmn.cigaxg('E', ig1, ig2, ig3, ig4)
+          axy[5:15] = ni, nj//2, xaxis.array[0], xaxis.array[-1], yaxis.array[0], yaxis.array[-1], xlat1, xlon1, xlat2, xlon2
+          axy[15:15+ni] = xaxis.array
+          axy[15+ni:15+ni+nj//2] = yaxis.array[:nj//2]
+          yin_gid = rmn.defGrid_ZEraxes(ax=xaxis.array, ay=yaxis.array[:nj//2], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+          yinsize=15+ni+nj//2
+          # Encode yang grid
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yang_params)
+          # Truncate to encoding precision.
+          ig1, ig2, ig3, ig4 = rmn.cxgaig('E', xlat1, xlon1, xlat2, xlon2)
+          xlat1, xlon1, xlat2, xlon2 = rmn.cigaxg('E', ig1, ig2, ig3, ig4)
+          axy[yinsize:yinsize+10] = ni, nj//2, xaxis.array[0], xaxis.array[-1], yaxis.array[0], yaxis.array[-1], xlat1, xlon1, xlat2, xlon2
+          axy[yinsize+10:yinsize+10+ni] = xaxis.array
+          axy[yinsize+10+ni:] = yaxis.array[nj//2:]
+          yang_gid = rmn.defGrid_ZEraxes(ax=xaxis.array, ay=yaxis.array[nj//2:], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+          # Consruct supergrid (to generate unique tags)
+          gid = rmn.ezgdef_supergrid(ni, nj//2, 'U', 'F', 1, (yin_gid['id'],yang_gid['id']))
+          gid = rmn.decodeGrid(gid)
+          gid['axy'] = axy  # Force our encoded values.
+          yygrid_table[yygrid_key] = gid
+        if yygrid_key in yygrid_table:
+          gid = yygrid_table[yygrid_key]
+          var.atts.update(grtyp='U',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
 
     # Add coordinate records to the table.
     for grid in zegrid_table.values():
       add_coord('>>',1,ni,grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
       add_coord('^^',nj,1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+    for grid in yygrid_table.values():
+      add_coord('^>',1,25+2*ni+nj,grid['axy'],typvar='X',etiket='POSXY',datyp=5,nbits=32,grtyp='F',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+
 
     # Set default grtyp if no better one found.
     for var in self._varlist:
