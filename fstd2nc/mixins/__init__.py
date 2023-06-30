@@ -872,6 +872,8 @@ class BufferBase (object):
         varlist.append(var)
       else:
         warn (_("Unable to encode %s.")%var.name)
+    if len(varlist) == 0:
+      error (_("Nothing to encode!"))
     self._varlist = varlist
     self._nrecs = sum(np.product(var.record_id.shape) if var.record_id.ndim > 0 else 1 for var in varlist)
     # Keep track of columns that we don't need to worry about.
