@@ -850,10 +850,41 @@ class XYCoords (BufferBase):
       array = array.squeeze()
       self._varlist.append(_iter_type(name,atts,dims,'float32',array))
 
+    # Helper method - determine rotated lat/lon grid parameters from
+    # 2D lat/lon fields.
+    def get_rotated_grid_params (ax, ay, lat, lon):
+      ni = len(ax)
+      nj = len(ay)
+      # Convert to radians.
+      ax = ax.astype('float64') * pi/180
+      ay = ay.astype('float64') * pi/180
+      ax = np.repeat(ax.reshape(1,-1),nj,axis=0)
+      ay = np.repeat(ay.reshape(-1,1),ni,axis=1)
+      lat = lat.astype('float64') * pi/180
+      lon = lon.astype('float64') * pi/180
+      def cartesian (lat, lon):
+        return [np.cos(lat)*np.cos(lon), np.cos(lat)*np.sin(lon), np.sin(lat)]
+      # Find transformation from grid coordinates to real coordinates.
+      # Use least-squares fit of lat/lon fields.
+      rotated_coords = np.array(cartesian(ay.flatten(),ax.flatten())).T
+      latlon_coords = np.array(cartesian(lat.flatten(),lon.flatten())).T
+      # Get transformation matrix.
+      transform, res, rank, s = np.linalg.lstsq(rotated_coords, latlon_coords, rcond=None)
+      transform = transform.T
+      # Find coordinates of grid north pole.
+      x, y, z = np.dot(transform,[0,0,1])
+      gpole_lat = asin(z) * 180/pi
+      gpole_lon = (atan2(y,x) * 180/pi) % 360
+      # Find coordinates of north pole in grid space.
+      x, y, z = np.dot(transform.T,[0,0,1])
+      npole = (atan2(y,x) * 180/pi) % 360
+      return (gpole_lat, gpole_lon, npole)
+
     gauss_table = {}
     lgrid_table = {}
     zlgrid_table = {}
     zegrid_table = {}
+    yygrid_table = {}
     projection_table = {}
     # Pull out projection variables.
     for var in self._varlist:
@@ -1077,8 +1108,20 @@ class XYCoords (BufferBase):
           gid = zegrid_table[zegrid_key]
           var.atts.update(grtyp='Z',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
           continue
+      # Case 3: yin-yang grid.
+      # Find the 2D lat/lon fields associated with this grid.
+      lat = None; lon = None
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name == 'lat': lat = coord
+        if coord.name == 'lon': lon = coord
+      if lat is not None and lon is not None and nj%2==0:
+        # Get params for yin grid.
+        yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat.array[:nj//2,:],lon.array[:nj//2,:])
+        print (yin_params)
+        yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat.array[nj//2:,:],lon.array[nj//2:,:])
+        print (yang_params)
 
-    # Add rotated grid coordinates.
+    # Add coordinate records to the table.
     for grid in zegrid_table.values():
       add_coord('>>',1,ni,grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
       add_coord('^^',nj,1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
