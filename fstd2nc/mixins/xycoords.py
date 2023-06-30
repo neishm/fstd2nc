@@ -1138,32 +1138,16 @@ class XYCoords (BufferBase):
           #TODO: verify that we actually have a yin-yang grid!
           yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat.array[:nj//2,:],lon.array[:nj//2,:])
           yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat.array[nj//2:,:],lon.array[nj//2:,:])
-          # Encode into an array.
-          axy = np.empty(5+10+ni+nj//2+10+ni+nj//2, dtype='float32')
-          axy[:5] = ord('F'), 1, 2, 1, 1
           # Encode yin grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params)
-          # Truncate to encoding precision.
-          ig1, ig2, ig3, ig4 = rmn.cxgaig('E', xlat1, xlon1, xlat2, xlon2)
-          xlat1, xlon1, xlat2, xlon2 = rmn.cigaxg('E', ig1, ig2, ig3, ig4)
-          axy[5:15] = ni, nj//2, xaxis.array[0], xaxis.array[-1], yaxis.array[0], yaxis.array[-1], xlat1, xlon1, xlat2, xlon2
-          axy[15:15+ni] = xaxis.array
-          axy[15+ni:15+ni+nj//2] = yaxis.array[:nj//2]
           yin_gid = rmn.defGrid_ZEraxes(ax=xaxis.array, ay=yaxis.array[:nj//2], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           yinsize=15+ni+nj//2
           # Encode yang grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yang_params)
-          # Truncate to encoding precision.
-          ig1, ig2, ig3, ig4 = rmn.cxgaig('E', xlat1, xlon1, xlat2, xlon2)
-          xlat1, xlon1, xlat2, xlon2 = rmn.cigaxg('E', ig1, ig2, ig3, ig4)
-          axy[yinsize:yinsize+10] = ni, nj//2, xaxis.array[0], xaxis.array[-1], yaxis.array[0], yaxis.array[-1], xlat1, xlon1, xlat2, xlon2
-          axy[yinsize+10:yinsize+10+ni] = xaxis.array
-          axy[yinsize+10+ni:] = yaxis.array[nj//2:]
           yang_gid = rmn.defGrid_ZEraxes(ax=xaxis.array, ay=yaxis.array[nj//2:], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           # Consruct supergrid (to generate unique tags)
           gid = rmn.ezgdef_supergrid(ni, nj//2, 'U', 'F', 1, (yin_gid['id'],yang_gid['id']))
           gid = rmn.decodeGrid(gid)
-          gid['axy'] = axy  # Force our encoded values.
           yygrid_table[yygrid_key] = gid
         if yygrid_key in yygrid_table:
           gid = yygrid_table[yygrid_key]
