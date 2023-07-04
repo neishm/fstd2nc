@@ -163,3 +163,38 @@ class Masks (BufferBase):
       return field1
     field2 = super(Masks,cls)._decode(mask, **kwargs)
     return ((field1*(field2>0)) + fill_value * (field2==0)).astype(field1.dtype)
+
+  # Override fstecr to check for masked data and write separate value/mask
+  # records.
+  @classmethod
+  def _fstecr (cls, outfile, rec, _warned=[False,False], **extra):
+    import numpy as np
+    masked = (len(rec['typvar']) == 2 and rec['typvar'][1] == '@')
+    alt_masked = (rec['datyp'] & 64) == 64
+    if not masked and not alt_masked and np.any(np.isnan(rec['d'])):
+      typvar = rec['typvar'][0] + '@'
+      if not _warned[0]:
+        warn(_("Detected masked data.  Changing typvar from '%s' to '%s' and writing separate mask record.")%(rec['typvar'],typvar))
+        _warned[0] = True
+      masked = True
+      rec['typvar'] = typvar
+    if masked:
+      mask = np.array(np.isfinite(rec['d']),dtype='int32')
+      mask = dict(rec,d=mask,typvar='@@',datyp=2,nbits=1)
+      rec['d'] = np.array(rec['d'])
+      rec['d'][np.isnan(rec['d'])] = 0
+      super(Masks,cls)._fstecr (outfile, rec, **extra)
+      super(Masks,cls)._fstecr (outfile, mask, **extra)
+    elif alt_masked:
+      if not _warned[1]:
+        warn(_("Encoding masks with datyp+64 not supported yet."))
+        _warned[1] = True
+      if np.all(rec['d']<=0):
+        mask_value = 1.0
+      else:
+        mask_value = np.nanmax(rec['d']) * 1.1
+      rec['d'] = np.array(rec['d'])
+      rec['d'][np.isnan(rec['d'])] = mask_value
+      super(Masks,cls)._fstecr (outfile, rec, **extra)
+    else:
+      super(Masks,cls)._fstecr (outfile, rec, **extra)

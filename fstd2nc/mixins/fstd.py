@@ -229,13 +229,20 @@ class FSTD (BufferBase):
       if hasattr(self._headers[colname],'mask'):
         self._headers[colname] = self._headers[colname].filled(default)
 
-    add_column ('typvar', '|S2', default='A')
+    add_column ('typvar', '|S2', default='P')
     add_column ('etiket', '|S12', default='')
     add_column ('datyp', 'int32', default=133)
     add_column ('nbits', 'int32', default=32)
     add_column ('ip3', 'int32', default=0)
     add_column ('deet', 'int32', default=60)
     add_column ('npas', 'int32', default=0)
+
+  # Define an entry point for writing records to a file.
+  # Allows the logic to be modified by mixins (such as masks).
+  @classmethod
+  def _fstecr (cls, outfile, rec, **extra):
+    import rpnpy.librmn.all as rmn
+    rmn.fstecr(outfile, rec, **extra)
 
   def to_fstd (self, filename):
     """
@@ -251,7 +258,7 @@ class FSTD (BufferBase):
       rec = self._fstluk(i)
       # Ensure data is Fortran-contiguous for librmn.
       rec['d'] = np.ascontiguousarray(rec['d'].T).T
-      rmn.fstecr(outfile, rec, rewrite=False)
+      self._fstecr(outfile, rec, rewrite=False)
     rmn.fstcloseall(outfile)
 
   #
