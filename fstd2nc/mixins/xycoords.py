@@ -971,6 +971,7 @@ class XYCoords (BufferBase):
     zlgrid_table = {}
     zegrid_table = {}
     yygrid_table = {}
+    stacked_yaxes = {}
     projection_table = {}
     # Pull out projection variables.
     for var in self._varlist:
@@ -1004,6 +1005,23 @@ class XYCoords (BufferBase):
       # Identify inner axes.
       var.axes[-2] = _dim_type('j',nj)
       var.axes[-1] = _dim_type('i',ni)
+      # Special case for subgrid axis
+      # Flatten it out so the yin/yang grids are stacked together.
+      if 'subgrid' in var.dims:
+        # First transpose so the subgrid axis is just before y axis.
+        i = var.dims.index('subgrid')
+        order = list(range(i)) + list(range(i+1,len(var.dims)-2)) + [i,-2,-1]
+        if order != list(range(len(var.axes))):
+          var.axes = [var.axes[i] for i in order]
+          var.array = var.array.transpose(*order)
+        # Next, make a stacked y axis.
+        if id(yaxis) not in stacked_yaxes:
+          stacked_yaxes[id(yaxis)] = _axis_type('j',yaxis.atts,np.concatenate([yaxis.array,yaxis.array]))
+        yaxis = stacked_yaxes[id(yaxis)]
+        var.array = var.array.reshape(var.shape[:-3] + (var.shape[-2]*2,var.shape[-1]))
+        var.axes = var.axes[:-3] + [yaxis] + var.axes[-1:]
+        nj *= 2
+      ###
       # Process the variable.
       outer_shape = [len(a) for a in var.axes[:-2]]
       record_id = np.zeros(outer_shape, dtype=object)
@@ -1134,9 +1152,12 @@ class XYCoords (BufferBase):
       if lat is not None and lon is not None and nj%2==0 and np.all(yaxis.array[:nj//2]==yaxis.array[nj//2:]):
         yygrid_key = (id(xaxis),id(yaxis),id(lat),id(lon))
         if yygrid_key not in yygrid_table:
+          # Fix shape of lat/lon (if had subgrid axes)
+          lat = lat.array.reshape(nj,ni)
+          lon = lon.array.reshape(nj,ni)
           # Get params for yin grid.
-          yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat.array[:nj//2,:],lon.array[:nj//2,:])
-          yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat.array[nj//2:,:],lon.array[nj//2:,:])
+          yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat[:nj//2,:],lon[:nj//2,:])
+          yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat[nj//2:,:],lon[nj//2:,:])
           # Encode yin grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params)
           yin_gid = rmn.defGrid_ZEraxes(ax=xaxis.array, ay=yaxis.array[:nj//2], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
@@ -1151,6 +1172,7 @@ class XYCoords (BufferBase):
         if yygrid_key in yygrid_table:
           gid = yygrid_table[yygrid_key]
           var.atts.update(grtyp='U',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
+          continue
 
     # Add coordinate records to the table.
     for grid in zegrid_table.values():
