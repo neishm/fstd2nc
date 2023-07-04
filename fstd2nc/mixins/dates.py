@@ -186,12 +186,11 @@ class Dates (BufferBase):
     # Get leadtime column (may be coming from forecast axis).
     if 'forecast' in self._headers.keys():
       self._headers['leadtime'] = self._headers['forecast']
-    else:
+    if 'leadtime' not in self._headers.keys():
       self._headers['leadtime'] = np.ma.masked_all(self._nrecs, dtype=int)
     # Convert leadtime to units of hours if it's a timedelta64.
-    if 'leadtime' in self._headers.keys():
-      if self._headers['leadtime'].dtype == 'timedelta64[ns]':
-        self._headers['leadtime'] = self._headers['leadtime'] / np.timedelta64(3600,'s')
+    if self._headers['leadtime'].dtype == 'timedelta64[ns]':
+      self._headers['leadtime'] = self._headers['leadtime'] / np.timedelta64(3600,'s')
     # Look at reftime column, just so it's acknowledged and not flagged as
     # unhandled.
     if 'reftime' in self._headers.keys():
@@ -199,15 +198,17 @@ class Dates (BufferBase):
 
     # Get datev, dateo, npas, using time, leadtime, deet.
     if 'deet' not in self._headers.keys():
-      self._headers['deet'] = np.empty(self._nrecs, dtype='int32')
-      self._headers['deet'][:] = 60  # Set default value of 60s
+      self._headers['deet'] = np.ma.masked_all(self._nrecs, dtype='int32')
+    if hasattr(self._headers['deet'],'mask'):
+      # Set default value of 60s
+      self._headers['deet'] = self._headers['deet'].filled(60)
     self._headers['npas'] = np.ma.array(self._headers['leadtime']*3600 / self._headers['deet'], dtype='int32')
     if 'time' in self._headers.keys():
       if 'forecast' in self._headers.keys():
         self._headers['dateo'] = self._headers['time']
         self._headers['datev'] = self._headers['time'] + self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
       else:
-        self._headers['dateo'] = self._headers['time']
+        self._headers['dateo'] = self._headers['time'] - self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
         self._headers['datev'] = self._headers['time']
 
     # Convert dateo and datev into RPN date stamps.
