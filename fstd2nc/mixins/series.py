@@ -181,8 +181,8 @@ class Series (BufferBase):
         array = array[:-1]
       if array.ndim != 1: continue
       atts = OrderedDict(self._get_header_atts(header))
-      if vertvar == 'SH': thermo = _axis_type('level',atts,array)
-      if vertvar == 'SV': momentum = _axis_type('level',atts,array)
+      if vertvar == b'SH  ': thermo = _axis_type('level',atts,array)
+      if vertvar == b'SV  ': momentum = _axis_type('level',atts,array)
 
 
     # 'Y' data should be handled fine by _XYCoords - just give a more
