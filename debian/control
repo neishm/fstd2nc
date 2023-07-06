@@ -1,0 +1,16 @@
+Source: fstd2nc
+Section: python
+Priority: optional
+Maintainer: Sébastien Fortier <sebastien.fortier@ec.gc.ca>
+Build-Depends: debhelper (>= 9), python3, python3-setuptools
+Standards-Version: 3.9.5
+X-Python-Version: >= 3.6
+Vcs-Git: https://github.com/neishm/fstd2nc.git
+
+Package: fstd2nc
+Architecture: all
+Depends: python3, python3-netcdf, python3-numpy, python3-progress
+Homepage: https://github.com/neishm/fstd2nc
+Description: Converts RPN standard files (from Environment Canada) to netCDF.
+ This module provides a mechanism for converting between FSTD and netCDF file
+ formats, either through Python or the command-line.

@@ -1,0 +1,5 @@
+fstd2nc (0.1.0) focal; urgency=medium
+
+  * initial Debian packaging
+
+ -- Tom Kralidis <tom.kralidis@ec.gc.ca>  Wed, 05 Jul 2023 20:00:11 +0000
