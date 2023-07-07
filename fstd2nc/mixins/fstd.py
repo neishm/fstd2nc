@@ -245,6 +245,10 @@ class FSTD (BufferBase):
     # Make sure we pass in single-precision when expected.
     if rec.get('nbits',32) <= 32 and rec['d'].dtype.name.endswith('64'):
       rec['d'] = rec['d'].astype(rec['d'].dtype.name[:-2]+'32')
+    # Disable compression on small records, to silence warning from
+    # armn_compress32.
+    if rec['ni'] <= 16 or rec['nj'] <= 16:
+      rec['datyp'] %= 128
     rmn.fstecr(outfile, rec, **extra)
 
   def to_fstd (self, filename):

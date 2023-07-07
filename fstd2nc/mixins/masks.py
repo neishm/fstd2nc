@@ -171,7 +171,7 @@ class Masks (BufferBase):
     import numpy as np
     masked = (len(rec['typvar']) == 2 and rec['typvar'][1] == '@')
     alt_masked = (rec['datyp'] & 64) == 64
-    if not masked and not alt_masked and np.any(np.isnan(rec['d'])):
+    if not masked and not alt_masked and rec['d'].dtype.kind == 'f' and np.any(np.isnan(rec['d'])):
       typvar = rec['typvar'][0] + '@'
       if not _warned[0]:
         warn(_("Detected masked data.  Changing typvar from '%s' to '%s' and writing separate mask record.")%(rec['typvar'],typvar))

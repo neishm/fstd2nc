@@ -203,6 +203,9 @@ class Dates (BufferBase):
       # Set default value of 60s
       self._headers['deet'] = self._headers['deet'].filled(60)
     self._headers['npas'] = np.ma.array(self._headers['leadtime']*3600 / self._headers['deet'], dtype='int32')
+    # If no npas available, assume zero (no forecast period?)
+    if hasattr(self._headers['npas'],'mask'):
+      self._headers['npas'] = self._headers['npas'].filled(0)
     if 'time' in self._headers.keys():
       if 'forecast' in self._headers.keys():
         self._headers['dateo'] = self._headers['time']
@@ -211,6 +214,9 @@ class Dates (BufferBase):
         self._headers['dateo'] = self._headers['time'] - self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
         self._headers['datev'] = self._headers['time']
 
+    else:  # Degenerate case - no variables with time axes, so put some default
+      self._headers['dateo'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
+      self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
     # Convert dateo and datev into RPN date stamps.
     if 'datev' not in self._headers.keys():
       self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
@@ -233,5 +239,5 @@ class Dates (BufferBase):
     self._headers['ip2'][ip2_as_forecast] = (self._headers['npas'] * self._headers['deet'] // 3600)[ip2_as_forecast]
 
     # Set default values.
-    self._headers['npas'] = self._headers['npas'].filled(0)
-    self._headers['ip2'] = self._headers['ip2'].filled(0)
+    if hasattr(self._headers['ip2'],'mask'):
+      self._headers['ip2'] = self._headers['ip2'].filled(0)

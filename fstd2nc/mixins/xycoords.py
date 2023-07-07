@@ -837,10 +837,10 @@ class XYCoords (BufferBase):
     import numpy as np
     import rpnpy.librmn.all as rmn
     from math import sin, cos, asin, atan2, pi, sqrt
-    import dask.array as da
 
     # Helper - add a coordinate record
     def add_coord (name,nj,ni,values,**atts):
+      import dask.array as da
       dims = []
       if nj > 1: dims.append(_dim_type('j',nj))
       if ni > 1: dims.append(_dim_type('i',ni))
