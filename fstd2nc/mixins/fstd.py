@@ -242,6 +242,9 @@ class FSTD (BufferBase):
   @classmethod
   def _fstecr (cls, outfile, rec, **extra):
     import rpnpy.librmn.all as rmn
+    # Make sure we pass in single-precision when expected.
+    if rec.get('nbits',32) <= 32 and rec['d'].dtype.name.endswith('64'):
+      rec['d'] = rec['d'].astype(rec['d'].dtype.name[:-2]+'32')
     rmn.fstecr(outfile, rec, **extra)
 
   def to_fstd (self, filename):
