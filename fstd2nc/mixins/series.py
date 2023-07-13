@@ -359,6 +359,17 @@ class Series (BufferBase):
         break
     self._varlist = [var for var in self._varlist if var.name != 'station']
 
+    # Encode lat/lon axes.
+    for var in self._varlist:
+      if 'station_id' not in var.dims: continue
+      nstations = len(var.getaxis('station_id'))
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name == 'lat':
+          add_coord('^^',1,nstations,coord.array,typvar='T',datyp=5,nbits=32,grtyp='T')
+        if coord.name == 'lon':
+          add_coord('>>',1,nstations,coord.array,typvar='T',datyp=5,nbits=32,grtyp='T')
+      break
+
     # Encode vertical coordinates.
     # Note: can only encode one set of vertical coordinates in a series
     # dataset.
@@ -458,9 +469,18 @@ class Series (BufferBase):
         # Enumerate the stations (starting at 1) and store in ip3.
         axis = var.getaxis('station_id')
         axis_ind = var.dims.index('station_id')
-        axes[axis_ind] = _axis_type('ip3',{},np.arange(len(axis))+1)
+        newaxis = _axis_type('ip3',{},np.arange(len(axis))+1)
+        axes[axis_ind] = newaxis
         num_outer_axes = axis_ind + 1
         var.atts['grtyp'] = '+'
+        # Patch up lat/lon coordinates.
+        for coord_ind, coord in enumerate(var.atts.get('coordinates',[])):
+          if coord.name == 'lat':
+            encoded_lat = _var_type(coord.name, coord.atts, [newaxis], coord.array)
+            var.atts['coordinates'][coord_ind] = encoded_lat
+          if coord.name == 'lon':
+            encoded_lon = _var_type(coord.name, coord.atts, [newaxis], coord.array)
+            var.atts['coordinates'][coord_ind] = encoded_lon
       else:
         ni = len(var.getaxis('station_id'))
         axes[var.dims.index('station_id')] = _dim_type('i',ni)
@@ -475,3 +495,13 @@ class Series (BufferBase):
       self._varlist[var_ind] = var
 
     super(Series,self)._unmakevars()
+
+    # Encode lat/lon in ig3/ig4 values.
+    encode_latlon = (self._headers['grtyp'] == '+')
+    if 'ig3' not in self._headers.keys():
+      self._headers['ig3'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    self._headers['ig3'][encode_latlon] = np.round((self._headers['lat']+100)*100)[encode_latlon]
+    if 'ig4' not in self._headers.keys():
+      self._headers['ig4'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    self._headers['ig4'][encode_latlon] = np.round(self._headers['lon']*100)[encode_latlon]
+
