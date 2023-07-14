@@ -729,8 +729,22 @@ class VCoords (BufferBase):
 
   # Re-encode vertical coordinate info back into FSTD metadata.
   def _unmakevars (self):
-    from fstd2nc.mixins import _var_type, _axis_type, _dim_type
+    from fstd2nc.mixins import _iter_type, _var_type, _axis_type, _dim_type
     import numpy as np
+    import rpnpy.vgd.all as vgd
+
+    # Helper - add a coordinate record
+    def add_coord (name,nj,ni,values,**atts):
+      import dask.array as da
+      dims = []
+      if nj > 1: dims.append(_dim_type('j',nj))
+      if ni > 1: dims.append(_dim_type('i',ni))
+      # Need to carefully encode the arrays so they are scalar object containing the data.
+      array = np.empty(1,dtype=object)
+      array[0] = da.from_array(values, chunks=-1)
+      array = array.squeeze()
+      self._varlist.append(_iter_type(name,atts,dims,'float32',array))
+
     axis_map = dict()
     # Detect special case where depth could be encoded as height
     depth_as_height = any(var.atts.get('typvar',None) == 'P@' for var in self._varlist)
@@ -778,6 +792,36 @@ class VCoords (BufferBase):
 
       # Map to a generic 'level' axis which will be transformed into a 'level' column in the table.
       axis_map[id(axis)] = _axis_type('level',atts,axis.array)
+
+      # Create vertical coordinate record.
+      try:
+        if atts['KIND'] in (5,21):
+          if atts.get('RC_3',0) < 0: del atts['RC_3']
+          if atts.get('RC_4',0) < 0: del atts['RC_4']
+          if 'DHM' not in atts:
+            atts['DHM'] = decode_ip1_level(atts['DIPM'])
+          if 'DHT' not in atts:
+            atts['DHT'] = decode_ip1_level(atts['DIPT'])
+          vid = vgd.vgd_new2 (
+            kind=atts['KIND'], version=atts['VERS'], hyb=axis.array,
+            rcoef1=atts['RC_1'], rcoef2=atts['RC_2'],
+            rcoef3=atts.get('RC_3',None), rcoef4=atts.get('RC_4',None),
+            pref=atts['PREF'], ptop=atts.get('PTOP',None),
+            dhm=atts['DHM'], dht=atts['DHT']
+          )
+          table = vgd.vgd_tolist(vid).squeeze().T
+          # Add a record for each matching ig1/ig2/ig3.
+          handled_toctocs = set()
+          for var in self._varlist:
+            if not axis in var.axes: continue
+            ig1 = var.atts['ig1']
+            ig2 = var.atts['ig2']
+            ig3 = var.atts['ig3']
+            if (ig1,ig2,ig3) in handled_toctocs: continue
+            add_coord ('!!',table.shape[0],table.shape[1],table,datyp=5,nbits=64,typvar='X',grtyp='X',ip1=ig1,ip2=ig2,ip3=ig3,ig1=atts['KIND']*1000+atts['VERS'])
+            handled_toctocs.add((ig1,ig2,ig3))
+      except KeyError:
+        pass
 
     # Update the vertical axis to the generic one.
     for var in self._varlist:
