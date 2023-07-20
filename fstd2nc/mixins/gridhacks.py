@@ -325,6 +325,7 @@ class YinYang (BufferBase):
     for gid in np.unique(gids):
       if gid<0: continue
       source_grid = rmn.decodeGrid(int(gid))
+      if 'subgrid' not in source_grid: continue   # Not a YY grid?
       dest_grid = source_grid['subgrid'][yy_ind]
       self._writeGrid (dest_grid)
       mask = (self._headers['ismeta']==0) & (self._headers['grtyp']==b'U')
