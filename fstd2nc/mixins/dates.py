@@ -223,13 +223,13 @@ class Dates (BufferBase):
     # Set fill value.
     self._headers['datev'] = self._headers['datev'].filled(np.datetime64('1970-01-01T00:00:00'))
     # Convert from date to stamp.
-    self._headers['datev'] = datetime2stamp(self._headers['datev'])
+    self._headers['datev'] = np.array(datetime2stamp(self._headers['datev']))
     if 'dateo' not in self._headers.keys():
       self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
     # Set fill value.
     self._headers['dateo'] = self._headers['dateo'].filled(np.datetime64('1970-01-01T00:00:00'))
     # Convert from date to stamp.
-    self._headers['dateo'] = datetime2stamp(self._headers['dateo'])
+    self._headers['dateo'] = np.array(datetime2stamp(self._headers['dateo']))
 
     # Set ip2 values.
     if 'ip2' not in self._headers.keys():
