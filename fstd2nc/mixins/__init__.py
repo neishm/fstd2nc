@@ -49,6 +49,11 @@ def vectorize (f):
     return cache[x]
   @wraps(f)
   def vectorized_f (x):
+    mask = None
+    if hasattr(x,'mask'):
+      mask = np.ma.getmaskarray(x)
+      n = len(x)
+      x = x[~mask]
     if _use_pandas():
       from pandas import Series, unique
       # If we're given a scalar value, then simply return it.
@@ -60,12 +65,18 @@ def vectorize (f):
       outputs = map(f,inputs)
       table = dict(zip(inputs,outputs))
       result = Series(x).map(table)
-      return result.values
+      result = result.values
     else:
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return cached_f(x)
-      return list(map(cached_f,x))
+      result = list(map(cached_f,x))
+    if mask is not None:
+      result = np.asarray(result)
+      masked_result = np.ma.masked_all(n,dtype=result.dtype)
+      masked_result[~mask] = result
+      result = masked_result
+    return result
   return vectorized_f
 
 

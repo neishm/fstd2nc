@@ -71,12 +71,19 @@ def _encode_ip1 (kind_level):
 # Helper function - take arrays of kind, level and encode as array of ip1 values.
 def encode_ip1 (kind, level):
   import numpy as np
+  mask = None
+  if hasattr(level,'mask'):
+    mask = np.ma.getmaskarray(level)
+    level = level.filled(0.0)
   # Hack the kind and level information into something that's hashable.
   kind_level = np.empty(kind.shape, dtype=[('kind','int32'),('level','float32')])
   kind_level['kind'] = kind
   kind_level['level'] = level
   kind_level = kind_level.view('uint64')
-  return np.array(_encode_ip1(kind_level))
+  if mask is not None:
+    return np.ma.masked_array(_encode_ip1(kind_level), mask=mask)
+  else:
+    return np.array(_encode_ip1(kind_level))
 
 
 #################################################
