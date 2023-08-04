@@ -224,9 +224,7 @@ class RotLatLon(GridMap):
       # Compensate for rounding error when undoing the adjustment.
       # This should make the values bit-for-bit identical if writing *back*
       # to FST format.
-      adjusted = self._ax + ax_adjust
-      error = adjusted - orig_ax
-      self._ax -= error
+      self._ax = orig_ax - ax_adjust
     self._ay = self._grd['ay'][0,:]
   def gen_gmapvar(self):
     from fstd2nc.mixins import _var_type
@@ -978,6 +976,20 @@ class XYCoords (BufferBase):
         xlat2 = asin(Z) * 180 / pi
         xlon2 = atan2(Y,X) * 180 / pi
         return xlat1, xlon1, xlat2, xlon2, ax_adjust
+    # Helper method - apply adjustment to ax while recovering as much
+    # accuracy as possible.
+    def adjust_ax (ax, ax_adjust):
+      ax = np.array(ax,dtype='float64')
+      ax += ax_adjust
+      # Check if we can apply a correction.
+      # For LAM coming from yin-yang grid, check for integer start/end.
+      if np.allclose(ax[0],round(ax[0])) and np.allclose(ax[-1],round(ax[-1])):
+        x0 = round(ax[0])
+        x1 = round(ax[-1])
+        x = np.linspace(x0,x1,len(ax))
+        if np.allclose(ax,x):
+          ax = x
+      return ax.astype('float32')
 
     gauss_table = {}
     lgrid_table = {}
@@ -1147,7 +1159,7 @@ class XYCoords (BufferBase):
         zegrid_key = (gpole_lat,gpole_lon,npole,id(xaxis),id(yaxis))
         if zegrid_key not in zegrid_table:
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(projection.atts)
-          ax = xaxis.array + ax_adjust
+          ax = adjust_ax (xaxis.array, ax_adjust)
           gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           zegrid_table[zegrid_key] = gid
 
@@ -1173,12 +1185,12 @@ class XYCoords (BufferBase):
           yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat[nj//2:,:],lon[nj//2:,:])
           # Encode yin grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params)
-          ax = xaxis.array + ax_adjust
+          ax = adjust_ax (xaxis.array, ax_adjust)
           yin_gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array[:nj//2], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           yinsize=15+ni+nj//2
           # Encode yang grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yang_params)
-          ax = xaxis.array + ax_adjust
+          ax = adjust_ax (xaxis.array, ax_adjust)
           yang_gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array[nj//2:], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           # Consruct supergrid (to generate unique tags)
           gid = rmn.ezgdef_supergrid(ni, nj//2, 'U', 'F', 1, (yin_gid['id'],yang_gid['id']))
