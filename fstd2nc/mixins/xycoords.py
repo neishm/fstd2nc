@@ -983,10 +983,20 @@ class XYCoords (BufferBase):
       ax += ax_adjust
       # Check if we can apply a correction.
       # For LAM coming from yin-yang grid, check for integer start/end.
+      # For mass grid, should have integer values.
       if np.allclose(ax[0],round(ax[0])) and np.allclose(ax[-1],round(ax[-1])):
         x0 = round(ax[0])
         x1 = round(ax[-1])
         x = np.linspace(x0,x1,len(ax))
+        if np.allclose(ax,x):
+          ax = x
+      # For staggered grid, should be offset by dx/2?
+      dx = ax[1]-ax[0]
+      if np.allclose(ax[0]-dx/2,round(ax[0]-dx/2)) and np.allclose(ax[-1]-dx/2,round(ax[-1]-dx/2)):
+        x0 = round(ax[0]-dx/2)
+        x1 = round(ax[-1]-dx/2)
+        dx = (x1-x0)/(len(ax)-1)
+        x = np.linspace(x0+dx/2,x1+dx/2,len(ax))
         if np.allclose(ax,x):
           ax = x
       return ax.astype('float32')
