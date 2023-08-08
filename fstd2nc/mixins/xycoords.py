@@ -947,6 +947,7 @@ class XYCoords (BufferBase):
         if ax_adjust >= 360: ax_adjust -= 360
         if ax_adjust < 0: ax_adjust += 360
         if np.allclose(ax_adjust,0.,atol=1e-5): ax_adjust = 0.
+        if np.allclose(ax_adjust,360.,atol=1e-5): ax_adjust = 0.
         # Get grid parameters.
         xlat1 = xlat[0] * 180/pi
         xlon1 = xlon[0] * 180/pi
