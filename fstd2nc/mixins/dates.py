@@ -220,16 +220,16 @@ class Dates (BufferBase):
     # Convert dateo and datev into RPN date stamps.
     if 'datev' not in self._headers.keys():
       self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
-    # Set fill value.
-    self._headers['datev'] = self._headers['datev'].filled(np.datetime64('1970-01-01T00:00:00'))
-    # Convert from date to stamp.
-    self._headers['datev'] = np.array(datetime2stamp(self._headers['datev']))
     if 'dateo' not in self._headers.keys():
-      self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
-    # Set fill value.
-    self._headers['dateo'] = self._headers['dateo'].filled(np.datetime64('1970-01-01T00:00:00'))
+      self._headers['dateo'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
     # Convert from date to stamp.
-    self._headers['dateo'] = np.array(datetime2stamp(self._headers['dateo']))
+    self._headers['datev'] = np.ma.array(datetime2stamp(self._headers['datev']),dtype=int)
+    # Set fill value.
+    self._headers['datev'] = self._headers['datev'].filled(0)
+    # Convert from date to stamp.
+    self._headers['dateo'] = np.ma.array(datetime2stamp(self._headers['dateo']),dtype=int)
+    # Set fill value.
+    self._headers['dateo'] = self._headers['dateo'].filled(0)
 
     # Set ip2 values.
     if 'ip2' not in self._headers.keys():
