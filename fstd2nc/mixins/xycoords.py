@@ -908,38 +908,41 @@ class XYCoords (BufferBase):
       seps = cos(gpole_lat)*cos(gpole_lon)*np.cos(intlat)*np.cos(intlon) \
            + cos(gpole_lat)*sin(gpole_lon)*np.cos(intlat)*np.sin(intlon) \
            + sin(gpole_lat)*np.sin(intlat)
-      xlat = []
-      xlon = []
-      while len(xlat) < 2:
+      # Get rotated grid center (in lat/lon coordinates)
+      xlat1 = None
+      xlon1 = None
+      while xlat1 is None:
         ind = np.argmin(abs(seps))
         ind = np.unravel_index(ind,seps.shape)
-        xlat1 = intlat[ind[0],0]
-        xlon1 = intlon[0,ind[1]]
-        if xlat1 >= 0:
-          xlat.append(xlat1)
-          xlon.append(xlon1)
+        if intlat[ind[0],0] >= 0:
+          xlat1 = intlat[ind[0],0]
+          xlon1 = intlon[0,ind[1]]
         seps[ind] = 1.0
+      # Get second point on rotated equator (in lat/lon coordinates).
+      # Assume the point is 90 degrees from grid center.
+      xlat2 = asin(cos(gpole_lat)*cos(xlat1)*sin(xlon1-gpole_lon))
+      xlon2 = atan2(sin(gpole_lat)*cos(xlon1)*cos(xlat1) - cos(gpole_lon)*cos(gpole_lat)*sin(xlat1),
+                    sin(gpole_lon)*cos(gpole_lat)*sin(xlat1) - sin(gpole_lat)*sin(xlon1)*cos(xlat1))
+      # Truncate to available encoding precision.
+      ilat1, ilon1, ilat2, ilon2 = rmn.cxgaig('E', xlat1*180/pi, xlon1*180/pi, xlat2*180/pi, xlon2*180/pi)
+      xlat1, xlon1, xlat2, xlon2 = rmn.cigaxg('E', ilat1, ilon1, ilat2, ilon2)
+      xlat1, xlon1, xlat2, xlon2 = xlat1*pi/180, xlon1*pi/180, xlat2*pi/180, xlon2*pi/180
       # Double-check if these points lie on rotated equator.
-      c0 = [cos(xlat[0])*cos(xlon[0]),cos(xlat[0])*sin(xlon[0]),sin(xlat[0])]
-      c1 = [cos(xlat[1])*cos(xlon[1]),cos(xlat[1])*sin(xlon[1]),sin(xlat[1])]
+      c0 = [cos(xlat1)*cos(xlon1),cos(xlat1)*sin(xlon1),sin(xlat1)]
+      c1 = [cos(xlat2)*cos(xlon2),cos(xlat2)*sin(xlon2),sin(xlat2)]
       cpole = [c0[1]*c1[2]-c1[1]*c0[2],c0[2]*c1[0]-c1[2]*c0[0],c0[0]*c1[1]-c1[0]*c0[1]]
       n = sqrt(np.dot(cpole,cpole))
       cpole = np.array(cpole)/n
       check = [cos(gpole_lat)*cos(gpole_lon), cos(gpole_lat)*sin(gpole_lon), sin(gpole_lat)]
-      # Check if we have reversed order of xlat1,xlon1 and xlat2,xlon2
-      if np.allclose(-cpole,check,atol=1e-5):
-        xlat = xlat[::-1]
-        xlon = xlon[::-1]
-        cpole = -cpole
       # If we have a good match, then encode this.
       if np.allclose(cpole,check,atol=1e-5):
         # Check for grid rotation, adjust if necessary.
         # Determine location of geographic pole in model coordinates.
-        X = sin(gpole_lat)*cos(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
-          + sin(gpole_lat)*sin(gpole_lon)*cos(xlat[0])*sin(xlon[0]) \
-          - cos(gpole_lat)*sin(xlat[0])
-        Y = sin(gpole_lon)*cos(xlat[0])*cos(xlon[0]) \
-          - cos(gpole_lon)*cos(xlat[0])*sin(xlon[0])
+        X = sin(gpole_lat)*cos(gpole_lon)*cos(xlat1)*cos(xlon1) \
+          + sin(gpole_lat)*sin(gpole_lon)*cos(xlat1)*sin(xlon1) \
+          - cos(gpole_lat)*sin(xlat1)
+        Y = sin(gpole_lon)*cos(xlat1)*cos(xlon1) \
+          - cos(gpole_lon)*cos(xlat1)*sin(xlon1)
         # Check if adjustment needed for ax.
         # (if it had been rotated from the expected values).
         ax_adjust = atan2(Y,X)*180/pi - npole
@@ -948,11 +951,19 @@ class XYCoords (BufferBase):
         if ax_adjust < 0: ax_adjust += 360
         if np.allclose(ax_adjust,0.,atol=1e-5): ax_adjust = 0.
         if np.allclose(ax_adjust,360.,atol=1e-5): ax_adjust = 0.
-        # Get grid parameters.
-        xlat1 = xlat[0] * 180/pi
-        xlon1 = xlon[0] * 180/pi
-        xlat2 = xlat[1] * 180/pi
-        xlon2 = xlon[1] * 180/pi
+        # Convert grid parameters to degreees.
+        xlat1 = xlat1 * 180/pi
+        xlon1 = xlon1 * 180/pi
+        xlat2 = xlat2 * 180/pi
+        xlon2 = xlon2 * 180/pi
+        # Check if adjustment is large, which might indicate that we've
+        # adjusted too much?
+        if (ax_adjust > 90 and ax_adjust < 180) or (ax_adjust > 180 and ax_adjust < 270):
+          xlat1 = -xlat1
+          xlon1 = (xlon1-180)%360
+          xlat2 = -xlat2
+          xlon2 = (xlon2-180)%360
+          ax_adjust = (ax_adjust-180)%360
         return xlat1, xlon1, xlat2, xlon2, ax_adjust
       # Case 2: Rotated grid from external source (general case)
       else:
