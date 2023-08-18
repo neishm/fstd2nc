@@ -902,8 +902,10 @@ class XYCoords (BufferBase):
                         sin(gpole_lon)*cos(gpole_lat)*np.sin(xlons*pi/180),  \
                         sin(gpole_lat)
                ) * 180/pi
-      eps = abs(np.sin(xlats*pi*40))
-      match = np.where(np.isclose(eps,0))[0]
+      eps = (xlats*40)%1
+      eps[eps>0.5] -= 1
+      eps /= 40
+      match = np.where(np.isclose(eps,0,atol=1e-5))[0]
       return xlats[match], xlons[match]
 
     # Helper method - get grid centre from given attributes.
