@@ -904,8 +904,25 @@ class XYCoords (BufferBase):
                ) * 180/pi
       eps = (xlats*40)%1
       eps[eps>0.5] -= 1
-      eps /= 40
-      match = np.where(np.isclose(eps,0,atol=1e-5))[0]
+      eps = abs(eps/40)
+      match = np.where(np.isclose(eps,0))[0]
+      # If only two matches (on opposite sides?), then try using another point
+      # 90 degrees away.
+      if len(match) == 2:
+        def find_orthogonal(ind):
+          xlat = xlats[ind]
+          xlon = xlons[ind]
+          x = cos(xlon*pi/180)*cos(xlat*pi/180)
+          y = sin(xlon*pi/180)*cos(xlat*pi/180)
+          z = sin(xlat*pi/180)
+          X = np.cos(xlons*pi/180)*np.cos(xlats*pi/180)
+          Y = np.sin(xlons*pi/180)*np.cos(xlats*pi/180)
+          Z = np.sin(xlats*pi/180)
+          eps = abs(x*X+y*Y+z*Z)
+          ind2 = np.argmin(eps)
+          if ind2 < ind: ind2 += 7200
+          return ind2
+        match = np.array([match[0], find_orthogonal(match[0]), match[1], find_orthogonal(match[1])])
       return xlats[match], xlons[match]
 
     # Helper method - get grid centre from given attributes.
