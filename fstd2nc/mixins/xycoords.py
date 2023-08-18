@@ -894,104 +894,89 @@ class XYCoords (BufferBase):
         north_pole_grid_longitude=npole
       )
 
+    # Helper method - find grid longitudes along rotated equator that can be
+    # losslessly encoded in FST.
+    def get_nice_xlats_xlons (gpole_lat, gpole_lon):
+      xlons = np.linspace(0,359.975,14400)
+      xlats =  np.arctan2(-cos(gpole_lon)*cos(gpole_lat)*np.cos(xlons*pi/180) - \
+                        sin(gpole_lon)*cos(gpole_lat)*np.sin(xlons*pi/180),  \
+                        sin(gpole_lat)
+               ) * 180/pi
+      eps = abs(np.sin(xlats*pi*40))
+      match = np.where(np.isclose(eps,0))[0]
+      return xlats[match], xlons[match]
+
+    # Helper method - get grid centre from given attributes.
+    def get_rotated_centre (gpole_lat, gpole_lon, npole):
+      cosp = cos(npole*pi/180)
+      sinp = sin(npole*pi/180)
+      X = cosp * sin(gpole_lat) * cos(gpole_lon) + sinp * sin(gpole_lon)
+      Y = cosp * sin(gpole_lat) * sin(gpole_lon) - sinp * cos(gpole_lon)
+      Z = -cosp * cos(gpole_lat)
+      xlat1 = asin(Z) * 180 / pi
+      xlon1 = atan2(Y,X) * 180 / pi
+      if xlon1 < 0: xlon1 += 360
+      return xlat1, xlon1
+
+    # Helper method - grid other grid reference point (east of centre).
+    def get_xlat_xlon (gpole_lat, gpole_lon, npole):
+      xlat1, xlon1 = get_rotated_centre (gpole_lat, gpole_lon, npole)
+      xlats, xlons = get_nice_xlats_xlons (gpole_lat, gpole_lon)
+      # Find index of the centre.
+      where_centre = np.where(np.isclose(xlons, xlon1))[0]
+      if len(where_centre) == 0:
+        raise Exception("TODO: case where no nice value available")
+      # Find another point just to the right.
+      ind = (where_centre[0]+1) % len(xlons)
+      xlat2 = xlats[ind]
+      xlon2 = xlons[ind]
+      return xlat1, xlon1, xlat2, xlon2
+
     # Helper method - get best xlat1/xlon1/xlat2/xlon2 rotation parameters
     # for the given CF rotation attributes.
-    def get_rotation_params (atts):
+    def get_rotation_params (atts, ax):
       gpole_lat = atts['grid_north_pole_latitude'] * pi / 180
       gpole_lon = atts['grid_north_pole_longitude'] * pi / 180
       npole = atts.get('north_pole_grid_longitude',0.)
-      # Case 1: Can reverse out integer xlat1,xlon1,xlat2,xlon2 coordinates.
-      # Assume geographic north pole is in northern hemisphere of numeric
-      # grid.
-      intlat = np.linspace(-90,90,181).reshape((181,1)) * pi / 180
-      intlon = np.linspace(0,359,360).reshape((1,360)) * pi / 180
-      seps = cos(gpole_lat)*cos(gpole_lon)*np.cos(intlat)*np.cos(intlon) \
-           + cos(gpole_lat)*sin(gpole_lon)*np.cos(intlat)*np.sin(intlon) \
-           + sin(gpole_lat)*np.sin(intlat)
-      # Get rotated grid center (in lat/lon coordinates)
-      xlat1 = None
-      xlon1 = None
-      while xlat1 is None:
-        ind = np.argmin(abs(seps))
-        ind = np.unravel_index(ind,seps.shape)
-        if intlat[ind[0],0] >= 0:
-          xlat1 = intlat[ind[0],0]
-          xlon1 = intlon[0,ind[1]]
-        seps[ind] = 1.0
-      # Get second point on rotated equator (in lat/lon coordinates).
-      # Assume the point is 90 degrees from grid center.
-      xlat2 = asin(cos(gpole_lat)*cos(xlat1)*sin(xlon1-gpole_lon))
-      xlon2 = atan2(sin(gpole_lat)*cos(xlon1)*cos(xlat1) - cos(gpole_lon)*cos(gpole_lat)*sin(xlat1),
-                    sin(gpole_lon)*cos(gpole_lat)*sin(xlat1) - sin(gpole_lat)*sin(xlon1)*cos(xlat1))
-      # Truncate to available encoding precision.
-      ilat1, ilon1, ilat2, ilon2 = rmn.cxgaig('E', xlat1*180/pi, xlon1*180/pi, xlat2*180/pi, xlon2*180/pi)
-      xlat1, xlon1, xlat2, xlon2 = rmn.cigaxg('E', ilat1, ilon1, ilat2, ilon2)
-      xlat1, xlon1, xlat2, xlon2 = xlat1*pi/180, xlon1*pi/180, xlat2*pi/180, xlon2*pi/180
-      # Double-check if these points lie on rotated equator.
-      c0 = [cos(xlat1)*cos(xlon1),cos(xlat1)*sin(xlon1),sin(xlat1)]
-      c1 = [cos(xlat2)*cos(xlon2),cos(xlat2)*sin(xlon2),sin(xlat2)]
-      cpole = [c0[1]*c1[2]-c1[1]*c0[2],c0[2]*c1[0]-c1[2]*c0[0],c0[0]*c1[1]-c1[0]*c0[1]]
-      n = sqrt(np.dot(cpole,cpole))
-      cpole = np.array(cpole)/n
-      check = [cos(gpole_lat)*cos(gpole_lon), cos(gpole_lat)*sin(gpole_lon), sin(gpole_lat)]
-      # If we have a good match, then encode this.
-      if np.allclose(cpole,check,atol=1e-5):
+      # Case 1: have non-zero npole, so no adjustment was done to grid
+      # longitudes.
+      if npole != 0.0:
+        xlat1, xlon1, xlat2, xlon2 = get_xlat_xlon (gpole_lat, gpole_lon, npole)
+        return xlat1, xlon1, xlat2, xlon2, 0.0
+      # Case 2: npole is zero, so need to determine the adjustment.
+      elif True:
+        # Get all good possible values of xlat1, xlon1.
+        # (encodable without precision loss).
+        xlats, xlons = get_nice_xlats_xlons (gpole_lat, gpole_lon)
+        # Find possible values for npole.
+        # Expect that ax values should be centered over the grid.
+        # (mid-point should be 180 degrees).
+        npole_guess = 180-(ax[0]+ax[-1])/2
+        # Find which xlon value would give us the closest match to this npole.
         # Check for grid rotation, adjust if necessary.
         # Determine location of geographic pole in model coordinates.
-        X = sin(gpole_lat)*cos(gpole_lon)*cos(xlat1)*cos(xlon1) \
-          + sin(gpole_lat)*sin(gpole_lon)*cos(xlat1)*sin(xlon1) \
-          - cos(gpole_lat)*sin(xlat1)
-        Y = sin(gpole_lon)*cos(xlat1)*cos(xlon1) \
-          - cos(gpole_lon)*cos(xlat1)*sin(xlon1)
-        # Check if adjustment needed for ax.
-        # (if it had been rotated from the expected values).
-        ax_adjust = atan2(Y,X)*180/pi - npole
-        if ax_adjust <= -360: ax_adjust += 360
-        if ax_adjust >= 360: ax_adjust -= 360
+        X = -sin(gpole_lat)*cos(gpole_lon)*np.cos(xlats*pi/180)*np.cos(xlons*pi/180) \
+          - sin(gpole_lat)*sin(gpole_lon)*np.cos(xlats*pi/180)*np.sin(xlons*pi/180) \
+          + cos(gpole_lat)*np.sin(xlats*pi/180)
+        Y = -sin(gpole_lon)*np.cos(xlats*pi/180)*np.cos(xlons*pi/180) \
+          + cos(gpole_lon)*np.cos(xlats*pi/180)*np.sin(xlons*pi/180)
+        check = np.arctan2(Y,X)*180/pi
+        closeness = (npole_guess - check)%360
+        closeness[closeness>=180] -= 360
+        closeness = abs(closeness)
+        ind = np.argmin(closeness)
+        npole = check[ind]
+        xlat1, xlon1, xlat2, xlon2 = get_xlat_xlon (gpole_lat, gpole_lon, npole)
+        ax_adjust = npole
         if ax_adjust < 0: ax_adjust += 360
-        if np.allclose(ax_adjust,0.,atol=1e-5): ax_adjust = 0.
-        if np.allclose(ax_adjust,360.,atol=1e-5): ax_adjust = 0.
-        # Convert grid parameters to degreees.
-        xlat1 = xlat1 * 180/pi
-        xlon1 = xlon1 * 180/pi
-        xlat2 = xlat2 * 180/pi
-        xlon2 = xlon2 * 180/pi
-        # Check if adjustment is large, which might indicate that we've
-        # adjusted too much?
-        if (ax_adjust > 90 and ax_adjust < 180) or (ax_adjust > 180 and ax_adjust < 270):
-          xlat1 = -xlat1
-          xlon1 = (xlon1-180)%360
-          xlat2 = -xlat2
-          xlon2 = (xlon2-180)%360
-          ax_adjust = (ax_adjust-180)%360
         return xlat1, xlon1, xlat2, xlon2, ax_adjust
-      # Case 2: Rotated grid from external source (general case)
-      else:
-        # Make sure rotated longitudes are from 0..360
-        if xaxis.array[0] < 0:
-          ax_adjust = -xaxis.array[0]
-          npole -= xaxis.array[0]
-        else:
-          ax_adjust = 0.
-        # Get coordinates of grid centre.
-        cosp = cos(npole*pi/180)
-        sinp = sin(npole*pi/180)
-        X = cosp * sin(gpole_lat) * cos(gpole_lon) + sinp * sin(gpole_lon)
-        Y = cosp * sin(gpole_lat) * sin(gpole_lon) - sinp * cos(gpole_lon)
-        Z = -cosp * cos(gpole_lat)
-        xlat1 = asin(Z) * 180 / pi
-        xlon1 = atan2(Y,X) * 180 / pi
-        # Get coordinates of another point on grid equator, east of centre.
-        X = sinp * sin(gpole_lat) * cos(gpole_lon) - cosp * sin(gpole_lon)
-        Y = sinp * sin(gpole_lat) * sin(gpole_lon) + cosp * cos(gpole_lon)
-        Z = -sinp * cos(gpole_lat)
-        xlat2 = asin(Z) * 180 / pi
-        xlon2 = atan2(Y,X) * 180 / pi
-        return xlat1, xlon1, xlat2, xlon2, ax_adjust
+
     # Helper method - apply adjustment to ax while recovering as much
     # accuracy as possible.
     def adjust_ax (ax, ax_adjust):
       ax = np.array(ax,dtype='float64')
+      if np.max(ax+ax_adjust) >= 360.0:
+        ax_adjust -= 360.0
       ax += ax_adjust
       # Check if we can apply a correction.
       # For LAM coming from yin-yang grid, check for integer start/end.
@@ -1180,7 +1165,7 @@ class XYCoords (BufferBase):
         npole = projection.atts.get('north_pole_grid_longitude',0.)
         zegrid_key = (gpole_lat,gpole_lon,npole,id(xaxis),id(yaxis))
         if zegrid_key not in zegrid_table:
-          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(projection.atts)
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(projection.atts, xaxis.array)
           ax = adjust_ax (xaxis.array, ax_adjust)
           gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           zegrid_table[zegrid_key] = gid
@@ -1206,12 +1191,12 @@ class XYCoords (BufferBase):
           yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat[:nj//2,:],lon[:nj//2,:])
           yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat[nj//2:,:],lon[nj//2:,:])
           # Encode yin grid
-          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params)
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params, xaxis.array)
           ax = adjust_ax (xaxis.array, ax_adjust)
           yin_gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array[:nj//2], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           yinsize=15+ni+nj//2
           # Encode yang grid
-          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yang_params)
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yang_params, xaxis.array)
           ax = adjust_ax (xaxis.array, ax_adjust)
           yang_gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array[nj//2:], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
           # Consruct supergrid (to generate unique tags)
