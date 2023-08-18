@@ -986,7 +986,7 @@ class XYCoords (BufferBase):
         x1 = round(ax[-1])
         x = np.linspace(x0,x1,len(ax))
         if np.allclose(ax,x):
-          ax = x
+          return x.astype('float32')
       # For staggered grid, should be offset by dx/2?
       dx = ax[1]-ax[0]
       if np.allclose(ax[0]-dx/2,round(ax[0]-dx/2)) and np.allclose(ax[-1]-dx/2,round(ax[-1]-dx/2)):
@@ -995,7 +995,19 @@ class XYCoords (BufferBase):
         dx = (x1-x0)/(len(ax)-1)
         x = np.linspace(x0+dx/2,x1+dx/2,len(ax))
         if np.allclose(ax,x):
-          ax = x
+          return x.astype('float32')
+      # Check if some inner points are integers?
+      for i in range(1,len(ax)//3):
+        if np.allclose(ax[i],round(ax[i])) and np.allclose(ax[-i-1],round(ax[-i-1])):
+          xa = round(ax[i])
+          xb = round(ax[-i-1])
+          x = np.zeros(len(ax),float)
+          x[i:-i] = np.linspace(xa,xb,len(ax)-2*i)
+          dx = (xb-xa) / (len(ax)-2*i-1)
+          x[:i] = np.linspace(xa-i*dx,xa-dx,i)
+          x[-i:] = np.linspace(xb+dx,xb+dx*i,i)
+          if np.allclose(ax,x):
+            return x.astype('float32')
       return ax.astype('float32')
 
     gauss_table = {}
