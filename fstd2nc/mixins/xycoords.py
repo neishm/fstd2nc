@@ -888,6 +888,30 @@ class XYCoords (BufferBase):
       # Find coordinates of north pole in grid space.
       x, y, z = np.dot(transform.T,[0,0,1])
       npole = (atan2(y,x) * 180/pi) % 360
+      # Estimate xlat1, xlon1.
+      x, y, z = np.dot(transform,[-1,0,0])
+      xlat1 = asin(z) * 180/pi
+      xlon1 = (atan2(y,x) * 180/pi) % 360
+      # Round to encoding precision.
+      xlat1_round = np.round(xlat1*40)/40
+      xlon1_round = np.round(xlon1*40)/40
+      x_round, y_round, z_round = cartesian(xlat1_round*pi/180,xlon1_round*pi/180)
+      # Re-orthogonalize gpole_lat, gpole_lon if we corrected for an error
+      # from rounding.
+      # 2D lat/lon fields are in single precision, so it will introduce some
+      # errors in the encoding.
+      x, y, z = np.dot(transform,[0,0,1])
+      corr = x*x_round + y*y_round + z*z_round
+      if abs(corr) > 0:
+        x -= corr*x_round
+        y -= corr*y_round
+        z -= corr*z_round
+        mag = np.sqrt(x**2 + y**2 + z**2)
+        x /= mag
+        y /= mag
+        z /= mag
+        gpole_lat = asin(z) * 180/pi
+        gpole_lon = (atan2(y,x) * 180/pi) % 360
       return dict(
         grid_north_pole_latitude=gpole_lat,
         grid_north_pole_longitude=gpole_lon,
@@ -906,8 +930,20 @@ class XYCoords (BufferBase):
       eps[eps>0.5] -= 1
       eps = abs(eps/40)
       match = np.where(np.isclose(eps,0))[0]
-      # If only two matches (on opposite sides?), then try using another point
-      # 90 degrees away.
+      # If only two matches (on opposite sides?), then adjust criteria to find 
+      # another point.
+      # First, look for a 'close' integer coordinate.
+      # Useful, for instance, if detecting a 'yin' grid where the grid
+      # rotation was inferred from 2D stacked lat/lon fields (less precision in
+      # inferred params).
+      if len(match) == 2:
+        eps = xlats%1
+        eps[eps>0.5] -= 1
+        eps = abs(eps)
+        match = np.where(np.isclose(eps,0,atol=1e-6))[0]
+      # Otherwise, use another point 90 degrees away.
+      # Less encoding precision, but this is what seems to be used for 'yang'
+      # grids.  So this code block is effectively a yang grid detector.
       if len(match) == 2:
         def find_orthogonal(ind):
           xlat = xlats[ind]
@@ -963,7 +999,7 @@ class XYCoords (BufferBase):
         xlat1, xlon1, xlat2, xlon2 = get_xlat_xlon (gpole_lat, gpole_lon, npole)
         return xlat1, xlon1, xlat2, xlon2, 0.0
       # Case 2: npole is zero, so need to determine the adjustment.
-      elif True:
+      else:
         # Get all good possible values of xlat1, xlon1.
         # (encodable without precision loss).
         xlats, xlons = get_nice_xlats_xlons (gpole_lat, gpole_lon)
