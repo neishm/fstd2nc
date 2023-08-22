@@ -1171,7 +1171,11 @@ class XYCoords (BufferBase):
           # Check if 'L' grid has sufficient resolution to capture this
           # set of lat/lon.
           if np.allclose(rmn.cigaxg('L',*lgrid_code),lgrid_key,atol=1e-5):
-            lgrid_table[lgrid_key] = lgrid_code
+            # Also check if this contains a repeated longitude.
+            # In which case, this is probably GEM output and should be on
+            # 'Z' grid?
+            if not np.allclose(xaxis.array[0]+360,xaxis.array[-1]):
+              lgrid_table[lgrid_key] = lgrid_code
         lgrid_lat = np.linspace(yaxis.array[0],yaxis.array[-1],nj)
         lgrid_lon = np.linspace(xaxis.array[0],xaxis.array[-1],ni)
         if lgrid_key in lgrid_table and np.allclose(lgrid_lat,yaxis.array,atol=1e-5) and np.allclose(lgrid_lon,xaxis.array,atol=1e-5) and grtyp != 'Z':
