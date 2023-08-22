@@ -115,7 +115,7 @@ class Dates (BufferBase):
     if self._squash_forecasts:
       fields['time'] = datev
     else:
-      fields['time'] = np.array(dateo) # Copy so it's not the same as reftime.
+      fields['time'] = dateo.copy() # Copy so it's not the same as reftime.
 
   # Add time and forecast axes to the data stream.
   def _makevars (self):
