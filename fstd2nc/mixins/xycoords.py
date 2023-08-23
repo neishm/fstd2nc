@@ -1185,12 +1185,13 @@ class XYCoords (BufferBase):
         # 'Z' grid (with degenerate rotation)
         if lgrid_key not in zlgrid_table:
           grid = rmn.defGrid_ZL(ni,nj,lat0=lat0,lon0=lon0,dlat=dlat,dlon=dlon)
-          var.atts.update(grtyp='Z',ig1=grid['tag1'],ig2=grid['tag2'],ig3=grid['tag3'])
           # Add extra positional records.
           add_coord('>>',1,ni,xaxis.array,typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'])
           add_coord('^^',nj,1,yaxis.array,typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'])
           zlgrid_table[lgrid_key] = grid
-          continue
+        grid = zlgrid_table[lgrid_key] = grid
+        var.atts.update(grtyp='Z',ig1=grid['tag1'],ig2=grid['tag2'],ig3=grid['tag3'])
+        continue
 
       # Case 2: other standard projections.
       projection = var.atts.get('grid_mapping',None)
