@@ -153,6 +153,7 @@ class LatLon(GridMap):
     from collections import OrderedDict
     from rpnpy.librmn.all import gdll 
     from fstd2nc.mixins import _axis_type, _var_type
+    import numpy as np
     ll = gdll(self._grd['id'])
     self._lonarray = ll['lon'][:,0]
     self._lonatts = OrderedDict()
@@ -174,6 +175,15 @@ class LatLon(GridMap):
     # Taken from old fstd_core.c code.
     if len(self._lonarray) >= 3 and self._lonarray[-2] > self._lonarray[-3] and self._lonarray[-1] < self._lonarray[-2]:
       self._lonarray[-1] += 360.
+    # Use the ax/ay values instead of derived lat/lon to maintain perfect
+    # precision of the coordinates.
+    # NOTE: Could probably remove the gdll function call (and monotonicity fix)
+    # and use these values directly.
+    if 'ax' in self._grd and 'ay' in self._grd:
+      if np.allclose(self._grd['ax'][:,0],self._lonarray,atol=1e-5):
+        self._lonarray[:] = self._grd['ax'][:,0]
+      if np.allclose(self._grd['ay'][0,:],self._latarray,atol=1e-5):
+        self._latarray[:] = self._grd['ay'][0,:]
     # Add lat/lon boundaries.
     if bounds:
       lon_bnds = get_bounds(self._lonarray)
