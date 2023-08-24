@@ -364,7 +364,15 @@ class ExternOutput (BufferBase):
     for varname, var in ds.variables.items():
       if varname in dims: continue
       if varname in coords: continue
-      encoded = _var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data)
+      # For 1D or 0D variables, strip out underscores and numbers.
+      # Assume such variables were probably meant to be coordinates, but were
+      # not in the 'coords' attribute for some particular reason
+      # (such as for leadtime, reftime).
+      if var.ndim <= 1:
+        newname = strip_numbers(varname)
+      else:
+        newname = varname
+      encoded = _var_type(newname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data)
       # Add coordinates.
       encoded.atts.setdefault('coordinates',[coords[coordname] for coordname in ds[varname].coords if coordname in coords])
       varlist.append(encoded)
