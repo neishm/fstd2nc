@@ -471,6 +471,33 @@ class netCDF_IO (BufferBase):
   # Alias "to_netcdf" as "write_nc_file" for backwards compatibility.
   write_nc_file = to_netcdf
 
+  #TODO
+  # Attempt to undo the uniquification of axis/variable names, such as what
+  # was caused by _fix_names.
+  # Mainly useful for going in reverse (netcdf back to fstd).
+  def _unfix_names (self):
+    # Helper method - strip integer indices from dimension names.
+    def strip_numbers (name):
+      while name[-1] in '_0123456789':
+        name = name[:-1]
+      return name
+    for axis in self._iter_axes():
+      axis.name = strip_numbers(axis.name)
+    for coord in self._iter_coords():
+      coord.name = strip_numbers(coord.name)
+    for var in self._varlist:
+      # For 1D or 0D variables, strip out underscores and numbers.
+      # Assume such variables were probably meant to be coordinates, but were
+      # not in the 'coords' attribute for some particular reason
+      # (such as for leadtime, reftime).
+      if len(var.axes) <= 1:
+        var.name = strip_numbers(var.name)
+
+  # Re-encode variables with netCDF modifications undone.
+  def _unmakevars (self):
+    self._unfix_names()
+    super(netCDF_IO,self)._unmakevars()
+
 # Internal helper method for delegating the load to a multiprocessing Pool.
 def _quick_load (args):
   import numpy as np
