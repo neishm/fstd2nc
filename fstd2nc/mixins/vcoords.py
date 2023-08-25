@@ -762,7 +762,8 @@ class VCoords (BufferBase):
       if not hasattr(axis,'atts'): continue
       standard_name = axis.atts.get('standard_name',None)
       kind = None
-      if standard_name == 'height' or (standard_name == 'depth' and depth_as_height):
+      # If height coordinate, defer to kind=4 for special case of diagnostic level.
+      if (standard_name == 'height' and (len(axis) > 1 or getattr(axis,'array',None) not in [1.5,10.0])) or (standard_name == 'depth' and depth_as_height):
         kind = 0
       elif standard_name == 'atmosphere_sigma_coordinate':
         kind = 1
