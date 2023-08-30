@@ -79,6 +79,7 @@ class netCDF_Atts (BufferBase):
       import configparser as ConfigParser
     from collections import OrderedDict
     import numpy as np
+    from os.path import exists
     metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:
       metafiles = []
@@ -98,6 +99,8 @@ class netCDF_Atts (BufferBase):
     configparser = ConfigParser.SafeConfigParser()
     configparser.optionxform = str # Make the attribute names case sensitive.
     for metafile in metafiles:
+      if not exists(metafile):
+        error(_("'%s' does not exist.")%metafile)
       configparser.read(metafile,encoding='utf-8')
     for varname in configparser.sections():
       metadata.setdefault(varname,OrderedDict()).update(configparser.items(varname))
