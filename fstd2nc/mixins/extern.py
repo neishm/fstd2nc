@@ -124,7 +124,7 @@ class ExternOutput (BufferBase):
     import numpy as np
     return np.concatenate(out)
 
-  def _iter_dask (self, include_coords=True, fused=True):
+  def _iter_dask (self, include_coords=True, fused=False):
     """
     Iterate over all the variables, and convert to dask arrays.
     """
@@ -260,7 +260,7 @@ class ExternOutput (BufferBase):
       var = _var_type(var.name,var.atts,var.axes,array)
       yield var
 
-  def to_xarray (self, fused=True):
+  def to_xarray (self, fused=False):
     """
     Create an xarray interface for the RPN data.
     Requires the xarray and dask packages.
@@ -292,7 +292,7 @@ class ExternOutput (BufferBase):
 
     return out
 
-  def to_xarray_list (self, fused=True):
+  def to_xarray_list (self, fused=False):
     """
     Similar to the to_xarray method, but returns a list of xarray Datasets,
     one for each variable, instead of a single Dataset object.
