@@ -42,11 +42,17 @@ class VarDict (BufferBase):
     super(VarDict,cls)._check_args(parser,args)
 
     if args.opdict:
-      if 'AFSISIO' not in environ:
-        parser.error(_("$AFSISIO undefined.  Can't find operational dictionary."))
-      f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
-      if not exists(f):
-        parser.error(_("Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary.xml"))
+      if 'CMCCONST' in environ:
+        f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          parser.error(_("Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"))
+      elif 'AFSISIO' in environ:
+        f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          parser.error(_("Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary.xml"))
+      else:
+        parser.error(_("Neither $CMCCONST nor $AFSISIO defined.  Can't find operational dictionary."))
+
     if args.vardict is not None:
       for f in args.vardict:
         if not exists(f):
@@ -66,7 +72,10 @@ class VarDict (BufferBase):
 
     vardicts = kwargs.pop('vardict',None) or []
     if kwargs.pop('opdict',False):
-      f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
+      if 'CMCCONST' in environ:
+        f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
+      elif 'AFSISIO' in environ:
+        f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
       vardicts.append(f)
 
     super(VarDict,self).__init__(*args, **kwargs)
