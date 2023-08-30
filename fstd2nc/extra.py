@@ -340,7 +340,7 @@ def get_crs (dataset):
   if gname == 'latitude_longitude':
     proj = ccrs.PlateCarree()
   elif gname == 'rotated_latitude_longitude':
-    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'])
+    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'], central_rotated_longitude=gmap.attrs.get('north_pole_grid_longitude',0.))
   elif gname == 'polar_stereographic':
     # May fail for South Pole projections (would maybe need to change sign of
     # true_scale_latitude?)
