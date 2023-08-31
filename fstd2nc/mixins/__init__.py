@@ -316,10 +316,10 @@ class BufferBase (object):
     """
     from collections import Counter
     import numpy as np
-    from glob import glob, has_magic
+    from glob import has_magic
     import os
     from multiprocessing import Pool
-    from pathlib import Path
+    from fstd2nc.extra import expand_files
     try:
       from itertools import imap  # Python 2
     except ImportError:
@@ -337,23 +337,7 @@ class BufferBase (object):
     else:
       existing_buffer = None
 
-    if isinstance(filename,(str,Path)):
-      infiles = [filename]
-    else:
-      infiles = list(filename)
-
-    # Apply wildcard and directory expansion to filenames.
-    expanded_infiles = []
-    for infile in infiles:
-      if isinstance(infile,Path):
-        infile = str(infile)
-      for f in sorted(glob(infile)) or [infile]:
-        if os.path.isdir(f):
-          for dirpath, dirnames, filenames in os.walk(f,followlinks=True):
-            for filename in filenames:
-              expanded_infiles.append((infile,os.path.join(dirpath,filename)))
-        else:
-          expanded_infiles.append((infile,f))
+    expanded_infiles = expand_files (filename)
 
     # How to handle internal metadata.
     internal_metadata = kwargs.pop('internal_metadata',None)
