@@ -220,11 +220,21 @@ class RotLatLon(GridMap):
     # Done to avoid crossing the dateline and representation problems 
     # in some software (e.g. IDV, Panoply, Iris)
     if adjust_rlon:
-      self._ax = self._ax - self._north_pole_grid_longitude 
+      orig_ax = self._ax
+      ax_adjust = self._north_pole_grid_longitude
+      self._ax = self._ax - self._north_pole_grid_longitude
       self._north_pole_grid_longitude = 0
       # Make sure rlon axis is still in range.
-      if self._ax.max() >= 360.: self._ax -= 360.
-      if self._ax.min() <= -180.: self._ax += 360.
+      if self._ax.max() >= 360.:
+        self._ax -= 360.
+        ax_adjust += 360.
+      if self._ax.min() <= -180.:
+        self._ax += 360.
+        ax_adjust -= 360.
+      # Compensate for rounding error when undoing the adjustment.
+      # This should make the values bit-for-bit identical if writing *back*
+      # to FST format.
+      self._ax = orig_ax - ax_adjust
     self._ay = self._grd['ay'][0,:]
   def gen_gmapvar(self):
     from fstd2nc.mixins import _var_type
@@ -410,9 +420,10 @@ class PolarStereo(GridMap):
 # Mixin for handling lat/lon coordinates.
 
 class XYCoords (BufferBase):
-  # Special records that contain coordinate info.
-  # We don't want to output these directly as variables, need to decode first.
-  _xycoord_nomvars = (b'^^',b'>>',b'^>')
+  # Tell the decoder not to process horizontal records as variables.
+  @classmethod
+  def _meta_records (cls):
+    return super(XYCoords,cls)._meta_records() + (b'^^',b'>>',b'^>')
   # Grids that can be read directly from '^^','>>' records, instead of going
   # through ezqkdef (in fact, may crash ezqkdef if you try decoding them).
   _direct_grids = ('X','Y','T','+','O','M')
@@ -447,8 +458,6 @@ class XYCoords (BufferBase):
     self._keep_LA_LO = kwargs.pop('keep_LA_LO',False)
     self._no_adjust_rlon = kwargs.pop('no_adjust_rlon',False)
     self._bounds = kwargs.pop('bounds',False)
-    # Tell the decoder not to process horizontal records as variables.
-    self._meta_records = self._meta_records + self._xycoord_nomvars
     super(XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)
@@ -841,3 +850,465 @@ class XYCoords (BufferBase):
       self._varlist = [list(lats.values())[0], list(lons.values())[0]]
       # Add grid mapping info.
       self._varlist.extend(gridmaps.values())
+
+  # Decode horizontal grid metadata from variables back into table.
+  def _unmakevars (self):
+    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
+    import numpy as np
+    import rpnpy.librmn.all as rmn
+    from math import sin, cos, asin, atan2, pi, sqrt
+
+    # Helper - add a coordinate record
+    def add_coord (name,nj,ni,values,**atts):
+      import dask.array as da
+      dims = []
+      if nj > 1: dims.append(_dim_type('j',nj))
+      if ni > 1: dims.append(_dim_type('i',ni))
+      # Need to carefully encode the arrays so they are scalar object containing the data.
+      array = np.empty(1,dtype=object)
+      array[0] = da.from_array(values, chunks=-1)
+      array = array.squeeze()
+      self._varlist.append(_iter_type(name,atts,dims,'float32',array))
+
+    # Helper method - determine rotated lat/lon grid parameters from
+    # 2D lat/lon fields.
+    def get_rotated_grid_params (ax, ay, lat, lon):
+      ni = len(ax)
+      nj = len(ay)
+      # Convert to radians.
+      ax = ax.astype('float64') * pi/180
+      ay = ay.astype('float64') * pi/180
+      ax = np.repeat(ax.reshape(1,-1),nj,axis=0)
+      ay = np.repeat(ay.reshape(-1,1),ni,axis=1)
+      lat = lat.astype('float64') * pi/180
+      lon = lon.astype('float64') * pi/180
+      def cartesian (lat, lon):
+        return [np.cos(lat)*np.cos(lon), np.cos(lat)*np.sin(lon), np.sin(lat)]
+      # Find transformation from grid coordinates to real coordinates.
+      # Use least-squares fit of lat/lon fields.
+      rotated_coords = np.array(cartesian(ay.flatten(),ax.flatten())).T
+      latlon_coords = np.array(cartesian(lat.flatten(),lon.flatten())).T
+      # Get transformation matrix.
+      transform, res, rank, s = np.linalg.lstsq(rotated_coords, latlon_coords, rcond=None)
+      transform = transform.T
+      # Find coordinates of grid north pole.
+      x, y, z = np.dot(transform,[0,0,1])
+      gpole_lat = asin(z) * 180/pi
+      gpole_lon = (atan2(y,x) * 180/pi) % 360
+      # Find coordinates of north pole in grid space.
+      x, y, z = np.dot(transform.T,[0,0,1])
+      npole = (atan2(y,x) * 180/pi) % 360
+      # Estimate xlat1, xlon1.
+      x, y, z = np.dot(transform,[-1,0,0])
+      xlat1 = asin(z) * 180/pi
+      xlon1 = (atan2(y,x) * 180/pi) % 360
+      # Round to encoding precision.
+      xlat1_round = np.round(xlat1*40)/40
+      xlon1_round = np.round(xlon1*40)/40
+      x_round, y_round, z_round = cartesian(xlat1_round*pi/180,xlon1_round*pi/180)
+      # Re-orthogonalize gpole_lat, gpole_lon if we corrected for an error
+      # from rounding.
+      # 2D lat/lon fields are in single precision, so it will introduce some
+      # errors in the encoding.
+      x, y, z = np.dot(transform,[0,0,1])
+      corr = x*x_round + y*y_round + z*z_round
+      if abs(corr) > 0:
+        x -= corr*x_round
+        y -= corr*y_round
+        z -= corr*z_round
+        mag = np.sqrt(x**2 + y**2 + z**2)
+        x /= mag
+        y /= mag
+        z /= mag
+        gpole_lat = asin(z) * 180/pi
+        gpole_lon = (atan2(y,x) * 180/pi) % 360
+      return dict(
+        grid_north_pole_latitude=gpole_lat,
+        grid_north_pole_longitude=gpole_lon,
+        north_pole_grid_longitude=npole
+      )
+
+    # Helper method - find grid longitudes along rotated equator that can be
+    # losslessly encoded in FST.
+    def get_nice_xlats_xlons (gpole_lat, gpole_lon):
+      xlons = np.linspace(0,359.975,14400)
+      xlats =  np.arctan2(-cos(gpole_lon)*cos(gpole_lat)*np.cos(xlons*pi/180) - \
+                        sin(gpole_lon)*cos(gpole_lat)*np.sin(xlons*pi/180),  \
+                        sin(gpole_lat)
+               ) * 180/pi
+      eps = (xlats*40)%1
+      eps[eps>0.5] -= 1
+      eps = abs(eps/40)
+      match = np.where(np.isclose(eps,0))[0]
+      # If only two matches (on opposite sides?), then adjust criteria to find 
+      # another point.
+      # First, look for a 'close' integer coordinate.
+      # Useful, for instance, if detecting a 'yin' grid where the grid
+      # rotation was inferred from 2D stacked lat/lon fields (less precision in
+      # inferred params).
+      if len(match) == 2:
+        eps = xlats%1
+        eps[eps>0.5] -= 1
+        eps = abs(eps)
+        match = np.where(np.isclose(eps,0,atol=1e-6))[0]
+      # Otherwise, use another point 90 degrees away.
+      # Less encoding precision, but this is what seems to be used for 'yang'
+      # grids.  So this code block is effectively a yang grid detector.
+      if len(match) == 2:
+        def find_orthogonal(ind):
+          xlat = xlats[ind]
+          xlon = xlons[ind]
+          x = cos(xlon*pi/180)*cos(xlat*pi/180)
+          y = sin(xlon*pi/180)*cos(xlat*pi/180)
+          z = sin(xlat*pi/180)
+          X = np.cos(xlons*pi/180)*np.cos(xlats*pi/180)
+          Y = np.sin(xlons*pi/180)*np.cos(xlats*pi/180)
+          Z = np.sin(xlats*pi/180)
+          eps = abs(x*X+y*Y+z*Z)
+          ind2 = np.argmin(eps)
+          if ind2 < ind: ind2 += 7200
+          return ind2
+        match = np.array([match[0], find_orthogonal(match[0]), match[1], find_orthogonal(match[1])])
+      return xlats[match], xlons[match]
+
+    # Helper method - get grid centre from given attributes.
+    def get_rotated_centre (gpole_lat, gpole_lon, npole):
+      cosp = cos(npole*pi/180)
+      sinp = sin(npole*pi/180)
+      X = cosp * sin(gpole_lat) * cos(gpole_lon) + sinp * sin(gpole_lon)
+      Y = cosp * sin(gpole_lat) * sin(gpole_lon) - sinp * cos(gpole_lon)
+      Z = -cosp * cos(gpole_lat)
+      xlat1 = asin(Z) * 180 / pi
+      xlon1 = atan2(Y,X) * 180 / pi
+      if xlon1 < 0: xlon1 += 360
+      return xlat1, xlon1
+
+    # Helper method - grid other grid reference point (east of centre).
+    def get_xlat_xlon (gpole_lat, gpole_lon, npole):
+      xlat1, xlon1 = get_rotated_centre (gpole_lat, gpole_lon, npole)
+      xlats, xlons = get_nice_xlats_xlons (gpole_lat, gpole_lon)
+      # Find index of the centre.
+      where_centre = np.where(np.isclose(xlons, xlon1))[0]
+      if len(where_centre) == 0:
+        raise Exception("TODO: case where no nice value available")
+      # Find another point just to the right.
+      ind = (where_centre[0]+1) % len(xlons)
+      xlat2 = xlats[ind]
+      xlon2 = xlons[ind]
+      return xlat1, xlon1, xlat2, xlon2
+
+    # Helper method - get best xlat1/xlon1/xlat2/xlon2 rotation parameters
+    # for the given CF rotation attributes.
+    def get_rotation_params (atts, ax):
+      gpole_lat = atts['grid_north_pole_latitude'] * pi / 180
+      gpole_lon = atts['grid_north_pole_longitude'] * pi / 180
+      npole = atts.get('north_pole_grid_longitude',0.)
+      # Case 1: have non-zero npole, so no adjustment was done to grid
+      # longitudes.
+      if npole != 0.0:
+        xlat1, xlon1, xlat2, xlon2 = get_xlat_xlon (gpole_lat, gpole_lon, npole)
+        return xlat1, xlon1, xlat2, xlon2, 0.0
+      # Case 2: npole is zero, so need to determine the adjustment.
+      else:
+        # Get all good possible values of xlat1, xlon1.
+        # (encodable without precision loss).
+        xlats, xlons = get_nice_xlats_xlons (gpole_lat, gpole_lon)
+        # Find possible values for npole.
+        # Expect that ax values should be centered over the grid.
+        # (mid-point should be 180 degrees).
+        npole_guess = 180-(ax[0]+ax[-1])/2
+        # Find which xlon value would give us the closest match to this npole.
+        # Check for grid rotation, adjust if necessary.
+        # Determine location of geographic pole in model coordinates.
+        X = -sin(gpole_lat)*cos(gpole_lon)*np.cos(xlats*pi/180)*np.cos(xlons*pi/180) \
+          - sin(gpole_lat)*sin(gpole_lon)*np.cos(xlats*pi/180)*np.sin(xlons*pi/180) \
+          + cos(gpole_lat)*np.sin(xlats*pi/180)
+        Y = -sin(gpole_lon)*np.cos(xlats*pi/180)*np.cos(xlons*pi/180) \
+          + cos(gpole_lon)*np.cos(xlats*pi/180)*np.sin(xlons*pi/180)
+        check = np.arctan2(Y,X)*180/pi
+        closeness = (npole_guess - check)%360
+        closeness[closeness>=180] -= 360
+        closeness = abs(closeness)
+        ind = np.argmin(closeness)
+        npole = check[ind]
+        xlat1, xlon1, xlat2, xlon2 = get_xlat_xlon (gpole_lat, gpole_lon, npole)
+        ax_adjust = npole
+        if ax_adjust < 0: ax_adjust += 360
+        return xlat1, xlon1, xlat2, xlon2, ax_adjust
+
+    # Helper method - apply adjustment to ax while recovering as much
+    # accuracy as possible.
+    def adjust_ax (ax, ax_adjust):
+      ax = np.array(ax,dtype='float64')
+      if np.max(ax+ax_adjust) >= 360.0:
+        ax_adjust -= 360.0
+      ax += ax_adjust
+      # Check if we can apply a correction.
+      # For LAM coming from yin-yang grid, check for integer start/end.
+      # For mass grid, should have integer values.
+      if np.allclose(ax[0],round(ax[0])) and np.allclose(ax[-1],round(ax[-1])):
+        x0 = round(ax[0])
+        x1 = round(ax[-1])
+        x = np.linspace(x0,x1,len(ax))
+        if np.allclose(ax,x):
+          return x.astype('float32')
+      # For staggered grid, should be offset by dx/2?
+      dx = ax[1]-ax[0]
+      if np.allclose(ax[0]-dx/2,round(ax[0]-dx/2)) and np.allclose(ax[-1]-dx/2,round(ax[-1]-dx/2)):
+        x0 = round(ax[0]-dx/2)
+        x1 = round(ax[-1]-dx/2)
+        dx = (x1-x0)/(len(ax)-1)
+        x = np.linspace(x0+dx/2,x1+dx/2,len(ax))
+        if np.allclose(ax,x):
+          return x.astype('float32')
+      # Check if some inner points are integers?
+      for i in range(1,len(ax)//3):
+        if np.allclose(ax[i],round(ax[i])) and np.allclose(ax[-i-1],round(ax[-i-1])):
+          xa = round(ax[i])
+          xb = round(ax[-i-1])
+          x = np.zeros(len(ax),float)
+          x[i:-i] = np.linspace(xa,xb,len(ax)-2*i)
+          dx = (xb-xa) / (len(ax)-2*i-1)
+          x[:i] = np.linspace(xa-i*dx,xa-dx,i)
+          x[-i:] = np.linspace(xb+dx,xb+dx*i,i)
+          if np.allclose(ax,x):
+            return x.astype('float32')
+      return ax.astype('float32')
+
+    gauss_table = {}
+    lgrid_table = {}
+    zlgrid_table = {}
+    zegrid_table = {}
+    yygrid_table = {}
+    stacked_yaxes = {}
+    projection_table = {}
+    # Pull out projection variables.
+    for var in self._varlist:
+      if 'grid_mapping' in var.atts:
+        projection_table[var.atts['grid_mapping']] = None
+    for var in self._varlist:
+      if var.name in projection_table.keys():
+        projection_table[var.name] = var
+    self._varlist = [v for v in self._varlist if v.name not in projection_table.keys()]
+    # Loop over all variables, encode grid info.
+    for var_ind, var in enumerate(self._varlist):
+      # Skip variables already processed into records.
+      if isinstance(var, _iter_type): continue
+      axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else None for a in var.axes]
+      # Skip records without any geophysical connection.
+      if 'X' not in axis_codes or 'Y' not in axis_codes: continue
+      xind = axis_codes.index('X')
+      yind = axis_codes.index('Y')
+      # Detect lat/lon axes.
+      xaxis = var.axes[xind]
+      yaxis = var.axes[yind]
+      ni = len(xaxis)
+      nj = len(yaxis)
+
+      # Transpose to expected order.
+      order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
+      order = order + [yind, xind]
+      if order != list(range(len(var.axes))):
+        var.axes = [var.axes[i] for i in order]
+        var.array = var.array.transpose(*order)
+      # Identify inner axes.
+      var.axes[-2] = _dim_type('j',nj)
+      var.axes[-1] = _dim_type('i',ni)
+      # Special case for subgrid axis
+      # Flatten it out so the yin/yang grids are stacked together.
+      if 'subgrid' in var.dims:
+        # First transpose so the subgrid axis is just before y axis.
+        i = var.dims.index('subgrid')
+        order = list(range(i)) + list(range(i+1,len(var.dims)-2)) + [i,-2,-1]
+        if order != list(range(len(var.axes))):
+          var.axes = [var.axes[i] for i in order]
+          var.array = var.array.transpose(*order)
+        # Next, make a stacked y axis.
+        if id(yaxis) not in stacked_yaxes:
+          stacked_yaxes[id(yaxis)] = _axis_type('j',yaxis.atts,np.concatenate([yaxis.array,yaxis.array]))
+        yaxis = stacked_yaxes[id(yaxis)]
+        var.array = var.array.reshape(var.shape[:-3] + (var.shape[-2]*2,var.shape[-1]))
+        var.axes = var.axes[:-3] + [yaxis] + var.axes[-1:]
+        nj *= 2
+      ###
+      # Process the variable.
+      outer_shape = [len(a) for a in var.axes[:-2]]
+      record_id = np.zeros(outer_shape, dtype=object)
+      for ind in np.ndindex(tuple(outer_shape)):
+        record_id[ind] = var.array[ind]
+      var = _iter_type (var.name, var.atts, var.axes, var.array.dtype, record_id)
+      self._varlist[var_ind] = var
+
+      # Find best grtyp to use.
+      # Use the specified one, if it works for the data.
+      grtyp = var.atts.get('grtyp',None)
+      grref = var.atts.get('grref',None)
+
+      # Case 1: data is on lat/lon grid (and no coordinate records needed)
+      have_lon = xaxis.name == 'lon' or xaxis.atts.get('standard_name',None) == 'longitude'
+      have_lat = yaxis.name == 'lat' or yaxis.atts.get('standard_name',None) == 'latitude'
+      if have_lon and have_lat:
+        # 'A' grid
+        #TODO: hemispheric
+        agrid_lat = (np.arange(nj)+0.5)/nj*180-90
+        agrid_lon = np.arange(ni)/ni*360
+        if np.allclose(yaxis.array,agrid_lat,atol=1e-5) and np.allclose(xaxis.array,agrid_lon,atol=1e-5) and grtyp not in ('L','Z'):
+          var.atts.update(grtyp='A',ig1=0,ig2=0,ig3=0,ig4=0)
+          continue
+        # 'B' grid
+        #TODO: hemispheric
+        bgrid_lat = np.linspace(-90,90,nj)
+        bgrid_lon = np.linspace(0,360,ni)
+        if np.allclose(yaxis.array,bgrid_lat,atol=1e-5) and np.allclose(xaxis.array,bgrid_lon,atol=1e-5) and grtyp not in ('L','Z'):
+          var.atts.update(grtyp='B',ig1=0,ig2=0,ig3=0,ig4=0)
+          continue
+        # 'G' grid
+        #TODO: hemispheric
+        if nj not in gauss_table:
+          gid = rmn.defGrid_G(ni,nj)
+          gauss_table[nj] = rmn.gdll(gid)['lat']
+        if np.allclose(yaxis.array,gauss_table[nj],atol=1e-5) and np.allclose(xaxis.array,agrid_lon,atol=1e-5) and grtyp != 'Z':
+          var.atts.update(grtyp='G',ig1=0,ig2=0,ig3=0,ig4=0)
+          continue
+        # 'L' grid
+        lat0 = float(yaxis.array[0])
+        lon0 = float(xaxis.array[0])
+        dlat = float(np.mean(yaxis.array[1:] - yaxis.array[:-1]))
+        dlon = float(np.mean(xaxis.array[1:] - xaxis.array[:-1]))
+        lgrid_key = (lat0,lon0,dlat,dlon)
+        if lgrid_key not in lgrid_table:
+          lgrid_code = rmn.cxgaig('L',*lgrid_key)
+          # Check if 'L' grid has sufficient resolution to capture this
+          # set of lat/lon.
+          if np.allclose(rmn.cigaxg('L',*lgrid_code),lgrid_key,atol=1e-5):
+            # Also check if this contains a repeated longitude.
+            # In which case, this is probably GEM output and should be on
+            # 'Z' grid?
+            if not np.allclose(xaxis.array[0]+360,xaxis.array[-1]):
+              lgrid_table[lgrid_key] = lgrid_code
+        lgrid_lat = np.linspace(yaxis.array[0],yaxis.array[-1],nj)
+        lgrid_lon = np.linspace(xaxis.array[0],xaxis.array[-1],ni)
+        if lgrid_key in lgrid_table and np.allclose(lgrid_lat,yaxis.array,atol=1e-5) and np.allclose(lgrid_lon,xaxis.array,atol=1e-5) and grtyp != 'Z':
+          ig1, ig2, ig3, ig4 = lgrid_table[(lat0,lon0,dlat,dlon)]
+          var.atts.update(grtyp='L',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
+          continue
+        # 'Z' grid (with degenerate rotation)
+        if lgrid_key not in zlgrid_table:
+          grid = rmn.defGrid_ZL(ni,nj,lat0=lat0,lon0=lon0,dlat=dlat,dlon=dlon)
+          # Add extra positional records.
+          add_coord('>>',1,ni,xaxis.array,typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'])
+          add_coord('^^',nj,1,yaxis.array,typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='L',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'])
+          zlgrid_table[lgrid_key] = grid
+        grid = zlgrid_table[lgrid_key] = grid
+        var.atts.update(grtyp='Z',ig1=grid['tag1'],ig2=grid['tag2'],ig3=grid['tag3'])
+        continue
+
+      # Case 2: other standard projections.
+      projection = var.atts.get('grid_mapping',None)
+      projection = projection_table.get(projection,None)
+      projection_name = getattr(projection,'atts',{}).get('grid_mapping_name',None)
+      # Polar stereographic
+      if projection_name == 'polar_stereographic':
+        origin = projection.atts.get('latitude_of_projection_origin',None)
+        if 'standard_parallel' in projection.atts:
+          stdlat = projection.atts['standard_parallel']
+        else:
+          k = projection.atts['scale_factor_at_projection_origin']
+          stdlat = abs(asin(2*k-1)) / pi * 180
+        if not np.allclose(stdlat,60.,atol=1e-5):
+          warn(_('Standard parallel must be 60 deg to encoder polar stereographic projections.  Found %s instead.')%stdlat)
+          continue
+        if 'straight_vertical_longitude_from_pole' not in projection.atts:
+          warn(_('Sterographic projection missing attribute "straight_vertical_longitude_from_pole"'))
+          continue
+        dgrw = -(projection.atts['straight_vertical_longitude_from_pole']+90)
+        dgrw %= 360.0
+        d60 = np.mean(xaxis.array[1:]-xaxis.array[:-1])
+        east = projection.atts.get('false_easting',0)
+        north = projection.atts.get('false_northing',0)
+        px = xaxis.array[0] + east
+        py = yaxis.array[0] + north
+        pi = px / d60 + 1
+        pj = py / d60 + 1
+        # 'N' grid
+        if origin == 90:
+          ig1, ig2, ig3, ig4 = rmn.cxgaig('N',pi,pj,d60,dgrw)
+        elif origin == -90:
+          ig1, ig2, ig3, ig4 = rmn.cxgaig('S',pi,pj,d60,dgrw)
+        else:
+          warn(_("latitude_of_projection_origin must be 90 or -90.  Found %s")%origin)
+          continue
+        var.atts.update(grtyp='N',ig1=ig1,ig2=ig2,ig3=ig3,ig4=ig4)
+        continue
+      # Rotated lat/lon
+      if projection_name == 'rotated_latitude_longitude':
+        gpole_lat = projection.atts['grid_north_pole_latitude'] * pi / 180
+        gpole_lon = projection.atts['grid_north_pole_longitude'] * pi / 180
+        npole = projection.atts.get('north_pole_grid_longitude',0.)
+        zegrid_key = (gpole_lat,gpole_lon,npole,id(xaxis),id(yaxis))
+        if zegrid_key not in zegrid_table:
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(projection.atts, xaxis.array)
+          ax = adjust_ax (xaxis.array, ax_adjust)
+          gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array, xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+          zegrid_table[zegrid_key] = gid
+
+        # Set grid descriptors to link to coordinate records.
+        if zegrid_key in zegrid_table:
+          gid = zegrid_table[zegrid_key]
+          var.atts.update(grtyp='Z',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
+          continue
+      # Case 3: yin-yang grid.
+      # Find the 2D lat/lon fields associated with this grid.
+      lat = None; lon = None
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name == 'lat': lat = coord
+        if coord.name == 'lon': lon = coord
+      if lat is not None and lon is not None and nj%2==0 and np.all(yaxis.array[:nj//2]==yaxis.array[nj//2:]):
+        yygrid_key = (id(xaxis),id(yaxis),id(lat),id(lon))
+        if yygrid_key not in yygrid_table:
+          # Fix shape of lat/lon (if had subgrid axes)
+          lat = lat.array.reshape(nj,ni)
+          lon = lon.array.reshape(nj,ni)
+          # Get params for yin grid.
+          yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat[:nj//2,:],lon[:nj//2,:])
+          yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat[nj//2:,:],lon[nj//2:,:])
+          # Encode yin grid
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params, xaxis.array)
+          ax = adjust_ax (xaxis.array, ax_adjust)
+          yin_gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array[:nj//2], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+          yinsize=15+ni+nj//2
+          # Encode yang grid
+          xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yang_params, xaxis.array)
+          ax = adjust_ax (xaxis.array, ax_adjust)
+          yang_gid = rmn.defGrid_ZEraxes(ax=ax, ay=yaxis.array[nj//2:], xlat1=xlat1, xlon1=xlon1, xlat2=xlat2, xlon2=xlon2)
+          # Consruct supergrid (to generate unique tags)
+          gid = rmn.ezgdef_supergrid(ni, nj//2, 'U', 'F', 1, (yin_gid['id'],yang_gid['id']))
+          gid = rmn.decodeGrid(gid)
+          yygrid_table[yygrid_key] = gid
+        if yygrid_key in yygrid_table:
+          gid = yygrid_table[yygrid_key]
+          var.atts.update(grtyp='U',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
+          continue
+
+    # Add coordinate records to the table.
+    for grid in zegrid_table.values():
+      add_coord('>>',1,grid['ni'],grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+      add_coord('^^',grid['nj'],1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+    for grid in yygrid_table.values():
+      add_coord('^>',1,25+2*grid['ni']+2*grid['nj'],grid['axy'],typvar='X',etiket='POSXY',datyp=5,nbits=32,grtyp='F',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+
+
+    # Set default grtyp if no better one found.
+    for var in self._varlist:
+      #TODO: determine appropriate grtyp
+      if 'grtyp' not in var.atts:
+        var.atts['grtyp'] = 'X'
+    super(XYCoords,self)._unmakevars()
+
+    # Fill in columns with default values.
+    self._headers['grtyp'] = self._headers['grtyp'].astype('|S1')
+    for key in 'ig1','ig2','ig3','ig4':
+      if key not in self._headers.keys():
+        self._headers[key] = np.ma.masked_all(self._nrecs,dtype='int32')
+      if hasattr(self._headers[key],'mask'):
+        self._headers[key] = self._headers[key].filled(0)

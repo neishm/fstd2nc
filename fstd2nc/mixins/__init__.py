@@ -49,6 +49,11 @@ def vectorize (f):
     return cache[x]
   @wraps(f)
   def vectorized_f (x):
+    mask = None
+    if hasattr(x,'mask'):
+      mask = np.ma.getmaskarray(x)
+      n = len(x)
+      x = x[~mask]
     if _use_pandas():
       from pandas import Series, unique
       # If we're given a scalar value, then simply return it.
@@ -60,12 +65,18 @@ def vectorize (f):
       outputs = map(f,inputs)
       table = dict(zip(inputs,outputs))
       result = Series(x).map(table)
-      return result.values
+      result = result.values
     else:
       # If we're given a scalar value, then simply return it.
       if not hasattr(x,'__len__'):
         return cached_f(x)
-      return list(map(cached_f,x))
+      result = list(map(cached_f,x))
+    if mask is not None:
+      result = np.asarray(result)
+      masked_result = np.ma.masked_all(n,dtype=result.dtype)
+      masked_result[~mask] = result
+      result = masked_result
+    return result
   return vectorized_f
 
 
@@ -193,6 +204,22 @@ try:
 except ImportError:
   _ProgressBar = _FakeBar
 
+# Special version of dictionary that keeps track of unaccessed keys.
+class AccessCountDict (object):
+  def __init__ (self, **items):
+    from collections import Counter
+    self._dict = dict(items)
+    self._counter = Counter()
+  def __getitem__ (self, key):
+    self._counter[key] += 1
+    return self._dict[key]
+  def __setitem__ (self, key, value):
+    self._counter[key] += 1
+    self._dict[key] = value
+  def __getattr__ (self, name): return getattr(self._dict, name)
+  def __str__ (self): return self._dict.__str__()
+  def __repr__ (self): return self._dict.__repr__()
+
 def _expand_files (filename):
   """
   Expands the given filename/directory/glob/Path/etc. into an explicit list
@@ -237,11 +264,15 @@ class BufferBase (object):
 
   # Names of records that should be kept separate (never grouped into
   # multidimensional arrays).
-  _meta_records = ()
+  @classmethod
+  def _meta_records(cls):
+    return ()
   # Other records that should also be kept separate, but only if they are
   # 1-dimensional.  If they are 2D, then they should be processed as a normal
   # variable.
-  _maybe_meta_records = ()
+  @classmethod
+  def _maybe_meta_records(cls):
+    return ()
 
   # Attributes which could potentially be used as outer axes.
   # The values from the attribute will become the axis values.
@@ -834,6 +865,127 @@ class BufferBase (object):
       self._makevars_pandas()
     else:
       self._makevars_slow()
+
+  # Decode variable structures into a format-independent structure.
+  def _serialize (self):
+    self._makevars()
+    return self._varlist
+
+  # Re-encode format-independent info into a format-specific table.
+  @classmethod
+  def _deserialize (cls, data):
+    # Encapsulate this info in a structure.
+    # Adapted from 'fake_buffer' object created in from_fstpy method.
+    # TODO: simpler way of making empty buffer?
+    b = cls.__new__(cls)
+    b._files = [None]
+    b._varlist = data
+    b._unmakevars()
+    # Check for unused columns.
+    for colname in b._headers.keys():
+      if b._headers._counter[colname] == 0:
+        warn(_("Unknown axis '%s'.  Encoding not complete.")%colname)
+    # Convert headers to regular dictionary.
+    b._headers = dict(b._headers)
+    # Return the result.
+    return b
+
+
+  # Inverse operation - determine record structure from a varlist.
+  def _unmakevars (self):
+    from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
+    import numpy as np
+    # By the time we get to this base method, the mixins should have filtered
+    # out all variables that shouldn't be in the record table.
+    varlist = []
+    for var in self._varlist:
+      if isinstance(var,_iter_type):
+        varlist.append(var)
+      else:
+        warn (_("Unable to encode %s.")%var.name)
+    if len(varlist) == 0:
+      error (_("Nothing to encode!"))
+    self._varlist = varlist
+    self._nrecs = sum(np.product(var.record_id.shape) if var.record_id.ndim > 0 else 1 for var in varlist)
+    # Keep track of columns that we don't need to worry about.
+    # (don't care if they get used or not).
+    dontcare = set()
+    # Start constructing header information.
+    # The initial columns will be the outer axes of the variables.
+    # plus the name and data columns, and inner dimensions.
+    headers = dict()
+    for var in self._varlist:
+      # Add outer axes.
+      for axis in var.axes[:var.record_id.ndim]:
+        if axis.name in headers: continue
+        headers[axis.name] = np.ma.masked_all(self._nrecs, dtype=axis.array.dtype)
+      # Add coordinates as well.
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name in headers: continue
+        # It's ok if these values are never actually referenced.
+        dontcare.add(coord.name)
+        headers[coord.name] = np.ma.masked_all(self._nrecs, dtype=coord.array.dtype)
+      # Add inner axes.
+      for dimname in self._inner_axes:
+        headers[dimname] = np.ma.ones(self._nrecs, dtype='int32')
+      for axis in var.axes[var.record_id.ndim:]:
+        if axis.name not in self._inner_axes:
+          error (_("Unhandled inner axis %s.")%axis.name)
+      # Add extra metadata.
+      for attname, attval in var.atts.items():
+        if attname in headers: continue
+        # It's ok if these values are never actually referenced.
+        dontcare.add(attname)
+        # For simple structures, create array with appropriate dtype.
+        # For complicated structures, use object dtype.
+        sample = np.array(attval)
+        if sample.ndim == 0:
+          headers[attname] = np.ma.masked_all(self._nrecs, dtype=sample.dtype)
+        else:
+          headers[attname] = np.ma.masked_all(self._nrecs, dtype=object)
+
+    namesize = max(len(var.name) for var in varlist)
+    headers['name'] = np.ma.masked_all(self._nrecs, dtype='|S%d'%namesize)
+    headers['d'] = np.empty(self._nrecs, dtype=object)
+    headers['file_id'] = np.empty(self._nrecs,dtype='int32')
+    headers['file_id'][:] = -1
+    offset = 0
+    for var in varlist:
+      axes = var.axes[:var.record_id.ndim]
+      # Add outer axes.
+      for i,axis in enumerate(axes):
+        shape = [1]*len(axes)
+        shape[i] = len(axis)
+        array = np.empty(var.record_id.shape, dtype=axis.array.dtype)
+        array[()] = axis.array.reshape(shape)
+        headers[axis.name][offset:offset+var.record_id.size] = array.flatten()
+      # Add coordinate info as well (only if defined on outer axes).
+      for coord in var.atts.get('coordinates',[]):
+        if not all(axis in axes for axis in coord.axes): continue
+        shape = [len(axis) if axis in coord.axes else 1 for axis in axes]
+        array = np.empty(var.record_id.shape, dtype=coord.array.dtype)
+        array[()] = coord.array.reshape(shape)
+        headers[coord.name][offset:offset+var.record_id.size] = array.flatten()
+      # Add inner axes.
+      for axis in var.axes[var.record_id.ndim:]:
+        headers[axis.name][offset:offset+var.record_id.size] = len(axis)
+      # Add extra metadata.
+      for attname, attval in var.atts.items():
+        if attname in ('coordinates',): continue
+        headers[attname][offset:offset+var.record_id.size] = attval
+      headers['name'][offset:offset+var.record_id.size] = var.name
+      headers['d'][offset:offset+var.record_id.size] = var.record_id.flatten()
+      offset = offset + var.record_id.size
+
+    # Use special dictionary to keep track of which columns were used.
+    # It would be a problem if the columns were never processed!
+    self._headers = AccessCountDict(**headers)
+    # Pre-access certain columns, so they don't get flagged as unhandled.
+    # (columns that aren't important).
+    dontcare |= set(('name','d','file_id'))
+    for col in dontcare:
+      self._headers[col]
+    # From here, the mixins will start processing the header info
 
   # Iterate over all unique axes found in the variables.
   # Requires _makevars() to have already been called.

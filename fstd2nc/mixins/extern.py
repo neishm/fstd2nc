@@ -327,6 +327,45 @@ class ExternOutput (BufferBase):
 
     return out_list
 
+  @classmethod
+  def from_xarray (cls, ds, **params):
+    """
+    Create a Buffer object from the given xarray object.
+    """
+    from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
+    import numpy as np
+    varlist = []
+    # Handle FSTD parameters passed in the method call.
+    ds = ds.copy()
+    ds.attrs.update(params)
+    # Handle FSTD parameters passed in as global attributes of the Dataset.
+    for varname, var in ds.variables.items():
+      var.attrs.update(ds.attrs)
+    # Handle FSTD parameters set as variable attributes.
+    for varname, var in ds.variables.items():
+      var.encoding.update(fstd_attrs=var.attrs)
+    # Collect dimensions and coordinates into a separate structure.
+    dims = {}
+    coords = {}
+    for dimname,dimsize in ds.dims.items():
+      if dimname in ds.variables:
+        dims[dimname] = _axis_type(dimname,dict(ds[dimname].attrs),np.array(ds[dimname]))
+      else:
+        dims[dimname] = _dim_type(dimname,dimsize)
+    for coordname, coord in ds.coords.items():
+      if coordname in dims: continue  # Already counted as a dimension.
+      coords[coordname] = _var_type(coordname, dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
+    # Construct the varlist.
+    for varname, var in ds.variables.items():
+      if varname in dims: continue
+      if varname in coords: continue
+      encoded = _var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data)
+      # Add coordinates.
+      encoded.atts.setdefault('coordinates',[coords[coordname] for coordname in ds[varname].coords if coordname in coords])
+      varlist.append(encoded)
+    # Decode the varlist into a table.
+    return cls._deserialize(varlist)
+
   def to_iris (self):
     """
     Create an iris interface for the RPN data.

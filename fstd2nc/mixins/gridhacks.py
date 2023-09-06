@@ -382,6 +382,10 @@ class Interp (BufferBase):
 #
 
 class YinYang (BufferBase):
+  # Default parameter values (overridden at init time).
+  _yin = False
+  _yang = False
+
   @classmethod
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
