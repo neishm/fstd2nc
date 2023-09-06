@@ -27,9 +27,19 @@ from fstd2nc.mixins import BufferBase
 # Scalar version, using simple datetime objects.
 def stamp2datetime_scalar (date):
   from rpnpy.rpndate import RPNDate
+  from datetime import datetime, timedelta
   dummy_stamps = (0, 10101011, 101010101)
   if date not in dummy_stamps:
-    return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
+    # Normal date range
+    if date > 0:
+      return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
+    # Extended date range
+    else:
+      #TODO: Use RPNDate for both cases, once support for negative stamps is
+      # implemented on that end.
+      tmp = date + 1294967266
+      hours = int(((tmp//10)<<3) + (tmp % 10))
+      return datetime(1,1,1) + timedelta(hours=hours) - timedelta(days=365)
   else:
     return None
 # Vectorized version, using datetime64 objects.

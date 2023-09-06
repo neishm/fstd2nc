@@ -208,7 +208,7 @@ def decode_headers (raw):
   np.divmod(raw[:,7,0],16, out['ip1'], temp8)
   out['ip2'][:] = raw[:,7,1]//16
   out['ip3'][:] = raw[:,8,0]//16
-  date_stamp = raw[:,8,1]
+  date_stamp = raw.astype('int32')[:,8,1]
   # Reassemble and decode.
   # (Based on fstd98.c)
   etiket_bytes = np.empty((nrecs,12),dtype='ubyte')
@@ -227,12 +227,25 @@ def decode_headers (raw):
   typvar_bytes[:,0] = ((_typvar >> 6) & 0x3f) + 32
   typvar_bytes[:,1] = ((_typvar & 0x3f)) + 32
   out['typvar'][:] = typvar_bytes.flatten().view('|S2')
-  out['datev'][:] = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
+  # Convert raw stamp to RPN date code.
+  # Two cases: positive = regular, negative = extended range.
+  out['datev'][:] = np.where (date_stamp >= 0,
+    (date_stamp >> 3) * 10 + (date_stamp & 0x7),
+    ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
+  )
+  # Compute date of origin.
   # Note: this dateo calculation is based on my assumption that
   # the raw stamps increase in 5-second intervals.
   # Doing it this way to avoid a gazillion calls to incdat.
-  date_stamp = date_stamp - (out['deet']*out['npas'])//5
-  out['dateo'][:] = (date_stamp >> 3) * 10 + (date_stamp & 0x7)
+  # Also, for negative date_stamp this is 1-hour units.
+  date_stamp = np.where (date_stamp >= 0,
+    date_stamp - (out['deet']*out['npas'])//5,
+    date_stamp - (out['deet']*out['npas'])//3600
+  )
+  out['dateo'][:] = np.where (date_stamp >= 0,
+    (date_stamp >> 3) * 10 + (date_stamp & 0x7),
+    ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
+  )
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0
