@@ -103,6 +103,7 @@ class Masks (BufferBase):
     ip2 = ip2[ind]
     ip3 = ip3[ind]
     dltf = dltf[ind]
+    uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
     has_mask = (nomvar[:-1] == nomvar[1:]) & (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:]) & uses_mask[:-1] & uses_mask[1:] & (dltf[:-1] == dltf[1:])
     has_mask = np.where(has_mask)[0]
     has_mask += 1  # Data appears after mask in this case.
