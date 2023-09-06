@@ -21,9 +21,9 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     if drop_variables is not None: kwargs['exclude'] = drop_variables
     return fstd2nc.Buffer(filename_or_obj, **kwargs).to_xarray(fused=fused)
   def guess_can_open (self, filename_or_obj):
-    from fstd2nc.extra import expand_files
+    from fstd2nc.mixins import _expand_files
     try:
-      infiles = expand_files(filename_or_obj)
+      infiles = _expand_files(filename_or_obj)
       infiles = list(zip(*infiles))[1]
       if len(infiles) == 0: return False
       # Check first matching file.

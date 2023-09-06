@@ -350,38 +350,3 @@ def get_crs (dataset):
     return None
   return proj
 
-def expand_files (filename):
-  """
-  Expands the given filename/directory/glob/Path/etc. into an explicit list
-  of matching files.
-
-  Parameters
-  ----------
-  filename : str or Path or iterable
-      The thing to expand.
-
-  Returns
-  -------
-  List of matches, each match a tuple of (pattern,[files])
-  """
-  from pathlib import Path
-  from glob import glob
-  import os
-  if isinstance(filename,(str,Path)):
-    infiles = [filename]
-  else:
-    infiles = list(filename)
-
-  # Apply wildcard and directory expansion to filenames.
-  expanded_infiles = []
-  for infile in infiles:
-    if isinstance(infile,Path):
-      infile = str(infile)
-    for f in sorted(glob(infile)) or [infile]:
-      if os.path.isdir(f):
-        for dirpath, dirnames, filenames in os.walk(f,followlinks=True):
-          for filename in filenames:
-            expanded_infiles.append((infile,os.path.join(dirpath,filename)))
-      else:
-        expanded_infiles.append((infile,f))
-  return expanded_infiles
