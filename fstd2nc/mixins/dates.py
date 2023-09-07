@@ -57,13 +57,29 @@ def stamp2datetime64 (date):
 def datetime2stamp (date):
   from rpnpy.rpndate import RPNDate
   import numpy as np
-  from datetime import datetime
+  from datetime import datetime, timedelta
   if date is None: return 0
   if not isinstance(date,datetime):
     stamp = date - np.datetime64('1970-01-01T00:00:00')
     stamp /= np.timedelta64(1,'s')
     date = datetime.utcfromtimestamp(stamp)
-  return RPNDate(date).datev
+  # Work around an issue with rpnpy handling dates in the extended range.
+  try:
+    return RPNDate(date).datev
+  except ValueError:
+    # Extended range encoding
+    hours = date + timedelta(days=365) - datetime(1,1,1)
+    hours = hours // timedelta(hours=1)
+    tmp = (hours>>3)*10 + (hours&0x7)
+    stamp = tmp - 1294967266
+    return stamp
+# Fixup for dates out of the datetime64 range.
+@vectorize
+def cftime2datetime64 (time):
+  import numpy as np
+  time = time.strftime('%Y-%m-%dT%H:%M:%S')
+  time = np.datetime64(time)
+  return time
 
 #################################################
 # Mixin for handling dates/times.
@@ -192,6 +208,12 @@ class Dates (BufferBase):
 
     # Continue processing the variables.
     super (Dates,self)._unmakevars()
+
+    # Make sure times are the right type.
+    # For dates in far past / future, we may get a list of cftime objects instead.
+    # This is a side-effect of some logic in xarray I believe.
+    if 'time' in self._headers.keys() and self._headers['time'].dtype == object:
+      self._headers['time'] = cftime2datetime64(self._headers['time'])
 
     # Get leadtime column (may be coming from forecast axis).
     if 'forecast' in self._headers.keys():
