@@ -33,3 +33,15 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     except Exception:
       # If something unexpected happened, then assume it's not a valid FST file.
       return False
+
+# Add a "to_fstd" shortcut to Dataset objects.
+import xarray as xr
+@xr.register_dataset_accessor("to_fstd")
+class to_fstd_accessor:
+  def __init__ (self, xarray_obj):
+    self._obj = xarray_obj
+  def __call__ (self, filename, **kwargs):
+    import fstd2nc
+    b = fstd2nc.Buffer.from_xarray(self._obj, **kwargs)
+    b.to_fstd(filename)
+
