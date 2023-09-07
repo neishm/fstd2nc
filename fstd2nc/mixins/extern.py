@@ -28,56 +28,6 @@ except ImportError:  # Python 3.10
 #################################################
 # Provide various external array interfaces for the FSTD data.
 
-# Helper interface for ordering dask tasks based on FSTD record order.
-# Might provide a small speed boost when the OS employs a read-ahead buffer.
-# Based on dask.core.get_dependencies
-class _RecordOrder (object):
-  def __init__(self, dsk):
-    self.dask = dsk
-  def __call__ (self, arg):
-    dsk = self.dask
-    work = [arg]
-    while work:
-        new_work = []
-        for w in work:
-            typ = type(w)
-            if typ is tuple and w and isinstance(w[0], Callable):  # istask(w)
-                if w[0] is _read_block:
-                  return w[1], w[2]
-                else:
-                  new_work += w[1:]
-            elif typ is list:
-                new_work += w
-            elif typ is dict:
-                new_work += list(w.values())
-            else:
-                try:
-                    if w in dsk:
-                        new_work.append(dsk[w])
-                except TypeError:  # not hashable
-                    pass
-        work = new_work
-
-# Add a callback to dask to ensure FSTD records are read in a good order.
-try:
-  from dask.callbacks import Callback
-  class _FSTD_Callback (Callback):
-    def _start_state (self, dsk, state):
-      # Try sorting by FSTD filename, offset (if applicable)
-      try:
-        ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
-        state['ready'] = ready[::-1]
-      except TypeError: pass  # Not applicable for this graph.
-  del Callback
-except ImportError:
-  pass
-
-# Only turn on this callback if explicitly requested by the user.
-# It may cause problems when there are large graphs being communicated
-# to a dask cluster environment.
-def force_strict_ordering ():
-  _FSTD_Callback().register()
-
 # Method for reading a block from a file.
 def _read_block (filename, offset, length):
   import numpy as np
