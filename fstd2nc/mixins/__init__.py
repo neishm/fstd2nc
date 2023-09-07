@@ -1098,7 +1098,7 @@ class BufferBase (object):
       if d_key in self._headers:
         d = self._headers[d_key][rec]
         if d is not None:
-          kwargs[key] = d.T
+          kwargs[key] = d
           continue
       address = self._headers[addr_key][rec]
       length = self._headers[len_key][rec]
