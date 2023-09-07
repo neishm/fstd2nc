@@ -176,13 +176,9 @@ class FSTD (BufferBase):
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 
   # How to decode the data from a raw binary array.
-  @classmethod
-  def _decode (cls, data):
+  @staticmethod
+  def _decode (data):
     from fstd2nc.extra import decode
-    # Degenerate case: decoding handled in opaque dask layer, nothing to do.
-    if hasattr(data,'dask'):
-      import numpy as np
-      return np.array(data.T)
     nbits = int(data[0x0b])
     datyp = int(data[0x13])
     dtype = dtype_fst2numpy(datyp, nbits)

@@ -55,22 +55,34 @@ def _read_block (filename, offset, length):
 
 class ExternOutput (BufferBase):
 
-  # Helper method to call decode routine using the given inputs.
+  # helper method to call decode routine using the given inputs.
   @classmethod
-  def _dasked_decode (cls, *args):
+  def _dasked_decode (cls, data):
+    # Scalar version first.
+    if not isinstance(data,list):
+      return cls._decode(data)
+    # Vectorized version.
+    out = []
+    for d in data:
+      out.append(cls._decode(d))
+    return out
+
+  # helper method to call decode routine using the given inputs.
+  @classmethod
+  def _dasked_postproc (cls, *args):
     keys = args[:-1:2]
     values = args[1::2]
-    # Scalar case (decoding single record)
+    # scalar case (decoding single record)
     if not any(isinstance(v,list) for v in values):
       kwargs = dict(zip(keys,values))
-      return cls._decode(**kwargs)
-    # Vectorized case (decoding multiple records into a single fused array)
+      return cls._postproc(**kwargs)
+    # vectorized case (decoding multiple records into a single fused array)
     nrec = [len(v) for v in values if isinstance(v,list)][0]
     values = [v if isinstance(v,list) else [v]*nrec for v in values]
     out = []
     for i in range(nrec):
       kwargs = dict((k,v[i]) for k,v in zip(keys,values))
-      out.append(cls._decode(**kwargs))
+      out.append(cls._postproc(**kwargs))
     import numpy as np
     return np.concatenate(out)
 
@@ -162,7 +174,10 @@ class ExternOutput (BufferBase):
         if addr.ndim > 1: addr = map(list,addr)
         length = self._headers[len_col][record_id]
         if length.ndim > 1: length = map(list,length)
+        # Read raw data from disk.
         rb = zip([_read_block]*nchunks, fname, addr, length)
+        # Decode the values.
+        rb = zip([self._dasked_decode]*nchunks, rb)
         # Skip the _read_blocks construct where we don't have file data.
         # (e.g. for missing records or where data coming from dask).
         rb = [_rb if fid >= 0 else None for _rb,fid in zip(rb,file_ids)]
@@ -182,7 +197,7 @@ class ExternOutput (BufferBase):
       # Add scalar arguments.
       for key, value in self._decoder_scalar_args().items():
         args.extend([[key]*nchunks, [value]*nchunks])
-      graphs = zip([self._dasked_decode]*nchunks, *args)
+      graphs = zip([self._dasked_postproc]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
       array[:] = list(graphs)
       shape = tuple(len(c) for c in var.chunks)
@@ -451,7 +466,7 @@ class ExternInput (BufferBase):
       # any subroutine is looking for this info.
       headers['address'] = np.empty(len(headers['nomvar']), dtype=object)
       headers['length'] = np.empty(len(headers['nomvar']), dtype=object)
-    # Fake file id (just so netcdf mixin _quick_load function doesn't crash).
+    # Fake file id (just so _read_record function doesn't crash).
     headers['file_id'] = np.empty(len(headers['nomvar']), dtype='int32')
     headers['file_id'][:] = -1
     # Add in data.

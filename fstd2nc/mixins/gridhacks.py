@@ -337,25 +337,26 @@ class Interp (BufferBase):
 
   # Handle grid interpolations from raw binary array.
   @classmethod
-  def _decode (cls, data, u_data=None, v_data=None, source_grid=None, dest_grid=None, **kwargs):
+  def _postproc (cls, data, u_data=None, v_data=None, source_grid=None, dest_grid=None, **kwargs):
     import rpnpy.librmn.all as rmn
     import numpy as np
     # If no interpolation requested, nothing to do.
     if source_grid is None or dest_grid is None:
-      return super(Interp,cls)._decode (data, **kwargs)
+      return super(Interp,cls)._postproc (data, **kwargs)
     source_grid = _unpack_grid(source_grid)
     dest_grid = _unpack_grid(dest_grid)
     if source_grid < 0:
       raise ValueError("Source data is not on a recognized grid.  Unable to interpolate.")
-    # Decode the source data.
-    d = super(Interp,cls)._decode (data, **kwargs).T
+    # Handle other post-processing of the input fields that occur before this
+    # mixin.
+    d = super(Interp,cls)._postproc (data, **kwargs).T
     # Decode auxiliary field(s), if they're needed.
     if u_data is not None:
-      u = super(Interp,cls)._decode (u_data, **kwargs).T
+      u = super(Interp,cls)._postproc (u_data, **kwargs).T
     else:
       u = None
     if v_data is not None:
-      v = super(Interp,cls)._decode (v_data, **kwargs).T
+      v = super(Interp,cls)._postproc (v_data, **kwargs).T
     else:
       v = None
     with _lock:
@@ -412,6 +413,10 @@ class YinYang (BufferBase):
     # Update yin-yang records to appear as regular rotated grids.
     if not self._yin and not self._yang:
       return
+    # Add yin/yang selection boolean flags as columns.
+    self._decoder_extra_args = self._decoder_extra_args + ('yin','yang')
+    self._headers['yin'] = (self._headers['grtyp'] == b'U') & self._yin
+    self._headers['yang'] = (self._headers['grtyp'] == b'U') & self._yang
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
@@ -444,25 +449,17 @@ class YinYang (BufferBase):
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][submask] = dest_grid[key]
 
-  def _decoder_scalar_args (self):
-    kwargs = super(YinYang,self)._decoder_scalar_args()
-    if self._yin: kwargs['yin'] = True
-    if self._yang: kwargs['yang'] = True
-    return kwargs
-
   # Handle grid interpolations from raw binary array.
   @classmethod
-  def _decode (cls, data, yin=False, yang=False, **kwargs):
+  def _postproc (cls, data, yin=False, yang=False, **kwargs):
     if not yin and not yang:
-      return super(YinYang,cls)._decode (data, **kwargs)
-    prm = cls._decode_headers(data[:72])
-    prm = dict((k,v[0]) for k,v in prm.items())
-    d = super(YinYang,cls)._decode (data, **kwargs).T
-    if prm['grtyp'] == b'U' and yin:
-      d = d[:,:prm['nj']//2]
-    elif prm['grtyp'] == b'U' and yang:
-      d = d[:,prm['nj']//2:]
-    return d.T
+      return super(YinYang,cls)._postproc (data, **kwargs)
+    d = super(YinYang,cls)._postproc (data, **kwargs)
+    nj, ni = d.shape[-2:]
+    if yin:
+      return d[:nj//2,:]
+    elif yang:
+      return d[nj//2:,:]
 
 #################################################
 # Mixin for grid cropping.
@@ -556,10 +553,10 @@ class Crop (BufferBase):
         self._headers['crop_i0'][submask] = i0
         self._headers['crop_iN'][submask] = iN
 
-  # Handle cropping from raw binary array.
+  # Handle cropping of the data.
   @classmethod
-  def _decode (cls, data, crop_j0=None, crop_jN=None, crop_i0=None, crop_iN=None, **kwargs):
-    d = super(Crop,cls)._decode (data, **kwargs)
+  def _postproc (cls, data, crop_j0=None, crop_jN=None, crop_i0=None, crop_iN=None, **kwargs):
+    d = super(Crop,cls)._postproc (data, **kwargs)
     if crop_j0 is not None and crop_jN is not None:
       d = d[crop_j0:crop_jN,:]
     if crop_i0 is not None and crop_iN is not None:

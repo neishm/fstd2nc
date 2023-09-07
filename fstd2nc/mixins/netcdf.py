@@ -453,17 +453,15 @@ class netCDF_IO (BufferBase):
       import numpy as np
       io = sorted(io)
       with Pool() as p:
-        raw = p.imap (_quick_load, ((self, r) for r,shape,v,ind in io))
+        raw = p.imap (self._read_record, (r for r,shape,v,ind in io))
         raw = bar.iter(raw)
-        for (r,shape,v,ind), stuff in zip(io, raw):
-          data = self._decode (**stuff)
+        for (r,shape,v,ind), data in zip(io, raw):
           v[ind] = data.astype(v.dtype).reshape(shape)
         bar.finish()
     else:
       for r,shape,v,ind in bar.iter(sorted(io)):
         try:
-          stuff = _quick_load ((self, r))
-          data = self._decode (**stuff)
+          data = self._read_record (r)
           v[ind] = data.astype(v.dtype).reshape(shape)
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
@@ -500,35 +498,4 @@ class netCDF_IO (BufferBase):
   def _unmakevars (self):
     self._unfix_names()
     super(netCDF_IO,self)._unmakevars()
-
-# Internal helper method for delegating the load to a multiprocessing Pool.
-def _quick_load (args):
-  import numpy as np
-  b, r = args
-  out = dict()
-  # Load data array(s).
-  file_id = b._headers['file_id'][r]
-  if file_id >= 0:
-    filename = b._files[file_id]
-    with open (filename, 'rb') as f:
-      for key, (addr_col,len_col,d_col) in b._decoder_data:
-        if d_col in b._headers and b._headers[d_col][r] is not None:
-          out[key] = b._headers[d_col][r]
-        elif addr_col in b._headers and len_col in b._headers:
-          address = int(b._headers[addr_col][r])
-          length = int(b._headers[len_col][r])
-          if address >= 0 and length >= 0:
-            f.seek (address, 0)
-            out[key] = np.fromfile(f,'B',length)
-  else:
-    for key, (addr_col,len_col,d_col) in b._decoder_data:
-      if d_col in b._headers and b._headers[d_col][r] is not None:
-        out[key] = b._headers[d_col][r]
-
-  # Get other arguments
-  for key in b._decoder_extra_args:
-    if key in b._headers:
-      out[key] = b._headers[key][r]
-  out.update(b._decoder_scalar_args())
-  return out
 

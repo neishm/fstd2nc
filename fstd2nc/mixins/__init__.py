@@ -1064,9 +1064,14 @@ class BufferBase (object):
         yield o
 
   # How to decode the data from a raw binary array.
-  @classmethod
-  def _decode (cls, data):
+  @staticmethod
+  def _decode (data):
     raise NotImplementedError("No decoder found.")
+
+  # Stub for any extra processing needed for the data after it's decoded.
+  @classmethod
+  def _postproc (cls, data):
+    return data
 
   # Shortcuts to header decoding functions.
   # Put into the class so they can potentially be overridden for other formats.
@@ -1099,7 +1104,7 @@ class BufferBase (object):
       length = self._headers[len_key][rec]
       if address == -1 or length == -1: continue
       f.seek(address,0)
-      data = np.fromfile(f,'B',length)
+      data = self._decode(np.fromfile(f,'B',length))
       kwargs[key] = data
     for key in self._decoder_extra_args:
       if key in self._headers:
@@ -1108,7 +1113,7 @@ class BufferBase (object):
     kwargs.update(self._decoder_scalar_args())
     if f is not None:
       f.close()
-    return self._decode(**kwargs)
+    return self._postproc(**kwargs)
 
 
   #
