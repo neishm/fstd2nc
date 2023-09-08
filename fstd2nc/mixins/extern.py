@@ -412,7 +412,7 @@ class ExternOutput (BufferBase):
       isvalid = self._headers['d'] != None
       for i in range(self._nrecs):
         if isvalid[i]:
-          d[i] = self._headers['d'][i]
+          d[i] = self._headers['d'][i].T
     table['d'] = d[mask]
     return table
 
@@ -471,7 +471,7 @@ class ExternInput (BufferBase):
     headers['file_id'][:] = -1
     # Add in data.
     headers['d'] = np.empty(len(headers['nomvar']), dtype=object)
-    headers['d'][:] = table['d']
+    headers['d'][:] = [d.T for d in table['d']]
 
     # Encapsulate this info in a structure.
     fake_buffer = cls.__new__(cls)
