@@ -1,3 +1,25 @@
+Version 0.20230908.0 (Sep 8, 2023)
+	* Added north_pole_grid_longitude attribute for rotated grids.
+	* Fixed missing vertical coordinates in series data.
+	* Fixed bug when using --forecast-axis with series data.
+	* Fixed bug with --yin and --yang when there are non-YY fields in the
+	  file.
+	* Improved precision of lat/lon axes for non-rotated 'Z' grids.
+	* Switch to default of fused=False in .to_xarray(), since fusing the
+	  records can give a performance hit for certain access patterns.
+	* Added $CMCCONST to search path for --opdict.
+	* Check if file specified by --metadata-file actually exists, instead
+	  of ignoring the missing file.
+	* Fixed get_crs() for data generated with no_adjust_rlon=True.
+	* Register this as a backend entrypoint for xarray, so now it should
+	  work from xarray.open_dataset().
+	* Fixed interpolation for vector fields like UU, VV.
+	* Added support for RPN extended date range (for years 0-9999).
+	* Registered a .to_fstd() method for xarray.Dataset objects, for some
+	  preliminary testing.
+	* Fixed an array transpose happening in some conditions for
+	  .to_fstpy() and .from_fstpy().
+
 Version 0.20230515.2 (May 30, 2023)
 	* From Python interface, allow interp parameter to accept existing
 	  grid ids as input.
