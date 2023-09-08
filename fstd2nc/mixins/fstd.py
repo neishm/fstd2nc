@@ -247,7 +247,7 @@ class FSTD (BufferBase):
       rec['datyp'] %= 128
     rmn.fstecr(outfile, rec, **extra)
 
-  def to_fstd (self, filename):
+  def to_fstd (self, filename, append=False, rewrite=False):
     """
     Write data to an FSTD file.
     """
@@ -255,13 +255,13 @@ class FSTD (BufferBase):
     from os import remove
     import rpnpy.librmn.all as rmn
     import numpy as np
-    if exists(filename): remove(filename)
+    if exists(filename) and not append and not rewrite: remove(filename)
     outfile = rmn.fstopenall(filename, rmn.FST_RW)
     for i in np.where(self._headers['selected'] | self._headers['ismeta'])[0]:
       rec = self._fstluk(i)
       # Ensure data is Fortran-contiguous for librmn.
       rec['d'] = np.ascontiguousarray(rec['d'].T).T
-      self._fstecr(outfile, rec, rewrite=False)
+      self._fstecr(outfile, rec, rewrite=rewrite)
     rmn.fstcloseall(outfile)
 
   #

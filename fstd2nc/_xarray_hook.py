@@ -40,8 +40,8 @@ import xarray as xr
 class to_fstd_accessor:
   def __init__ (self, xarray_obj):
     self._obj = xarray_obj
-  def __call__ (self, filename, **kwargs):
+  def __call__ (self, filename, append=False, **kwargs):
     import fstd2nc
     b = fstd2nc.Buffer.from_xarray(self._obj, **kwargs)
-    b.to_fstd(filename)
+    b.to_fstd(filename, append=append)
 
