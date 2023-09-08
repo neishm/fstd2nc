@@ -79,6 +79,7 @@ class netCDF_Atts (BufferBase):
       import configparser as ConfigParser
     from collections import OrderedDict
     import numpy as np
+    from os.path import exists
     metadata_file = kwargs.pop('metadata_file',None)
     if metadata_file is None:
       metafiles = []
@@ -98,6 +99,8 @@ class netCDF_Atts (BufferBase):
     configparser = ConfigParser.SafeConfigParser()
     configparser.optionxform = str # Make the attribute names case sensitive.
     for metafile in metafiles:
+      if not exists(metafile):
+        error(_("'%s' does not exist.")%metafile)
       configparser.read(metafile,encoding='utf-8')
     for varname in configparser.sections():
       metadata.setdefault(varname,OrderedDict()).update(configparser.items(varname))
@@ -450,17 +453,15 @@ class netCDF_IO (BufferBase):
       import numpy as np
       io = sorted(io)
       with Pool() as p:
-        raw = p.imap (_quick_load, ((self, r) for r,shape,v,ind in io))
+        raw = p.imap (self._read_record, (r for r,shape,v,ind in io))
         raw = bar.iter(raw)
-        for (r,shape,v,ind), stuff in zip(io, raw):
-          data = self._decode (**stuff)
+        for (r,shape,v,ind), data in zip(io, raw):
           v[ind] = data.astype(v.dtype).reshape(shape)
         bar.finish()
     else:
       for r,shape,v,ind in bar.iter(sorted(io)):
         try:
-          stuff = _quick_load ((self, r))
-          data = self._decode (**stuff)
+          data = self._read_record (r)
           v[ind] = data.astype(v.dtype).reshape(shape)
         except (IndexError,ValueError):
           warn(_("Internal problem with the script - unable to get data for '%s'")%v.name)
@@ -471,34 +472,30 @@ class netCDF_IO (BufferBase):
   # Alias "to_netcdf" as "write_nc_file" for backwards compatibility.
   write_nc_file = to_netcdf
 
-# Internal helper method for delegating the load to a multiprocessing Pool.
-def _quick_load (args):
-  import numpy as np
-  b, r = args
-  out = dict()
-  # Load data array(s).
-  file_id = b._headers['file_id'][r]
-  if file_id >= 0:
-    filename = b._files[file_id]
-    with open (filename, 'rb') as f:
-      for key, (addr_col,len_col,d_col) in b._decoder_data:
-        if d_col in b._headers and b._headers[d_col][r] is not None:
-          out[key] = b._headers[d_col][r]
-        elif addr_col in b._headers and len_col in b._headers:
-          address = int(b._headers[addr_col][r])
-          length = int(b._headers[len_col][r])
-          if address >= 0 and length >= 0:
-            f.seek (address, 0)
-            out[key] = np.fromfile(f,'B',length)
-  else:
-    for key, (addr_col,len_col,d_col) in b._decoder_data:
-      if d_col in b._headers and b._headers[d_col][r] is not None:
-        out[key] = b._headers[d_col][r]
+  #TODO
+  # Attempt to undo the uniquification of axis/variable names, such as what
+  # was caused by _fix_names.
+  # Mainly useful for going in reverse (netcdf back to fstd).
+  def _unfix_names (self):
+    # Helper method - strip integer indices from dimension names.
+    def strip_numbers (name):
+      while name[-1] in '_0123456789':
+        name = name[:-1]
+      return name
+    for axis in self._iter_axes():
+      axis.name = strip_numbers(axis.name)
+    for coord in self._iter_coords():
+      coord.name = strip_numbers(coord.name)
+    for var in self._varlist:
+      # For 1D or 0D variables, strip out underscores and numbers.
+      # Assume such variables were probably meant to be coordinates, but were
+      # not in the 'coords' attribute for some particular reason
+      # (such as for leadtime, reftime).
+      if len(var.axes) <= 1:
+        var.name = strip_numbers(var.name)
 
-  # Get other arguments
-  for key in b._decoder_extra_args:
-    if key in b._headers:
-      out[key] = b._headers[key][r]
-  out.update(b._decoder_scalar_args())
-  return out
+  # Re-encode variables with netCDF modifications undone.
+  def _unmakevars (self):
+    self._unfix_names()
+    super(netCDF_IO,self)._unmakevars()
 

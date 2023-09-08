@@ -58,6 +58,14 @@ class Series (BufferBase):
     group.add_argument('--profile-thermodynamic-vars', metavar='VAR1,VAR2,...', help=_('Comma-separated list of variables that use thermodynamic levels.'))
     group.add_argument('--missing-bottom-profile-level', action='store_true', help=_('Assume the bottom level of the profile data is missing.'))
 
+  # Don't process series time/station/height records as variables.
+  @classmethod
+  def _meta_records(cls):
+    return super(Series,cls)._meta_records() + (b'STNS',)
+  @classmethod
+  def _maybe_meta_records(cls):
+    return super(Series,cls)._maybe_meta_records() + (b'HH',b'SV',b'SH')
+
   def __init__ (self, *args, **kwargs):
     """
     profile_momentum_vars : str or list, optional
@@ -84,9 +92,6 @@ class Series (BufferBase):
     self._thermo_vars = thermo_vars
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
 
-    # Don't process series time/station/height records as variables.
-    self._meta_records = self._meta_records + (b'STNS',)
-    self._maybe_meta_records = self._maybe_meta_records + (b'HH',b'SV',b'SH')
     # Add station # as another axis.
     self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
@@ -181,8 +186,8 @@ class Series (BufferBase):
         array = array[:-1]
       if array.ndim != 1: continue
       atts = OrderedDict(self._get_header_atts(header))
-      if vertvar == 'SH': thermo = _axis_type('level',atts,array)
-      if vertvar == 'SV': momentum = _axis_type('level',atts,array)
+      if vertvar == b'SH  ': thermo = _axis_type('level',atts,array)
+      if vertvar == b'SV  ': momentum = _axis_type('level',atts,array)
 
 
     # 'Y' data should be handled fine by _XYCoords - just give a more
@@ -311,4 +316,192 @@ class Series (BufferBase):
         # Attach the station as a coordinate.
         for var in varlist:
           var.deps.append(station_coord)
+
+  # Decode station data back into table.
+  def _unmakevars (self):
+    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
+    import numpy as np
+
+    # If no series data defined in the dataset, then nothing to do here.
+    if not any(var.name == 'station' for var in self._varlist):
+      return super(Series,self)._unmakevars()
+
+    # Helper - add a coordinate record
+    # Copied from xycoords mixin.
+    def add_coord (name,nj,ni,values,**atts):
+      import dask.array as da
+      dims = []
+      if nj > 1: dims.append(_dim_type('j',nj))
+      if ni > 1: dims.append(_dim_type('i',ni))
+      # Need to carefully encode the arrays so they are scalar object containing the data.
+      array = np.empty(1,dtype=object)
+      array[0] = da.from_array(values, chunks=-1)
+      dtype = array[0].dtype
+      array = array.squeeze()
+      self._varlist.append(_iter_type(name,atts,dims,dtype,array))
+
+    # Encode stations.
+    for var in self._varlist:
+      if var.name == 'station' and len(var.dims) == 1 and hasattr(var,'array'):
+        array = var.array
+        nstations = len(array)
+        array = array.view('|S1').reshape(nstations,-1)
+        # Pad out to 128 characters?  (Is this needed?)
+        station_len = array.shape[-1]
+        if station_len < 128:
+          new_array = np.zeros((nstations,128),dtype='|S1')
+          new_array[:,:station_len] = array
+          array = new_array
+        station_len = array.shape[-1]
+        # Pad with spaces.
+        array[array==b''] = b' '
+        add_coord('STNS',nstations,station_len,array,typvar='T',datyp=7,nbits=8,grtyp='T')
+        break
+    self._varlist = [var for var in self._varlist if var.name != 'station']
+
+    # Encode lat/lon axes.
+    for var in self._varlist:
+      if 'station_id' not in var.dims: continue
+      nstations = len(var.getaxis('station_id'))
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name == 'lat':
+          add_coord('^^',1,nstations,coord.array,typvar='T',datyp=5,nbits=32,grtyp='T')
+        if coord.name == 'lon':
+          add_coord('>>',1,nstations,coord.array,typvar='T',datyp=5,nbits=32,grtyp='T')
+      break
+
+    # Encode vertical coordinates.
+    # Note: can only encode one set of vertical coordinates in a series
+    # dataset.
+    for var in self._varlist:
+      if 'station_id' not in var.dims: continue
+      if 'level' in var.dims:
+        levels = var.getaxis('level')
+        if hasattr(levels,'atts'):
+          if 'VCDT' in levels.atts and 'VCDM' in levels.atts:
+            # Add thermodynamic coordinate variable.
+            array = levels.atts['VCDT'][:-2]  # Skip 1.0 level and diag level?
+            add_coord('SH',1,len(array),array,typvar='T',datyp=5,nbits=32,grtyp='T')
+            # Add momentum coordinate variable.
+            array = levels.atts['VCDM'][:-1]  # Skip 1.0 level
+            add_coord('SV',1,len(array),array,typvar='T',datyp=5,nbits=32,grtyp='T')
+            break
+
+    # If the data does not contain a forecast axis, then reconstruct one
+    # based on leadtime.
+    # Only do this if more than one forecast time is available.
+    #TODO: Move some of this logic to dates mixin?
+    forecast_axes = {}
+    for var in self._varlist:
+      if 'time' not in var.dims: continue
+      time = var.getaxis('time')
+      if var.name == 'leadtime' and hasattr(var,'array'):
+        forecasts = np.unique(var.array)
+        # Convert forecast to timedelta64 if it's in hours.
+        if forecasts.dtype != 'timedelta64[ns]':
+          forecasts = forecasts * np.timedelta64(3600,'s')
+        forecast_axes[id(time)] = _axis_type('forecast',var.atts,forecasts)
+        break
+    time0 = None
+    for var in self._varlist:
+      if var.name == 'reftime' and hasattr(var,'array'):
+        time0 = np.atleast_1d(var.array)
+        time0 = _axis_type('time',{},time0)
+        break
+    for var in self._varlist:
+      if 'station_id' not in var.dims: continue
+      if 'time' not in var.dims: continue
+      # Only do this for '+' grid, where time axis is fastest varying.
+      itime = var.dims.index('time')
+      if itime < var.dims.index('station_id'): continue
+      time = var.getaxis('time')
+      if id(time) not in forecast_axes: continue
+      if time0 is None: continue
+      forecast = forecast_axes[id(time)]
+      if len(time0) * len(forecast) != len(time): continue
+      var.axes = var.axes[:itime] + [time0,forecast] + var.axes[itime+1:]
+      var.array = var.array.reshape(var.shape)
+
+    # Encode forecast info.
+    # Note: similar to vertical info, can only encode one forecast variable
+    # here.
+    for var in self._varlist:
+      if 'station_id' not in var.dims: continue
+      if 'forecast' in var.dims:
+        forecasts = var.getaxis('forecast')
+        if hasattr(forecasts,'array'):
+          forecasts = forecasts.array
+          # Convert forecast to units of hours if it's a timedelta64.
+          if forecasts.dtype == 'timedelta64[ns]':
+            forecasts = forecasts / np.timedelta64(3600,'s')
+          add_coord('HH',1,len(forecasts),forecasts,typvar='T',datyp=5,nbits=32,grtyp='T')
+          break
+
+    # Check if dimensions need to be transposed.
+    # Last dims should be station_id or station_id,forecast.
+    for var in self._varlist:
+      if 'station_id' not in var.dims: continue
+      if not hasattr(var,'array'): continue
+      dims = var.dims
+      order = [i for i,d in enumerate(dims) if d not in ('level','station_id','forecast')]
+      order.append(dims.index('station_id'))
+      if 'level' in dims:
+        order.append(dims.index('level'))
+      if 'forecast' in dims:
+        order.append(dims.index('forecast'))
+      if order != sorted(order):
+        var.axes = [var.axes[o] for o in order]
+        var.array = var.array.transpose(order)
+
+    # Final preparation of station-based variables.
+    for var_ind, var in enumerate(self._varlist):
+      axes = list(var.axes)
+      if 'station_id' not in var.dims: continue
+      # Process the variable.
+      # Case 1: Have a forecast axis.
+      # Each station is in a separate record, which contains all forecasts.
+      if 'forecast' in var.dims:
+        if 'level' in var.dims:
+          ni = len(var.getaxis('level'))
+          axes[var.dims.index('level')] = _dim_type('i',ni)
+        nj = len(var.getaxis('forecast'))
+        axes[var.dims.index('forecast')] = _dim_type('j',nj)
+        # Enumerate the stations (starting at 1) and store in ip3.
+        axis = var.getaxis('station_id')
+        axis_ind = var.dims.index('station_id')
+        newaxis = _axis_type('ip3',{},np.arange(len(axis))+1)
+        axes[axis_ind] = newaxis
+        num_outer_axes = axis_ind + 1
+        var.atts['grtyp'] = '+'
+        # Patch up lat/lon coordinates.
+        for coord_ind, coord in enumerate(var.atts.get('coordinates',[])):
+          if coord.name == 'lat':
+            encoded_lat = _var_type(coord.name, coord.atts, [newaxis], coord.array)
+            var.atts['coordinates'][coord_ind] = encoded_lat
+          if coord.name == 'lon':
+            encoded_lon = _var_type(coord.name, coord.atts, [newaxis], coord.array)
+            var.atts['coordinates'][coord_ind] = encoded_lon
+      else:
+        ni = len(var.getaxis('station_id'))
+        axes[var.dims.index('station_id')] = _dim_type('i',ni)
+        num_outer_axes = var.dims.index('station_id')
+        var.atts['grtyp'] = 'Y'
+      outer_shape = var.shape[:num_outer_axes]
+      record_id = np.zeros(outer_shape, dtype=object)
+      for ind in np.ndindex(tuple(outer_shape)):
+        record_id[ind] = var.array[ind]
+      var.atts['typvar'] = 'T'
+      var = _iter_type (var.name, var.atts, axes, var.array.dtype, record_id)
+      self._varlist[var_ind] = var
+
+    super(Series,self)._unmakevars()
+
+    # Encode lat/lon in ig3/ig4 values.
+    encode_latlon = (self._headers['grtyp'] == '+')
+    if 'ig3' not in self._headers.keys():
+      self._headers['ig3'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    self._headers['ig3'][encode_latlon] = np.round((self._headers['lat']+100)*100)[encode_latlon]
+    if 'ig4' not in self._headers.keys():
+      self._headers['ig4'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    self._headers['ig4'][encode_latlon] = np.round(self._headers['lon']*100)[encode_latlon]
 

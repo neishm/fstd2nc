@@ -42,6 +42,7 @@ sfc_agg_codes = {
   5: "all_area_types", # (aggregated)
   6: "urban",          # (urban)
 }
+reverse_sfc_agg_codes = dict((v,k) for k,v in sfc_agg_codes.items())
 # List of "aggregated" variables in rpnphy
 # To get the list, from the rpnphy git repository run:
 #  git grep 'ON=.*nagg' | sed 's/.*ON=//;s/ .*//'
@@ -150,4 +151,34 @@ class Sfc_Codes (BufferBase):
         var.deps.extend(coordinates)
 
 
+  def _unmakevars (self):
+    from fstd2nc.mixins import _axis_type
+    from fstd2nc.mixins.vcoords import encode_ip1
+    import numpy as np
 
+    # Re-encode surface types back to ip1 values.
+    levels = {}
+    for var in self._varlist:
+      if 'sfctype' in var.dims:
+        sfctype = var.getaxis('sfctype')
+        if id(sfctype) not in levels:
+          # Find the surface types.
+          surface_type = None
+          for v in self._varlist:
+            if v.name != 'surface_type': continue
+            if sfctype in v.axes:
+              surface_type = v
+              break
+          if surface_type is not None:
+            codes = [reverse_sfc_agg_codes[t.decode()] for t in surface_type.array]
+            codes = np.array(codes,dtype='float32')
+            kind = np.empty(len(codes),dtype='int32')
+            kind[:] = 3
+            ip1 = encode_ip1(kind,codes)
+            #TODO: let vcoords mixin do the encoding, if it can be run after
+            # this mixin.
+            levels[id(sfctype)] = _axis_type('ip1',{},ip1)
+        if id(sfctype) in levels:
+          var.axes[var.dims.index('sfctype')] = levels[id(sfctype)]
+
+    super(Sfc_Codes,self)._unmakevars()

@@ -28,56 +28,6 @@ except ImportError:  # Python 3.10
 #################################################
 # Provide various external array interfaces for the FSTD data.
 
-# Helper interface for ordering dask tasks based on FSTD record order.
-# Might provide a small speed boost when the OS employs a read-ahead buffer.
-# Based on dask.core.get_dependencies
-class _RecordOrder (object):
-  def __init__(self, dsk):
-    self.dask = dsk
-  def __call__ (self, arg):
-    dsk = self.dask
-    work = [arg]
-    while work:
-        new_work = []
-        for w in work:
-            typ = type(w)
-            if typ is tuple and w and isinstance(w[0], Callable):  # istask(w)
-                if w[0] is _read_block:
-                  return w[1], w[2]
-                else:
-                  new_work += w[1:]
-            elif typ is list:
-                new_work += w
-            elif typ is dict:
-                new_work += list(w.values())
-            else:
-                try:
-                    if w in dsk:
-                        new_work.append(dsk[w])
-                except TypeError:  # not hashable
-                    pass
-        work = new_work
-
-# Add a callback to dask to ensure FSTD records are read in a good order.
-try:
-  from dask.callbacks import Callback
-  class _FSTD_Callback (Callback):
-    def _start_state (self, dsk, state):
-      # Try sorting by FSTD filename, offset (if applicable)
-      try:
-        ready = sorted(state['ready'][::-1],key=_RecordOrder(dsk))
-        state['ready'] = ready[::-1]
-      except TypeError: pass  # Not applicable for this graph.
-  del Callback
-except ImportError:
-  pass
-
-# Only turn on this callback if explicitly requested by the user.
-# It may cause problems when there are large graphs being communicated
-# to a dask cluster environment.
-def force_strict_ordering ():
-  _FSTD_Callback().register()
-
 # Method for reading a block from a file.
 def _read_block (filename, offset, length):
   import numpy as np
@@ -105,26 +55,38 @@ def _read_block (filename, offset, length):
 
 class ExternOutput (BufferBase):
 
-  # Helper method to call decode routine using the given inputs.
+  # helper method to call decode routine using the given inputs.
   @classmethod
-  def _dasked_decode (cls, *args):
+  def _dasked_decode (cls, data):
+    # Scalar version first.
+    if not isinstance(data,list):
+      return cls._decode(data)
+    # Vectorized version.
+    out = []
+    for d in data:
+      out.append(cls._decode(d))
+    return out
+
+  # helper method to call decode routine using the given inputs.
+  @classmethod
+  def _dasked_postproc (cls, *args):
     keys = args[:-1:2]
     values = args[1::2]
-    # Scalar case (decoding single record)
+    # scalar case (decoding single record)
     if not any(isinstance(v,list) for v in values):
       kwargs = dict(zip(keys,values))
-      return cls._decode(**kwargs)
-    # Vectorized case (decoding multiple records into a single fused array)
+      return cls._postproc(**kwargs)
+    # vectorized case (decoding multiple records into a single fused array)
     nrec = [len(v) for v in values if isinstance(v,list)][0]
     values = [v if isinstance(v,list) else [v]*nrec for v in values]
     out = []
     for i in range(nrec):
       kwargs = dict((k,v[i]) for k,v in zip(keys,values))
-      out.append(cls._decode(**kwargs))
+      out.append(cls._postproc(**kwargs))
     import numpy as np
     return np.concatenate(out)
 
-  def _iter_dask (self, include_coords=True, fused=True):
+  def _iter_dask (self, include_coords=True, fused=False):
     """
     Iterate over all the variables, and convert to dask arrays.
     """
@@ -212,7 +174,10 @@ class ExternOutput (BufferBase):
         if addr.ndim > 1: addr = map(list,addr)
         length = self._headers[len_col][record_id]
         if length.ndim > 1: length = map(list,length)
+        # Read raw data from disk.
         rb = zip([_read_block]*nchunks, fname, addr, length)
+        # Decode the values.
+        rb = zip([self._dasked_decode]*nchunks, rb)
         # Skip the _read_blocks construct where we don't have file data.
         # (e.g. for missing records or where data coming from dask).
         rb = [_rb if fid >= 0 else None for _rb,fid in zip(rb,file_ids)]
@@ -232,7 +197,7 @@ class ExternOutput (BufferBase):
       # Add scalar arguments.
       for key, value in self._decoder_scalar_args().items():
         args.extend([[key]*nchunks, [value]*nchunks])
-      graphs = zip([self._dasked_decode]*nchunks, *args)
+      graphs = zip([self._dasked_postproc]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
       array[:] = list(graphs)
       shape = tuple(len(c) for c in var.chunks)
@@ -260,7 +225,7 @@ class ExternOutput (BufferBase):
       var = _var_type(var.name,var.atts,var.axes,array)
       yield var
 
-  def to_xarray (self, fused=True):
+  def to_xarray (self, fused=False):
     """
     Create an xarray interface for the RPN data.
     Requires the xarray and dask packages.
@@ -292,7 +257,7 @@ class ExternOutput (BufferBase):
 
     return out
 
-  def to_xarray_list (self, fused=True):
+  def to_xarray_list (self, fused=False):
     """
     Similar to the to_xarray method, but returns a list of xarray Datasets,
     one for each variable, instead of a single Dataset object.
@@ -326,6 +291,45 @@ class ExternOutput (BufferBase):
       out_list.append(out)
 
     return out_list
+
+  @classmethod
+  def from_xarray (cls, ds, **params):
+    """
+    Create a Buffer object from the given xarray object.
+    """
+    from fstd2nc.mixins import _var_type, _iter_type, _dim_type, _axis_type
+    import numpy as np
+    varlist = []
+    # Handle FSTD parameters passed in the method call.
+    ds = ds.copy()
+    ds.attrs.update(params)
+    # Handle FSTD parameters passed in as global attributes of the Dataset.
+    for varname, var in ds.variables.items():
+      var.attrs.update(ds.attrs)
+    # Handle FSTD parameters set as variable attributes.
+    for varname, var in ds.variables.items():
+      var.encoding.update(fstd_attrs=var.attrs)
+    # Collect dimensions and coordinates into a separate structure.
+    dims = {}
+    coords = {}
+    for dimname,dimsize in ds.dims.items():
+      if dimname in ds.variables:
+        dims[dimname] = _axis_type(dimname,dict(ds[dimname].attrs),np.array(ds[dimname]))
+      else:
+        dims[dimname] = _dim_type(dimname,dimsize)
+    for coordname, coord in ds.coords.items():
+      if coordname in dims: continue  # Already counted as a dimension.
+      coords[coordname] = _var_type(coordname, dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
+    # Construct the varlist.
+    for varname, var in ds.variables.items():
+      if varname in dims: continue
+      if varname in coords: continue
+      encoded = _var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data)
+      # Add coordinates.
+      encoded.atts.setdefault('coordinates',[coords[coordname] for coordname in ds[varname].coords if coordname in coords])
+      varlist.append(encoded)
+    # Decode the varlist into a table.
+    return cls._deserialize(varlist)
 
   def to_iris (self):
     """
@@ -408,7 +412,7 @@ class ExternOutput (BufferBase):
       isvalid = self._headers['d'] != None
       for i in range(self._nrecs):
         if isvalid[i]:
-          d[i] = self._headers['d'][i]
+          d[i] = self._headers['d'][i].T
     table['d'] = d[mask]
     return table
 
@@ -462,12 +466,12 @@ class ExternInput (BufferBase):
       # any subroutine is looking for this info.
       headers['address'] = np.empty(len(headers['nomvar']), dtype=object)
       headers['length'] = np.empty(len(headers['nomvar']), dtype=object)
-    # Fake file id (just so netcdf mixin _quick_load function doesn't crash).
+    # Fake file id (just so _read_record function doesn't crash).
     headers['file_id'] = np.empty(len(headers['nomvar']), dtype='int32')
     headers['file_id'][:] = -1
     # Add in data.
     headers['d'] = np.empty(len(headers['nomvar']), dtype=object)
-    headers['d'][:] = table['d']
+    headers['d'][:] = [d.T for d in table['d']]
 
     # Encapsulate this info in a structure.
     fake_buffer = cls.__new__(cls)

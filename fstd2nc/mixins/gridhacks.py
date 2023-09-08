@@ -184,6 +184,9 @@ def _unpack_grid (grid):
 
 
 class Interp (BufferBase):
+  # List of known fields that should be treated as vectors for the purpose of
+  # interpolation.
+  _vector_fields=("UU,VV","UT1,VT1","URT1,VRT1","UUW,VVW","UU2W,VV2W","UUI,VVI","UDST,VDST","UUN,VVN","UUX,VVX")
 
   @classmethod
   def _cmdline_args (cls, parser):
@@ -191,15 +194,45 @@ class Interp (BufferBase):
     super(Interp,cls)._cmdline_args(parser)
     #parser.add_argument('--interp', metavar="GRTYP,PARAM=VAL,PARAM=VAL,...", help=_("Interpolate to the specified grid."))
     parser.add_argument('--interp', metavar="GRTYP,PARAM=VAL,PARAM=VAL,...", help=SUPPRESS)
+    #parser.add_argument('--vector-fields', metavar="UFIELD,VFIELD", help=_("Specify a pair of fields to be treated as vectors.  Only needed if --interp is used on vector fields."))
+    parser.add_argument('--vector-fields', metavar="UFIELD,VFIELD", help=SUPPRESS)
+    #parser.add_argument('--scalar-fields', metavar="VAR1,VAR2,...", help=_("Disable vector interpolation for the specified fields."))
+    parser.add_argument('--scalar-fields', metavar="VAR1,VAR2,...", help=SUPPRESS)
 
   def __init__ (self, *args, **kwargs):
     """
-    interp : str or list, optional
+    interp : str or int, optional
         Interpolate to the specified grid.
+    vector_fields : str or list, optional
+        Specify a pair of fields to be treated as vectors.  Only needed if
+        interp is used on vector fields.
+    scalar_fields : str or list, optional
+        Disable vector interpolation for the specified fields.
     """
     import rpnpy.librmn.all as rmn
     import numpy as np
+    from fstd2nc.extra import structured_array
+    from collections import OrderedDict
+
+    self._decoder_data = self._decoder_data + (('u_data',('u_address','u_length','u_d')),('v_data',('v_address','v_length','v_d')))
+
     interp = kwargs.pop('interp',None)
+
+    # Determine which fields should be interpolated as vectors.
+    vector_fields = kwargs.pop('vector_fields',None)
+    if vector_fields is None: vector_fields = []
+    if isinstance(vector_fields,str):
+      vector_fields = [vector_fields]
+    vector_fields = tuple(vector_fields) + self._vector_fields
+    vector_fields = [v.split(',') if isinstance(v,str) else v for v in vector_fields]
+    scalar_fields = kwargs.pop('scalar_fields',None)
+    if scalar_fields is None: scalar_fields = []
+    if isinstance(scalar_fields,str):
+      scalar_fields = scalar_fields.split(',')
+    vector_fields = [(u,v) for u,v in vector_fields if u not in scalar_fields and v not in scalar_fields]
+    b = lambda s: s.ljust(4).encode()
+    vector_fields = [(b(u),b(v)) for u,v in vector_fields]
+
     super(Interp,self).__init__(*args,**kwargs)
     # Extract interpolation grid.
     if interp is not None:
@@ -218,6 +251,56 @@ class Interp (BufferBase):
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_DEGREE, rmn.EZ_EXTRAP_VALUE)
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_VALUE, self._fill_value)
 
+      # Locate wind components.
+      is_wind = np.isin(self._headers['nomvar'],vector_fields)
+      if not np.any(is_wind): return
+      # Set U,V record info for the interpolator.
+      nrecs = len(self._headers['name'])
+      self._headers['u_address'] = np.empty(nrecs,'int32')
+      self._headers['u_address'][:] = -1
+      self._headers['u_length'] = np.empty(nrecs,'int32')
+      self._headers['u_length'][:] = -1
+      self._headers['v_address'] = np.empty(nrecs,'int32')
+      self._headers['v_address'][:] = -1
+      self._headers['v_length'] = np.empty(nrecs,'int32')
+      self._headers['v_length'][:] = -1
+      for u,v in vector_fields:
+        this_uv = np.isin(self._headers['nomvar'],(u,v))
+        if sum(this_uv) == 0: continue
+        # The following is adapted from masks mixin
+        nomvar = self._headers['nomvar'][this_uv]
+        typvar = self._headers['typvar'][this_uv]
+        etiket = self._headers['etiket'][this_uv]
+        datev = self._headers['datev'][this_uv]
+        ip1 = self._headers['ip1'][this_uv]
+        ip2 = self._headers['ip2'][this_uv]
+        ip3 = self._headers['ip3'][this_uv]
+        dltf = self._headers['dltf'][this_uv]
+        # Figure out how to pair up the wind components
+        # Requires O(n log n) time, which is better than O(n^2) for naive lookup
+        # on each record.
+        keys = OrderedDict([('dltf',dltf),('etiket',etiket),('datev',datev),('ip1',ip1),('ip2',ip2),('ip3',ip3),('typvar',typvar),('nomvar',nomvar)])
+        ind = np.argsort(structured_array(keys))
+        nomvar = nomvar[ind]
+        typvar = typvar[ind]
+        etiket = etiket[ind]
+        datev = datev[ind]
+        ip1 = ip1[ind]
+        ip2 = ip2[ind]
+        ip3 = ip3[ind]
+        dltf = dltf[ind]
+        is_paired = (etiket[:-1] == etiket[1:]) & (datev[:-1] == datev[1:]) & (ip1[:-1] == ip1[1:]) & (ip2[:-1] == ip2[1:]) & (ip3[:-1] == ip3[1:])
+        is_paired_u = is_paired & (nomvar[:-1] == u) & (nomvar[1:] == v)
+        is_paired_u = np.where(is_paired_u)[0]
+        is_paired_v = is_paired_u + 1  # Assume V component follows U
+        u_recid = np.arange(nrecs)[this_uv][ind][is_paired_u]
+        v_recid = np.arange(nrecs)[this_uv][ind][is_paired_v]
+        # If this is U record, then V record goes into auxiliary data, and
+        # vice versa.
+        self._headers['v_address'][u_recid] = self._headers['address'][v_recid]
+        self._headers['v_length'][u_recid] = self._headers['length'][v_recid]
+        self._headers['u_address'][v_recid] = self._headers['address'][u_recid]
+        self._headers['u_length'][v_recid] = self._headers['length'][u_recid]
 
   def _makevars (self):
     from fstd2nc.mixins import _iter_type
@@ -254,23 +337,41 @@ class Interp (BufferBase):
 
   # Handle grid interpolations from raw binary array.
   @classmethod
-  def _decode (cls, data, source_grid=None, dest_grid=None, **kwargs):
+  def _postproc (cls, data, u_data=None, v_data=None, source_grid=None, dest_grid=None, **kwargs):
     import rpnpy.librmn.all as rmn
     import numpy as np
     # If no interpolation requested, nothing to do.
     if source_grid is None or dest_grid is None:
-      return super(Interp,cls)._decode (data, **kwargs)
+      return super(Interp,cls)._postproc (data, **kwargs)
     source_grid = _unpack_grid(source_grid)
     dest_grid = _unpack_grid(dest_grid)
     if source_grid < 0:
       raise ValueError("Source data is not on a recognized grid.  Unable to interpolate.")
-    d = super(Interp,cls)._decode (data, **kwargs).T
+    # Handle other post-processing of the input fields that occur before this
+    # mixin.
+    d = super(Interp,cls)._postproc (data, **kwargs).T
+    # Decode auxiliary field(s), if they're needed.
+    if u_data is not None:
+      u = super(Interp,cls)._postproc (u_data, **kwargs).T
+    else:
+      u = None
+    if v_data is not None:
+      v = super(Interp,cls)._postproc (v_data, **kwargs).T
+    else:
+      v = None
     with _lock:
       # Propogate any fill values to the interpolated grid.
       fill_value = kwargs.get('fill_value')
       in_mask = np.zeros(d.shape, order='F', dtype='float32')
       in_mask[d==fill_value] = 1.0
-      d = rmn.ezsint (dest_grid, source_grid, d)
+      # Is this a U component? (i.e. use this + extra V component?)
+      if v is not None:
+        d, _ = rmn.ezuvint (dest_grid, source_grid, d, v)
+      # Is this a V component? (i.e. use this + extra U component?)
+      elif u is not None:
+        _, d = rmn.ezuvint (dest_grid, source_grid, u, d)
+      else:
+        d = rmn.ezsint (dest_grid, source_grid, d)
       out_mask = rmn.ezsint (dest_grid, source_grid, in_mask)
       d[out_mask!=0] = fill_value
       # Return the data for the interpolated field.
@@ -282,6 +383,10 @@ class Interp (BufferBase):
 #
 
 class YinYang (BufferBase):
+  # Default parameter values (overridden at init time).
+  _yin = False
+  _yang = False
+
   @classmethod
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
@@ -308,6 +413,10 @@ class YinYang (BufferBase):
     # Update yin-yang records to appear as regular rotated grids.
     if not self._yin and not self._yang:
       return
+    # Add yin/yang selection boolean flags as columns.
+    self._decoder_extra_args = self._decoder_extra_args + ('yin','yang')
+    self._headers['yin'] = (self._headers['grtyp'] == b'U') & self._yin
+    self._headers['yang'] = (self._headers['grtyp'] == b'U') & self._yang
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
@@ -325,6 +434,7 @@ class YinYang (BufferBase):
     for gid in np.unique(gids):
       if gid<0: continue
       source_grid = rmn.decodeGrid(int(gid))
+      if 'subgrid' not in source_grid: continue   # Not a YY grid?
       dest_grid = source_grid['subgrid'][yy_ind]
       self._writeGrid (dest_grid)
       mask = (self._headers['ismeta']==0) & (self._headers['grtyp']==b'U')
@@ -339,25 +449,17 @@ class YinYang (BufferBase):
       for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
         self._headers[key][submask] = dest_grid[key]
 
-  def _decoder_scalar_args (self):
-    kwargs = super(YinYang,self)._decoder_scalar_args()
-    if self._yin: kwargs['yin'] = True
-    if self._yang: kwargs['yang'] = True
-    return kwargs
-
   # Handle grid interpolations from raw binary array.
   @classmethod
-  def _decode (cls, data, yin=False, yang=False, **kwargs):
+  def _postproc (cls, data, yin=False, yang=False, **kwargs):
     if not yin and not yang:
-      return super(YinYang,cls)._decode (data, **kwargs)
-    prm = cls._decode_headers(data[:72])
-    prm = dict((k,v[0]) for k,v in prm.items())
-    d = super(YinYang,cls)._decode (data, **kwargs).T
-    if prm['grtyp'] == b'U' and yin:
-      d = d[:,:prm['nj']//2]
-    elif prm['grtyp'] == b'U' and yang:
-      d = d[:,prm['nj']//2:]
-    return d.T
+      return super(YinYang,cls)._postproc (data, **kwargs)
+    d = super(YinYang,cls)._postproc (data, **kwargs)
+    nj, ni = d.shape[-2:]
+    if yin:
+      return d[:nj//2,:]
+    elif yang:
+      return d[nj//2:,:]
 
 #################################################
 # Mixin for grid cropping.
@@ -451,10 +553,10 @@ class Crop (BufferBase):
         self._headers['crop_i0'][submask] = i0
         self._headers['crop_iN'][submask] = iN
 
-  # Handle cropping from raw binary array.
+  # Handle cropping of the data.
   @classmethod
-  def _decode (cls, data, crop_j0=None, crop_jN=None, crop_i0=None, crop_iN=None, **kwargs):
-    d = super(Crop,cls)._decode (data, **kwargs)
+  def _postproc (cls, data, crop_j0=None, crop_jN=None, crop_i0=None, crop_iN=None, **kwargs):
+    d = super(Crop,cls)._postproc (data, **kwargs)
     if crop_j0 is not None and crop_jN is not None:
       d = d[crop_j0:crop_jN,:]
     if crop_i0 is not None and crop_iN is not None:

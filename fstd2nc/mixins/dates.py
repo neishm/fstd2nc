@@ -27,9 +27,19 @@ from fstd2nc.mixins import BufferBase
 # Scalar version, using simple datetime objects.
 def stamp2datetime_scalar (date):
   from rpnpy.rpndate import RPNDate
+  from datetime import datetime, timedelta
   dummy_stamps = (0, 10101011, 101010101)
   if date not in dummy_stamps:
-    return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
+    # Normal date range
+    if date > 0:
+      return RPNDate(int(date)).toDateTime().replace(tzinfo=None)
+    # Extended date range
+    else:
+      #TODO: Use RPNDate for both cases, once support for negative stamps is
+      # implemented on that end.
+      tmp = date + 1294967266
+      hours = int(((tmp//10)<<3) + (tmp % 10))
+      return datetime(1,1,1) + timedelta(hours=hours) - timedelta(days=365)
   else:
     return None
 # Vectorized version, using datetime64 objects.
@@ -42,7 +52,34 @@ def stamp2datetime64 (date):
     return np.asarray(date, dtype='datetime64[s]')[()]
   else:
     return None
-
+# Convert datetime64 objects back to an RPN date stamp.
+@vectorize
+def datetime2stamp (date):
+  from rpnpy.rpndate import RPNDate
+  import numpy as np
+  from datetime import datetime, timedelta
+  if date is None: return 0
+  if not isinstance(date,datetime):
+    stamp = date - np.datetime64('1970-01-01T00:00:00')
+    stamp /= np.timedelta64(1,'s')
+    date = datetime.utcfromtimestamp(stamp)
+  # Work around an issue with rpnpy handling dates in the extended range.
+  try:
+    return RPNDate(date).datev
+  except ValueError:
+    # Extended range encoding
+    hours = date + timedelta(days=365) - datetime(1,1,1)
+    hours = hours // timedelta(hours=1)
+    tmp = (hours>>3)*10 + (hours&0x7)
+    stamp = tmp - 1294967266
+    return stamp
+# Fixup for dates out of the datetime64 range.
+@vectorize
+def cftime2datetime64 (time):
+  import numpy as np
+  time = time.strftime('%Y-%m-%dT%H:%M:%S')
+  time = np.datetime64(time)
+  return time
 
 #################################################
 # Mixin for handling dates/times.
@@ -104,7 +141,7 @@ class Dates (BufferBase):
     if self._squash_forecasts:
       fields['time'] = datev
     else:
-      fields['time'] = dateo
+      fields['time'] = dateo.copy() # Copy so it's not the same as reftime.
 
   # Add time and forecast axes to the data stream.
   def _makevars (self):
@@ -137,3 +174,102 @@ class Dates (BufferBase):
         axis.name = 'forecast'
         axis.atts['units'] = 'hours'
 
+  def _unmakevars (self):
+    import numpy as np
+    # Re-attach leadtime, reftime as coordinates for variables.
+    # First, find all leadtime/reftime coordinates.
+    leadtimes = dict()
+    reftimes = dict()
+    # Helper method - find the time dimension of a variable.
+    # Returned as an id.
+    def get_time (var):
+      time = [axis for axis in var.axes if axis.name == 'time']
+      if len(time) == 0:
+        return None
+      else:
+        return id(time[0])
+
+    for var in self._varlist:
+      time = get_time(var)
+      if var.name == 'leadtime':
+        leadtimes[time] = var
+      if var.name == 'reftime':
+        reftimes[time] = var
+
+    # Remove these from the varlist.
+    self._varlist = [var for var in self._varlist if var.name not in ('leadtime','reftime')]
+    # Now, add these coordinates into the vars.
+    for var in self._varlist:
+      time = get_time(var)
+      if time in leadtimes:
+        var.atts.setdefault('coordinates',[]).append(leadtimes[time])
+      if time in reftimes:
+        var.atts.setdefault('coordinates',[]).append(reftimes[time])
+
+    # Continue processing the variables.
+    super (Dates,self)._unmakevars()
+
+    # Make sure times are the right type.
+    # For dates in far past / future, we may get a list of cftime objects instead.
+    # This is a side-effect of some logic in xarray I believe.
+    if 'time' in self._headers.keys() and self._headers['time'].dtype == object:
+      self._headers['time'] = cftime2datetime64(self._headers['time'])
+
+    # Get leadtime column (may be coming from forecast axis).
+    if 'forecast' in self._headers.keys():
+      self._headers['leadtime'] = self._headers['forecast']
+    if 'leadtime' not in self._headers.keys():
+      self._headers['leadtime'] = np.ma.masked_all(self._nrecs, dtype=int)
+    # Convert leadtime to units of hours if it's a timedelta64.
+    if self._headers['leadtime'].dtype == 'timedelta64[ns]':
+      self._headers['leadtime'] = self._headers['leadtime'] / np.timedelta64(3600,'s')
+    # Look at reftime column, just so it's acknowledged and not flagged as
+    # unhandled.
+    if 'reftime' in self._headers.keys():
+      self._headers['reftime']
+
+    # Get datev, dateo, npas, using time, leadtime, deet.
+    if 'deet' not in self._headers.keys():
+      self._headers['deet'] = np.ma.masked_all(self._nrecs, dtype='int32')
+    if hasattr(self._headers['deet'],'mask'):
+      # Set default value of 60s
+      self._headers['deet'] = self._headers['deet'].filled(60)
+    self._headers['npas'] = np.ma.array(self._headers['leadtime']*3600 / self._headers['deet'], dtype='int32')
+    # If no npas available, assume zero (no forecast period?)
+    if hasattr(self._headers['npas'],'mask'):
+      self._headers['npas'] = self._headers['npas'].filled(0)
+    if 'time' in self._headers.keys():
+      if 'forecast' in self._headers.keys():
+        self._headers['dateo'] = self._headers['time']
+        self._headers['datev'] = self._headers['time'] + self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
+      else:
+        self._headers['dateo'] = self._headers['time'] - self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
+        self._headers['datev'] = self._headers['time']
+
+    else:  # Degenerate case - no variables with time axes, so put some default
+      self._headers['dateo'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
+      self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
+    # Convert dateo and datev into RPN date stamps.
+    if 'datev' not in self._headers.keys():
+      self._headers['datev'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
+    if 'dateo' not in self._headers.keys():
+      self._headers['dateo'] = np.ma.masked_all(self._nrecs,dtype='datetime64[s]')
+    # Convert from date to stamp.
+    self._headers['datev'] = np.ma.array(datetime2stamp(self._headers['datev']),dtype=int)
+    # Set fill value.
+    self._headers['datev'] = self._headers['datev'].filled(0)
+    # Convert from date to stamp.
+    self._headers['dateo'] = np.ma.array(datetime2stamp(self._headers['dateo']),dtype=int)
+    # Set fill value.
+    self._headers['dateo'] = self._headers['dateo'].filled(0)
+
+    # Set ip2 values.
+    if 'ip2' not in self._headers.keys():
+      self._headers['ip2'] = np.ma.masked_all(self._nrecs,dtype='int32')
+    # Skip entries that are already using ip2 for something.
+    ip2_as_forecast = np.ma.getmaskarray(self._headers['ip2'])
+    self._headers['ip2'][ip2_as_forecast] = (self._headers['npas'] * self._headers['deet'] // 3600)[ip2_as_forecast]
+
+    # Set default values.
+    if hasattr(self._headers['ip2'],'mask'):
+      self._headers['ip2'] = self._headers['ip2'].filled(0)

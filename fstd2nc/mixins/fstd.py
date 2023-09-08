@@ -59,6 +59,8 @@ class FSTD (BufferBase):
   _format_singular = _("an RPN standard file")
   _format_plural = _("RPN standard file(s)")
 
+  _inner_axes = ('k','j','i')
+
   # Keep a reference to fstd98 so it's available during cleanup.
   try:
     from rpnpy.librmn import fstd98 as _fstd98
@@ -123,8 +125,6 @@ class FSTD (BufferBase):
     """
     import numpy as np
 
-    self._inner_axes = ('k','j','i')
-
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj','nk') + self._var_id
     self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s', '%(nk)sL') + self._human_var_id
@@ -148,10 +148,10 @@ class FSTD (BufferBase):
     # that provide all unique metadata records.
     # This will make it easier to look up the meta records later.
     meta_mask = np.zeros(self._nrecs,dtype='bool')
-    for meta_name in self._meta_records:
+    for meta_name in self._meta_records():
       meta_name = (meta_name+b'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name)
-    for meta_name in self._maybe_meta_records:
+    for meta_name in self._maybe_meta_records():
       meta_name = (meta_name+b'   ')[:4]
       meta_mask |= (self._headers['nomvar'] == meta_name) & ((self._headers['ni']==1)|(self._headers['nj']==1))
 
@@ -159,7 +159,7 @@ class FSTD (BufferBase):
     self._headers['ismeta'] = np.empty(self._nrecs, dtype='bool')
     self._headers['ismeta'][:] = meta_mask
 
-    # Aliases for iner dimensions
+    # Aliases for inner dimensions
     self._headers['k'] = self._headers['nk']
     self._headers['j'] = self._headers['nj']
     self._headers['i'] = self._headers['ni']
@@ -176,13 +176,9 @@ class FSTD (BufferBase):
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 
   # How to decode the data from a raw binary array.
-  @classmethod
-  def _decode (cls, data):
+  @staticmethod
+  def _decode (data):
     from fstd2nc.extra import decode
-    # Degenerate case: decoding handled in opaque dask layer, nothing to do.
-    if hasattr(data,'dask'):
-      import numpy as np
-      return np.array(data.T)
     nbits = int(data[0x0b])
     datyp = int(data[0x13])
     dtype = dtype_fst2numpy(datyp, nbits)
@@ -200,7 +196,58 @@ class FSTD (BufferBase):
     from fstd2nc.extra import raw_headers
     return raw_headers(filename)
 
-  def to_fstd (self, filename):
+  # Reconstructing FSTD records from external data.
+  def _unmakevars (self):
+    import numpy as np
+    # Generate a table of records (with incomplete information).
+    super(FSTD,self)._unmakevars()
+    # Aliases for inner dimensions
+    self._headers['nk'] = self._headers['k']
+    self._headers['nj'] = self._headers['j']
+    self._headers['ni'] = self._headers['i']
+    # Add other FSTD-related columns that are expected to be there.
+    self._headers['nomvar'] = np.empty(self._nrecs,dtype='|S4')
+    self._headers['nomvar'][:] = self._headers['name']
+    self._headers['ismeta'] = np.zeros(self._nrecs,'bool')
+    self._headers['ismeta'] |= np.isin(self._headers['nomvar'],self._meta_records())
+    self._headers['ismeta'] |= np.isin(self._headers['nomvar'],self._maybe_meta_records()) & ((self._headers['ni']==1)|(self._headers['nj']==1))
+    self._headers['selected'] = ~self._headers['ismeta']
+    self._headers['address'] = np.empty(self._nrecs,dtype=int)
+    self._headers['address'][:] = -1
+    # Some columns may not have a specific value to put in the table, so put
+    # in some placeholder value.
+    def add_column (colname, dtype, default):
+      if colname in self._headers.keys():
+        self._headers[colname] = self._headers[colname].astype(dtype)
+      else:
+        self._headers[colname] = np.empty(self._nrecs,dtype=dtype)
+        self._headers[colname][:] = default
+      if hasattr(self._headers[colname],'mask'):
+        self._headers[colname] = self._headers[colname].filled(default)
+
+    add_column ('typvar', '|S2', default='P')
+    add_column ('etiket', '|S12', default='')
+    add_column ('datyp', 'int32', default=133)
+    add_column ('nbits', 'int32', default=32)
+    add_column ('ip3', 'int32', default=0)
+    add_column ('deet', 'int32', default=60)
+    add_column ('npas', 'int32', default=0)
+
+  # Define an entry point for writing records to a file.
+  # Allows the logic to be modified by mixins (such as masks).
+  @classmethod
+  def _fstecr (cls, outfile, rec, **extra):
+    import rpnpy.librmn.all as rmn
+    # Make sure we pass in single-precision when expected.
+    if rec.get('nbits',32) <= 32 and rec['d'].dtype.name.endswith('64'):
+      rec['d'] = rec['d'].astype(rec['d'].dtype.name[:-2]+'32')
+    # Disable compression on small records, to silence warning from
+    # armn_compress32.
+    if rec['ni'] <= 16 or rec['nj'] <= 16:
+      rec['datyp'] %= 128
+    rmn.fstecr(outfile, rec, **extra)
+
+  def to_fstd (self, filename, append=False, rewrite=False):
     """
     Write data to an FSTD file.
     """
@@ -208,13 +255,13 @@ class FSTD (BufferBase):
     from os import remove
     import rpnpy.librmn.all as rmn
     import numpy as np
-    if exists(filename): remove(filename)
+    if exists(filename) and not append and not rewrite: remove(filename)
     outfile = rmn.fstopenall(filename, rmn.FST_RW)
     for i in np.where(self._headers['selected'] | self._headers['ismeta'])[0]:
       rec = self._fstluk(i)
       # Ensure data is Fortran-contiguous for librmn.
       rec['d'] = np.ascontiguousarray(rec['d'].T).T
-      rmn.fstecr(outfile, rec)
+      self._fstecr(outfile, rec, rewrite=rewrite)
     rmn.fstcloseall(outfile)
 
   #

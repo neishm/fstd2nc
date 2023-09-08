@@ -78,8 +78,8 @@ class CCCMixin(BufferBase):
   # array of values.  Uses the 'address' and 'length' entries from _headers to
   # determine the location and length of each raw data record.
   # This method is called from the xarray interface, and to_netcdf().
-  @classmethod
-  def _decode (cls, data):
+  @staticmethod
+  def _decode (data):
     import numpy as np
     header = data[4:68].view('>i8')
     nlon = header[4]

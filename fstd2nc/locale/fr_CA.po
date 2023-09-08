@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-03-28 05:06+0000\n"
+"POT-Creation-Date: 2023-08-30 17:32+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -469,6 +469,9 @@ msgstr ""
 "Problème de traitement du niveau de diagnostic de %s comme niveau de modèle "
 "- le divise dans un champ séparé."
 
+msgid "Unable to fuse some variables."
+msgstr "Impossible de fusionner la ou les variables: "
+
 msgid "show program's version number and exit"
 msgstr "afficher le numéro de version du programme et quitter"
 
@@ -547,7 +550,7 @@ msgstr "Trouve %s %s"
 
 #, python-format
 msgid "Missing some records for %s."
-msgstr "Quelque enregistrements manquants pour %s sont."
+msgstr "Quelque enregistrements sont manquants pour %s."
 
 msgid "Use metadata from the specified variable dictionary (XML format)."
 msgstr ""
@@ -558,9 +561,10 @@ msgstr ""
 "Similaire à ce qui précéde, mais utilise le dictionnaire opérationnel "
 "standard CMC-RPN."
 
-msgid "$AFSISIO undefined.  Can't find operational dictionary."
+msgid "Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"
 msgstr ""
-"$AFSISIO non défini.  Impossible de trouver le dictionnaire opérationnel."
+"Impossible de trouver $CMCCONST/opdict/ops."
+"variable_dictionary."
 
 msgid ""
 "Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary."
@@ -568,6 +572,11 @@ msgid ""
 msgstr ""
 "Impossible de trouver $AFSISIO/datafiles/constants/opdict/ops."
 "variable_dictionary."
+
+msgid ""
+"Neither $CMCCONST nor $AFSISIO defined.  Can't find operational dictionary."
+msgstr ""
+"Ni $CMCCONST ni $AFSISIO définis.  Impossible de trouver le dictionnaire opérationnel."
 
 #, python-format
 msgid "Unable to find '%s'"

@@ -61,6 +61,9 @@ setup (
       'ccc2nc = cccbuffer.__main__:run',
       'cccdump = cccbuffer.cccdump:run',
     ],
+    'xarray.backends': [
+      'fstd = fstd2nc._xarray_hook:FSTDBackendEntrypoint'
+    ],
   },
 
 )
