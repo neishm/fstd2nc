@@ -190,15 +190,13 @@ data.to_netcdf("myfile.nc", reference_date='2000-01-01')
 Interfacing with xarray
 ---------------------------------------------------------------------------------
 
-For more complicated conversions, you can manipulate the data as an [xarray.Dataset](http://xarray.pydata.org/en/stable/data-structures.html#dataset) object by using the `to_xarray()` method:
+For more complicated conversions, you can manipulate the data as an [xarray.Dataset](http://xarray.pydata.org/en/stable/data-structures.html#dataset) object:
 ```python
-import fstd2nc
+import xarray as xr
 
 # Open the FSTD file.
-data = fstd2nc.Buffer("myfile.fst")
-
 # Access the data as an xarray.Dataset object.
-dataset = data.to_xarray()
+dataset = xr.open_dataset("myfile.fst", engine="fstd")
 print (dataset)
 
 # Convert surface pressure to Pa.
