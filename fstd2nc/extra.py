@@ -204,29 +204,38 @@ def decode_headers (raw):
   etik6a = raw[:,5,1]//4
   et = raw[:,6,0]//256
   etikbc, _typvar = divmod(et, 4096)
+  del et
   _nomvar = raw[:,6,1]//256
   np.divmod(raw[:,7,0],16, out['ip1'], temp8)
   out['ip2'][:] = raw[:,7,1]//16
   out['ip3'][:] = raw[:,8,0]//16
-  date_stamp = raw.astype('int32')[:,8,1]
+  date_stamp = raw[:,8,1].astype('int32')
   # Reassemble and decode.
   # (Based on fstd98.c)
   etiket_bytes = np.empty((nrecs,12),dtype='ubyte')
   for i in range(5):
     etiket_bytes[:,i] = ((etik15 >> ((4-i)*6)) & 0x3f) + 32
+  del etik15
   for i in range(5,10):
     etiket_bytes[:,i] = ((etik6a >> ((9-i)*6)) & 0x3f) + 32
+  del etik6a
   etiket_bytes[:,10] = ((etikbc >> 6) & 0x3f) + 32
   etiket_bytes[:,11] = (etikbc & 0x3f) + 32
+  del etikbc
   out['etiket'][:] = etiket_bytes.flatten().view('|S12')
+  del etiket_bytes
   nomvar_bytes = np.empty((nrecs,4),dtype='ubyte')
   for i in range(4):
     nomvar_bytes[:,i] = ((_nomvar >> ((3-i)*6)) & 0x3f) + 32
+  del _nomvar
   out['nomvar'][:] = nomvar_bytes.flatten().view('|S4')
+  del nomvar_bytes
   typvar_bytes = np.empty((nrecs,2),dtype='ubyte')
   typvar_bytes[:,0] = ((_typvar >> 6) & 0x3f) + 32
   typvar_bytes[:,1] = ((_typvar & 0x3f)) + 32
+  del _typvar
   out['typvar'][:] = typvar_bytes.flatten().view('|S2')
+  del typvar_bytes
   # Convert raw stamp to RPN date code.
   # Two cases: positive = regular, negative = extended range.
   out['datev'][:] = np.where (date_stamp >= 0,
@@ -246,6 +255,7 @@ def decode_headers (raw):
     (date_stamp >> 3) * 10 + (date_stamp & 0x7),
     ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
   )
+  del date_stamp
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0
