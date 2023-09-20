@@ -177,7 +177,6 @@ def decode_headers (raw):
   out['ip2'] = np.empty(nrecs, dtype='int32')
   out['ip3'] = np.empty(nrecs, dtype='int32')
   out['datev'] = np.empty(nrecs, dtype='int32')
-  out['dateo'] = np.empty(nrecs, dtype='int32')
   out['xtra1'] = np.empty(nrecs, dtype='uint32')
   out['xtra2'] = np.empty(nrecs, dtype='uint32')
   out['xtra3'] = np.empty(nrecs, dtype='uint32')
@@ -242,20 +241,9 @@ def decode_headers (raw):
     (date_stamp >> 3) * 10 + (date_stamp & 0x7),
     ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
   )
-  # Compute date of origin.
-  # Note: this dateo calculation is based on my assumption that
-  # the raw stamps increase in 5-second intervals.
-  # Doing it this way to avoid a gazillion calls to incdat.
-  # Also, for negative date_stamp this is 1-hour units.
-  date_stamp = np.where (date_stamp >= 0,
-    date_stamp - (out['deet']*out['npas'])//5,
-    date_stamp - (out['deet']*out['npas'])//3600
-  )
-  out['dateo'][:] = np.where (date_stamp >= 0,
-    (date_stamp >> 3) * 10 + (date_stamp & 0x7),
-    ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
-  )
   del date_stamp
+  # NOTE: Date of origin is now calculated in the dates mixin, since it's more
+  # involved than a simple arithmetic operation.
   out['xtra1'][:] = out['datev']
   out['xtra2'][:] = 0
   out['xtra3'][:] = 0

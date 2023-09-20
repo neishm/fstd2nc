@@ -124,13 +124,12 @@ class Dates (BufferBase):
     # Calculate the forecast (in hours).
     fields = self._headers
     fields['leadtime']=fields['deet']*fields['npas']/3600.
-    dateo = stamp2datetime64(fields['dateo'])
     datev = stamp2datetime64(fields['datev'])
     # Convert date stamps to datetime objects, filtering out dummy values.
-    dateo = np.ma.asarray(dateo, dtype='datetime64[s]')
     datev = np.ma.asarray(datev, dtype='datetime64[s]')
-    dateo.mask = np.isnat(dateo)
     datev.mask = np.isnat(datev)
+    # Compute date of origin.
+    dateo = datev - (fields['deet']*fields['npas']).astype('timedelta64[s]')
     # Where there are dummy dates, ignore the forecast information too.
     forecast = np.ma.asarray(fields['leadtime'], dtype='float32')
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))

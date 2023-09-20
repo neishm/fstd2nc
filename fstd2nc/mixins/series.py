@@ -172,7 +172,7 @@ class Series (BufferBase):
       # Note: the information in 'HH' is actually the hour of validity.
       # Need to subtract the hour from the date of origin in order to get
       # the leadtime.
-      starting_hour = stamp2datetime_scalar(forecast_header['dateo']).hour
+      starting_hour = stamp2datetime_scalar(forecast_header['datev']).hour - forecast_header['npas']*forecast_header['deet']
       array = forecast_header['d'].flatten() - starting_hour
       forecast_timedelta = np.array(array*3600,'timedelta64[s]')
       forecast_axis = _axis_type('forecast',atts,array)

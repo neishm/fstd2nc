@@ -374,7 +374,7 @@ class ExternOutput (BufferBase):
     from dask import delayed
     import dask.array as da
     # Put all the header info into a dictionary.
-    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
+    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
     # Create a mask to exclude deleted / overwritten / unselected records.
     # Include all meta (coordinate) records in the output.
@@ -447,7 +447,7 @@ class ExternInput (BufferBase):
     if hasattr(table,'to_pandas'):
       table = table.to_pandas()
     # Construct the record header info from the table.
-    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'dateo', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
+    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     headers = {}
     for col in fields:
       headers[col] = table[col].values.copy()
