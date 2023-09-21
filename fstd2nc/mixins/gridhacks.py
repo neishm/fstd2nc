@@ -411,8 +411,10 @@ class YinYang (BufferBase):
       return
     # Add yin/yang selection boolean flags as columns.
     self._decoder_extra_args = self._decoder_extra_args + ('yin','yang')
-    self._headers['yin'] = (self._headers['grtyp'] == b'U') & yin
-    self._headers['yang'] = (self._headers['grtyp'] == b'U') & yang
+    if yin:
+      self._headers['yin'] = (self._headers['grtyp'] == b'U')
+    elif yang:
+      self._headers['yang'] = (self._headers['grtyp'] == b'U')
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
