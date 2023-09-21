@@ -55,36 +55,72 @@ def _read_block (filename, offset, length):
 
 class ExternOutput (BufferBase):
 
-  # helper method to call decode routine using the given inputs.
+  # Helper method to read, decode, and post-process the data in one go.
   @classmethod
-  def _dasked_decode (cls, data):
-    # Scalar version first.
-    if not isinstance(data,list):
-      return cls._decode(data)
-    # Vectorized version.
-    out = []
-    for d in data:
-      out.append(cls._decode(d))
-    return out
-
-  # helper method to call decode routine using the given inputs.
-  @classmethod
-  def _dasked_postproc (cls, *args):
-    keys = args[:-1:2]
-    values = args[1::2]
-    # scalar case (decoding single record)
-    if not any(isinstance(v,list) for v in values):
-      kwargs = dict(zip(keys,values))
-      return cls._postproc(**kwargs)
-    # vectorized case (decoding multiple records into a single fused array)
-    nrec = [len(v) for v in values if isinstance(v,list)][0]
-    values = [v if isinstance(v,list) else [v]*nrec for v in values]
+  def _dasked_read (cls, *args):
+    import numpy as np
+    filename = args[0]
+    shape = args[-1]
+    # Extract arguments, read and decode any data arguments.
+    kwargs = {}
+    key = 'data'
+    i = 1
+    while i < len(args)-1:
+      if isinstance(args[i],str):
+        key = args[i]
+        i = i + 1
+        continue
+      # Single argument - scalar or external array?
+      if isinstance(args[i+1],str) or i == len(args)-2:
+        kwargs[key] = args[i]
+        i = i + 1
+      # Dual arguments (address + length)?
+      else:
+        offset = args[i]
+        length = args[i+1]
+        ###
+        # Scalar version first.
+        if not hasattr(offset,'__len__'):
+          # Skip addresses that are -1 (indicates no data available).
+          # E.g. for masked data, if no corresponding mask available
+          if offset < 0:
+            kwargs[key] = None
+            i = i + 2
+            continue
+          with open(filename,'rb') as f:
+            f.seek (offset,0)
+            data = np.fromfile(f,'B',length)
+            data = cls._decode(data)
+            kwargs[key] = data
+          i = i + 2
+          continue
+        # Vectorized version.
+        kwargs[key] = []
+        with open(filename,'rb') as f:
+          for o, l in zip(offset, length):
+            # Skip addresses that are -1 (indicates no data available).
+            # E.g. for masked data, if no corresponding mask available
+            if o < 0:
+              kwargs[key].append(None)
+              continue
+            f.seek (o,0)
+            data = np.fromfile(f,'B',l)
+            data = cls._decode(data)
+            kwargs[key].append(data)
+        i = i + 2
+    # Post-processing
+    # Scalar case:
+    if not any(isinstance(v,list) for v in kwargs.values()):
+      data = cls._postproc(**kwargs)
+      return data.reshape(shape)
+    # Vector case
+    # First, broadcast any scalar arguments into vector arguments.
+    nrec = [len(v) for v in kwargs.values() if isinstance(v,list)][0]
     out = []
     for i in range(nrec):
-      kwargs = dict((k,v[i]) for k,v in zip(keys,values))
-      out.append(cls._postproc(**kwargs))
-    import numpy as np
-    return np.concatenate(out)
+      kw = dict((k,v[i] if isinstance(v,list) else v) for k,v in kwargs.items())
+      out.append(cls._postproc(**kw))
+    return np.array(out).reshape(shape)
 
   def _iter_dask (self, include_coords=True, fused=False):
     """
@@ -165,26 +201,25 @@ class ExternOutput (BufferBase):
       # Assume same file within chunk.
       if file_ids.ndim > 1: file_ids = file_ids[:,0]
       nchunks = record_id.shape[0]
-      args = []
+      args = [files[file_ids]]
       # Add data sources (primary data plus possible secondary like mask).
       for key, (addr_col, len_col, dname) in self._decoder_data:
         if addr_col not in self._headers: continue # Skip inactive arguments.
-        fname = files[file_ids]
-        addr = self._headers[addr_col][record_id]
-        if addr.ndim > 1: addr = map(list,addr)
-        length = self._headers[len_col][record_id]
-        if length.ndim > 1: length = map(list,length)
-        # Read raw data from disk.
-        rb = zip([_read_block]*nchunks, fname, addr, length)
-        # Decode the values.
-        rb = zip([self._dasked_decode]*nchunks, rb)
-        # Skip the _read_blocks construct where we don't have file data.
-        # (e.g. for missing records or where data coming from dask).
-        rb = [_rb if fid >= 0 else None for _rb,fid in zip(rb,file_ids)]
-        # Inject dask array data where it's available.
+        # Source data is coming from dask / numpy?
         if dname in self._headers:
-          rb = [d if d is not None else _rb for d,_rb in zip(self._headers[dname][record_id].flatten(),rb)]
-        args.extend([[key]*nchunks, rb])
+          d = self._headers[dname][record_id]
+          args.extend([[key]*nchunks, d])
+        # Source data is from disk?
+        else:
+          fname = files[file_ids]
+          addr = self._headers[addr_col][record_id]
+          if addr.ndim > 1: addr = map(list,addr)
+          length = self._headers[len_col][record_id]
+          if length.ndim > 1: length = map(list,length)
+          args.extend([[key]*nchunks, addr, length])
+      # Don't need to label the primary data argument (called 'data').
+      if args[1][0] == "data":
+        args = args[0:1] + args[2:]
       # Add extra arguments from columns.
       for key in self._decoder_extra_args:
         if key not in self._headers: continue  # Skip inactive arguments.
@@ -197,7 +232,8 @@ class ExternOutput (BufferBase):
       # Add scalar arguments.
       for key, value in self._decoder_scalar_args().items():
         args.extend([[key]*nchunks, [value]*nchunks])
-      graphs = zip([self._dasked_postproc]*nchunks, *args)
+      args.append(product(*var.chunks))
+      graphs = zip([self._dasked_read]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
       array[:] = list(graphs)
       shape = tuple(len(c) for c in var.chunks)
@@ -213,7 +249,7 @@ class ExternOutput (BufferBase):
         # Add this record as a chunk in the dask Array.
         graph = array[ind]
         if graph is not None:
-          dsk[key] = (np.reshape, graph, chunk_shape)
+          dsk[key] = graph
         else:
           # Fill missing chunks with fill value or NaN.
           if hasattr(self,'_fill_value'):
