@@ -144,7 +144,7 @@ class Series (BufferBase):
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    station_header = self._fstlir(nomvar=b'STNS')
+    station_header = self._fstlir(nomvar=b'STNS', grtyp=b'T')
     if station_header is not None:
       array = station_header['d'].transpose()
       # Re-cast array as string.
@@ -166,7 +166,7 @@ class Series (BufferBase):
       # Encode it as 2D character array for netCDF file output.
       station = _var_type('station',{},[station_id,station_strlen],array)
     # Create forecast axis.
-    forecast_header = self._fstlir (nomvar=b'HH  ')
+    forecast_header = self._fstlir (nomvar=b'HH  ', grtyp=b'T')
     if forecast_header is not None:
       atts = OrderedDict(units='hours')
       # Note: the information in 'HH' is actually the hour of validity.
@@ -178,7 +178,7 @@ class Series (BufferBase):
       forecast_axis = _axis_type('forecast',atts,array)
     # Extract vertical coordinates.
     for vertvar in (b'SH  ',b'SV  '):
-      header = self._fstlir (nomvar=vertvar)
+      header = self._fstlir (nomvar=vertvar, grtyp=b'T')
       if header is None: continue
       array = header['d'].squeeze()
       # Drop the top or bottom levels to match the profile data?
