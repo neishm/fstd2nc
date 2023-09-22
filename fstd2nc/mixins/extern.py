@@ -213,9 +213,11 @@ class ExternOutput (BufferBase):
         else:
           fname = files[file_ids]
           addr = self._headers[addr_col][record_id]
-          if addr.ndim > 1: addr = map(list,addr)
-          length = self._headers[len_col][record_id]
-          if length.ndim > 1: length = map(list,length)
+          if addr.ndim > 1: addr = map(np.array,addr)
+          else: addr = map(int,addr)
+          length = self._headers[len_col][record_id].astype('int32')
+          if length.ndim > 1: length = map(np.array,length)
+          else: length = map(int,length)
           args.extend([[key]*nchunks, addr, length])
       # Don't need to label the primary data argument (called 'data').
       if args[1][0] == "data":
