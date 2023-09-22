@@ -74,6 +74,7 @@ class ExternOutput (BufferBase):
       if isinstance(args[i+1],str) or i == len(args)-2:
         kwargs[key] = args[i]
         i = i + 1
+        continue
       # Dual arguments (address + length)?
       else:
         offset = args[i]
@@ -108,6 +109,7 @@ class ExternOutput (BufferBase):
             data = cls._decode(data)
             kwargs[key].append(data)
         i = i + 2
+        continue
     # Post-processing
     # Scalar case:
     if not any(isinstance(v,list) for v in kwargs.values()):
@@ -120,6 +122,11 @@ class ExternOutput (BufferBase):
     for i in range(nrec):
       kw = dict((k,v[i] if isinstance(v,list) else v) for k,v in kwargs.items())
       out.append(cls._postproc(**kw))
+    # Fill in any missing data.
+    subshapes = [o.shape for o in out if o is not None]
+    if len(subshapes) == 0: return np.full(shape, float('nan'))
+    subshape = subshapes[0]
+    out = [np.full(subshape,float('nan'),'float32') if o is None else o for o in out]
     return np.array(out).reshape(shape)
 
   def _iter_dask (self, include_coords=True, fused=False):
@@ -213,6 +220,7 @@ class ExternOutput (BufferBase):
         else:
           fname = files[file_ids]
           addr = self._headers[addr_col][record_id]
+          addr[record_id<0] = -1
           if addr.ndim > 1: addr = map(np.array,addr)
           else: addr = map(int,addr)
           length = self._headers[len_col][record_id].astype('int32')
