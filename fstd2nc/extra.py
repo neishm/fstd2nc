@@ -164,7 +164,6 @@ def decode_headers (raw):
   out['nj'] = np.empty(nrecs, dtype='int32')
   out['datyp'] = np.empty(nrecs, dtype='ubyte')
   out['nk'] = np.empty(nrecs, dtype='int32')
-  out['ubc'] = np.empty(nrecs, dtype='uint16')
   out['npas'] = np.empty(nrecs, dtype='int32')
   out['ig1'] = np.empty(nrecs, dtype='int32')
   out['ig2'] = np.empty(nrecs, dtype='int32')
@@ -177,9 +176,6 @@ def decode_headers (raw):
   out['ip2'] = np.empty(nrecs, dtype='int32')
   out['ip3'] = np.empty(nrecs, dtype='int32')
   out['datev'] = np.empty(nrecs, dtype='int32')
-  out['xtra1'] = np.empty(nrecs, dtype='uint32')
-  out['xtra2'] = np.empty(nrecs, dtype='uint32')
-  out['xtra3'] = np.empty(nrecs, dtype='uint32')
 
   temp8 = np.empty(nrecs, dtype='ubyte')
   temp32 = np.empty(nrecs, dtype='int32')
@@ -191,7 +187,7 @@ def decode_headers (raw):
   np.divmod(raw[:,1,0],256, out['deet'], out['nbits'])
   np.divmod(raw[:,1,1],256, out['ni'], out['grtyp'].view('ubyte'))
   np.divmod(raw[:,2,0],256, out['nj'], out['datyp'])
-  np.divmod(raw[:,2,1],4096, out['nk'], out['ubc'])
+  np.divmod(raw[:,2,1],4096, out['nk'], temp32)
   out['npas'][:] = raw[:,3,0]//64
   np.divmod(raw[:,3,1],256, out['ig4'], temp32)
   out['ig2'][:] = (temp32 << 16) # ig2a
@@ -244,9 +240,8 @@ def decode_headers (raw):
   del date_stamp
   # NOTE: Date of origin is now calculated in the dates mixin, since it's more
   # involved than a simple arithmetic operation.
-  out['xtra1'][:] = out['datev']
-  out['xtra2'][:] = 0
-  out['xtra3'][:] = 0
+  # NOTE: xtra1, xtra2, xtra3 not returned (not used, and take up space in the
+  # header table).
   return out
 
 

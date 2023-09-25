@@ -92,16 +92,19 @@ class Series (BufferBase):
     self._thermo_vars = thermo_vars
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
 
-    # Add station # as another axis.
-    self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
 
     fields = self._headers
     nrecs = self._nrecs
     # Identify timeseries records for further processing.
     is_series = (fields['typvar'] == b'T ') & ((fields['grtyp'] == b'+') | (fields['grtyp'] == b'Y') | (fields['grtyp'] == b'T'))
+    if not np.any(is_series):
+      return
     # More particular, data that has one station per record.
     is_split_series = (fields['typvar'] == b'T ') & (fields['grtyp'] == b'+')
+
+    # Add station # as another axis.
+    self._outer_axes = ('station_id',) + self._outer_axes
 
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(np.array(fields['ip3']), dtype='int32')
