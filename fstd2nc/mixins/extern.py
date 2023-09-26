@@ -240,6 +240,7 @@ class ExternOutput (BufferBase):
       if hasattr(var.array,'chunks'):
         chunk_shape = [c[0] for c in var.array.chunks]
         out[var.name].encoding['chunksizes'] = chunk_shape
+        out[var.name].encoding['preferred_chunks'] = dict(zip(var.dims,chunk_shape))
         out[var.name].encoding['original_shape'] = out[var.name].shape
 
     # Construct the Dataset from all the variables.
@@ -281,6 +282,7 @@ class ExternOutput (BufferBase):
       if hasattr(var.array,'chunks'):
         chunk_shape = [c[0] for c in var.array.chunks]
         out[var.name].encoding['chunksizes'] = chunk_shape
+        out[var.name].encoding['preferred_chunks'] = dict(zip(var.dims,chunk_shape))
         out[var.name].encoding['original_shape'] = out[var.name].shape
       # Construct the Dataset from the variable.
       out = xr.Dataset(out)
