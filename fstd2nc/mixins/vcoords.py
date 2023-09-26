@@ -167,7 +167,9 @@ class VCoords (BufferBase):
     # Keep track of any diagnostic levels, e.g. from GEM.
     self._diag_ip1 = []
     for vcoord_nomvar in (b'HY  ',b'!!  '):
-      for handle in self._fstinl(nomvar=vcoord_nomvar):
+      # Note: assume there will only be a few unique records, so limit the
+      # processing.
+      for handle in self._fstinl(nomvar=vcoord_nomvar)[:10]:
         header = self._fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.

@@ -46,12 +46,12 @@ class FilterRecords (BufferBase):
     self._filters = tuple(filter)
     super(FilterRecords,self).__init__(*args,**kwargs)
     if len(self._filters) == 0: return
-    flags = np.ones(self._nrecs,dtype='bool')
+    flags = True
     # Get copy of records with bytestrings and with unicode strings.
     records_with_bytestrings = self._headers
     records_with_strings = self._headers.copy()
     for key, value in records_with_strings.items():
-      if value.dtype.char == 'S':
+      if value.dtype.char == 'S' and any(key in cmd for cmd in self._filters):
         new_dtype = 'U'+str(value.dtype.itemsize)
         value = value[:,None].view('B').astype('i4')
         # rstrip

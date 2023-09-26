@@ -176,7 +176,7 @@ class ExternOutput (BufferBase):
           # Look at part of record to guess at number of records to chunk.
           # Can only chunk within a file.
           sample = file_ids[(0,)*dim].squeeze()
-          dx = sum(sample==sample[0])
+          dx = np.sum(sample==sample[0])
           # Check if this guessed chunk size works for the data shape.
           if var.record_id.shape[dim] % dx == 0:
             if dx > 1:

@@ -143,6 +143,7 @@ class Series (BufferBase):
     momentum = thermo = None   # To attach the vertical axes.
 
     super(Series,self)._makevars()
+    if 'station_id' not in self._headers: return
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
