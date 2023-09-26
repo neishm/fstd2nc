@@ -19,6 +19,7 @@ Version 0.20230908.0 (Sep 8, 2023)
 	  preliminary testing.
 	* Fixed an array transpose happening in some conditions for
 	  .to_fstpy() and .from_fstpy().
+	* Debian packaging rules provided by Tom Kralidis.
 
 Version 0.20230515.2 (May 30, 2023)
 	* From Python interface, allow interp parameter to accept existing
