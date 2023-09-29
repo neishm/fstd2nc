@@ -24,10 +24,10 @@ class Char(BufferBase):
 
   # Modify the decoder to return character arrays for CHAR records.
   @classmethod
-  def _postproc (cls, data):
+  def _decode (cls, data):
     import numpy as np
     kind = data[4:68].view('|S8')[0]
-    data = super(Char,cls)._postproc(data)
+    data = super(Char,cls)._decode(data)
     if kind == b'CHAR    ':
       data = data.view('|S1')
     return data
