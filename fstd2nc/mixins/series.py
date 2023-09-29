@@ -92,16 +92,19 @@ class Series (BufferBase):
     self._thermo_vars = thermo_vars
     self._missing_bottom_profile_level = kwargs.pop('missing_bottom_profile_level',False)
 
-    # Add station # as another axis.
-    self._outer_axes = ('station_id',) + self._outer_axes
     super(Series,self).__init__(*args,**kwargs)
 
     fields = self._headers
     nrecs = self._nrecs
     # Identify timeseries records for further processing.
     is_series = (fields['typvar'] == b'T ') & ((fields['grtyp'] == b'+') | (fields['grtyp'] == b'Y') | (fields['grtyp'] == b'T'))
+    if not np.any(is_series):
+      return
     # More particular, data that has one station per record.
     is_split_series = (fields['typvar'] == b'T ') & (fields['grtyp'] == b'+')
+
+    # Add station # as another axis.
+    self._outer_axes = ('station_id',) + self._outer_axes
 
     # For timeseries data, station # is provided by 'ip3'.
     station_id = np.ma.array(np.array(fields['ip3']), dtype='int32')
@@ -140,11 +143,12 @@ class Series (BufferBase):
     momentum = thermo = None   # To attach the vertical axes.
 
     super(Series,self)._makevars()
+    if 'station_id' not in self._headers: return
 
     # Get station and forecast info.
     # Need to read from original records, because this into isn't in the
     # data stream.
-    station_header = self._fstlir(nomvar=b'STNS')
+    station_header = self._fstlir(nomvar=b'STNS', grtyp=b'T')
     if station_header is not None:
       array = station_header['d'].transpose()
       # Re-cast array as string.
@@ -166,19 +170,19 @@ class Series (BufferBase):
       # Encode it as 2D character array for netCDF file output.
       station = _var_type('station',{},[station_id,station_strlen],array)
     # Create forecast axis.
-    forecast_header = self._fstlir (nomvar=b'HH  ')
+    forecast_header = self._fstlir (nomvar=b'HH  ', grtyp=b'T')
     if forecast_header is not None:
       atts = OrderedDict(units='hours')
       # Note: the information in 'HH' is actually the hour of validity.
       # Need to subtract the hour from the date of origin in order to get
       # the leadtime.
-      starting_hour = stamp2datetime_scalar(forecast_header['dateo']).hour
+      starting_hour = stamp2datetime_scalar(forecast_header['datev']).hour - forecast_header['npas']*forecast_header['deet']
       array = forecast_header['d'].flatten() - starting_hour
       forecast_timedelta = np.array(array*3600,'timedelta64[s]')
       forecast_axis = _axis_type('forecast',atts,array)
     # Extract vertical coordinates.
     for vertvar in (b'SH  ',b'SV  '):
-      header = self._fstlir (nomvar=vertvar)
+      header = self._fstlir (nomvar=vertvar, grtyp=b'T')
       if header is None: continue
       array = header['d'].squeeze()
       # Drop the top or bottom levels to match the profile data?

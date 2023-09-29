@@ -43,9 +43,12 @@ def dtype_fst2numpy (datyp, nbits=None):
 from fstd2nc.mixins import vectorize
 @vectorize
 def packed_dtype_fst2numpy (datyp_nbits):
+  import numpy as np
   datyp = int(datyp_nbits//(1<<32))
   nbits = int(datyp_nbits%(1<<32))
-  return dtype_fst2numpy (datyp, nbits)
+  dtype = dtype_fst2numpy (datyp, nbits)
+  dtype = np.dtype(dtype)
+  return (dtype.char + str(dtype.itemsize)).encode()
 def fast_dtype_fst2numpy (datyp, nbits):
   import numpy as np
   args = np.array(datyp,'uint64')
@@ -59,7 +62,7 @@ class FSTD (BufferBase):
   _format_singular = _("an RPN standard file")
   _format_plural = _("RPN standard file(s)")
 
-  _inner_axes = ('k','j','i')
+  _inner_axes = ('j','i')
 
   # Keep a reference to fstd98 so it's available during cleanup.
   try:
@@ -126,8 +129,8 @@ class FSTD (BufferBase):
     import numpy as np
 
     # Note: name should always be the first attribute
-    self._var_id = ('name','ni','nj','nk') + self._var_id
-    self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s', '%(nk)sL') + self._human_var_id
+    self._var_id = ('name','ni','nj') + self._var_id
+    self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s') + self._human_var_id
     self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','ismeta','d') + self._ignore_atts
 
     ignore_typvar = kwargs.pop('ignore_typvar',False)
@@ -160,7 +163,6 @@ class FSTD (BufferBase):
     self._headers['ismeta'][:] = meta_mask
 
     # Aliases for inner dimensions
-    self._headers['k'] = self._headers['nk']
     self._headers['j'] = self._headers['nj']
     self._headers['i'] = self._headers['ni']
 
@@ -170,9 +172,12 @@ class FSTD (BufferBase):
     # (such as from fstpy)
     if 'swa' in self._headers:
       self._headers['address'] = np.array(self._headers['swa'],int)*8-8
+      del self._headers['swa']
     if 'lng' in self._headers:
-      self._headers['length'] = np.array(self._headers['lng'],int)*4
-    self._headers['dtype'] = np.array(fast_dtype_fst2numpy(self._headers['datyp'],self._headers['nbits']))
+      self._headers['length'] = np.array(self._headers['lng'],'int32')*4
+      del self._headers['lng']
+    self._headers['dtype'] = np.empty(self._nrecs, dtype='|S2')
+    self._headers['dtype'][:] = np.array(fast_dtype_fst2numpy(self._headers['datyp'],self._headers['nbits']))
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 
   # How to decode the data from a raw binary array.

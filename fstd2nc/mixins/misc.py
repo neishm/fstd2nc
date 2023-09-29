@@ -29,6 +29,12 @@ from fstd2nc.mixins import BufferBase
 # Remove extraneous dimensions from the output.
 
 class NoNK (BufferBase):
+  def __init__ (self, *args, **kwargs):
+    import numpy as np
+    super(NoNK,self).__init__(*args, **kwargs)
+    if 'nk' in self._headers:
+      if np.all(self._headers['nk'] == 1):
+        del self._headers['nk']
   def _makevars (self):
     super(NoNK,self)._makevars()
     for var in self._varlist:

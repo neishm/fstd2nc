@@ -165,9 +165,11 @@ class VCoords (BufferBase):
     # to ignore them).
     vrecs = OrderedDict()
     # Keep track of any diagnostic levels, e.g. from GEM.
-    diag_ip1 = []
+    self._diag_ip1 = []
     for vcoord_nomvar in (b'HY  ',b'!!  '):
-      for handle in self._fstinl(nomvar=vcoord_nomvar):
+      # Note: assume there will only be a few unique records, so limit the
+      # processing.
+      for handle in self._fstinl(nomvar=vcoord_nomvar)[:10]:
         header = self._fstprm(handle)
         key = (header['ip1'],header['ip2'])
         # For old HY records, there's no matching ipX/igX codes.
@@ -183,9 +185,9 @@ class VCoords (BufferBase):
           # Problems opening this vertical coordinate?
           continue
         try:
-          diag_ip1.append(vgd_get(vgd_id,'DIPT'))
-          diag_ip1.append(vgd_get(vgd_id,'DIPM'))
-          diag_ip1.append(vgd_get(vgd_id,'DIPW'))
+          self._diag_ip1.append(vgd_get(vgd_id,'DIPT'))
+          self._diag_ip1.append(vgd_get(vgd_id,'DIPM'))
+          self._diag_ip1.append(vgd_get(vgd_id,'DIPW'))
         except (KeyError,VGDError):
           #warn(_("Unable to parse diagnostic levels from the vertical coordinate"))
           pass
@@ -213,13 +215,13 @@ class VCoords (BufferBase):
     fields = self._headers
     # Provide 'level' and 'kind' information to the decoder.
     fields['level'] = np.array(decode_ip1_level(fields['ip1']), dtype='float32')
-    fields['kind'] = np.array(decode_ip1_kind(fields['ip1']), dtype='int32')
+    fields['kind'] = np.array(decode_ip1_kind(fields['ip1']), dtype='uint8')
 
     # Pre-filter the diagnostic level data?
     # Start by treating diagnostic level as model level, then
     # revert this later if it ends up not working.
     if not self._split_diag_level and not self._only_diag_level:
-      for ip1_val in diag_ip1:
+      for ip1_val in self._diag_ip1:
           mask = (fields['ip1'] == ip1_val)
           if self._ignore_diag_level:
             fields['selected'] &= (~mask)
@@ -231,7 +233,7 @@ class VCoords (BufferBase):
     # Only use diagnostic level(s)?
     if self._only_diag_level:
       mask = False
-      for ip1_val in diag_ip1:
+      for ip1_val in self._diag_ip1:
           mask |= (fields['ip1'] == ip1_val)
       fields['selected'] &= mask
 
@@ -281,28 +283,30 @@ class VCoords (BufferBase):
           warn(_("Unable to parse vertical velocity levels from the vertical coordinate"))
         vgd_free (vgd_id)
 
-    # Apply special labels for some levels.
-    # Used to describe a variable when it's split into multiple coordinate types.
-    fields['level_descr'] = np.empty(len(fields['kind']), dtype='|S20')
-    fields['level_descr'][:] = 'unknown_levels'
-    fields['level_descr'][fields['kind'] == 0] = 'depth_levels'
-    fields['level_descr'][fields['kind'] == 1] = 'model_levels'
-    fields['level_descr'][fields['kind'] == 2] = 'pressure_levels'
-    fields['level_descr'][fields['kind'] == 3] = 'generic_levels'
-    fields['level_descr'][fields['kind'] == 4] = 'height_levels'
-    fields['level_descr'][fields['kind'] == 5] = 'model_levels'
-    fields['level_descr'][fields['kind'] == 21] = 'model_levels'
-    fields['special_level'] = np.empty(len(fields['kind']), dtype='|S20')
-    fields['special_level'][:] = fields['level_descr'][:]
-    # Discern ocean depths from ocean bottom.
-    fields['special_level'][fields['kind'] == 0] = 'depth_levels'
-    fields['special_level'][(fields['kind'] == 1) & (fields['level'] == 1.0)] = 'bottom_level'
-    # Discern atmospheric levels from diagnostic levels.
-    for ip1_val in diag_ip1:
-      fields['special_level'][fields['ip1'] == ip1_val] = 'diag_level'
 
   def _makevars (self):
     super(VCoords,self)._makevars()
+    for var in self._varlist:
+      if 'kind' not in var.atts: continue
+      kind = var.atts['kind']
+      # Apply special labels for some levels.
+      # Used to describe a variable when it's split into multiple coordinate types.
+      var.atts['level_descr'] = 'unknown_levels'
+      if kind == 0: var.atts['level_descr'] = 'depth_levels'
+      elif kind == 1: var.atts['level_descr'] = 'model_levels'
+      elif kind == 2: var.atts['level_descr'] = 'pressure_levels'
+      elif kind == 3: var.atts['level_descr'] = 'generic_levels'
+      elif kind == 4: var.atts['level_descr'] = 'height_levels'
+      elif kind == 5: var.atts['level_descr'] = 'model_levels'
+      elif kind == 21: var.atts['level_descr'] = 'model_levels'
+      var.atts['special_level'] = var.atts['level_descr']
+      # Discern ocean depths from ocean bottom.
+      if kind == 0: var.atts['special_level'] = 'depth_levels'
+      elif kind == 1 and var.atts.get('level',None) == 1.0: var.atts['special_level'] = 'bottom_level'
+      # Discern atmospheric levels from diagnostic levels.
+      if var.atts.get('ip1',None) in self._diag_ip1:
+        var.atts['special_level'] = 'diag_level'
+
     # Call this makevars routine from a separate wrapper, to make it easier
     # to re-run just that one part without redoing the whole pipeline.
     # I.e., for case where our initial attempt at fitting the diagnostic level

@@ -66,7 +66,9 @@ class Masks (BufferBase):
     # Check for usage of the alternate masking technique (flag 64).
     # By convention (as far as I know), the maximum value in the field is
     # a special value indicating where data is masked out.
-    self._headers['alt_mask'] = (self._headers['datyp']&64) == 64
+    alt_mask = (self._headers['datyp']&64) == 64
+    if np.any(alt_mask):
+      self._headers['alt_mask'] = alt_mask
 
     nomvar = self._headers['nomvar']
     typvar = self._headers['typvar']
@@ -133,12 +135,13 @@ class Masks (BufferBase):
 
   def _decoder_scalar_args (self):
     args = super(Masks,self)._decoder_scalar_args()
-    args['fill_value'] = self._fill_value
+    if self._fill_value != 1e30:
+      args['fill_value'] = self._fill_value
     return args
 
   # Apply a mask to the field.
   @classmethod
-  def _postproc (cls, data, fill_value, mask=None, alt_mask=False, **kwargs):
+  def _postproc (cls, data, fill_value=1e30, mask=None, alt_mask=False, **kwargs):
     import numpy as np
     # Get first field.
     field1 = super(Masks,cls)._postproc(data, **kwargs)

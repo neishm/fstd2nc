@@ -383,10 +383,6 @@ class Interp (BufferBase):
 #
 
 class YinYang (BufferBase):
-  # Default parameter values (overridden at init time).
-  _yin = False
-  _yang = False
-
   @classmethod
   def _cmdline_args (cls, parser):
     from argparse import SUPPRESS
@@ -404,19 +400,21 @@ class YinYang (BufferBase):
     """
     import rpnpy.librmn.all as rmn
     import numpy as np
-    self._yin = kwargs.pop('yin',False)
-    self._yang = kwargs.pop('yang',False)
+    yin = kwargs.pop('yin',False)
+    yang = kwargs.pop('yang',False)
 
     # Load the metadata from the file(s).
     super(YinYang,self).__init__(*args,**kwargs)
 
     # Update yin-yang records to appear as regular rotated grids.
-    if not self._yin and not self._yang:
+    if not yin and not yang:
       return
     # Add yin/yang selection boolean flags as columns.
     self._decoder_extra_args = self._decoder_extra_args + ('yin','yang')
-    self._headers['yin'] = (self._headers['grtyp'] == b'U') & self._yin
-    self._headers['yang'] = (self._headers['grtyp'] == b'U') & self._yang
+    if yin:
+      self._headers['yin'] = (self._headers['grtyp'] == b'U')
+    elif yang:
+      self._headers['yang'] = (self._headers['grtyp'] == b'U')
 
     # Run _makevars early to generate grid ids with xycoords mixin.
     # Silence warnings from makevars, which might not be relevant to the final
@@ -429,7 +427,7 @@ class YinYang (BufferBase):
     gids = self._gids
 
     # Get the Z grid for one half of the YY input.
-    if self._yin: yy_ind = 0
+    if yin: yy_ind = 0
     else: yy_ind = 1
     for gid in np.unique(gids):
       if gid<0: continue

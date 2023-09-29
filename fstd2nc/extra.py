@@ -164,7 +164,6 @@ def decode_headers (raw):
   out['nj'] = np.empty(nrecs, dtype='int32')
   out['datyp'] = np.empty(nrecs, dtype='ubyte')
   out['nk'] = np.empty(nrecs, dtype='int32')
-  out['ubc'] = np.empty(nrecs, dtype='uint16')
   out['npas'] = np.empty(nrecs, dtype='int32')
   out['ig1'] = np.empty(nrecs, dtype='int32')
   out['ig2'] = np.empty(nrecs, dtype='int32')
@@ -177,10 +176,6 @@ def decode_headers (raw):
   out['ip2'] = np.empty(nrecs, dtype='int32')
   out['ip3'] = np.empty(nrecs, dtype='int32')
   out['datev'] = np.empty(nrecs, dtype='int32')
-  out['dateo'] = np.empty(nrecs, dtype='int32')
-  out['xtra1'] = np.empty(nrecs, dtype='uint32')
-  out['xtra2'] = np.empty(nrecs, dtype='uint32')
-  out['xtra3'] = np.empty(nrecs, dtype='uint32')
 
   temp8 = np.empty(nrecs, dtype='ubyte')
   temp32 = np.empty(nrecs, dtype='int32')
@@ -192,7 +187,7 @@ def decode_headers (raw):
   np.divmod(raw[:,1,0],256, out['deet'], out['nbits'])
   np.divmod(raw[:,1,1],256, out['ni'], out['grtyp'].view('ubyte'))
   np.divmod(raw[:,2,0],256, out['nj'], out['datyp'])
-  np.divmod(raw[:,2,1],4096, out['nk'], out['ubc'])
+  np.divmod(raw[:,2,1],4096, out['nk'], temp32)
   out['npas'][:] = raw[:,3,0]//64
   np.divmod(raw[:,3,1],256, out['ig4'], temp32)
   out['ig2'][:] = (temp32 << 16) # ig2a
@@ -204,51 +199,49 @@ def decode_headers (raw):
   etik6a = raw[:,5,1]//4
   et = raw[:,6,0]//256
   etikbc, _typvar = divmod(et, 4096)
+  del et
   _nomvar = raw[:,6,1]//256
   np.divmod(raw[:,7,0],16, out['ip1'], temp8)
   out['ip2'][:] = raw[:,7,1]//16
   out['ip3'][:] = raw[:,8,0]//16
-  date_stamp = raw.astype('int32')[:,8,1]
+  date_stamp = raw[:,8,1].astype('int32')
   # Reassemble and decode.
   # (Based on fstd98.c)
   etiket_bytes = np.empty((nrecs,12),dtype='ubyte')
   for i in range(5):
     etiket_bytes[:,i] = ((etik15 >> ((4-i)*6)) & 0x3f) + 32
+  del etik15
   for i in range(5,10):
     etiket_bytes[:,i] = ((etik6a >> ((9-i)*6)) & 0x3f) + 32
+  del etik6a
   etiket_bytes[:,10] = ((etikbc >> 6) & 0x3f) + 32
   etiket_bytes[:,11] = (etikbc & 0x3f) + 32
+  del etikbc
   out['etiket'][:] = etiket_bytes.flatten().view('|S12')
+  del etiket_bytes
   nomvar_bytes = np.empty((nrecs,4),dtype='ubyte')
   for i in range(4):
     nomvar_bytes[:,i] = ((_nomvar >> ((3-i)*6)) & 0x3f) + 32
+  del _nomvar
   out['nomvar'][:] = nomvar_bytes.flatten().view('|S4')
+  del nomvar_bytes
   typvar_bytes = np.empty((nrecs,2),dtype='ubyte')
   typvar_bytes[:,0] = ((_typvar >> 6) & 0x3f) + 32
   typvar_bytes[:,1] = ((_typvar & 0x3f)) + 32
+  del _typvar
   out['typvar'][:] = typvar_bytes.flatten().view('|S2')
+  del typvar_bytes
   # Convert raw stamp to RPN date code.
   # Two cases: positive = regular, negative = extended range.
   out['datev'][:] = np.where (date_stamp >= 0,
     (date_stamp >> 3) * 10 + (date_stamp & 0x7),
     ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
   )
-  # Compute date of origin.
-  # Note: this dateo calculation is based on my assumption that
-  # the raw stamps increase in 5-second intervals.
-  # Doing it this way to avoid a gazillion calls to incdat.
-  # Also, for negative date_stamp this is 1-hour units.
-  date_stamp = np.where (date_stamp >= 0,
-    date_stamp - (out['deet']*out['npas'])//5,
-    date_stamp - (out['deet']*out['npas'])//3600
-  )
-  out['dateo'][:] = np.where (date_stamp >= 0,
-    (date_stamp >> 3) * 10 + (date_stamp & 0x7),
-    ((date_stamp+858993488) >> 3) * 10 + ((date_stamp+858993488) & 0x7) - 6
-  )
-  out['xtra1'][:] = out['datev']
-  out['xtra2'][:] = 0
-  out['xtra3'][:] = 0
+  del date_stamp
+  # NOTE: Date of origin is now calculated in the dates mixin, since it's more
+  # involved than a simple arithmetic operation.
+  # NOTE: xtra1, xtra2, xtra3 not returned (not used, and take up space in the
+  # header table).
   return out
 
 
