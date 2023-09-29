@@ -157,6 +157,7 @@ class _FakeBar (object):
   def iter(self, it):
     for i in it: yield i
   def __next__(self): pass
+  def next(self): pass
   def finish(self): pass
 
 # Try importing progress module.
@@ -437,20 +438,27 @@ class BufferBase (object):
       error(_("Unexpected arguments: %s"%(kwargs.keys())))
 
     # Extract headers from the files.
-    if len(expanded_infiles) == 1: Bar = _FakeBar
-    bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
+    if hasattr(progress,'next'):
+      bar = progress
+    else:
+      if len(expanded_infiles) == 1: Bar = _FakeBar
+      bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
 
     if len(expanded_infiles) > 1 and not self._serial:
       with Pool() as p:
         headers = p.imap (self._raw_headers, [f for (infile,f) in expanded_infiles])
-        headers = bar.iter(headers)
+        headers = ([h,bar.next()][0] for h in headers)
         headers = list(headers) # Start scanning.
     else:
       headers = imap (self._raw_headers, [f for (infile,f) in expanded_infiles])
-      headers = bar.iter(headers)
+      headers = ([h,bar.next()][0] for h in headers)
       headers = list(headers) # Start scanning.
 
-    bar.finish()
+    # If we made this progress bar, then finish it here.
+    # Otherwise, if it was passed in it could be part of a bigger workflow
+    # so don't finish it yet.
+    if not hasattr(progress,'next'):
+      bar.finish()
 
     # Check which files had headers used, report on the results.
     matches = Counter()
