@@ -207,7 +207,7 @@ class FSTD (BufferBase):
     # Generate a table of records (with incomplete information).
     super(FSTD,self)._unmakevars()
     # Aliases for inner dimensions
-    self._headers['nk'] = self._headers['k']
+    #self._headers['nk'] = self._headers['k']
     self._headers['nj'] = self._headers['j']
     self._headers['ni'] = self._headers['i']
     # Add other FSTD-related columns that are expected to be there.
@@ -237,6 +237,7 @@ class FSTD (BufferBase):
     add_column ('ip3', 'int32', default=0)
     add_column ('deet', 'int32', default=60)
     add_column ('npas', 'int32', default=0)
+    add_column ('nk', 'int32', default=1)
 
   # Define an entry point for writing records to a file.
   # Allows the logic to be modified by mixins (such as masks).
