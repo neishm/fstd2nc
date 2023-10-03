@@ -88,31 +88,42 @@ class ExternOutput (BufferBase):
             kwargs[key] = None
             i = i + 2
             continue
-          with open(filename,'rb') as f:
-            f.seek (offset,0)
-            data = np.fromfile(f,'B',length)
-            data = cls._decode(data)
-            kwargs[key] = data
+          try:
+            with open(filename,'rb') as f:
+              f.seek (offset,0)
+              data = np.fromfile(f,'B',length)
+              data = cls._decode(data)
+              kwargs[key] = data
+          except Exception:
+            warn(_("Cannot read from %s - file may be missing or damaged.")%filename)
+            kwargs[key] = None
           i = i + 2
           continue
         # Vectorized version.
         kwargs[key] = []
-        with open(filename,'rb') as f:
-          for o, l in zip(offset, length):
-            # Skip addresses that are -1 (indicates no data available).
-            # E.g. for masked data, if no corresponding mask available
-            if o < 0:
-              kwargs[key].append(None)
-              continue
-            f.seek (o,0)
-            data = np.fromfile(f,'B',l)
-            data = cls._decode(data)
-            kwargs[key].append(data)
+        try:
+          with open(filename,'rb') as f:
+            for o, l in zip(offset, length):
+              # Skip addresses that are -1 (indicates no data available).
+              # E.g. for masked data, if no corresponding mask available
+              if o < 0:
+                kwargs[key].append(None)
+                continue
+              f.seek (o,0)
+              data = np.fromfile(f,'B',l)
+              data = cls._decode(data)
+              kwargs[key].append(data)
+        except Exception:
+          warn(_("Cannot read from %s - file may be missing or damaged.")%filename)
+          kwargs[key] = [None]*len(offset)
         i = i + 2
         continue
     # Post-processing
     # Scalar case:
     if not any(isinstance(v,list) for v in kwargs.values()):
+      # Skip post-processing for missing data.
+      if kwargs.get('data',None) is None:
+        return np.full(shape,float('nan'))
       data = cls._postproc(**kwargs)
       return data.reshape(shape)
     # Vector case
@@ -121,6 +132,9 @@ class ExternOutput (BufferBase):
     out = []
     for i in range(nrec):
       kw = dict((k,v[i] if isinstance(v,list) else v) for k,v in kwargs.items())
+      # Skip post-processing for missing data.
+      if kw.get('data',None) is None:
+        out.append(None)
       out.append(cls._postproc(**kw))
     # Fill in any missing data.
     subshapes = [o.shape for o in out if o is not None]
