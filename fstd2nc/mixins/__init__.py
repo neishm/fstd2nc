@@ -662,7 +662,7 @@ class BufferBase (object):
         axes[n] = _dim_type(name=n, length = length)
 
       # Determine the optimal data type to use.
-      dtype_list = var_records['dtype']
+      dtype_list = map(np.dtype,var_records['dtype'])
       dtype = np.result_type(*dtype_list)
 
       var = _iter_type( name = nomvar, atts = atts,
@@ -840,7 +840,7 @@ class BufferBase (object):
         axes[n] = _dim_type(name=n, length = length)
 
       # Determine the optimal data type to use.
-      dtype_list = var_records['dtype']
+      dtype_list = map(np.dtype,var_records['dtype'])
       dtype = np.result_type(*dtype_list)
 
       var = _iter_type( name = nomvar, atts = atts,
