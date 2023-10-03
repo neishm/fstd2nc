@@ -143,16 +143,12 @@ class ExternOutput (BufferBase):
     out = [np.full(subshape,float('nan'),'float32') if o is None else o for o in out]
     return np.array(out).reshape(shape)
 
-  def _iter_dask (self, include_coords=True, fused=False):
+  def _iter_graph (self, include_coords=True, fused=False):
     """
-    Iterate over all the variables, and convert to dask arrays.
+    Iterate over all the variables, and generate graphs for them.
     """
-    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type
-    from dask import array as da
-    from dask.base import tokenize
+    from fstd2nc.mixins import _iter_type, _chunk_type
     import numpy as np
-    from itertools import product
-    unique_token = tokenize(self._files,id(self))
     files = np.array(self._files, dtype=object)
     self._makevars()
     for var in self._iter_objects():
@@ -160,9 +156,8 @@ class ExternOutput (BufferBase):
         if var not in self._varlist:
           continue
       if not isinstance(var,(_iter_type,_chunk_type)):
-        yield var
+        yield var, None
         continue
-      name = var.name+"-"+unique_token
       ndim = len(var.axes)
       shape = var.shape
       # Convert _iter_type to more generic _chunk_type.
@@ -256,6 +251,26 @@ class ExternOutput (BufferBase):
       # Add scalar arguments.
       for key, value in self._decoder_scalar_args().items():
         args.extend([[key]*nchunks, [value]*nchunks])
+      yield var, args
+
+  def _iter_dask (self, include_coords=True, fused=False, graph_iterator=None):
+    """
+    Iterate over all the variables, and convert to dask arrays.
+    """
+    from fstd2nc.mixins import _var_type
+    from itertools import product
+    import numpy as np
+    from dask.base import tokenize
+    from dask import array as da
+    unique_token = tokenize(self._files,id(self))
+    if graph_iterator is None:
+      graph_iterator = self._iter_graph (include_coords=include_coords, fused=fused)
+    for var, args in graph_iterator:
+      if args is None:
+        yield var
+        continue
+      name = var.name+"-"+unique_token
+      nchunks = len(args[0])
       args.append(product(*var.chunks))
       graphs = zip([self._dasked_read]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
