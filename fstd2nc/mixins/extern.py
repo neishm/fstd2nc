@@ -236,9 +236,6 @@ class ExternOutput (BufferBase):
           if length.ndim > 1: length = map(np.array,length)
           else: length = map(int,length)
           args.extend([[key]*nchunks, addr, length])
-      # Don't need to label the primary data argument (called 'data').
-      if args[1][0] == "data":
-        args = args[0:1] + args[2:]
       # Add extra arguments from columns.
       for key in self._decoder_extra_args:
         if key not in self._headers: continue  # Skip inactive arguments.
@@ -269,8 +266,12 @@ class ExternOutput (BufferBase):
       if args is None:
         yield var
         continue
+      # Don't need to label the primary data argument (called 'data').
+      if args[1][0] == "data":
+        args = args[0:1] + args[2:]
       name = var.name+"-"+unique_token
       nchunks = len(args[0])
+      # Add shape as final argument.
       args.append(product(*var.chunks))
       graphs = zip([self._dasked_read]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
