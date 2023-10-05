@@ -10,29 +10,101 @@ def _get_open_dataset_parameters ():
   parser = argparse.ArgumentParser()
   fstd2nc.Buffer._cmdline_args(parser)
   args = parser.parse_args([])
-  return ('filename_or_obj', 'drop_variables', 'fused', 'batch') + tuple(vars(args).keys())
+  return ('filename_or_obj', 'drop_variables', 'fused', 'batch', 'cachefile') + tuple(vars(args).keys())
 
 # Register this as a backend for xarray, so FST files can be directly
 # opened with xarray.open_dataset
 class FSTDBackendEntrypoint(BackendEntrypoint):
   description = "Open FST files in xarray."
   open_dataset_parameters = _get_open_dataset_parameters()
-  def open_dataset (self, filename_or_obj, drop_variables=None, fused=False, batch=None, **kwargs):
+  def open_dataset (self, filename_or_obj, drop_variables=None, fused=False, batch=None, cachefile=None, **kwargs):
     from fstd2nc.stdout import _, info, warn, error
     from fstd2nc.mixins import _expand_files, _FakeBar, _ProgressBar
+    from fstd2nc.mixins import _var_type, _dim_type
     import fstd2nc
+    import numpy as np
+    import xarray as xr
+    import netCDF4 as nc  # For on-disk storage of meta information.
     if drop_variables is not None: kwargs['exclude'] = drop_variables
     # Simple case: no batching done.
     if batch is None:
       return fstd2nc.Buffer(filename_or_obj, **kwargs).to_xarray(fused=fused)
     # Complicated case: processing the files in batches.
+    if fused is True:
+      warn(_("'fused' option ignored for batch processing."))
+      fused = False
+    if cachefile is None:
+      error(_("Need to specify 'cachefile' when using 'batch' argument."))
     # First, get full list of files.
     allfiles = _expand_files(filename_or_obj)
     allfiles = list(zip(*allfiles))[1]
     allfiles = sorted(allfiles)
+    if len(allfiles) % batch != 0:
+      error(_("'batch' size (%d) does not divide evenly into number of files (%s)")%(batch,len(allfiles)))
+    nbatch = len(allfiles) // batch
     # Construct a progress bar encompassing the whole file set.
     if kwargs.get('progress',False) is True:
       kwargs['progress'] = _ProgressBar(_("Checking input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(allfiles))
+    # Process first batch, get basic structure of the dataset.
+    b = fstd2nc.Buffer(allfiles[0:batch], **kwargs)
+    graphs = list(b._iter_graph())
+    # Create a data structure to hold this graph information.
+    # Write dimensions with xarray, since it will handle encoding CF metadata.
+    # Data will be written using netCDF Python module.
+    out = {}
+    for var, args in graphs:
+      if args is not None: continue
+      if not hasattr(var,'array'): continue
+      out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)
+    xr.Dataset(out).to_netcdf(cachefile)
+    #TODO
+    # Write the batch information.
+    f = nc.Dataset(cachefile,'a')
+    batch_dim = f.createDimension('batch',nbatch)
+    # Write file information.
+    filename_len = max(map(len,allfiles))
+    f.createDimension('filename_len',filename_len)
+    nfiles_dim = f.createDimension('nfiles',len(allfiles))
+    file_var = f.createVariable('files','|S1',('nfiles','filename_len'),zlib=True)
+    allfiles = np.array(allfiles,dtype='|S%d'%filename_len)
+    file_var[:,:] = allfiles.reshape(-1,1).view('|S1')
+    for var, args in graphs:
+      if args is None: continue
+      vargroup = f.createGroup(var.name)
+      # Define outer axes (for storing address / length values).
+      ndim_outer = var.record_id.ndim
+      while var.record_id.shape[ndim_outer-1] == 1 and var.shape[ndim_outer-1] != 1:
+        ndim_outer -= 1
+      dims = ('batch',) + var.dims[:ndim_outer]
+      shape = (nbatch,) + var.record_id.shape[:ndim_outer]
+      # Set file_id
+      files = np.array(args[0],dtype='|S%d'%filename_len)
+      file_id = vargroup.createVariable('file_id','i4',dims,zlib=True)
+      file_id[0,...] = np.searchsorted(allfiles,files).reshape(shape[1:])
+      # Set address/length info
+      for i in range(1,len(args)-2,3):
+        label = args[i][0]
+        address = vargroup.createVariable(label+'.address','i8',dims,zlib=True)
+        address[0,...] = np.array(list(args[i+1]),'int64').reshape(shape[1:])
+        length = vargroup.createVariable(label+'.length','i4',dims,zlib=True)
+        length[0,...] = np.array(list(args[i+2]),'int32').reshape(shape[1:])
+      # Define a blank version of the final variable with the final structure.
+      template = vargroup.createVariable('template',var.dtype,var.dims)
+    #TODO
+    f.close()
+    return xr.Dataset({})
+    out = dict()
+    for var in varlist:
+      if not hasattr(var,'array'): continue
+      out[var.name] = xr.DataArray(data=var.array, dims=var.dims, name=var.name, attrs=var.atts)
+    ds = xr.Dataset(out)
+    ds.to_netcdf(cachefile)
+    return xr.Dataset({})
+    # Only print warning messages for first batch of files, assume the
+    # warnings will be the same for the rest of the files as well.
+    # Continue processing the rest of the batches, spawning threads for getting
+    # the variable structures.
+    # Turn warnings messages back on.
     #TODO
     ind = 0
     pieces = []
@@ -42,11 +114,8 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
       #TODO: spawn thread here.
       graphs = list(b._iter_graph())
       pieces.append(graphs)
-      # Only print warning messages for first batch of files, assume the
-      # warnings will be the same for the rest of the files as well.
       if ind == 0: fstd2nc.stdout.streams = ('error',)
       ind += batch
-    # Turn warnings messages back on.
     fstd2nc.stdout.streams = original_streams
     # Finalize the progress bar.
     if 'progress' in kwargs and hasattr(kwargs['progress'],'finish'):
