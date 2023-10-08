@@ -28,7 +28,6 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
   # Non-concatenated coordinates only need to be written once.
   for var, args in graphs:
     sl = [slice(None)]*len(var.axes)
-    shape = list(var.shape)
     dtype = var.dtype if hasattr(var,'dtype') else var.array.dtype
     concatenate = False
     ###
@@ -39,14 +38,15 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
         concatenate = True
         dt = len(axis)
         sl[iaxis] = slice(ind*dt,ind*dt+dt)
-        shape[iaxis] = nbatch*len(axis)
+        full_length = len(axis)*nbatch
+      else:
+        full_length = len(axis)
       if axis.name not in b.dimensions:
         b.createDimension(axis.name, len(axis))
       if axis.name not in t.dimensions:
-        t.createDimension(axis.name, shape[iaxis])
+        t.createDimension(axis.name, full_length)
     ###
     sl = tuple(sl)
-    shape = tuple(shape)
 
     if var.name not in t.variables:
       v = t.createVariable(var.name,dtype,var.dims)
@@ -58,28 +58,31 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
         t.variables[var.name][sl] = var.array
       continue
 
-    #TODO
-    continue
+    # Write the address / length info for indirect case.
+    if var.name not in b.groups:
+      b.createGroup(var.name)
 
-    # Write the variable meta info (address / length).
-    if var.name not in f.groups:
-      f.createGroup(var.name)
-    g = f.groups[var.name]
+    g = b.groups[var.name]
+
     # Define outer axes (for storing address / length values).
     ndim_outer = var.record_id.ndim
     while var.record_id.shape[ndim_outer-1] == 1 and var.shape[ndim_outer-1] != 1:
       ndim_outer -= 1
-    if 'template' not in g.variables:
-      template = g.createVariable('template',var.dtype,var.dims)
-      template.setncatts(var.atts)
-    #TODO
+
     dims = ('batch',) + var.dims[:ndim_outer]
-    shape = (nbatch,) + shape[:ndim_outer]
-    #sl = (slice(ind)
+    shape = var.shape[:ndim_outer]
     # Set file_id
+    filename_len = len(f.dimensions['filename_len'])
+    allfiles = f.variables['files'][:,:].view('|S%d'%filename_len)[0]
     files = np.array(args[0],dtype='|S%d'%filename_len)
-    file_id = vargroup.createVariable('file_id','i4',dims,zlib=True,chunksizes='TODO')
-    file_id[0,...] = np.searchsorted(allfiles,files).reshape(shape[1:])
+    if 'file_id' not in g.variables:
+      g.createVariable('file_id','i4',dims,zlib=True,chunksizes=(1,)+shape)
+    file_id = g.variables['file_id']
+    s = np.searchsorted(allfiles,files)
+    file_id[0,...] = np.searchsorted(allfiles,files).reshape(shape)
+    #TODO
+    continue
+
     # Set address/length info
     for i in range(1,len(args)-2,3):
       label = args[i][0]
