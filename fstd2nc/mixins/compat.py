@@ -142,10 +142,8 @@ class FSTD_Compat (BufferBase):
       from os.path import getsize
       import rpnpy.librmn.all as rmn
       # Align the data on 8-byte boundaries, which is what FSTD expects.
-      while True:
-        f.sync()
-        alignment = getsize(filename) % 8
-        if alignment == 0: break
+      f.sync()
+      if getsize(filename) % 8 != 0:
         # Add dummy global attributes as a way to pad out the file.
         # The chosen size for the attributes is from trial-and-error. It seems
         # to get the right padding after a few iterations.
@@ -156,7 +154,14 @@ class FSTD_Compat (BufferBase):
         # The current approach of writing attributes wastes more space (a few
         # dozen kilobytes?) but it seems to do the job.
         #f.setncattr('_pad%05d'%npad[0], np.zeros(4096+(8-alignment),dtype='B'))
-        f.setncattr('_pad%05d'%npad[0], np.zeros(0+(npad[0]%7),dtype='B'))
+        #f.setncattr('_pad%05d'%npad[0], np.zeros(0+(npad[0]%7),dtype='B'))
+        padding = 1
+        while True:
+          f.setncattr('_pad%05d'%npad[0], np.zeros(padding,dtype='B'))
+          f.sync()
+          if getsize(filename) % 8 == 0: break
+          f.delncattr('_pad%05d'%npad[0])
+          padding += 127
         npad[0] += 1
       # Next, write the data
       address = getsize(filename)
