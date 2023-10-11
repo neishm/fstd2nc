@@ -78,20 +78,33 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
     if 'file_id' not in g.variables:
       g.createVariable('file_id','i4',dims,zlib=True,chunksizes=(1,)+shape)
     file_id = g.variables['file_id']
-    s = np.searchsorted(allfiles,files)
     file_id[0,...] = np.searchsorted(allfiles,files).reshape(shape)
-    #TODO
-    continue
-
-    # Set address/length info
-    for i in range(1,len(args)-2,3):
+    # Set address / length arguments.
+    i = 1
+    while i < len(args):
+      assert isinstance(args[i][0],str)
       label = args[i][0]
-      address = vargroup.createVariable(label+'.address','i8',dims,zlib=True)
-      address[0,...] = np.array(list(args[i+1]),'int64').reshape(shape[1:])
-      length = vargroup.createVariable(label+'.length','i4',dims,zlib=True)
-      length[0,...] = np.array(list(args[i+2]),'int32').reshape(shape[1:])
-    # Define a blank version of the final variable with the final structure.
-    template = vargroup.createVariable('template',var.dtype,var.dims)
+      # Scalar argument
+      if i == len(args)-2 or isinstance(args[i+2],str):
+        if label not in b.groups:
+          b.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=(1,)+shape)
+        v = b.variables[label]
+        v[0,...] = np.array(args[i+1]).reshape(shape)
+        i += 2
+        continue
+      # Address / length arguments
+      if label not in g.groups:
+        g.createGroup(label)
+      al = g.groups[label]
+      if 'address' not in al.variables:
+        al.createVariable('address','i8',dims,zlib=True,chunksizes=(1,)+shape)
+      address = al.variables['address']
+      address[0,...] = np.array(list(args[i+1]),'int64').reshape(shape)
+      if 'length' not in al.variables:
+        al.createVariable('length','i4',dims,zlib=True,chunksizes=(1,)+shape)
+      length = al.variables['length']
+      length[0,...] = np.array(list(args[i+2]),'int32').reshape(shape)
+      i += 3
 
 
 # Register this as a backend for xarray, so FST files can be directly
