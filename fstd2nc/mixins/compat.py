@@ -367,7 +367,9 @@ class FSTD_Compat (BufferBase):
     # nj, datyp
     buf[:,4] = (headers['nj']<<8) + datyps
     # nk, ubc
-    buf[:,5] = (headers['nk']<<12) + headers['ubc']
+    # (nk and ubc no longer guaranteed to be kept in the headers).
+    #buf[:,5] = (headers['nk']<<12) + headers['ubc']
+    buf[:,5] = (1<<12) + 0
     # npas, pad7
     buf[:,6] = (headers['npas']<<6)
     # ig4, ig2a
