@@ -154,6 +154,7 @@ class VCoords (BufferBase):
 
     # Use decoded IP1 values as the vertical axis.
     self._outer_axes = ('level',) + self._outer_axes
+    self._ignore_atts = ('level_descr','special_level') + self._ignore_atts
     super(VCoords,self).__init__(*args,**kwargs)
     # Don't group records across different level 'kind'.
     # (otherwise can't create a coherent vertical axis).
@@ -284,8 +285,8 @@ class VCoords (BufferBase):
         vgd_free (vgd_id)
 
 
-  def _makevars (self):
-    super(VCoords,self)._makevars()
+  # Add human readable vcoord attributes for making unique variable names.
+  def _insert_vcoord_atts (self):
     for var in self._varlist:
       if 'kind' not in var.atts: continue
       kind = var.atts['kind']
@@ -307,6 +308,11 @@ class VCoords (BufferBase):
       if var.atts.get('ip1',None) in self._diag_ip1:
         var.atts['special_level'] = 'diag_level'
 
+  def _makevars (self):
+    super(VCoords,self)._makevars()
+
+    self._insert_vcoord_atts()
+
     # Call this makevars routine from a separate wrapper, to make it easier
     # to re-run just that one part without redoing the whole pipeline.
     # I.e., for case where our initial attempt at fitting the diagnostic level
@@ -315,11 +321,8 @@ class VCoords (BufferBase):
       self._vcoords_makevars()
     except ValueError:
       super(VCoords,self)._makevars()
+      self._insert_vcoord_atts()
       self._vcoords_makevars()
-    # Clean up attributes that were for making unique variable names.
-    for var in self._varlist:
-      var.atts.pop('level_descr',None)
-      var.atts.pop('special_level',None)
 
   def _vcoords_makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type

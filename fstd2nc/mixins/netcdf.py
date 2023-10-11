@@ -264,8 +264,8 @@ class netCDF_IO (BufferBase):
 
   def _fix_names (self):
 
-    # List of metadata keys that are internal to the FSTD file.
-    internal_meta = self._headers.keys()
+    # List of metadata keys that are internal to the input file.
+    internal_meta = list(self._headers.keys()) + list(self._ignore_atts)
 
     # Generate unique axis names.
     axis_table = dict()
