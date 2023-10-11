@@ -312,10 +312,14 @@ class VCoords (BufferBase):
     # I.e., for case where our initial attempt at fitting the diagnostic level
     # into the model levels fails.
     try:
-      return self._vcoords_makevars()
+      self._vcoords_makevars()
     except ValueError:
       super(VCoords,self)._makevars()
-      return self._vcoords_makevars()
+      self._vcoords_makevars()
+    # Clean up attributes that were for making unique variable names.
+    for var in self._varlist:
+      var.atts.pop('level_descr',None)
+      var.atts.pop('special_level',None)
 
   def _vcoords_makevars (self):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
