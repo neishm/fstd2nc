@@ -780,13 +780,20 @@ class XYCoords (BufferBase):
       elif len(gridaxes) == 2:
         newaxes = [('j',gridaxes[0]),('i',gridaxes[1])]
       elif len(gridaxes) == 3:
-        newaxes = [('k',gridaxes[0]),('j',gridaxes[1]),('i',gridaxes[2])]
+        newaxes = [('j',((gridaxes[0],gridaxes[1]))),('i',gridaxes[2])]
       else:
         warn(_("Unusual grid axes for '%s' - ignoring.")%var.name)
       dims = var.dims
       for oldname,newaxis in newaxes:
         if oldname in dims:
-          var.axes[dims.index(oldname)] = newaxis
+          ind = dims.index(oldname)
+          # Special case for splitting an inner axes into multiple components
+          # (such as adding a subgrid index).
+          if isinstance(newaxis,tuple):
+            var.axes = var.axes[:ind] + list(newaxis) + var.axes[ind+1:]
+            dims = var.dims # Number of dimensions is updated.
+          else:
+            var.axes[ind] = newaxis
 
       # For 2D lat/lon, need to reference them as coordinates in order for
       # netCDF viewers to display the field properly.
