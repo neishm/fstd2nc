@@ -48,7 +48,7 @@ def packed_dtype_fst2numpy (datyp_nbits):
   nbits = int(datyp_nbits%(1<<32))
   dtype = dtype_fst2numpy (datyp, nbits)
   dtype = np.dtype(dtype)
-  return (dtype.char + str(dtype.itemsize)).encode()
+  return (dtype.kind + str(dtype.itemsize)).encode()
 def fast_dtype_fst2numpy (datyp, nbits):
   import numpy as np
   args = np.array(datyp,'uint64')
