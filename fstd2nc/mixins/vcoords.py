@@ -303,7 +303,8 @@ class VCoords (BufferBase):
       var.atts['special_level'] = var.atts['level_descr']
       # Discern ocean depths from ocean bottom.
       if kind == 0: var.atts['special_level'] = 'depth_levels'
-      elif kind == 1 and var.atts.get('level',None) == 1.0: var.atts['special_level'] = 'bottom_level'
+      elif kind == 1 and var.atts.get('ip1',None) == 26314400:
+        var.atts['special_level'] = 'bottom_level'
       # Discern atmospheric levels from diagnostic levels.
       if var.atts.get('ip1',None) in self._diag_ip1:
         var.atts['special_level'] = 'diag_level'
