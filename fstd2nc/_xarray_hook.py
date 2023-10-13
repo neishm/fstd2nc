@@ -16,12 +16,12 @@ def _get_open_dataset_parameters ():
 def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
   import numpy as np
   init = (ind == 0)
-  # Define batch / template groups.
-  if 'batch' not in f.groups:
-    f.createGroup('batch')
+  # Define records / templates groups.
+  if 'records' not in f.groups:
+    f.createGroup('records')
   if 'templates' not in f.groups:
     f.createGroup('templates')
-  b = f.groups['batch']
+  r = f.groups['records']
   t = f.groups['templates']
 
   # Write dimensions / coordinates.
@@ -41,10 +41,8 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
         full_length = None
       else:
         full_length = len(axis)
-      if axis.name not in b.dimensions:
-        b.createDimension(axis.name, full_length)
-      if axis.name not in t.dimensions:
-        t.createDimension(axis.name, full_length)
+      if axis.name not in f.dimensions:
+        f.createDimension(axis.name, full_length)
     ###
     sl = tuple(sl)
 
@@ -59,10 +57,10 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
       continue
 
     # Write the address / length info for indirect case.
-    if var.name not in b.groups:
-      b.createGroup(var.name)
+    if var.name not in r.groups:
+      r.createGroup(var.name)
 
-    g = b.groups[var.name]
+    g = r.groups[var.name]
 
     # Define outer axes (for storing address / length values).
     ndim_outer = var.record_id.ndim
@@ -87,9 +85,9 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
       label = args[i][0]
       # Scalar argument
       if i == len(args)-2 or isinstance(args[i+2],str):
-        if label not in b.groups:
-          b.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
-        v = b.variables[label]
+        if label not in r.groups:
+          r.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
+        v = r.variables[label]
         v[outer_sl] = np.array(args[i+1]).reshape(outer_shape)
         i += 2
         continue
