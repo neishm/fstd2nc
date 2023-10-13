@@ -13,7 +13,7 @@ def _get_open_dataset_parameters ():
   return ('filename_or_obj', 'drop_variables', 'fused', 'batch', 'cachefile') + tuple(vars(args).keys())
 
 # Helper method - write the given graph information into a cache file.
-def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
+def _write_graphs (f, ind, graphs, concat_axis='time'):
   import numpy as np
   init = (ind == 0)
   # Define records / templates groups.
@@ -156,7 +156,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
       b = fstd2nc.Buffer(allfiles[i*batch:(i+1)*batch], **kwargs)
       graphs = list(b._iter_graph())
       #TODO
-      _write_graphs (f, i, nbatch, graphs)
+      _write_graphs (f, i, graphs)
     f.close()
     return xr.Dataset({})
     # Only print warning messages for first batch of files, assume the
