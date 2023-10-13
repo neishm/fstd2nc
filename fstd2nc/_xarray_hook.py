@@ -152,10 +152,12 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     file_var[:,:] = allfiles.reshape(-1,1).view('|S1')
 
     # Process first batch, get basic structure of the dataset.
-    b = fstd2nc.Buffer(allfiles[0:batch], **kwargs)
-    graphs = list(b._iter_graph())
     #TODO
-    _write_graphs (f, 0, nbatch, graphs)
+    for i in range(nbatch):
+      b = fstd2nc.Buffer(allfiles[i*batch:(i+1)*batch], **kwargs)
+      graphs = list(b._iter_graph())
+      #TODO
+      _write_graphs (f, i, nbatch, graphs)
     f.close()
     return xr.Dataset({})
     # Only print warning messages for first batch of files, assume the
