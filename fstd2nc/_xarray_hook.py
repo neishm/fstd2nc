@@ -18,7 +18,7 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
   init = (ind == 0)
   # Define batch / template groups.
   if 'batch' not in f.groups:
-    f.createGroup('batch').createDimension('batch',nbatch)
+    f.createGroup('batch')
   if 'templates' not in f.groups:
     f.createGroup('templates')
   b = f.groups['batch']
@@ -38,11 +38,11 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
         concatenate = True
         dt = len(axis)
         sl[iaxis] = slice(ind*dt,ind*dt+dt)
-        full_length = len(axis)*nbatch
+        full_length = None
       else:
         full_length = len(axis)
       if axis.name not in b.dimensions:
-        b.createDimension(axis.name, len(axis))
+        b.createDimension(axis.name, full_length)
       if axis.name not in t.dimensions:
         t.createDimension(axis.name, full_length)
     ###
@@ -69,16 +69,17 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
     while var.record_id.shape[ndim_outer-1] == 1 and var.shape[ndim_outer-1] != 1:
       ndim_outer -= 1
 
-    dims = ('batch',) + var.dims[:ndim_outer]
-    shape = var.shape[:ndim_outer]
+    dims = var.dims[:ndim_outer]
+    outer_shape = var.shape[:ndim_outer]
+    outer_sl = sl[:ndim_outer]
     # Set file_id
     filename_len = len(f.dimensions['filename_len'])
     allfiles = f.variables['files'][:,:].view('|S%d'%filename_len).flatten()
     files = np.array(args[0],dtype='|S%d'%filename_len)
     if 'file_id' not in g.variables:
-      g.createVariable('file_id','i4',dims,zlib=True,chunksizes=(1,)+shape)
+      g.createVariable('file_id','i4',dims,zlib=True,chunksizes=outer_shape)
     file_id = g.variables['file_id']
-    file_id[ind,...] = np.searchsorted(allfiles,files).reshape(shape)
+    file_id[outer_sl] = np.searchsorted(allfiles,files).reshape(outer_shape)
     # Set address / length arguments.
     i = 1
     while i < len(args):
@@ -87,9 +88,9 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
       # Scalar argument
       if i == len(args)-2 or isinstance(args[i+2],str):
         if label not in b.groups:
-          b.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=(1,)+shape)
+          b.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
         v = b.variables[label]
-        v[ind,...] = np.array(args[i+1]).reshape(shape)
+        v[outer_sl] = np.array(args[i+1]).reshape(outer_shape)
         i += 2
         continue
       # Address / length arguments
@@ -97,13 +98,13 @@ def _write_graphs (f, ind, nbatch, graphs, concat_axis='time'):
         g.createGroup(label)
       al = g.groups[label]
       if 'address' not in al.variables:
-        al.createVariable('address','i8',dims,zlib=True,chunksizes=(1,)+shape)
+        al.createVariable('address','i8',dims,zlib=True,chunksizes=outer_shape)
       address = al.variables['address']
-      address[ind,...] = np.array(list(args[i+1]),'int64').reshape(shape)
+      address[outer_sl] = np.array(list(args[i+1]),'int64').reshape(outer_shape)
       if 'length' not in al.variables:
-        al.createVariable('length','i4',dims,zlib=True,chunksizes=(1,)+shape)
+        al.createVariable('length','i4',dims,zlib=True,chunksizes=outer_shape)
       length = al.variables['length']
-      length[ind,...] = np.array(list(args[i+2]),'int32').reshape(shape)
+      length[outer_sl] = np.array(list(args[i+2]),'int32').reshape(outer_shape)
       i += 3
 
 
