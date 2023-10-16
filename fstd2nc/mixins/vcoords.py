@@ -398,7 +398,7 @@ class VCoords (BufferBase):
         atts = OrderedDict()
         name = 'level'
         new_axis = _axis_type(name, atts, level_axis.array)
-        new_bnds = _var_type(name+'_bnds', {}, [new_axis,bnds2], None)
+        new_bnds = None
 
         # Check if we have a vertical coordinate record to use.
         if key in vrecs:
@@ -516,6 +516,7 @@ class VCoords (BufferBase):
                     C_bnds2.append(all_c[ind2])
                 coordA_bnds.array = np.array(np.asarray([A_bnds1,A_bnds2]).T)
                 coordB_bnds.array = np.array(np.asarray([B_bnds1,B_bnds2]).T)
+                new_bnds = _var_type(name+'_bnds', {}, [new_axis,bnds2], None)
                 new_bnds.array = np.array(np.asarray([z_bnds1,z_bnds2]).T)
                 if sleve:
                   coordC_bnds.array = np.array(np.asarray([C_bnds1,C_bnds2]).T)
