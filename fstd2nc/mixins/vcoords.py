@@ -332,6 +332,7 @@ class VCoords (BufferBase):
     from rpnpy.vgd.base import vgd_fromlist, vgd_get, vgd_free
     from rpnpy.vgd.const import VGD_KEYS, VGD_OPR_KEYS
     from rpnpy.vgd import VGDError
+    import rpnpy.librmn.all as rmn
 
     vrecs = self._vrecs
 
@@ -445,7 +446,18 @@ class VCoords (BufferBase):
             # Add all parameters for this coordinate.
             for vgdkey in VGD_KEYS:
               try:
+                # Recent versions of vgrid are very verbose about querying for
+                # attributes that don't exist.  Turn off those messages if
+                # the App logging mechanism is available.
+                # If App logging is not available, then vgrid is not recent
+                # enough to have this verbosity problem anyway.
+                try:
+                  loglvl = rmn.librmn.Lib_LogLevelNo(5,9)
+                except AttributeError: pass
                 val = vgd_get(vgd_id,vgdkey)
+                try:
+                  rmn.librmn.Lib_LogLevelNo(5,loglvl)
+                except AttributeError: pass
                 # Skip multidimensional arrays (can't be encoded as metadata).
                 if getattr(val,'ndim',1) > 1: continue
                 internal_atts[vgdkey] = val
