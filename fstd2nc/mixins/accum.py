@@ -25,7 +25,7 @@ from fstd2nc.mixins import BufferBase
 # Mixin for handling accumulated values.
 # E.g. precipitation.
 
-accum_nomvars = ('PR','PRMM','PB','PC','PY','PZ')
+accum_nomvars = ('PR','PRMM','PB','PC','PY','PZ','N0','O1')
 
 class Accum (BufferBase):
   @classmethod
