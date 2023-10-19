@@ -343,11 +343,14 @@ def get_crs (dataset):
     warn(_("Multiple grid mappings found: %s")%gmap)
     return None
   gmap = dataset[gmap.pop()]
+  # Define the spherical globe.
+  radius = gmap.attrs.get('earth_radius',None)
+  globe = ccrs.Globe(ellipse="sphere",semimajor_axis=radius,semiminor_axis=radius)
   gname = gmap.attrs['grid_mapping_name']
   if gname == 'latitude_longitude':
-    proj = ccrs.PlateCarree()
+    proj = ccrs.PlateCarree(globe=globe)
   elif gname == 'rotated_latitude_longitude':
-    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'], central_rotated_longitude=gmap.attrs.get('north_pole_grid_longitude',0.))
+    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'], central_rotated_longitude=gmap.attrs.get('north_pole_grid_longitude',0.), globe=globe)
   elif gname == 'polar_stereographic':
     # May fail for South Pole projections (would maybe need to change sign of
     # true_scale_latitude?)
@@ -356,7 +359,7 @@ def get_crs (dataset):
       lat = abs(asin(2*k-1)) / pi * 180
     else:
       lat = gmap.attrs['standard_parallel']
-    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=lat)
+    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=lat, globe=globe)
   else:
     warn(_("Unhandled grid mapping: %s")%gname)
     return None
