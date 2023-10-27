@@ -61,32 +61,51 @@ class Accum (BufferBase):
     from fstd2nc.mixins import _axis_type
     import numpy as np
     super(Accum,self)._makevars()
+    # Remember the purpose of ip3, once it's discovered for one variable
+    # in the loop.
+    ip3_purpose = None  # Fill in later.
     # Remove degenerate accumumlation periods.
     for var in self._varlist:
       if 'accum' not in var.dims: continue
       ind = var.dims.index('accum')
       # Check if 'accum' axis should be stripped out.
-      if var.shape[ind] == 1:
+      # Either if there's only one value or if the value changes with ip2
+      # (so only one valid record found per ip2 value).
+      ip3_changes_with_ip2 = np.all( np.sum(var.record_id>=0,axis=ind) == 1)
+      if var.shape[ind] == 1 or ip3_changes_with_ip2:
         ip3 = int(var.axes[ind].array[0])
         if var.name not in self._accum_nomvars and ip3 != 0:
           warn(_('Ignoring IP3 value %d for %s, of unknown purpose.  If this is an accumulated variable, you could specify it in the --accum-vars option.')%(ip3,var.name))
         # For single accumulation periods, don't add an 'accum' axis.
-        # Instead, put the accumulation period in an attribute.
-        # This is for backwards-compatibility with previous versions of this
-        # package where this axis did not exist.
-        if var.name in self._accum_nomvars:
-          var.atts['accumulation_period'] = '%d hours'%ip3
+        # We don't know if ip3 is accumulation period or starting hour.
         var.axes.pop(ind)
         if ind < var.record_id.ndim:
-          var.record_id = var.record_id.squeeze(axis=ind)
+          var.record_id = np.sum(var.record_id * (var.record_id>=0), axis=ind)
       # Check if we have an 'accum' axis that we don't know what to do with.
       elif var.shape[ind] > 1 and var.name not in self._accum_nomvars:
         warn(_('Multiple IP3 values of unknown purpose found for %s.  If this is an accumulated variable, you could specify it in the --accum-vars option.')%var.name)
         axis = var.axes[ind]
         var.axes[ind] = _axis_type('ip3_values', {}, axis.array)
       # Annotate the 'accum' axis.
+      # Need to ascertain the purpose of the ip3 value.
+      # Could be either the starting hour or accumulation period, depending on
+      # the application that wrote the file.  Yippeee!
       else:
-        var.axes[ind].atts.update(long_name='accumulation_period',units='hours')
+        if ip3_purpose is None:
+          sl1 = [0]*var.record_id.ndim
+          sl2 = [0]*var.record_id.ndim
+          sl2[ind] = 1
+          field1 = self._read_record(var.record_id[tuple(sl1)])
+          field2 = self._read_record(var.record_id[tuple(sl2)])
+          sign = (field2-field1)
+          if np.all(sign>=0):
+            ip3_purpose = 'accum'
+          elif np.all(sign<=0):
+            ip3_purpose = 'start'
+        if ip3_purpose == 'accum':
+          var.axes[ind] = _axis_type('accum', dict(long_name='accumulation_period',units='hours'), var.axes[ind].array)
+        elif ip3_purpose == 'start' and 'ip2' in var.atts:
+          var.axes[ind] = _axis_type('accum', dict(long_name='accumulation_period',units='hours'), vars.atts['ip2'] - var.axes[ind].array)
 
   # Re-encode accumulation time back into ip3.
   def _unmakevars (self):
