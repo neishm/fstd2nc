@@ -14,8 +14,17 @@ def _get_open_dataset_parameters ():
 
 # Helper method - given a list of files, produce the graphs.
 def graph_maker (**kwargs):
-  def get_graphs (infiles):
+  from threading import Lock
+  _lock = Lock()
+  def get_graphs (infiles, first=[True]):
     import fstd2nc
+    # Only print warning messages for first batch of files, assume the
+    # warnings will be the same for the rest of the files as well.
+    with _lock:
+      if first == [True]:
+        first[0] = False
+        return list(fstd2nc.Buffer(infiles, **kwargs)._iter_graph())
+    fstd2nc.stdout.streams = ('error',)
     return list(fstd2nc.Buffer(infiles, **kwargs)._iter_graph())
   return get_graphs
 
@@ -159,35 +168,16 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
 
     # Put the files into batches for processing.
     file_batches = allfiles.reshape(nbatch,batch)
-    #TODO
+    # Remember original I/O streams (will get mangled by write_graphs).
+    orig_streams = fstd2nc.stdout.streams
+    # Start a thread pool for processing the graphs in parallel.
     all_graphs = map(graph_maker(**kwargs), file_batches)
+    # Iterate through the graphs from this pool, write to the cache file.
     for ind, graphs in enumerate(all_graphs):
       _write_graphs(f, ind, graphs)
+    # Restore original I/O streams
+    fstd2nc.stdout.streams = orig_streams
     f.close()
-    return xr.Dataset({})
-    # Only print warning messages for first batch of files, assume the
-    # warnings will be the same for the rest of the files as well.
-    # Continue processing the rest of the batches, spawning threads for getting
-    # the variable structures.
-    # Turn warnings messages back on.
-    #TODO
-    ind = 0
-    pieces = []
-    original_streams = fstd2nc.stdout.streams
-    while ind < len(allfiles):
-      b = fstd2nc.Buffer(allfiles[ind:ind+batch], **kwargs)
-      #TODO: spawn thread here.
-      graphs = list(b._iter_graph())
-      pieces.append(graphs)
-      if ind == 0: fstd2nc.stdout.streams = ('error',)
-      ind += batch
-    fstd2nc.stdout.streams = original_streams
-    # Finalize the progress bar.
-    if 'progress' in kwargs and hasattr(kwargs['progress'],'finish'):
-      kwargs['progress'].finish()
-
-    #TODO
-    import xarray as xr
     return xr.Dataset({})
 
   def guess_can_open (self, filename_or_obj):
