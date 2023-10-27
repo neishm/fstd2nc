@@ -12,6 +12,13 @@ def _get_open_dataset_parameters ():
   args = parser.parse_args([])
   return ('filename_or_obj', 'drop_variables', 'fused', 'batch', 'cachefile') + tuple(vars(args).keys())
 
+# Helper method - given a list of files, produce the graphs.
+def graph_maker (**kwargs):
+  def get_graphs (infiles):
+    import fstd2nc
+    return list(fstd2nc.Buffer(infiles, **kwargs)._iter_graph())
+  return get_graphs
+
 # Helper method - write the given graph information into a cache file.
 def _write_graphs (f, ind, graphs, concat_axis='time'):
   import numpy as np
@@ -150,13 +157,12 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     allfiles = np.array(allfiles,dtype='|S%d'%filename_len)
     file_var[:,:] = allfiles.reshape(-1,1).view('|S1')
 
-    # Process first batch, get basic structure of the dataset.
+    # Put the files into batches for processing.
+    file_batches = allfiles.reshape(nbatch,batch)
     #TODO
-    for i in range(nbatch):
-      b = fstd2nc.Buffer(allfiles[i*batch:(i+1)*batch], **kwargs)
-      graphs = list(b._iter_graph())
-      #TODO
-      _write_graphs (f, i, graphs)
+    all_graphs = map(graph_maker(**kwargs), file_batches)
+    for ind, graphs in enumerate(all_graphs):
+      _write_graphs(f, ind, graphs)
     f.close()
     return xr.Dataset({})
     # Only print warning messages for first batch of files, assume the
