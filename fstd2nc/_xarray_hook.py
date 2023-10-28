@@ -25,7 +25,8 @@ def graph_maker (**kwargs):
         first[0] = False
         return list(fstd2nc.Buffer(infiles, **kwargs)._iter_graph())
     fstd2nc.stdout.streams = ('error',)
-    return list(fstd2nc.Buffer(infiles, **kwargs)._iter_graph())
+    b = fstd2nc.Buffer(infiles, **kwargs)
+    return list(b._iter_graph())
   return get_graphs
 
 # Helper method - write the given graph information into a cache file.
@@ -134,6 +135,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     import numpy as np
     import xarray as xr
     import netCDF4 as nc  # For on-disk storage of meta information.
+    from multiprocessing.pool import ThreadPool
     if drop_variables is not None: kwargs['exclude'] = drop_variables
     # Simple case: no batching done.
     if batch is None:
@@ -171,7 +173,8 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     # Remember original I/O streams (will get mangled by write_graphs).
     orig_streams = fstd2nc.stdout.streams
     # Start a thread pool for processing the graphs in parallel.
-    all_graphs = map(graph_maker(**kwargs), file_batches)
+    pool = ThreadPool(5)
+    all_graphs = pool.imap(graph_maker(**kwargs), file_batches)
     # Iterate through the graphs from this pool, write to the cache file.
     for ind, graphs in enumerate(all_graphs):
       _write_graphs(f, ind, graphs)
