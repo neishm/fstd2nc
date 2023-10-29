@@ -169,7 +169,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     # Remember original I/O streams (will get mangled by write_graphs).
     orig_streams = fstd2nc.stdout.streams
     # Start a thread pool for processing the graphs in parallel.
-    pool = ThreadPool(5)
+    pool = ThreadPool(1)
     all_graphs = pool.imap(graph_maker(**kwargs), file_batches)
     # Iterate through the graphs from this pool, write to the cache file.
     for ind, graphs in enumerate(all_graphs):
