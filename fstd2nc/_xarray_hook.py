@@ -33,13 +33,6 @@ def graph_maker (**kwargs):
 def _write_graphs (f, ind, graphs, concat_axis='time'):
   import numpy as np
   init = (ind == 0)
-  # Define records / templates groups.
-  if 'records' not in f.groups:
-    f.createGroup('records')
-  if 'templates' not in f.groups:
-    f.createGroup('templates')
-  r = f.groups['records']
-  t = f.groups['templates']
 
   # Write dimensions / coordinates.
   # Non-concatenated coordinates only need to be written once.
@@ -63,21 +56,24 @@ def _write_graphs (f, ind, graphs, concat_axis='time'):
     ###
     sl = tuple(sl)
 
-    if var.name not in t.variables:
-      v = t.createVariable(var.name,dtype,var.dims)
-      v.setncatts(var.atts)
-
     # Write the variable (direct case)
     if args is None:
+      if var.name not in f.variables:
+        v = f.createVariable(var.name,dtype,var.dims)
+        v.setncatts(var.atts)
       if init or concatenate:
-        t.variables[var.name][sl] = var.array
+        f.variables[var.name][sl] = var.array
       continue
 
     # Write the address / length info for indirect case.
-    if var.name not in r.groups:
-      r.createGroup(var.name)
+    if var.name not in f.groups:
+      f.createGroup(var.name)
 
-    g = r.groups[var.name]
+    g = f.groups[var.name]
+
+    if 'template' not in g.variables:
+      v = g.createVariable('template',dtype,var.dims)
+      v.setncatts(var.atts)
 
     # Define outer axes (for storing address / length values).
     ndim_outer = var.record_id.ndim
@@ -102,9 +98,9 @@ def _write_graphs (f, ind, graphs, concat_axis='time'):
       label = args[i][0]
       # Scalar argument
       if i == len(args)-2 or isinstance(args[i+2],str):
-        if label not in r.groups:
+        if label not in g.variables:
           r.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
-        v = r.variables[label]
+        v = g.variables[label]
         v[outer_sl] = np.array(args[i+1]).reshape(outer_shape)
         i += 2
         continue
