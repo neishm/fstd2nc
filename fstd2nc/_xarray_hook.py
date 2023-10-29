@@ -160,7 +160,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     filename_len = max(map(len,allfiles))
     f.createDimension('filename_len',filename_len)
     nfiles_dim = f.createDimension('nfiles',len(allfiles))
-    file_var = f.createVariable('files','|S1',('nfiles','filename_len'),zlib=True)
+    file_var = f.createVariable('files','|S1',('nfiles','filename_len'),zlib=True,chunksizes=(batch,filename_len))
     allfiles = np.array(allfiles,dtype='|S%d'%filename_len)
     file_var[:,:] = allfiles.reshape(-1,1).view('|S1')
 
