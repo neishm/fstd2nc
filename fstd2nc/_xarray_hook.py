@@ -30,9 +30,13 @@ def graph_maker (**kwargs):
   return get_graphs
 
 # Helper method - write the given graph information into a cache file.
-def _write_graphs (f, ind, graphs, concat_axis='time'):
+def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
   import numpy as np
   init = (ind == 0)
+
+  # Extract the filesnames needed for this batch.
+  filename_len = len(f.dimensions['filename_len'])
+  allfiles = f.variables['files'][ind*batch:(ind+1)*batch,:].view('|S%d'%filename_len).flatten()
 
   # Write dimensions / coordinates.
   # Non-concatenated coordinates only need to be written once.
@@ -84,13 +88,11 @@ def _write_graphs (f, ind, graphs, concat_axis='time'):
     outer_shape = var.shape[:ndim_outer]
     outer_sl = sl[:ndim_outer]
     # Set file_id
-    filename_len = len(f.dimensions['filename_len'])
-    allfiles = f.variables['files'][:,:].view('|S%d'%filename_len).flatten()
     files = np.array(args[0],dtype='|S%d'%filename_len)
     if 'file_id' not in g.variables:
       g.createVariable('file_id','i4',dims,zlib=True,chunksizes=outer_shape)
     file_id = g.variables['file_id']
-    file_id[outer_sl] = np.searchsorted(allfiles,files).reshape(outer_shape)
+    file_id[outer_sl] = np.searchsorted(allfiles,files).reshape(outer_shape) + ind*batch
     # Set address / length arguments.
     i = 1
     while i < len(args):
@@ -99,7 +101,7 @@ def _write_graphs (f, ind, graphs, concat_axis='time'):
       # Scalar argument
       if i == len(args)-2 or isinstance(args[i+2],str):
         if label not in g.variables:
-          r.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
+          g.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
         v = g.variables[label]
         v[outer_sl] = np.array(args[i+1]).reshape(outer_shape)
         i += 2
@@ -173,7 +175,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     all_graphs = pool.imap(graph_maker(**kwargs), file_batches)
     # Iterate through the graphs from this pool, write to the cache file.
     for ind, graphs in enumerate(all_graphs):
-      _write_graphs(f, ind, graphs)
+      _write_graphs(f, ind, batch, graphs)
     # Restore original I/O streams
     fstd2nc.stdout.streams = orig_streams
     f.close()
