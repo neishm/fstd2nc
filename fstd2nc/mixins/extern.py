@@ -546,6 +546,7 @@ class ExternOutput (BufferBase):
     # Open with netCDF4 get get access to the group structures containing the
     # metadata.
     root = nc.Dataset(indexfile, 'r')
+    root.set_auto_mask(False)
     files = root.variables['files']
     # Generate the variables.
     vardict = {}
