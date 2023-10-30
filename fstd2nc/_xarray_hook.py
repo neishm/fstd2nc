@@ -63,7 +63,7 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
     # Write the variable (direct case)
     if args is None:
       if var.name not in f.variables:
-        v = f.createVariable(var.name,dtype,var.dims)
+        v = f.createVariable(var.name,dtype,var.dims,zlib=True)
         v.setncatts(var.atts)
       if init or concatenate:
         f.variables[var.name][sl] = var.array
@@ -171,8 +171,11 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     # Remember original I/O streams (will get mangled by write_graphs).
     orig_streams = fstd2nc.stdout.streams
     # Start a thread pool for processing the graphs in parallel.
-    pool = ThreadPool(1)
-    all_graphs = pool.imap(graph_maker(**kwargs), file_batches)
+    #NOTE: disabled - not much speed improvement with this approach.
+    # To re-enable, uncomment the following line, and then change 'map'
+    # to 'pool.imap'.
+    #pool = ThreadPool(2)
+    all_graphs = map(graph_maker(**kwargs), file_batches)
     # Iterate through the graphs from this pool, write to the cache file.
     for ind, graphs in enumerate(all_graphs):
       _write_graphs(f, ind, batch, graphs)
