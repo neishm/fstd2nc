@@ -134,6 +134,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
     import xarray as xr
     import netCDF4 as nc  # For on-disk storage of meta information.
     from multiprocessing.pool import ThreadPool
+    import os
     if drop_variables is not None: kwargs['exclude'] = drop_variables
     # Simple case: no batching done.
     if batch is None:
@@ -156,6 +157,8 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
       kwargs['progress'] = _ProgressBar(_("Checking input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(allfiles))
 
     # Define the cache file.
+    if os.path.exists(cachefile):
+      os.remove(cachefile)
     f = nc.Dataset(cachefile,'w')
     f.setncattr('version',1)
     # Write file information.
