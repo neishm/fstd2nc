@@ -534,8 +534,46 @@ class ExternOutput (BufferBase):
     # Restore original I/O streams
     fstd2nc.stdout.streams = orig_streams
     f.close()
-    return xr.Dataset({})
 
+  # Create a dataset from the given index file.
+  @classmethod
+  def open_index (cls, indexfile):
+    import xarray as xr
+    import netCDF4 as nc
+    from fstd2nc._xarray_hook import FSTDBackendArray
+    # Open with xarray to get axes / coordinates.
+    ds = xr.open_dataset(indexfile)
+    # Open with netCDF4 get get access to the group structures containing the
+    # metadata.
+    root = nc.Dataset(indexfile, 'r')
+    files = root.variables['files']
+    # Generate the variables.
+    vardict = {}
+    for varname, group in root.groups.items():
+      # Get a lazy accessor for the data.
+      array = FSTDBackendArray (cls, files, group)
+      array = xr.core.indexing.LazilyIndexedArray(array)
+      # Define the preferred chunking for the data, based on how it's stored
+      # on disk.
+      preferred_chunks = {}
+      all_dims = group.variables['template'].dimensions
+      outer_dims = group.groups['data'].variables['address'].dimensions
+      for dim in all_dims:
+        if dim in outer_dims:
+          preferred_chunks[dim] = 1
+        else:
+          preferred_chunks[dim] = len(root.dimensions[dim])
+      encoding = {'preferred_chunks':preferred_chunks}
+      # Annotate the variable with dimensions and other metadata.
+      template = group.variables['template']
+      vardict[varname] = xr.Variable (template.dimensions, array, attrs=template.__dict__, encoding=encoding)
+    # Put these variables into the Dataset structure (where the coordinates are
+    # already defined.
+    ds = ds.merge(vardict)
+    # Remove bookkeeping variables.
+    del ds['files']
+    del ds.attrs['version']
+    return (ds)
 
   @classmethod
   def from_xarray (cls, ds, **params):
