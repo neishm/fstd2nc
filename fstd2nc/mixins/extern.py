@@ -118,11 +118,13 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
     file_id[outer_sl] = np.searchsorted(allfiles,files).reshape(outer_shape) + ind*batch
     # Set address / length arguments.
     i = 1
+    # Evaluate any map objects.
+    args = [list(a) if isinstance(a,map) else a for a in args]
     while i < len(args):
       assert isinstance(args[i][0],str)
       label = args[i][0]
       # Scalar argument
-      if i == len(args)-2 or isinstance(args[i+2],str):
+      if i == len(args)-2 or isinstance(args[i+2][0],str):
         scalar = args[i+1]
         # Convert boolean flags to bytes, for netcdf compatibility.
         if scalar[0] in (True,False):
