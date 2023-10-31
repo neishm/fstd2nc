@@ -55,6 +55,7 @@ def _read_block (filename, offset, length):
 # Helper method - write the given graph information into an index file.
 def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
   import numpy as np
+  from pickle import dumps
   init = (ind == 0)
 
   # Extract the filesnames needed for this batch.
@@ -129,6 +130,31 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
         # Convert boolean flags to bytes, for netcdf compatibility.
         if scalar[0] in (True,False):
           scalar = np.array(scalar,dtype='B')
+        # Handle compound data (nested tuples).
+        # NOTE: assuming the order of these tuples is always consistent across
+        # every batch of files.
+        if isinstance(scalar[0],tuple):
+          # Get the unique data structures.
+          unique = {}
+          for s in scalar:
+            if id(s) not in unique:
+              unique[id(s)] = s
+          ids, structs = zip(*unique.items())
+          structs = [np.array([dumps(s)]).view('B') for s in structs]
+          if label+'_index' not in g.dimensions:
+            g.createDimension(label+'_index',len(structs))
+          if label+'_lookup' not in g.variables:
+            g.createVariable(label+'_lookup','i4',dims,zlib=True,chunksizes=outer_shape)
+          g.variables[label+'_lookup'][outer_sl] = np.array([ids.index(id(s)) for s in scalar],'int32').reshape(outer_shape)
+          if 'pickle' not in f.vltypes:
+            f.createVLType('B','pickle')
+          if label+'_pickle' not in g.variables:
+            g.createVariable(label+'_pickle',f.vltypes['pickle'],(label+'_index',),zlib=True)
+            for ind,s in enumerate(structs):
+              g.variables[label+'_pickle'][ind] = s
+          i += 2
+          continue
+          # End of compound data case
         # Initialize the scalar variable?
         if label not in g.variables:
           g.createVariable(label,type(scalar[0]),dims,zlib=True,chunksizes=outer_shape)
