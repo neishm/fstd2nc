@@ -95,6 +95,6 @@ class CCCMixin(BufferBase):
     xmax = data[84:92].view('>f8')[0]
     dtype = {1:'>i8', 2:'>i4', 4:'>H', 8:'B'}[pack]
     data = data[92:-4].view(dtype).reshape(nlat,nlon)
-    data = data * (xmax-xmin) / (2**(nbits-1))
+    data = data * (xmax-xmin) / (2**(nbits-1)) + xmin
     return np.array(data,'float32')
 
