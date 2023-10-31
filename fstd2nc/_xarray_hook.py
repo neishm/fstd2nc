@@ -55,11 +55,16 @@ class FSTDBackendArray(BackendArray):
       for argname, argval in args.items():
         if argname == 'data': continue
         current_args.append(argname)
+        # Address / length arguments (for data from file)?
         if isinstance(argval,tuple):
           current_args.append(argval[0])
           current_args.append(argval[1])
+        # Scalar arguments?
         else:
-          current_args.append(argval)
+          # Decode bytes into boolean (from netcdf compatibility).
+          if argval.dtype.name == 'uint8':
+            argval = argval.astype('bool')
+          current_args.append(list(argval))
       current_args.append((nrecs,)+self._chunk_shape)
       # Fetch the data.
       # Vectorized over multiple records per input file.

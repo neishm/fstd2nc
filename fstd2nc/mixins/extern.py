@@ -123,10 +123,16 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
       label = args[i][0]
       # Scalar argument
       if i == len(args)-2 or isinstance(args[i+2],str):
+        scalar = args[i+1]
+        # Convert boolean flags to bytes, for netcdf compatibility.
+        if scalar[0] in (True,False):
+          scalar = np.array(scalar,dtype='B')
+        # Initialize the scalar variable?
         if label not in g.variables:
-          g.createVariable(label,type(args[i+1][0]),dims,zlib=True,chunksizes=outer_shape)
+          g.createVariable(label,type(scalar[0]),dims,zlib=True,chunksizes=outer_shape)
+        # Fill in the scalar values.
         v = g.variables[label]
-        v[outer_sl] = np.array(args[i+1]).reshape(outer_shape)
+        v[outer_sl] = np.array(scalar).reshape(outer_shape)
         i += 2
         continue
       # Address / length arguments
