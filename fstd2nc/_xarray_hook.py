@@ -3,16 +3,27 @@ from xarray.backends import BackendEntrypoint, BackendArray
 
 # Create a lazy array interface from the given index data.
 class FSTDBackendArray(BackendArray):
-  __slots__ = ("shape", "dtype", "_buffer", "_files", "_group", "_outer_dims","_chunk_shape")
-  def __init__ (self, buffer, files, group):
+  __slots__ = ("shape", "dtype", "_buffer", "_root", "_group", "_outer_dims","_chunk_shape","_pickles")
+  def __init__ (self, buffer, name, root, pickles):
+    from pickle import loads
     self._buffer = buffer
-    self._files = files
-    self._group = group
-    template = group.variables['template']
+    self._root = root
+    self._group = root.groups[name]
+    template = self._group.variables['template']
     self.shape = template.shape
     self.dtype = template.dtype
-    self._outer_dims = len(group.groups['data'].variables['address'].dimensions)
+    self._outer_dims = len(self._group.groups['data'].variables['address'].dimensions)
     self._chunk_shape = self.shape[self._outer_dims:]
+    self._pickles = pickles
+    # Construct pickle objects if this is the first time decoding.
+    if len(pickles) == 0:
+      for varname in root.variables:
+        if varname.endswith('_pickle'):
+          struct = root.variables[varname][:]
+          struct = [s.view('|S%d'%len(s)) for s in struct]
+          struct = [loads(s) for s in struct]
+          pickles[varname.rstrip('_pickle')] = struct
+
   def __getitem__ (self, key):
     import xarray as xr
     return xr.core.indexing.explicit_indexing_adapter (
@@ -26,12 +37,23 @@ class FSTDBackendArray(BackendArray):
     outer_key = key[:self._outer_dims]
     inner_key = key[self._outer_dims:]
     # Get the telemetry of the data requested.
+    files = self._root.variables['files']
     file_ids = self._group.variables['file_id'][outer_key]
     # Get arguments for data construction.
     args = {}
     # Scalar arguments
     for argname in self._group.variables:
       if argname in ('file_id','template'): continue
+      # Check for compound data.
+      if argname.endswith('_lookup'):
+        ind = self._group.variables[argname][outer_key]
+        # For now, assume this type of data is invariant over the variable.
+        ind0 = ind.flatten()[0]
+        assert np.all(ind==ind0)
+        argname = argname.rstrip('_lookup')
+        args[argname] = self._pickles[argname][ind0]
+        continue
+      # Regular scalar data.
       args[argname] = self._group.variables[argname][outer_key]
     # Address / length arguments.
     for argname in self._group.groups:
@@ -47,7 +69,7 @@ class FSTDBackendArray(BackendArray):
       selection = (file_ids == file_id)
       nrecs = np.sum(selection)
       # Set up the arguments going into the data loader.
-      filename = self._files[file_id].flatten()
+      filename = files[file_id].flatten()
       filename = filename.view('|S%d'%len(filename))[0].decode()
       current_args = [filename]
       current_args.append(args['data'][0].flatten())
@@ -55,8 +77,11 @@ class FSTDBackendArray(BackendArray):
       for argname, argval in args.items():
         if argname == 'data': continue
         current_args.append(argname)
+        # Compound data (single copy over all data)
+        if argname in self._pickles:
+          current_args.append(argval)
         # Address / length arguments (for data from file)?
-        if isinstance(argval,tuple):
+        elif isinstance(argval,tuple):
           current_args.append(argval[0])
           current_args.append(argval[1])
         # Scalar arguments?

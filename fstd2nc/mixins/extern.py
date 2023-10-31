@@ -594,9 +594,10 @@ class ExternOutput (BufferBase):
     files = root.variables['files']
     # Generate the variables.
     vardict = {}
+    pickles = {}
     for varname, group in root.groups.items():
       # Get a lazy accessor for the data.
-      array = FSTDBackendArray (cls, files, group)
+      array = FSTDBackendArray (cls, varname, root, pickles)
       array = xr.core.indexing.LazilyIndexedArray(array)
       # Define the preferred chunking for the data, based on how it's stored
       # on disk.
