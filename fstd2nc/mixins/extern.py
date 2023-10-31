@@ -163,18 +163,22 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
         v[outer_sl] = np.array(scalar).reshape(outer_shape)
         i += 2
         continue
-      # Address / length arguments
+      # Handle arguments from address / length pairs.
+      # Skip for case where there are no valid records.
+      if np.all(np.array(args[i+1])==-1):
+        i += 3
+        continue
       if label not in g.groups:
         g.createGroup(label)
       al = g.groups[label]
       if 'address' not in al.variables:
         al.createVariable('address','i8',dims,zlib=True,chunksizes=outer_shape)
       address = al.variables['address']
-      address[outer_sl] = np.array(list(args[i+1]),'int64').reshape(outer_shape)
+      address[outer_sl] = np.array(args[i+1],'int64').reshape(outer_shape)
       if 'length' not in al.variables:
         al.createVariable('length','i4',dims,zlib=True,chunksizes=outer_shape)
       length = al.variables['length']
-      length[outer_sl] = np.array(list(args[i+2]),'int32').reshape(outer_shape)
+      length[outer_sl] = np.array(args[i+2],'int32').reshape(outer_shape)
       i += 3
 
 
