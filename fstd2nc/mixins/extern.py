@@ -58,6 +58,9 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
   from pickle import dumps
   init = (ind == 0)
 
+  # Global collection of all compound data (pickled).
+  pickles = {}
+
   # Extract the filesnames needed for this batch.
   filename_len = len(f.dimensions['filename_len'])
   allfiles = f.variables['files'][ind*batch:(ind+1)*batch,:].view('|S%d'%filename_len).flatten()
@@ -135,23 +138,14 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
         # every batch of files.
         if isinstance(scalar[0],tuple):
           # Get the unique data structures.
-          unique = {}
+          unique = pickles.setdefault(label,{})
           for s in scalar:
             if id(s) not in unique:
               unique[id(s)] = s
           ids, structs = zip(*unique.items())
-          structs = [np.array([dumps(s)]).view('B') for s in structs]
-          if label+'_index' not in g.dimensions:
-            g.createDimension(label+'_index',len(structs))
           if label+'_lookup' not in g.variables:
             g.createVariable(label+'_lookup','i4',dims,zlib=True,chunksizes=outer_shape)
           g.variables[label+'_lookup'][outer_sl] = np.array([ids.index(id(s)) for s in scalar],'int32').reshape(outer_shape)
-          if 'pickle' not in f.vltypes:
-            f.createVLType('B','pickle')
-          if label+'_pickle' not in g.variables:
-            g.createVariable(label+'_pickle',f.vltypes['pickle'],(label+'_index',),zlib=True)
-            for ind,s in enumerate(structs):
-              g.variables[label+'_pickle'][ind] = s
           i += 2
           continue
           # End of compound data case
@@ -181,7 +175,19 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
       length[outer_sl] = np.array(args[i+2],'int32').reshape(outer_shape)
       i += 3
 
-
+    if len(pickles) == 0: return
+    # Final encoding of compound arguments.
+    if 'pickle' not in f.vltypes:
+      f.createVLType('B','pickle')
+    for label, unique in pickles.items():
+      ids, structs = zip(*unique.items())
+      structs = [np.array([dumps(s)]).view('B') for s in structs]
+      if label+'_index' not in f.dimensions:
+        f.createDimension(label+'_index',len(structs))
+      if label+'_pickle' not in f.variables:
+        f.createVariable(label+'_pickle',f.vltypes['pickle'],(label+'_index',),zlib=True)
+        for ind,s in enumerate(structs):
+          f.variables[label+'_pickle'][ind] = s
 
 
 class ExternOutput (BufferBase):
