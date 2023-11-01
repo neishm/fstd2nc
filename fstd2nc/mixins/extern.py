@@ -538,6 +538,9 @@ class ExternOutput (BufferBase):
     import netCDF4 as nc  # For on-disk storage of meta information.
     from multiprocessing.pool import ThreadPool
     import os
+    # Need a consistent reference date across all batches.
+    if 'reference_date' not in kwargs and batch is not None:
+      kwargs['reference_date'] = '1900-01-01'
     # First, get full list of files.
     if isinstance(filenames,list):
       allfiles = filenames
