@@ -1,29 +1,55 @@
 import fstd2nc
 from xarray.backends import BackendEntrypoint, BackendArray
 
+# Wrapper for managing index file.
+# Allows the file reference to be pickled.
+class IndexFile(object):
+  __slots__ = ("_filename", "root")
+  def __init__ (self, filename):
+    self.__setstate__ (filename)
+  def __getstate__ (self):
+    return self._filename
+  def __setstate__ (self, filename):
+    import netCDF4 as nc
+    self._filename = filename
+    self.root = nc.Dataset(filename,'r')
+    self.root.set_auto_mask(False)
+
 # Create a lazy array interface from the given index data.
 class FSTDBackendArray(BackendArray):
-  __slots__ = ("shape", "dtype", "_buffer", "_root", "_group", "_outer_dims","_chunk_shape","_pickles")
-  def __init__ (self, buffer, name, root, pickles):
+  __slots__ = ("shape", "dtype", "_buffer", "_name", "_source", "_root", "_group", "_outer_dims","_chunk_shape","_pickles")
+  def __init__ (self, buffer, name, source, pickles):
     from pickle import loads
     self._buffer = buffer
-    self._root = root
-    self._group = root.groups[name]
+    self._name = name
+    self._source = source
+    self._pickles = pickles
+    self._finalize()
+  def _finalize (self):
+    self._root = self._source.root
+    self._group = self._root.groups[self._name]
     template = self._group.variables['template']
     self.shape = template.shape
     self.dtype = template.dtype
     self._outer_dims = len(self._group.groups['data'].variables['address'].dimensions)
     self._chunk_shape = self.shape[self._outer_dims:]
-    self._pickles = pickles
     # Construct pickle objects if this is the first time decoding.
-    if len(pickles) == 0:
-      for varname in root.variables:
+    if len(self._pickles) == 0:
+      for varname in self._root.variables:
         if varname.endswith('_pickle'):
-          struct = root.variables[varname][:]
+          struct = self._root.variables[varname][:]
           struct = [s.view('|S%d'%len(s)) for s in struct]
           struct = [loads(s) for s in struct]
-          pickles[varname.rstrip('_pickle')] = struct
-
+          self._pickles[varname.rstrip('_pickle')] = struct
+  def __getstate__ (self):
+    state = dict()
+    for k in ('_buffer','_name','_source','_pickles'):
+      state[k] = getattr(self,k)
+    return state
+  def __setstate__ (self, state):
+    for k, v in state.items():
+      setattr(self,k,v)
+    self._finalize()
   def __getitem__ (self, key):
     import xarray as xr
     return xr.core.indexing.explicit_indexing_adapter (

@@ -586,20 +586,18 @@ class ExternOutput (BufferBase):
   def open_index (cls, indexfile):
     import xarray as xr
     import netCDF4 as nc
-    from fstd2nc._xarray_hook import FSTDBackendArray
+    from fstd2nc._xarray_hook import IndexFile, FSTDBackendArray
     # Open with xarray to get axes / coordinates.
     ds = xr.open_dataset(indexfile)
     # Open with netCDF4 get get access to the group structures containing the
     # metadata.
-    root = nc.Dataset(indexfile, 'r')
-    root.set_auto_mask(False)
-    files = root.variables['files']
+    index = IndexFile(indexfile)
     # Generate the variables.
     vardict = {}
     pickles = {}
-    for varname, group in root.groups.items():
+    for varname, group in index.root.groups.items():
       # Get a lazy accessor for the data.
-      array = FSTDBackendArray (cls, varname, root, pickles)
+      array = FSTDBackendArray (cls, varname, index, pickles)
       array = xr.core.indexing.LazilyIndexedArray(array)
       # Define the preferred chunking for the data, based on how it's stored
       # on disk.
@@ -610,7 +608,7 @@ class ExternOutput (BufferBase):
         if dim in outer_dims:
           preferred_chunks[dim] = 1
         else:
-          preferred_chunks[dim] = len(root.dimensions[dim])
+          preferred_chunks[dim] = len(index.root.dimensions[dim])
       encoding = {'preferred_chunks':preferred_chunks}
       # Annotate the variable with dimensions and other metadata.
       template = group.variables['template']
