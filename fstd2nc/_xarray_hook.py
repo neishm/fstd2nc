@@ -98,8 +98,8 @@ class FSTDBackendArray(BackendArray):
       filename = files[file_id].flatten()
       filename = filename.view('|S%d'%len(filename))[0].decode()
       current_args = [filename]
-      current_args.append(args['data'][0].flatten())
-      current_args.append(args['data'][1].flatten())
+      current_args.append(args['data'][0][selection].flatten())
+      current_args.append(args['data'][1][selection].flatten())
       for argname, argval in args.items():
         if argname == 'data': continue
         current_args.append(argname)
@@ -108,14 +108,15 @@ class FSTDBackendArray(BackendArray):
           current_args.append(argval)
         # Address / length arguments (for data from file)?
         elif isinstance(argval,tuple):
-          current_args.append(argval[0].flatten())
-          current_args.append(argval[1].flatten())
+          current_args.append(argval[0][selection].flatten())
+          current_args.append(argval[1][selection].flatten())
         # Scalar arguments?
         else:
           # Decode bytes into boolean (from netcdf compatibility).
           if argval.dtype.name == 'uint8':
             argval = argval.astype('bool')
-          current_args.append(list(argval))
+          shape = args['data'][0].shape
+          current_args.append(np.array(list(argval)).reshape(shape)[selection].flatten())
       current_args.append((nrecs,)+self._chunk_shape)
       # Fetch the data.
       # Vectorized over multiple records per input file.
@@ -126,7 +127,7 @@ class FSTDBackendArray(BackendArray):
       if out is None:
         out = np.empty(file_ids.shape+data.shape[1:], dtype=data.dtype)
       out[selection] = data
-      return out
+    return out
 
 # Quick and dirty hack to get list of parameters that could be passed to
 # to Buffer interface.
