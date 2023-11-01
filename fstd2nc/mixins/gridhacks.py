@@ -266,7 +266,7 @@ class Interp (BufferBase):
       self._headers['v_length'][:] = -1
       for u,v in vector_fields:
         this_uv = np.isin(self._headers['nomvar'],(u,v))
-        if sum(this_uv) == 0: continue
+        if np.sum(this_uv) == 0: continue
         # The following is adapted from masks mixin
         nomvar = self._headers['nomvar'][this_uv]
         typvar = self._headers['typvar'][this_uv]

@@ -52,6 +52,145 @@ def _read_block (filename, offset, length):
       out.append(np.fromfile(f,'B',l))
   return out
 
+# Helper method - write the given graph information into an index file.
+def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
+  import numpy as np
+  from pickle import dumps
+  init = (ind == 0)
+
+  # Global collection of all compound data (pickled).
+  pickles = {}
+
+  # Extract the filesnames needed for this batch.
+  filename_len = len(f.dimensions['filename_len'])
+  allfiles = f.variables['files'][ind*batch:(ind+1)*batch,:].view('|S%d'%filename_len).flatten()
+
+  # Write dimensions / coordinates.
+  # Non-concatenated coordinates only need to be written once.
+  for var, args in graphs:
+    # Skip dimensions (encoded as part of variable encoding below).
+    if not hasattr(var,'axes'): continue
+    sl = [slice(None)]*len(var.axes)
+    dtype = var.dtype if hasattr(var,'dtype') else var.array.dtype
+    concatenate = False
+    ###
+    # Define the coordinates (if not already defined).
+    for iaxis,axis in enumerate(var.axes):
+      # Check for concatenation axis.
+      if axis.name.startswith(concat_axis):
+        concatenate = True
+        dt = len(axis)
+        sl[iaxis] = slice(ind*dt,ind*dt+dt)
+        full_length = None
+      else:
+        full_length = len(axis)
+      if axis.name not in f.dimensions:
+        f.createDimension(axis.name, full_length)
+    ###
+    sl = tuple(sl)
+
+    # Write the variable (direct case)
+    if args is None:
+      if var.name not in f.variables:
+        v = f.createVariable(var.name,dtype,var.dims,zlib=True)
+        v.setncatts(var.atts)
+      if init or concatenate:
+        f.variables[var.name][sl] = var.array
+      continue
+
+    # Write the address / length info for indirect case.
+    if var.name not in f.groups:
+      f.createGroup(var.name)
+
+    g = f.groups[var.name]
+
+    if 'template' not in g.variables:
+      v = g.createVariable('template',dtype,var.dims)
+      v.setncatts(var.atts)
+
+    # Define outer axes (for storing address / length values).
+    ndim_outer = var.record_id.ndim
+    while var.record_id.shape[ndim_outer-1] == 1 and var.shape[ndim_outer-1] != 1:
+      ndim_outer -= 1
+
+    dims = var.dims[:ndim_outer]
+    outer_shape = var.shape[:ndim_outer]
+    outer_sl = sl[:ndim_outer]
+    # Set file_id
+    files = np.array(args[0],dtype='|S%d'%filename_len)
+    if 'file_id' not in g.variables:
+      g.createVariable('file_id','i4',dims,zlib=True,chunksizes=outer_shape)
+    file_id = g.variables['file_id']
+    file_id[outer_sl] = np.searchsorted(allfiles,files).reshape(outer_shape) + ind*batch
+    # Set address / length arguments.
+    i = 1
+    # Evaluate any map objects.
+    args = [list(a) if isinstance(a,map) else a for a in args]
+    while i < len(args):
+      assert isinstance(args[i][0],str)
+      label = args[i][0]
+      # Scalar argument
+      if i == len(args)-2 or isinstance(args[i+2][0],str):
+        scalar = args[i+1]
+        # Convert boolean flags to bytes, for netcdf compatibility.
+        if scalar[0] in (True,False):
+          scalar = np.array(scalar,dtype='B')
+        # Handle compound data (nested tuples).
+        # NOTE: assuming the order of these tuples is always consistent across
+        # every batch of files.
+        if isinstance(scalar[0],tuple):
+          # Get the unique data structures.
+          unique = pickles.setdefault(label,{})
+          for s in scalar:
+            if id(s) not in unique:
+              unique[id(s)] = s
+          ids, structs = zip(*unique.items())
+          if label+'_lookup' not in g.variables:
+            g.createVariable(label+'_lookup','i4',dims,zlib=True,chunksizes=outer_shape)
+          g.variables[label+'_lookup'][outer_sl] = np.array([ids.index(id(s)) for s in scalar],'int32').reshape(outer_shape)
+          i += 2
+          continue
+          # End of compound data case
+        # Initialize the scalar variable?
+        if label not in g.variables:
+          g.createVariable(label,type(scalar[0]),dims,zlib=True,chunksizes=outer_shape)
+        # Fill in the scalar values.
+        v = g.variables[label]
+        v[outer_sl] = np.array(scalar).reshape(outer_shape)
+        i += 2
+        continue
+      # Handle arguments from address / length pairs.
+      # Skip for case where there are no valid records.
+      if np.all(np.array(args[i+1])==-1):
+        i += 3
+        continue
+      if label not in g.groups:
+        g.createGroup(label)
+      al = g.groups[label]
+      if 'address' not in al.variables:
+        al.createVariable('address','i8',dims,zlib=True,chunksizes=outer_shape)
+      address = al.variables['address']
+      address[outer_sl] = np.array(args[i+1],'int64').reshape(outer_shape)
+      if 'length' not in al.variables:
+        al.createVariable('length','i4',dims,zlib=True,chunksizes=outer_shape)
+      length = al.variables['length']
+      length[outer_sl] = np.array(args[i+2],'int32').reshape(outer_shape)
+      i += 3
+
+  if len(pickles) == 0: return
+  # Final encoding of compound arguments.
+  if 'pickle' not in f.vltypes:
+    f.createVLType('B','pickle')
+  for label, unique in pickles.items():
+    ids, structs = zip(*unique.items())
+    structs = [np.array([dumps(s)]).view('B') for s in structs]
+    if label+'_index' not in f.dimensions:
+      f.createDimension(label+'_index',len(structs))
+    if label+'_pickle' not in f.variables:
+      f.createVariable(label+'_pickle',f.vltypes['pickle'],(label+'_index',),zlib=True)
+      for ind,s in enumerate(structs):
+        f.variables[label+'_pickle'][ind] = s
+
 
 class ExternOutput (BufferBase):
 
@@ -143,16 +282,12 @@ class ExternOutput (BufferBase):
     out = [np.full(subshape,float('nan'),'float32') if o is None else o for o in out]
     return np.array(out).reshape(shape)
 
-  def _iter_dask (self, include_coords=True, fused=False):
+  def _iter_graph (self, include_coords=True, fused=False):
     """
-    Iterate over all the variables, and convert to dask arrays.
+    Iterate over all the variables, and generate graphs for them.
     """
-    from fstd2nc.mixins import _iter_type, _chunk_type, _var_type
-    from dask import array as da
-    from dask.base import tokenize
+    from fstd2nc.mixins import _iter_type, _chunk_type
     import numpy as np
-    from itertools import product
-    unique_token = tokenize(self._files,id(self))
     files = np.array(self._files, dtype=object)
     self._makevars()
     for var in self._iter_objects():
@@ -160,9 +295,8 @@ class ExternOutput (BufferBase):
         if var not in self._varlist:
           continue
       if not isinstance(var,(_iter_type,_chunk_type)):
-        yield var
+        yield var, None
         continue
-      name = var.name+"-"+unique_token
       ndim = len(var.axes)
       shape = var.shape
       # Convert _iter_type to more generic _chunk_type.
@@ -241,9 +375,6 @@ class ExternOutput (BufferBase):
           if length.ndim > 1: length = map(np.array,length)
           else: length = map(int,length)
           args.extend([[key]*nchunks, addr, length])
-      # Don't need to label the primary data argument (called 'data').
-      if args[1][0] == "data":
-        args = args[0:1] + args[2:]
       # Add extra arguments from columns.
       for key in self._decoder_extra_args:
         if key not in self._headers: continue  # Skip inactive arguments.
@@ -256,6 +387,48 @@ class ExternOutput (BufferBase):
       # Add scalar arguments.
       for key, value in self._decoder_scalar_args().items():
         args.extend([[key]*nchunks, [value]*nchunks])
+      yield var, args
+
+  # Helper method - given a list of files, produce the graphs.
+  @classmethod
+  def _graph_maker (cls, **kwargs):
+    from threading import Lock
+    _lock = Lock()
+    def get_graphs (infiles, first=[True]):
+      import fstd2nc
+      # Only print warning messages for first batch of files, assume the
+      # warnings will be the same for the rest of the files as well.
+      with _lock:
+        if first == [True]:
+          first[0] = False
+          return list(cls(infiles, **kwargs)._iter_graph())
+      fstd2nc.stdout.streams = ('error',)
+      b = cls(infiles, **kwargs)
+      return list(b._iter_graph())
+    return get_graphs
+
+  def _iter_dask (self, include_coords=True, fused=False, graph_iterator=None):
+    """
+    Iterate over all the variables, and convert to dask arrays.
+    """
+    from fstd2nc.mixins import _var_type
+    from itertools import product
+    import numpy as np
+    from dask.base import tokenize
+    from dask import array as da
+    unique_token = tokenize(self._files,id(self))
+    if graph_iterator is None:
+      graph_iterator = self._iter_graph (include_coords=include_coords, fused=fused)
+    for var, args in graph_iterator:
+      if args is None:
+        yield var
+        continue
+      # Don't need to label the primary data argument (called 'data').
+      if args[1][0] == "data":
+        args = args[0:1] + args[2:]
+      name = var.name+"-"+unique_token
+      nchunks = len(args[0])
+      # Add shape as final argument.
       args.append(product(*var.chunks))
       graphs = zip([self._dasked_read]*nchunks, *args)
       array = np.empty(nchunks, dtype=object)
@@ -353,6 +526,108 @@ class ExternOutput (BufferBase):
       out_list.append(out)
 
     return out_list
+
+  # Generate an index file for fast loading of a dataset.
+  @classmethod
+  def make_index (cls, filenames, indexfile, batch=None, **kwargs):
+    from fstd2nc.stdout import _, info, warn, error
+    from fstd2nc.mixins import _expand_files, _FakeBar, _ProgressBar
+    import fstd2nc
+    import numpy as np
+    import xarray as xr
+    import netCDF4 as nc  # For on-disk storage of meta information.
+    from multiprocessing.pool import ThreadPool
+    import os
+    # Need a consistent reference date across all batches.
+    if 'reference_date' not in kwargs and batch is not None:
+      kwargs['reference_date'] = '1900-01-01'
+    # First, get full list of files.
+    if isinstance(filenames,list):
+      allfiles = filenames
+    else:
+      allfiles = _expand_files(filenames)
+      allfiles = list(zip(*allfiles))[1]
+      allfiles = sorted(allfiles)
+    if batch is None:
+      batch = len(allfiles)
+    if len(allfiles) % batch != 0:
+      error(_("'batch' size (%d) does not divide evenly into number of files (%s)")%(batch,len(allfiles)))
+    nbatch = len(allfiles) // batch
+    # Construct a progress bar encompassing the whole file set.
+    if kwargs.get('progress',False) is True:
+      kwargs['progress'] = _ProgressBar(_("Indexing the files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(allfiles))
+
+    # Define the index file.
+    if os.path.exists(indexfile):
+      os.remove(indexfile)
+    f = nc.Dataset(indexfile,'w')
+    f.setncattr('version',1)
+    # Write file information.
+    filename_len = max(map(len,allfiles))
+    f.createDimension('filename_len',filename_len)
+    nfiles_dim = f.createDimension('nfiles',len(allfiles))
+    file_var = f.createVariable('files','|S1',('nfiles','filename_len'),zlib=True,chunksizes=(batch,filename_len))
+    allfiles = np.array(allfiles,dtype='|S%d'%filename_len)
+    file_var[:,:] = allfiles.reshape(-1,1).view('|S1')
+
+    # Put the files into batches for processing.
+    file_batches = allfiles.reshape(nbatch,batch)
+    # Remember original I/O streams (will get mangled by write_graphs).
+    orig_streams = fstd2nc.stdout.streams
+    # Start a thread pool for processing the graphs in parallel.
+    #NOTE: disabled - not much speed improvement with this approach.
+    # To re-enable, uncomment the following line, and then change 'map'
+    # to 'pool.imap'.
+    #pool = ThreadPool(2)
+    all_graphs = map(cls._graph_maker(**kwargs), file_batches)
+    # Iterate through the graphs from this pool, write to the index file.
+    for ind, graphs in enumerate(all_graphs):
+      _write_graphs(f, ind, batch, graphs)
+    # Restore original I/O streams
+    fstd2nc.stdout.streams = orig_streams
+    f.close()
+
+  # Create a dataset from the given index file.
+  @classmethod
+  def open_index (cls, indexfile):
+    import xarray as xr
+    import netCDF4 as nc
+    from fstd2nc._xarray_hook import IndexFile, FSTDBackendArray
+    # Open with xarray to get axes / coordinates.
+    ds = xr.open_dataset(indexfile)
+    # Open with netCDF4 get get access to the group structures containing the
+    # metadata.
+    index = IndexFile(indexfile)
+    # Generate the variables.
+    vardict = {}
+    pickles = {}
+    for varname, group in index.root.groups.items():
+      # Get a lazy accessor for the data.
+      array = FSTDBackendArray (cls, varname, index, pickles)
+      array = xr.core.indexing.LazilyIndexedArray(array)
+      # Define the preferred chunking for the data, based on how it's stored
+      # on disk.
+      preferred_chunks = {}
+      all_dims = group.variables['template'].dimensions
+      outer_dims = group.groups['data'].variables['address'].dimensions
+      for dim in all_dims:
+        if dim in outer_dims:
+          preferred_chunks[dim] = 1
+        else:
+          preferred_chunks[dim] = len(index.root.dimensions[dim])
+      encoding = {'preferred_chunks':preferred_chunks}
+      # Annotate the variable with dimensions and other metadata.
+      template = group.variables['template']
+      vardict[varname] = xr.Variable (template.dimensions, array, attrs=template.__dict__, encoding=encoding)
+    # Put these variables into the Dataset structure (where the coordinates are
+    # already defined.
+    ds = ds.merge(vardict)
+    # Remove bookkeeping variables.
+    del ds['files']
+    del ds.attrs['version']
+    # Decode CF metadata
+    ds = xr.conventions.decode_cf(ds)
+    return (ds)
 
   @classmethod
   def from_xarray (cls, ds, **params):
