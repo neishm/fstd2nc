@@ -539,9 +539,12 @@ class ExternOutput (BufferBase):
     from multiprocessing.pool import ThreadPool
     import os
     # First, get full list of files.
-    allfiles = _expand_files(filenames)
-    allfiles = list(zip(*allfiles))[1]
-    allfiles = sorted(allfiles)
+    if isinstance(filenames,list):
+      allfiles = filenames
+    else:
+      allfiles = _expand_files(filenames)
+      allfiles = list(zip(*allfiles))[1]
+      allfiles = sorted(allfiles)
     if batch is None:
       batch = len(allfiles)
     if len(allfiles) % batch != 0:
