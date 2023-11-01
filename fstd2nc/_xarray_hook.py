@@ -108,8 +108,8 @@ class FSTDBackendArray(BackendArray):
           current_args.append(argval)
         # Address / length arguments (for data from file)?
         elif isinstance(argval,tuple):
-          current_args.append(argval[0])
-          current_args.append(argval[1])
+          current_args.append(argval[0].flatten())
+          current_args.append(argval[1].flatten())
         # Scalar arguments?
         else:
           # Decode bytes into boolean (from netcdf compatibility).
