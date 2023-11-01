@@ -68,6 +68,8 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
   # Write dimensions / coordinates.
   # Non-concatenated coordinates only need to be written once.
   for var, args in graphs:
+    # Skip dimensions (encoded as part of variable encoding below).
+    if not hasattr(var,'axes'): continue
     sl = [slice(None)]*len(var.axes)
     dtype = var.dtype if hasattr(var,'dtype') else var.array.dtype
     concatenate = False
