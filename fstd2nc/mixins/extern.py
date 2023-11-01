@@ -175,19 +175,19 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
       length[outer_sl] = np.array(args[i+2],'int32').reshape(outer_shape)
       i += 3
 
-    if len(pickles) == 0: return
-    # Final encoding of compound arguments.
-    if 'pickle' not in f.vltypes:
-      f.createVLType('B','pickle')
-    for label, unique in pickles.items():
-      ids, structs = zip(*unique.items())
-      structs = [np.array([dumps(s)]).view('B') for s in structs]
-      if label+'_index' not in f.dimensions:
-        f.createDimension(label+'_index',len(structs))
-      if label+'_pickle' not in f.variables:
-        f.createVariable(label+'_pickle',f.vltypes['pickle'],(label+'_index',),zlib=True)
-        for ind,s in enumerate(structs):
-          f.variables[label+'_pickle'][ind] = s
+  if len(pickles) == 0: return
+  # Final encoding of compound arguments.
+  if 'pickle' not in f.vltypes:
+    f.createVLType('B','pickle')
+  for label, unique in pickles.items():
+    ids, structs = zip(*unique.items())
+    structs = [np.array([dumps(s)]).view('B') for s in structs]
+    if label+'_index' not in f.dimensions:
+      f.createDimension(label+'_index',len(structs))
+    if label+'_pickle' not in f.variables:
+      f.createVariable(label+'_pickle',f.vltypes['pickle'],(label+'_index',),zlib=True)
+      for ind,s in enumerate(structs):
+        f.variables[label+'_pickle'][ind] = s
 
 
 class ExternOutput (BufferBase):
