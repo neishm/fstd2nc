@@ -619,6 +619,8 @@ class ExternOutput (BufferBase):
     # Remove bookkeeping variables.
     del ds['files']
     del ds.attrs['version']
+    # Decode CF metadata
+    ds = xr.conventions.decode_cf(ds)
     return (ds)
 
   @classmethod
