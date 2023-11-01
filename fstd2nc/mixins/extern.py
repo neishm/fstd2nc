@@ -585,6 +585,10 @@ class ExternOutput (BufferBase):
       _write_graphs(f, ind, batch, graphs)
     # Restore original I/O streams
     fstd2nc.stdout.streams = orig_streams
+    # Finalize the progress bar.
+    if 'progress' in kwargs:
+      if hasattr(kwargs['progress'],'finish'):
+        kwargs['progress'].finish()
     f.close()
 
   # Create a dataset from the given index file.
