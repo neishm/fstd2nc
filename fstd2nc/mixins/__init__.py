@@ -599,10 +599,10 @@ class BufferBase (object):
       axes = OrderedDict()
       for n in self._outer_axes:
         values = var_records[n]
-        # Remove missing values before continuing.
-        values = np.ma.compressed(values)
         # Ignore axes that have no actual coordinate values.
-        if len(values) == 0: continue
+        if len(np.ma.compressed(values)) == 0: continue
+        # Remove missing values before continuing.
+        values = np.ma.unique(values).data
         # Get all unique values (sorted).
         values = tuple(sorted(set(values)))
         if (n,values) not in known_axes:
