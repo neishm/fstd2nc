@@ -536,7 +536,6 @@ class ExternOutput (BufferBase):
     import numpy as np
     import xarray as xr
     import netCDF4 as nc  # For on-disk storage of meta information.
-    from multiprocessing.pool import ThreadPool
     import os
     # Need a consistent reference date across all batches.
     if 'reference_date' not in kwargs and batch is not None:
@@ -574,14 +573,15 @@ class ExternOutput (BufferBase):
     file_batches = allfiles.reshape(nbatch,batch)
     # Remember original I/O streams (will get mangled by write_graphs).
     orig_streams = fstd2nc.stdout.streams
-    # Start a thread pool for processing the graphs in parallel.
-    #NOTE: disabled - not much speed improvement with this approach.
-    # To re-enable, uncomment the following line, and then change 'map'
-    # to 'pool.imap'.
-    #pool = ThreadPool(2)
-    all_graphs = map(cls._graph_maker(**kwargs), file_batches)
-    # Iterate through the graphs from this pool, write to the index file.
-    for ind, graphs in enumerate(all_graphs):
+    # Get the funtion for generating the graphs.
+    # The reason for currying the function was originally to support calling
+    # the graph maker from threads (using just the file_batches as the input
+    # argument).  However, in practice this didn't give much of a speed
+    # improvement.
+    graph_maker = cls._graph_maker(**kwargs)
+    # Iterate through the graphs, write to the index file.
+    for ind, file_batch in enumerate(file_batches):
+      graphs = graph_maker (file_batch)
       _write_graphs(f, ind, batch, graphs)
     # Restore original I/O streams
     fstd2nc.stdout.streams = orig_streams
