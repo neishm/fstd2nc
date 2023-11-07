@@ -96,7 +96,11 @@ class netCDF_Atts (BufferBase):
       metadata['global'] = OrderedDict(Conventions = conventions)
 
     # Read the metadata files.
-    configparser = ConfigParser.SafeConfigParser()
+    try:
+      configparser = ConfigParser.SafeConfigParser()
+    # Python 3.12+ removed SafeConfigParser, so use ConfigParser instead.
+    except AttributeError:
+      configparser = ConfigParser.ConfigParser()
     configparser.optionxform = str # Make the attribute names case sensitive.
     for metafile in metafiles:
       if not exists(metafile):
