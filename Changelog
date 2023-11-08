@@ -1,3 +1,36 @@
+Version 0.20231105.0 (Nov 8, 2023)
+	* Fixed preferred chunking when creating xarray objects via
+	  open_dataset().
+	* Reduced the memory footprint of Buffer objects, and some small
+	  speedups in the header decoding.
+	* Fixed CCC decoder.  It was broken after a recent refactor, and there
+	  was bug where the min value wasn't being added to the decoded
+	  values.
+	* Added xarray backend for CCC files, so they can be opened with
+	  xr.open_dataset(...,engine='ccc').
+	* Catch some possible runtime issues when fetching data from xarray
+	  interface, such as if the file was removed from disk.  Return
+	  missing values if a problem occurs.
+	* Improved efficiency of --fstd-compat option (less padding used).
+	* Fixed a bug when using --bounds on surface data that has a
+	  'sfc_type' dimension.
+	* Silence some warnings from recent vgrid libraries, when querying for
+	  the existence of certain parameters.
+	* Added an 'accum' axis for accumulated quantities.  Also added an
+	  '--accum-vars' option to explicitly set fields that should be
+	  treated as accumulated.
+	* Explicitly use a spherical globe in the projections returned by
+	  fstd2nc.extra.get_crs().
+	* New helper methods for working with ridiculously large datasets
+	  with xarray.
+	  - fstd2nc.Buffer.make_index() pre-scans the input files and
+	    generates an 'index' file on disk which contains all the variable
+	    structures.
+	  - fstd2nc.Buffer.open_index() reads the above 'index' file and
+	    returns an xarray Dataset representing the FSTD data.  This step
+	    should be *much* faster since the files were already scanned
+	    in the first step.
+
 Version 0.20230908.0 (Sep 8, 2023)
 	* Added north_pole_grid_longitude attribute for rotated grids.
 	* Fixed missing vertical coordinates in series data.
