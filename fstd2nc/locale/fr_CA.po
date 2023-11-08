@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-08-30 17:32+0000\n"
+"POT-Creation-Date: 2023-11-08 18:09+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -17,6 +17,14 @@ msgstr ""
 "Content-Type: text/plain; charset=ISO-8859-1\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#, python-format
+msgid "Warning: %s"
+msgstr "Avertissement: %s"
+
+#, python-format
+msgid "Error: %s"
+msgstr "Erreur: %s"
 
 msgid "No grid mapping found"
 msgstr "Aucun mappage de grille trouvé"
@@ -28,14 +36,6 @@ msgstr "Plusieurs mappages de grille trouvés: %s"
 #, python-format
 msgid "Unhandled grid mapping: %s"
 msgstr "Mappage de grille non géré: %s"
-
-#, python-format
-msgid "Warning: %s"
-msgstr "Avertissement: %s"
-
-#, python-format
-msgid "Error: %s"
-msgstr "Erreur: %s"
 
 #, python-format
 msgid "Display %s metadata in a structured format."
@@ -202,6 +202,25 @@ msgstr "Mauvaise forme de lat/lon pour '%s'"
 msgid "Unusual grid axes for '%s' - ignoring."
 msgstr "Axes de grille inhabituels pour '%s' - ignorés."
 
+#, python-format
+msgid ""
+"Standard parallel must be 60 deg to encode polar stereographic projections.  "
+"Found %s instead."
+msgstr ""
+"Le parallèle standard doit être de 60 degrés pour coder les projections "
+"stéréographiques polaires.  Trouve %s à la place."
+
+msgid ""
+"Sterographic projection missing attribute "
+"\"straight_vertical_longitude_from_pole\""
+msgstr ""
+"L'attribut \"straight_vertical_longitude_from_pole\" est manquant pour la "
+"projection stéréographique."
+
+#, python-format
+msgid "latitude_of_projection_origin must be 90 or -90.  Found %s"
+msgstr "latitude_of_projection_origin doit être de 90 ou -90.  Trouve %s"
+
 msgid "Comma-separated list of variables that use momentum levels."
 msgstr ""
 "Liste de variables séparées par des virgules qui utilisent des niveaux "
@@ -245,6 +264,17 @@ msgstr ""
 msgid "Can't set fill value '%g' for %s."
 msgstr "Impossible de définir la valeur de replissage '%g' pour %s."
 
+#, python-format
+msgid ""
+"Detected masked data.  Changing typvar from '%s' to '%s' and writing "
+"separate mask record."
+msgstr ""
+"Données masquées détectés.  Changer typvar de '%s' à '%s' est écrire un "
+"enregistrement de masque séparé."
+
+msgid "Encoding masks with datyp+64 not supported yet."
+msgstr "Encoder des masques avec datyp+64 n'est pas encore supporté."
+
 msgid ""
 "Comma-separated list of variables to convert.  By default, all variables are "
 "converted."
@@ -285,6 +315,10 @@ msgstr "Omettre entièrement l'attribut \"Conventions\" du fichier netCDF."
 
 msgid "Unable to parse the rename arguments."
 msgstr "Impossible d'analyser les arguments de renommage."
+
+#, python-format
+msgid "'%s' does not exist."
+msgstr "'%s' n'existe pas."
 
 #, python-format
 msgid "The units for the output time axis.  Default is %(default)s."
@@ -469,8 +503,29 @@ msgstr ""
 "Problème de traitement du niveau de diagnostic de %s comme niveau de modèle "
 "- le divise dans un champ séparé."
 
+#, python-format
+msgid "Cannot read from %s - file may be missing or damaged."
+msgstr ""
+"Impossible de lire à partir de %s - le fichier est peut-être manquant ou "
+"endommagé."
+
 msgid "Unable to fuse some variables."
 msgstr "Impossible de fusionner la ou les variables: "
+
+msgid ""
+"Dates out of bounds for pandas routines.  Using alternative (slower) "
+"routines."
+msgstr ""
+"Dates hors limites pour les routines des pandas. Utiliser des routines "
+"alternatives (plus lentes)."
+
+#, python-format
+msgid "'batch' size (%d) does not divide evenly into number of files (%s)"
+msgstr ""
+"Taille 'batch' (%d) ne se divise pas uniformément en nombre de fichiers (%s)"
+
+msgid "Indexing the files"
+msgstr "Indexer les fichiers"
 
 msgid "show program's version number and exit"
 msgstr "afficher le numéro de version du programme et quitter"
@@ -534,10 +589,6 @@ msgid "No %s match '%s'."
 msgstr "Aucun %s ne correspond à '%s'."
 
 #, python-format
-msgid "'%s' does not exist."
-msgstr "'%s' n'existe pas."
-
-#, python-format
 msgid "Problem with input file '%s'"
 msgstr "Probleme avec fichier d'entrée '%s'"
 
@@ -552,6 +603,21 @@ msgstr "Trouve %s %s"
 msgid "Missing some records for %s."
 msgstr "Quelque enregistrements sont manquants pour %s."
 
+#, python-format
+msgid "Unknown axis '%s'.  Encoding not complete."
+msgstr "L'axe '%s' inconnue.  Encodage incomplet."
+
+#, python-format
+msgid "Unable to encode %s."
+msgstr "Impossible d'encoder '%s'."
+
+msgid "Nothing to encode!"
+msgstr "Rein à encoder!"
+
+#, python-format
+msgid "Unhandled inner axis %s."
+msgstr "Axe intérieur non géré: %s"
+
 msgid "Use metadata from the specified variable dictionary (XML format)."
 msgstr ""
 "Utiliser les métadonnées du dictionnaire de variables spécifié (format XML)."
@@ -562,9 +628,7 @@ msgstr ""
 "standard CMC-RPN."
 
 msgid "Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"
-msgstr ""
-"Impossible de trouver $CMCCONST/opdict/ops."
-"variable_dictionary."
+msgstr "Impossible de trouver $CMCCONST/opdict/ops.variable_dictionary."
 
 msgid ""
 "Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary."
@@ -576,7 +640,8 @@ msgstr ""
 msgid ""
 "Neither $CMCCONST nor $AFSISIO defined.  Can't find operational dictionary."
 msgstr ""
-"Ni $CMCCONST ni $AFSISIO définis.  Impossible de trouver le dictionnaire opérationnel."
+"Ni $CMCCONST ni $AFSISIO définis.  Impossible de trouver le dictionnaire "
+"opérationnel."
 
 #, python-format
 msgid "Unable to find '%s'"
@@ -595,6 +660,30 @@ msgid ""
 msgstr ""
 "Utiliser la date d'analyse d'origine pour l'axe temporel, et placer les "
 "heurs de prévision dans un axe \"forecast\" séparé."
+
+msgid ""
+"Specify which fields to treat as accumulated quantities (using IP3 as "
+"accumulation period)."
+msgstr ""
+"Spécifier les champs à traiter comme des quantités cumulées (en utilisant "
+"IP3 comme période de cumul)."
+
+#, python-format
+msgid ""
+"Ignoring IP3 value %d for %s, of unknown purpose.  If this is an accumulated "
+"variable, you could specify it in the --accum-vars option."
+msgstr ""
+"Ignorer la valeur IP3 %d pour %s, dont l'objectif est inconnu. S'il s'agit "
+"d'une variable accumulée, vous pouvez la spécifier dans l'option --accum-"
+"vars."
+
+#, python-format
+msgid ""
+"Multiple IP3 values of unknown purpose found for %s.  If this is an "
+"accumulated variable, you could specify it in the --accum-vars option."
+msgstr ""
+"Plusieurs valeurs IP3 à but inconnu trouvées pour %s. S'il s'agit d'une "
+"variable accumulée, vous pouvez la spécifier dans l'option --accum-vars."
 
 msgid ""
 "Adds a compatibility layer to the netCDF output file, so it can also "

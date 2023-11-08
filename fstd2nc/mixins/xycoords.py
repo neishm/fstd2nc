@@ -1223,7 +1223,7 @@ class XYCoords (BufferBase):
           k = projection.atts['scale_factor_at_projection_origin']
           stdlat = abs(asin(2*k-1)) / pi * 180
         if not np.allclose(stdlat,60.,atol=1e-5):
-          warn(_('Standard parallel must be 60 deg to encoder polar stereographic projections.  Found %s instead.')%stdlat)
+          warn(_('Standard parallel must be 60 deg to encode polar stereographic projections.  Found %s instead.')%stdlat)
           continue
         if 'straight_vertical_longitude_from_pole' not in projection.atts:
           warn(_('Sterographic projection missing attribute "straight_vertical_longitude_from_pole"'))
