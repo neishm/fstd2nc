@@ -61,6 +61,9 @@ arguments optionnel:
                         Utiliser la date d'analyse d'origine pour l'axe
                         temporel, et placer les heurs de prévision dans un axe
                         "forecast" séparé.
+  --accum-vars NOM,NOM,...
+                        Spécifier les champs à traiter comme des quantités
+                        cumulées (en utilisant IP3 comme période de cumul).
   --ensembles           Rassembler différentes etikets pour la même variable
                         ensemble dans une axe "ensemble".
   --profile-momentum-vars VAR1,VAR2,...

@@ -56,6 +56,9 @@ optional arguments:
                         Use the date of original analysis for the time axis,
                         and put the forecast times into a separate "forecast"
                         axis.
+  --accum-vars NAME,NAME,...
+                        Specify which fields to treat as accumulated
+                        quantities (using IP3 as accumulation period).
   --ensembles           Collect different etikets for the same variable
                         together into an "ensemble" axis.
   --profile-momentum-vars VAR1,VAR2,...
