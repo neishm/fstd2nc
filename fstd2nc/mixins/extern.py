@@ -400,15 +400,17 @@ class ExternOutput (BufferBase):
         first[0] = False
       else:
         fstd2nc.stdout.streams = ('error',)
-      b = cls(infiles, **kwargs)
       # Catch any problems with dates out of bounds.
       # pandas can't handle dates in 2263 or later.
       try:
+        b = cls(infiles, **kwargs)
         graphs = list(b._iter_graph())
       except Exception as e:
         if 'Out of bounds' in str(e):
           warn (_("Dates out of bounds for pandas routines.  Using alternative (slower) routines."))
-          fstd2nc.mixins._pandas_needed = False
+          fstd2nc.mixins._use_pandas = lambda: False
+          _kwargs = dict(kwargs, progress=False)
+          b = cls(infiles, **_kwargs)
           graphs = list(b._iter_graph())
         else:
           raise
@@ -591,6 +593,7 @@ class ExternOutput (BufferBase):
     for ind, file_batch in enumerate(file_batches):
       graphs = graph_maker (file_batch)
       _write_graphs(f, ind, batch, graphs)
+      f.sync()
     # Restore original I/O streams
     fstd2nc.stdout.streams = orig_streams
     # Finalize the progress bar.
