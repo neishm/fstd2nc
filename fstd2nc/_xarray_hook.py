@@ -116,7 +116,8 @@ class FSTDBackendArray(BackendArray):
           if argval.dtype.name == 'uint8':
             argval = argval.astype('bool')
           shape = args['data'][0].shape
-          current_args.append(np.array(list(argval)).reshape(shape)[selection].flatten())
+          argval = np.array(argval).reshape(shape)[selection].flatten()
+          current_args.append(list(argval))
       current_args.append((nrecs,)+self._chunk_shape)
       # Fetch the data.
       # Vectorized over multiple records per input file.
