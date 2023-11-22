@@ -1,3 +1,8 @@
+Version 0.20231105.1 (Nov 22, 2023)
+	* Fixed bug in make_index / open_index when storing scalar parameters.
+	* Fixed bug in handling large files with masked fields.  The mask
+	  addresses were stored in 32-bits, causing an overflow in the address.
+
 Version 0.20231105.0 (Nov 8, 2023)
 	* Fixed preferred chunking when creating xarray objects via
 	  open_dataset().
