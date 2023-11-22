@@ -110,7 +110,7 @@ class Masks (BufferBase):
     has_mask = np.where(has_mask)[0]
     has_mask += 1  # Data appears after mask in this case.
     rec_id = np.arange(nrecs)[ind]
-    self._headers['mask_address'] = np.empty(nrecs,'int32')
+    self._headers['mask_address'] = np.empty(nrecs,int)
     self._headers['mask_address'][:] = -1
     self._headers['mask_address'][rec_id[has_mask]] = self._headers['address'][rec_id[has_mask-1]]
     self._headers['mask_length'] = np.empty(nrecs,'int32')
