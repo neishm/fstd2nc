@@ -1,0 +1,33 @@
+package:
+  name: fstd2nc
+  version: 0.20231105.1
+
+
+requirements:
+  build:
+    - python
+    - numpy  >1.15.3
+    - netcdf4
+    - cftime
+  run:
+    - python
+    - numpy >1.15.3
+    - netcdf4
+    - progress
+    - pandas
+    - xarray >=0.10.3
+    - dask
+    - toolz
+    - iris >=2.0
+    - certifi
+    - cftime
+
+about:
+  home: https://github.com/neishm/fstd2nc
+  license: LGPL-3
+  summary: 'Converts to netCDF and provides an xarray interface to RPN standard files (from Environment Canada).'
+
+source:
+  path: ../.
+
+
