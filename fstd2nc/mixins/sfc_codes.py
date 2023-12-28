@@ -116,7 +116,10 @@ class Sfc_Codes (BufferBase):
         # Generate the list of surface types.
         if codes not in handled_agg_codes:
           codenames = tuple(sfc_agg_codes.get(code,"unknown") for code in codes)
-          array = np.array(codenames,dtype=np.char.string_).view('|S1').reshape(len(codes),-1)
+          try:
+            array = np.array(codenames,dtype=np.char.string_).view('|S1').reshape(len(codes),-1)
+          except AttributeError:
+            array = np.array(codenames,dtype=np.bytes_).view('|S1').reshape(len(codes),-1)
           atts = OrderedDict([('standard_name','area_type')])
           sfctype = _dim_type('sfctype',array.shape[0])
           sfctype_strlen = _dim_type('sfctype_strlen',array.shape[1])

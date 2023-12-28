@@ -52,7 +52,10 @@ class Ensembles (BufferBase):
     for etikets, varlist in self._iter_axes(name='etiket',varlist=True):
       # Python3: convert bytes to str.
       array = [str(arr.decode()) for arr in etikets.array]
-      array = np.array(array,dtype=np.char.string_)
+      try:
+        array = np.array(array,dtype=np.char.string_)
+      except AttributeError:
+        array = np.array(array,dtype=np.bytes_)
       # Strip out trailing whitespace.
       array[:] = [arr.rstrip() for arr in array]
       # Encode it as 2D character array for netCDF file output.
