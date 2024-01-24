@@ -513,19 +513,39 @@ class VCoords (BufferBase):
                 all_z_sorted = sorted(all_z)
                 for z in levels:
                   ind = all_z_sorted.index(z)
-                  z1 = all_z_sorted[ind-1]
-                  z2 = all_z_sorted[ind+1]
-                  ind1 = all_z.index(z1)
-                  ind2 = all_z.index(z2)
-                  A_bnds1.append(all_a[ind1])
-                  A_bnds2.append(all_a[ind2])
-                  B_bnds1.append(all_b[ind1])
-                  B_bnds2.append(all_b[ind2])
-                  z_bnds1.append(all_z[ind1])
-                  z_bnds2.append(all_z[ind2])
-                  if sleve:
-                    C_bnds1.append(all_c[ind1])
-                    C_bnds2.append(all_c[ind2])
+                  # Catch values out of range.
+                  # This was triggered when run on field that only had
+                  # diagnostic level.  In that case, put any placeholder value
+                  # assuming it won't be used in the end (wrong coordinate type
+                  # for a/b values to show up in the output anyway).
+                  if ind > 0:
+                    z1 = all_z_sorted[ind-1]
+                    ind1 = all_z.index(z1)
+                    A_bnds1.append(all_a[ind1])
+                    B_bnds1.append(all_b[ind1])
+                    z_bnds1.append(all_z[ind1])
+                    if sleve:
+                      C_bnds1.append(all_c[ind1])
+                  else:
+                    A_bnds1.append(float('nan'))
+                    B_bnds1.append(float('nan'))
+                    z_bnds1.append(float('nan'))
+                    if sleve:
+                      C_bnds1.append(float('nan'))
+                  if ind < len(all_z_sorted)-1:
+                    z2 = all_z_sorted[ind+1]
+                    ind2 = all_z.index(z2)
+                    A_bnds2.append(all_a[ind2])
+                    B_bnds2.append(all_b[ind2])
+                    z_bnds2.append(all_z[ind2])
+                    if sleve:
+                      C_bnds2.append(all_c[ind2])
+                  else:
+                    A_bnds2.append(float('nan'))
+                    B_bnds2.append(float('nan'))
+                    z_bnds2.append(float('nan'))
+                    if sleve:
+                      C_bnds2.append(float('nan'))
                 coordA_bnds.array = np.array(np.asarray([A_bnds1,A_bnds2]).T)
                 coordB_bnds.array = np.array(np.asarray([B_bnds1,B_bnds2]).T)
                 new_bnds = _var_type(name+'_bnds', {}, [new_axis,bnds2], None)
@@ -681,7 +701,7 @@ class VCoords (BufferBase):
               coordinates.extend([coordA,coordB])
 
         # Attach vertical boundaries?
-        if bounds and new_bnds is not None:
+        if bounds and new_bnds is not None and np.all(np.isfinite(new_bnds.array)):
           atts['bounds'] = new_bnds
           # Attach a/b bounds
           if 'formula_terms' in atts:
