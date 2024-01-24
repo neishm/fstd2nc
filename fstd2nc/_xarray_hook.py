@@ -19,13 +19,13 @@ class IndexFile(object):
 class FSTDBackendArray(BackendArray):
   __slots__ = ("shape", "dtype", "_buffer", "_name", "_source", "_root", "_group", "_outer_dims","_chunk_shape","_pickles")
   def __init__ (self, buffer, name, source, pickles):
-    from pickle import loads
     self._buffer = buffer
     self._name = name
     self._source = source
     self._pickles = pickles
     self._finalize()
   def _finalize (self):
+    from pickle import loads
     self._root = self._source.root
     self._group = self._root.groups[self._name]
     template = self._group.variables['template']
