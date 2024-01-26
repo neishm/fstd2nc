@@ -510,7 +510,7 @@ class VCoords (BufferBase):
                 B_bnds1, B_bnds2 = [], []
                 C_bnds1, C_bnds2 = [], []
                 z_bnds1, z_bnds2 = [], []
-                all_z_sorted = sorted(all_z)
+                all_z_sorted = sorted(set(all_z))
                 for z in levels:
                   ind = all_z_sorted.index(z)
                   # Catch values out of range.
