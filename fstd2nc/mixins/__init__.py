@@ -591,7 +591,7 @@ class BufferBase (object):
         # Trim string attributes (remove whitespace padding).
         if isinstance(v,str): v = v.strip()
         # Use regular integers for numeric types.
-        elif np.can_cast(v.dtype,int):
+        elif np.can_cast(v,int):
           v = int(v)
         atts[n] = v
 
