@@ -1,3 +1,10 @@
+Version 0.20231105.2 (Feb 19, 2023)
+	* Fixed a bug in open_index() when the index contains pickled data.
+	* Fix some bugs in vertical bounds (when --bounds is used).
+	* Added some more fields to the list of accumulated quantities.
+	* Fix a bug when using .from_fstpy() followed by .to_xarray() on
+	  a single record.
+
 Version 0.20231105.1 (Nov 22, 2023)
 	* Fixed bug in make_index / open_index when storing scalar parameters.
 	* Fixed bug in handling large files with masked fields.  The mask
