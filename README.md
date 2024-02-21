@@ -12,6 +12,10 @@ The easiest way to install is using [pip](https://pip.pypa.io/en/stable):
 ```
 pip install fstd2nc
 ```
+Or, from conda:
+```
+conda install fortiers::fstd2nc
+```
 
 
 Basic Usage
