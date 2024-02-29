@@ -726,7 +726,7 @@ class ExternOutput (BufferBase):
     from dask import delayed
     import dask.array as da
     # Put all the header info into a dictionary.
-    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
+    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     table = dict()
     # Create a mask to exclude deleted / overwritten / unselected records.
     # Include all meta (coordinate) records in the output.
@@ -739,6 +739,8 @@ class ExternOutput (BufferBase):
       table[field] = col
     # Convert to pandas table.
     table = pd.DataFrame.from_dict(table)
+    # Add other things which aren't stored in the headers.
+    table['nk'] = 1  # This was removed from fstd2nc header table to save space.
     # Generate dask objects.
     # NOTE: using raw (records for this, no transformations / masking applied).
     if 'file_id' in self._headers and 'address' in self._headers and 'length' in self._headers:
@@ -799,7 +801,7 @@ class ExternInput (BufferBase):
     if hasattr(table,'to_pandas'):
       table = table.to_pandas()
     # Construct the record header info from the table.
-    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'nk', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
+    fields = ['nomvar', 'typvar', 'etiket', 'ni', 'nj', 'ip1', 'ip2', 'ip3', 'deet', 'npas', 'datyp', 'nbits', 'grtyp', 'ig1', 'ig2', 'ig3', 'ig4', 'datev']
     headers = {}
     for col in fields:
       headers[col] = table[col].values.copy()
