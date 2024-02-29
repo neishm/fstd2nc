@@ -69,14 +69,38 @@ class VarDict (BufferBase):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     from xml.etree import ElementTree as ET
+    from os.path import exists
 
+    opdict = kwargs.pop('opdict',False)
     vardicts = kwargs.pop('vardict',None) or []
-    if kwargs.pop('opdict',False):
+
+    ### copied and modified from _check_args
+    if opdict:
       if 'CMCCONST' in environ:
         f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          error(_("Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"))
       elif 'AFSISIO' in environ:
         f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
-      vardicts.append(f)
+        if not exists(f):
+          error(_("Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary.xml"))
+      else:
+        error(_("Neither $CMCCONST nor $AFSISIO defined.  Can't find operational dictionary."))
+
+    if vardicts is not None:
+      for f in vardicts:
+        if not exists(f):
+          error(_("Unable to find '%s'")%f)
+    ###
+
+    # Add operational dictionary to list of dictionaries to use.
+    if opdict:
+      if 'CMCCONST' in environ:
+        f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
+        vardicts.append(f)
+      elif 'AFSISIO' in environ:
+        f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
+        vardicts.append(f)
 
     super(VarDict,self).__init__(*args, **kwargs)
 
