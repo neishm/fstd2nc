@@ -475,6 +475,7 @@ class ExternOutput (BufferBase):
     """
     from collections import OrderedDict
     import xarray as xr
+    from fstd2nc.extra import get_crs
     out = OrderedDict()
     for var in self._iter_dask(fused=fused):
       if not hasattr(var,'array'): continue
@@ -499,6 +500,11 @@ class ExternOutput (BufferBase):
     for var in out.variables:
       out[var].encoding.pop('coordinates',None)
 
+    # Add CRS information (used by some Python modules).
+    try:
+      out.attrs['_CRS'] = get_crs(out).to_wkt()
+    except ModuleNotFoundError:
+      warn(_('Cartopy not found.  Unable to add _CRS attribute.'))
     return out
 
   def to_xarray_list (self, fused=False):
