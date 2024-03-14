@@ -170,10 +170,10 @@ class FSTD (BufferBase):
     self._headers['name'] = self._headers['nomvar']
     # These two fields may not exist for externally-sourced data
     # (such as from fstpy)
-    if 'swa' in self._headers:
+    if 'address' not in self._headers and 'swa' in self._headers:
       self._headers['address'] = np.array(self._headers['swa'],int)*8-8
       del self._headers['swa']
-    if 'lng' in self._headers:
+    if 'length' not in self._headers and 'lng' in self._headers:
       self._headers['length'] = np.array(self._headers['lng'],'int32')*4
       del self._headers['lng']
     self._headers['dtype'] = np.empty(self._nrecs, dtype='|S2')
@@ -181,11 +181,12 @@ class FSTD (BufferBase):
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)
 
   # How to decode the data from a raw binary array.
-  @staticmethod
-  def _decode (data):
+  @classmethod
+  def _decode (cls,data):
     from fstd2nc.extra import decode
-    nbits = int(data[0x0b])
-    datyp = int(data[0x13])
+    prm = cls._decode_headers(data[:72])
+    nbits = int(prm['nbits'][0])
+    datyp = int(prm['datyp'][0])
     dtype = dtype_fst2numpy(datyp, nbits)
     out = decode(data).view(dtype)
     return out

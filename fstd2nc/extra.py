@@ -54,7 +54,13 @@ def decode (data):
   import rpnpy.librmn.all as rmn
   import numpy as np
   from fstd2nc.mixins.fstd import dtype_fst2numpy
-  data = data.view('>i4').astype('i4')
+  # Check endianness, based on header.
+  # Currently, checks position of 'pad' byte next to nomvar.
+  # Could make this more robust, in case nomvars can start with a space?
+  if data.view('B').flatten()[0x37] == 0:
+    data = data.view('>i4').astype('i4')
+  else:
+    data = data.view('<i4').astype('i4')
   ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
   nelm = ni*nj*nk
   datyp = int(data[4]%256) & 191  # Ignore +64 mask.
@@ -66,7 +72,13 @@ def decode (data):
   else:
     work = np.empty(nelm,'int64').view('int32')
   # Strip header
-  data = data[20:]
+  # If data address is zero, assume that means this is from an RSF file
+  # (which has the address encoded somewhere else in the metadata).
+  # RSF files have a slightly smaller header (missing the two "aux" keys).
+  if data[1] == 0:
+    data = data[18:]   # Assume RSF, no aux keys
+  else:
+    data = data[20:]   # FSTD, two aux keys need to be skipped.
   # Extend data buffer for in-place decompression.
   if datyp in (129,130,134):
     d = np.empty(nelm + 100, dtype='int32')
@@ -140,7 +152,28 @@ def decode_headers (raw):
       The raw array of headers to decode.
   '''
   import numpy as np
-  raw = raw.view('>i4').astype('uint32').reshape(-1,9,2)
+  # Check if this data contains extended RSF metadata
+  raw = raw.view('u4')
+  if raw.shape[-1] == 24:
+    raw = raw.reshape(-1,12,2)
+    rsf_meta = raw[:,:3,:]
+    raw = raw[:,3:,:]
+    raw = np.array(raw)
+  else:
+    rsf_meta = None
+    raw = raw.view('>u4').reshape(-1,9,2)
+  # Check endianness, based on first record.
+  # Currently, checks position of 'pad' byte next to nomvar.
+  # Could make this more robust, in case nomvars can start with a space?
+  if raw.view('B').flatten()[0x37] == 0:
+    raw = raw.view('>u4').astype('uint32')
+    if rsf_meta is not None:
+      rsf_meta = rsf_meta.view('>u4').astype('uint32')
+  else:
+    raw = raw.view('<u4').astype('uint32')
+    if rsf_meta is not None:
+      rsf_meta = rsf_meta.view('<u4').astype('uint32')
+
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
   # 0      word deleted:1, select:7, lng:24, addr:32;
@@ -242,31 +275,18 @@ def decode_headers (raw):
   # involved than a simple arithmetic operation.
   # NOTE: xtra1, xtra2, xtra3 not returned (not used, and take up space in the
   # header table).
+
+  # Add extra RSF metadata
+  if rsf_meta is not None:
+    out['address'] = (rsf_meta[:,0,0].astype(int)<<32) + rsf_meta[:,0,1]
+    out['length'] = (rsf_meta[:,1,0].astype(int)<<32) + rsf_meta[:,1,1] - 16
+
   return out
 
 
-def raw_headers (filename):
-  '''
-  Extract record headers from the specified file.
-  Returns a raw byte array with shape (nrec,72).
-  NOTE: This includes deleted records as well.  You can filter them out using
-        the 'dltf' flag.
-
-  Parameters
-  ----------
-  filename : string
-      The file to scan for headers.
-  '''
+# Extract raw headers from an FST file.
+def _raw_headers_fst (f):
   import numpy as np
-  import os
-  if not os.path.exists(filename):
-    return None
-  f = open(filename,'rb')
-  # Use same check as maybeFST
-  magic = f.read(16)
-  if len(magic) < 16 or magic[12:] != b'STDR':
-    f.close()
-    return None
   # Get the raw (packed) parameters.
   pageaddr = 27; pageno = 0
   raw = []
@@ -285,6 +305,99 @@ def raw_headers (filename):
   f.close()
   return raw.reshape(-1,72)
 
+# Extract a segment from an RSF file.
+def _read_rsf_segment (f):
+  import numpy as np
+  addr = f.tell()
+  readahead = np.fromfile(f, 'B', 12)
+  if len(readahead) == 0: return None  # No more segments in file.
+  f.seek(-12,1)
+  # Check endianness of the data.
+  if readahead[0] == 0xfe:
+    dtype = '>u4'  # Big endian
+  elif readahead[3] == 0xfe:
+    dtype = '<u4'  # Little endian
+  else:
+    return None  # Unexpected condition, don't know what to do.
+  readahead = readahead.view(dtype)
+  size = (int(readahead[1])<<32) + int(readahead[2])
+  assert size%4 == 0
+  record = np.fromfile(f, dtype, size//4)
+  assert len(record) == size//4
+  assert record[-1]>>24 == 0xff  # Check for valid end of record.
+  return record
+
+# Extract raw headers from an RSF file (with FSTD payload inside).
+def _raw_headers_rsf (f):
+  import numpy as np
+  raw = []
+  while True:
+    # Read SOS
+    where_sos = f.tell()
+    sos = _read_rsf_segment(f)
+    if sos is None: break  # End of file?
+    assert sos[0]%256 == 0x03  # Must be SOS record.
+    # Seek to directory.
+    dir_offset = (int(sos[11])<<32) + int(sos[12])
+    if dir_offset > 0:
+      f.seek(-len(sos)*4,1)
+      f.seek(dir_offset,1)
+      directory = _read_rsf_segment(f)
+      nrecs = int(directory[4])
+      # Metadata width is 96 bytes.
+      # 24 bytes for outer (RSF) metadata, 72 bytes for inner (FSTD) metadata.
+      directory = directory[5:-3].reshape(nrecs,24)
+      # Modify the address to be absolute file reference.
+      address = (directory[:,0].astype(int)<<32) + directory[:,1]
+      address = address + (where_sos + 16)
+      directory[:,0] = address>>32
+      directory[:,1] = address&0xFFFFFFFF
+      # Decode FSTD metadata.
+      headers = decode_headers(directory)
+      # Directory must be the last record in a segment?
+      eos = _read_rsf_segment(f)
+      assert eos[0]%256 == 0x04
+      raw.append(directory.astype('u4').view('B').flatten())
+    else:
+      # Directory must be the last record in a segment?
+      eos = _read_rsf_segment(f)
+      assert eos[0]%256 == 0x04
+  raw = np.concatenate(raw)
+  f.close()
+  return raw.reshape(-1,96)
+
+def raw_headers (filename):
+  '''
+  Extract record headers from the specified file.
+  Returns a raw byte array with shape (nrec,72).
+  NOTE: This includes deleted records as well.  You can filter them out using
+        the 'dltf' flag.
+
+  Parameters
+  ----------
+  filename : string
+      The file to scan for headers.
+  '''
+  import os
+  if not os.path.exists(filename):
+    return None
+  f = open(filename,'rb')
+  magic = f.read(24)
+  if len(magic) < 24:
+    f.close()
+    return None
+  f.seek(0,0)
+  # FSTD file?
+  if magic[12:16] == b'STDR':
+    out = _raw_headers_fst (f)
+  # RSF file?
+  elif magic[16:24] == b'RSF0STDR':
+    out = _raw_headers_rsf (f)
+  # Unknown file, can't do anything with it.
+  else:
+    f.close()
+    return None
+  return out
 
 # Return the given arrays as a single structured array.
 # Makes certain operations easier, such as finding unique combinations.
