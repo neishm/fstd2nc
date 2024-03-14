@@ -447,7 +447,7 @@ class ExternOutput (BufferBase):
       array = array.reshape(shape)
 
       # Create dask array from this info.
-      chunk_indices = [np.cumsum((0,)+c)[:-1] for c in var.chunks]
+      chunk_indices = [list(map(int,np.cumsum((0,)+c)[:-1])) for c in var.chunks]
       # Loop over all indices, generate dask graph.
       dsk = dict()
       for ind, chunk_coord, chunk_shape in zip(np.ndindex(array.shape), product(*chunk_indices), product(*var.chunks)):
