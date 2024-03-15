@@ -83,7 +83,7 @@ class Masks (BufferBase):
 
     # Remove all mask records from the table, they should not become variables
     # themselves.
-    is_mask = (self._headers['typvar'] == b'@@')
+    is_mask = np.isin(self._headers['typvar'],(b'@@',b'!@'))
     self._headers['selected'][is_mask] = False
 
     nrecs = len(self._headers['name'])
