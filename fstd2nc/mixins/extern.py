@@ -502,9 +502,12 @@ class ExternOutput (BufferBase):
 
     # Add CRS information (used by some Python modules).
     try:
-      out.attrs['_CRS'] = get_crs(out).to_wkt()
+      crs = get_crs(out)
     except ModuleNotFoundError:
       warn(_('Cartopy not found.  Unable to add _CRS attribute.'))
+    else:
+      if crs is not None:
+        out.attrs['_CRS'] = crs.to_wkt()
     return out
 
   def to_xarray_list (self, fused=False):
