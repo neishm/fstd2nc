@@ -352,8 +352,6 @@ def _raw_headers_rsf (f):
       address = address + (where_sos + 16)
       directory[:,0] = address>>32
       directory[:,1] = address&0xFFFFFFFF
-      # Decode FSTD metadata.
-      headers = decode_headers(directory)
       # Directory must be the last record in a segment?
       eos = _read_rsf_segment(f)
       assert eos[0]%256 == 0x04
