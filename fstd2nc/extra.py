@@ -388,8 +388,11 @@ def raw_headers (filename):
   # FSTD file?
   if magic[12:16] == b'STDR':
     out = _raw_headers_fst (f)
-  # RSF file?
+  # RSF file (pre-release version)?
   elif magic[16:24] == b'RSF0STDR':
+    out = _raw_headers_rsf (f)
+  # RSF file?
+  elif magic[16:24] == b'RSF0STDF':
     out = _raw_headers_rsf (f)
   # Unknown file, can't do anything with it.
   else:
