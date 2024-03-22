@@ -77,6 +77,18 @@ def decode (data):
   # RSF files have a slightly smaller header (missing the two "aux" keys).
   if data[1] == 0:
     data = data[18:]   # Assume RSF, no aux keys
+    # Skip extended metadata.
+    # This has a variable size, so seek to null termination.
+    data = data.view('B')
+    # TODO: Need a more robust way of detecting extended metadata.
+    # Unfortunately, this information isn't encoded in this part of the file,
+    # only in the "directory".
+    if data[:13].view('|S13') == b'{\n  "version"':
+      i = np.where(data==0)[0][0]
+      # Skip end padding to 4-byte boundary.
+      while (i%4) != 3: i += 1
+      data = data[i+1:]
+    data = data.view('int32')
   else:
     data = data[20:]   # FSTD, two aux keys need to be skipped.
   # Extend data buffer for in-place decompression.
