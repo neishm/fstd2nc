@@ -83,8 +83,10 @@ def decode (data):
     # TODO: Need a more robust way of detecting extended metadata.
     # Unfortunately, this information isn't encoded in this part of the file,
     # only in the "directory".
+    # Limit to scanning the first 10000 bytes to avoid wasting too much
+    # time on this (assuming the extended header is smaller than that).
     if data[:13].view('|S13') == b'{\n  "version"':
-      i = np.where(data==0)[0][0]
+      i = np.where(data[:10000]==0)[0][0]
       # Skip end padding to 4-byte boundary.
       while (i%4) != 3: i += 1
       data = data[i+1:]
