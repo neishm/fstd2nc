@@ -35,8 +35,15 @@ librmn.compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, np
 librmn.ieeepak_.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
 librmn.compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
 librmn.c_armn_uncompress32.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int)
-librmn.c_armn_compress_setswap.argtypes = (ct.c_int,)
-librmn.armn_compress.argtypes = (npc.ndpointer(dtype='int32'),ct.c_int,ct.c_int,ct.c_int,ct.c_int,ct.c_int)
+# API for armn_compress was updated after version 20 to include an extra
+# "swap_stream" integer flag.
+try:
+  librmn.c_armn_compress_setswap.argtypes = (ct.c_int,)
+  librmn.armn_compress.argtypes = (npc.ndpointer(dtype='int32'),ct.c_int,ct.c_int,ct.c_int,ct.c_int,ct.c_int)
+  _api_version = 20
+except AttributeError:
+  librmn.armn_compress.argtypes = (npc.ndpointer(dtype='int32'),ct.c_int,ct.c_int,ct.c_int,ct.c_int,ct.c_int,ct.c_int)
+  _api_version = 21
 librmn.c_float_unpacker.argtypes = (npc.ndpointer(dtype='int32'),npc.ndpointer(dtype='int32'),npc.ndpointer(dtype='int32'),ct.c_int,ct.POINTER(ct.c_int))
 
 def decode (data):
@@ -135,17 +142,26 @@ def decode (data):
   elif datyp == 8:
     librmn.ieeepak_(work, data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
   elif datyp == 129:
-    librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
+    if _api_version <= 20:
+      librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
+    else:
+      librmn.armn_compress(data[5:],ni,nj,nk,nbits,2,0)
     librmn.compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
   elif datyp == 130:
     #librmn.c_armn_compress_setswap(0)
-    librmn.armn_compress(data[1:],ni,nj,nk,nbits,2)
+    if _api_version <= 20:
+      librmn.armn_compress(data[1:],ni,nj,nk,nbits,2)
+    else:
+      librmn.armn_compress(data[1:],ni,nj,nk,nbits,2,0)
     #librmn.c_armn_compress_setswap(1)
     work[:] = data[1:].astype('>i4').view('>H')[:nelm.value]
   elif datyp == 133:
     librmn.c_armn_uncompress32(work, data[1:], ni, nj, nk, nbits)
   elif datyp == 134:
-    librmn.armn_compress(data[4:],ni,nj,nk,nbits,2);
+    if _api_version <= 20:
+      librmn.armn_compress(data[4:],ni,nj,nk,nbits,2);
+    else:
+      librmn.armn_compress(data[4:],ni,nj,nk,nbits,2,0);
     librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
   else:
     raise Exception(datyp)
