@@ -64,7 +64,7 @@ def _fstdump (buffer_type=Buffer):
 
   # Get the metadata in a netCDF-like structure.
   buf._makevars()
-  print ("fstd98 %s {"%basename(infile))
+  print ("fst %s {"%basename(infile))
   print ("dimensions:")
   for axis in buf._iter_axes():
     print ("\t%s = %d ;"%(axis.name,len(axis)))
