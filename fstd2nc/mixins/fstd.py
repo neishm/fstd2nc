@@ -131,7 +131,7 @@ class FSTD (BufferBase):
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj') + self._var_id
     self._human_var_id = ('%(name)s', '%(ni)sx%(nj)s') + self._human_var_id
-    self._ignore_atts = ('swa','lng','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','nk','ismeta','d') + self._ignore_atts
+    self._ignore_atts = ('swa','lng','meta_length','dltf','ubc','xtra1','xtra2','xtra3','i','j','k','nk','ismeta','d') + self._ignore_atts
 
     ignore_typvar = kwargs.pop('ignore_typvar',False)
     ignore_etiket = kwargs.pop('ignore_etiket',False)
@@ -176,6 +176,9 @@ class FSTD (BufferBase):
     if 'length' not in self._headers and 'lng' in self._headers:
       self._headers['length'] = np.array(self._headers['lng'],'int32')*4
       del self._headers['lng']
+    # Metadata length is a fixed size for fst98.
+    if 'meta_length' not in self._headers:
+      self._headers['meta_length'] = np.full(self._nrecs,18,dtype='uint16')
     self._headers['dtype'] = np.empty(self._nrecs, dtype='|S2')
     self._headers['dtype'][:] = np.array(fast_dtype_fst2numpy(self._headers['datyp'],self._headers['nbits']))
     self._headers['selected'] = (self._headers['dltf']==0) & (self._headers['ismeta'] == False)

@@ -182,27 +182,28 @@ def decode_headers (raw):
       The raw array of headers to decode.
   '''
   import numpy as np
-  # Check if this data contains extended RSF metadata
+  # Check if this is from an RSF contain, which as extra info
+  # appended at the end of the header.
   raw = raw.view('u4')
   if raw.shape[-1] == 24:
     raw = raw.reshape(-1,12,2)
-    rsf_meta = raw[:,:3,:]
+    rsf_info = raw[:,:3,:]
     raw = raw[:,3:,:]
     raw = np.array(raw)
   else:
-    rsf_meta = None
+    rsf_info = None
     raw = raw.view('>u4').reshape(-1,9,2)
   # Check endianness, based on first record.
   # Currently, checks position of 'pad' byte next to nomvar.
   # Could make this more robust, in case nomvars can start with a space?
   if raw.view('B').flatten()[0x37] == 0:
     raw = raw.view('>u4').astype('uint32')
-    if rsf_meta is not None:
-      rsf_meta = rsf_meta.view('>u4').astype('uint32')
+    if rsf_info is not None:
+      rsf_info = rsf_info.view('>u4').astype('uint32')
   else:
     raw = raw.view('<u4').astype('uint32')
-    if rsf_meta is not None:
-      rsf_meta = rsf_meta.view('<u4').astype('uint32')
+    if rsf_info is not None:
+      rsf_info = rsf_info.view('<u4').astype('uint32')
 
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
@@ -306,11 +307,11 @@ def decode_headers (raw):
   # NOTE: xtra1, xtra2, xtra3 not returned (not used, and take up space in the
   # header table).
 
-  # Add extra RSF metadata
-  if rsf_meta is not None:
-    out['address'] = (rsf_meta[:,0,0].astype(int)<<32) + rsf_meta[:,0,1]
-    out['length'] = (rsf_meta[:,1,0].astype(int)<<32) + rsf_meta[:,1,1] - 16
-
+  # Add RSF record info
+  if rsf_info is not None:
+    out['address'] = (rsf_info[:,0,0].astype(int)<<32) + rsf_info[:,0,1]
+    out['length'] = (rsf_info[:,1,0].astype(int)<<32) + rsf_info[:,1,1] - 16
+    out['meta_length'] = rsf_info[:,2,0].copy().view('H')[::2].copy()
   return out
 
 
