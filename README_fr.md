@@ -145,6 +145,8 @@ arguments optionnel:
   --crop-to-smallest-grid
                         Couper les grilles au domaine plus petit (noyau
                         interne) pours les sorties LAM.
+  --extended-metadata   Ajouter des métadonnées étendues aux variables
+                        (données fst24 seulement).
   --metadata-file METADATA_FILE
                         Utiliser les métadonnées du fichier spécifié.
   --rename OLDNAME=NEWNAME,...

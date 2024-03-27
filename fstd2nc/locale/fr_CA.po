@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-11-08 18:09+0000\n"
+"POT-Creation-Date: 2024-03-27 15:44+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -117,6 +117,9 @@ msgstr "Refus de remplacer le fichier existant '%s'."
 
 msgid "Aborted by user."
 msgstr "Annulé par l'utilisateur."
+
+msgid "Add extended metadata to the variables (fst24 data only)."
+msgstr "Ajouter des métadonnées étendues aux variables (données fst24 seulement)."
 
 msgid "NAME,NAME,..."
 msgstr "NOM,NOM,..."
@@ -519,6 +522,9 @@ msgstr ""
 "Dates hors limites pour les routines des pandas. Utiliser des routines "
 "alternatives (plus lentes)."
 
+msgid "Cartopy not found.  Unable to add _CRS attribute."
+msgstr "Cartopy non trouvée Impossible d'ajouter l'attribut _CRS."
+
 #, python-format
 msgid "'batch' size (%d) does not divide evenly into number of files (%s)"
 msgstr ""
@@ -730,7 +736,7 @@ msgid "argument \"-\" with mode %r"
 msgstr "argument \"-\" avec le mode %r"
 
 #, python-format
-msgid "can't open '%s': %s"
+msgid "can't open '%(filename)s': %(error)s"
 msgstr "impossible d'ouvrir '%s': %s"
 
 #, python-format

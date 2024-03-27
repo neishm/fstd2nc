@@ -133,6 +133,8 @@ optional arguments:
   --crop-to-smallest-grid
                         Crop grids to the smaller (inner core) domain for LAM
                         outputs.
+  --extended-metadata   Add extended metadata to the variables (fst24 data
+                        only).
   --metadata-file METADATA_FILE
                         Use metadata from the specified file. You can repeat
                         this option multiple times to build metadata from
