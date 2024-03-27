@@ -145,14 +145,14 @@ def decode (data):
     if _api_version <= 20:
       librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
     else:
-      librmn.armn_compress(data[5:],ni,nj,nk,nbits,2,0)
+      librmn.armn_compress(data[5:],ni,nj,nk,nbits,2,1)
     librmn.compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
   elif datyp == 130:
     #librmn.c_armn_compress_setswap(0)
     if _api_version <= 20:
       librmn.armn_compress(data[1:],ni,nj,nk,nbits,2)
     else:
-      librmn.armn_compress(data[1:],ni,nj,nk,nbits,2,0)
+      librmn.armn_compress(data[1:],ni,nj,nk,nbits,2,1)
     #librmn.c_armn_compress_setswap(1)
     work[:] = data[1:].astype('>i4').view('>H')[:nelm.value]
   elif datyp == 133:
@@ -161,7 +161,7 @@ def decode (data):
     if _api_version <= 20:
       librmn.armn_compress(data[4:],ni,nj,nk,nbits,2);
     else:
-      librmn.armn_compress(data[4:],ni,nj,nk,nbits,2,0);
+      librmn.armn_compress(data[4:],ni,nj,nk,nbits,2,1);
     librmn.c_float_unpacker(work,data[1:],data[4:],nelm,ct.byref(nbits))
   else:
     raise Exception(datyp)
