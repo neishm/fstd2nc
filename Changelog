@@ -1,4 +1,4 @@
-Version 0.20240401.0 (Apr 3, 2023)
+Version 0.20240401.0 (Apr 3, 2024)
 	* Some support for new RSF file container and fst24 data format.
 	* Fixed bug in fstpy bridge - nk no longer stored in Buffer.
 	* Fixed check for operational dictionary when opdict=True is used in
