@@ -1,3 +1,16 @@
+Version 0.20240401.0 (Apr 3, 2023)
+	* Some support for new RSF file container and fst24 data format.
+	* Fixed bug in fstpy bridge - nk no longer stored in Buffer.
+	* Fixed check for operational dictionary when opdict=True is used in
+	  Python interface.
+	* Added _CRS attribute to xarray interface.
+	* Fixed bug when using dask distributed - the keys were not integers,
+	  but rather numpy integers, which apparently was a problem.
+	* Some support for mask typvar '!@'.
+	* Fix potential bug if used in future librmn release 20.1 - the
+	  call signature for armn_compress now requires an extra 'swap_stream'
+	  argument to control byte swapping of the decoded values.
+
 Version 0.20231105.2 (Feb 19, 2023)
 	* Fixed a bug in open_index() when the index contains pickled data.
 	* Fix some bugs in vertical bounds (when --bounds is used).
