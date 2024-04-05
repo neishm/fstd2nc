@@ -86,8 +86,10 @@ def decode (data):
   # Strip header
   # If data address is zero, assume that means this is from an RSF file
   # (which has the address encoded somewhere else in the metadata).
+  # Or, if data address is 18, this would also be an RSF file, and the
+  # address entry is an offset after the metadata?
   # RSF files have a slightly smaller header (missing the two "aux" keys).
-  if data[1] == 0:
+  if data[1] in (0,18):
     data = data[18:]   # Assume RSF, no aux keys
     # Skip extended metadata.
     # This has a variable size, so seek to null termination.
@@ -97,7 +99,7 @@ def decode (data):
     # only in the "directory".
     # Limit to scanning the first 10000 bytes to avoid wasting too much
     # time on this (assuming the extended header is smaller than that).
-    if data[:13].view('|S13') == b'{\n  "version"':
+    if data[:13].view('|S13')[0] == b'{\n  "version"':
       i = np.where(data[:10000]==0)[0][0]
       # Skip end padding to 4-byte boundary.
       while (i%4) != 3: i += 1
