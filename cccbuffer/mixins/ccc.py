@@ -39,14 +39,17 @@ class CCCMixin(BufferBase):
       f.seek(raw[-1][-1]+4,1)
       raw.append(np.fromfile(f,'>i4',19))
     raw.pop()
-    raw = np.array(raw,'>i4')
-    # Hijack part of the raw buffer to include the addresses.
+    final = np.empty((len(raw),22),dtype='>u4')
+    final[:,:-3] = np.array(raw,'u4')
+    final[:,-3] = 0  # padding to align 64-bit address below.
+    # Encode the address information (not in file, have to compute here).
+    address = final.view('>i8')[:,-1]
     # First, fill with the lengths of each record (plus header)
-    raw[0,-2] = 0
-    raw[1:,-2] = raw[:-1,-1] + 80
+    address[0] = 0
+    address[1:] = final[:-1,-4] + 80
     # Then, addresses are the cumulative sum of these lengths.
-    raw[:,-2] = np.cumsum(raw[:,-2])
-    return raw.view('B')
+    address[:] = np.cumsum(address[:])
+    return final.view('B')
 
   # This method will take the collection of raw headers and decode them
   # into their final fields.  Result is stored internally in the _headers
@@ -68,9 +71,9 @@ class CCCMixin(BufferBase):
     out['khem'] = np.array(headers_int[:,6],'uint64')
     out['pack'] = np.array(headers_int[:,7],'uint64')
     # Extra info (raw data length and position in file)
-    length = raw[:,-1] + 80
+    length = raw[:,-4] + 80
     out['length'] = np.array(length,'uint32')
-    out['address'] = np.array(raw[:,-2],'uint64')
+    out['address'] = np.array(raw.view('>u8')[:,-1],'uint64')
     out['dtype'] = np.array([np.float32]*len(raw))
     return out
 
