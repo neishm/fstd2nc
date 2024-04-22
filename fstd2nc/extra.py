@@ -51,6 +51,49 @@ except ModuleNotFoundError:
   # work without this library.
   pass
 
+# Helper method for splitting metadata from a data segment.
+# Returns a tuple of (legacy metadata, extended metadata, data payload).
+# Also byte-swaps the data so it has the expected endianness.
+def _split_meta (data):
+  # Check if XDF or RSF container (fstd98 or fst24)
+  # This is a hack, which only works if RMETA is set to zero?
+  # For fstd98 this value is the address of the data (non-zero)
+  if data.view('i4')[1] == 0:  # RSF with RMETA=0
+    if data[0] == 0xfe:  # Data stored as big-endian on disk.
+      data = data.view('>i4').astype('i4')
+    elif data[3] == 0xfe:  # Data stored as little-endian on disk.
+      data = data.view('<i4').astype('i4')
+    else:
+      raise Exception  # Unknown endian / bad data?
+    # Determine header size (legacy plus extended metadata).
+    # This seemed to change between development versions of librmn 20.1.0,
+    # so need to check a few places where this info might be?
+    # First, check in (what I believe is) rmeta entry?
+    # In later alpha releases, this seems to contain length of metadata
+    # and extended metadata?
+    rmeta = data[5]
+    legacy_size = rmeta>>16
+    extended_size = rmeta&0xffff
+    if legacy_size > 0:
+      header = data[4+legacy_size-18:4+legacy_size]
+      xmeta = data[4+legacy_size:4+legacy_size+extended_size]
+      data = data[4+legacy_size+extended_size:]
+    else:
+      # Older alpha versions don't encode info here, but there seems to be
+      # a consistent value of header size in this other place?
+      header_size = 18 + (data[0]&0x00ffff00)>>8
+      header = data[4:4+18]
+      xmeta = data[4+18:4+header_size]
+      data = data[4+header_size:]
+  else:
+    data = data.view('>i4').astype('i4')
+    header_size = 20    # FSTD, two aux keys need to be skipped.
+    header = data[:header_size]
+    xmeta = None
+    data = data[header_size:]
+  return header, xmeta, data
+
+
 def decode (data):
   '''
   Decodes the raw FSTD data into the final 2D array of values.
@@ -66,47 +109,20 @@ def decode (data):
   import rpnpy.librmn.all as rmn
   import numpy as np
   from fstd2nc.mixins.fstd import dtype_fst2numpy
-  # Check endianness, based on header.
-  # Currently, checks position of 'pad' byte next to nomvar.
-  # Could make this more robust, in case nomvars can start with a space?
-  if data.view('B').flatten()[0x37] == 0:
-    data = data.view('>i4').astype('i4')
-  else:
-    data = data.view('<i4').astype('i4')
-  ni, nj, nk = data[3]>>8, data[4]>>8, data[5]>>12
+  # Split header and data parts, and handle endian conversion.
+  header, xmeta, data = _split_meta (data)
+  # Extract some basic details about the data (data type, shape, bit packing).
+  ni, nj, nk = header[3]>>8, header[4]>>8, header[5]>>12
   nelm = ni*nj*nk
-  datyp = int(data[4]%256) & 191  # Ignore +64 mask.
+  datyp = int(header[4]%256) & 191  # Ignore +64 mask.
   if datyp == 8: nelm = nelm * 2  # For complex, have double the elements.
-  nbits = int(data[2]%256)
+  nbits = int(header[2]%256)
   dtype = dtype_fst2numpy (datyp, nbits)
   if nbits <= 32:
     work = np.empty(nelm,'int32')
   else:
     work = np.empty(nelm,'int64').view('int32')
-  # Strip header
-  # If data address is zero, assume that means this is from an RSF file
-  # (which has the address encoded somewhere else in the metadata).
-  # Or, if data address is 18, this would also be an RSF file, and the
-  # address entry is an offset after the metadata?
-  # RSF files have a slightly smaller header (missing the two "aux" keys).
-  if data[1] in (0,18):
-    data = data[18:]   # Assume RSF, no aux keys
-    # Skip extended metadata.
-    # This has a variable size, so seek to null termination.
-    data = data.view('B')
-    # TODO: Need a more robust way of detecting extended metadata.
-    # Unfortunately, this information isn't encoded in this part of the file,
-    # only in the "directory".
-    # Limit to scanning the first 10000 bytes to avoid wasting too much
-    # time on this (assuming the extended header is smaller than that).
-    if data[:13].view('|S13')[0] == b'{\n  "version"':
-      i = np.where(data[:10000]==0)[0][0]
-      # Skip end padding to 4-byte boundary.
-      while (i%4) != 3: i += 1
-      data = data[i+1:]
-    data = data.view('int32')
-  else:
-    data = data[20:]   # FSTD, two aux keys need to be skipped.
+
   # Extend data buffer for in-place decompression.
   if datyp in (129,130,134):
     d = np.empty(nelm + 100, dtype='int32')
@@ -192,10 +208,10 @@ def decode_headers (raw):
   # Check if this is from an RSF contain, which as extra info
   # appended at the end of the header.
   raw = raw.view('u4')
-  if raw.shape[-1] == 24:
-    raw = raw.reshape(-1,12,2)
-    rsf_info = raw[:,:3,:]
-    raw = raw[:,3:,:]
+  width = raw.shape[-1]
+  if width > 18:
+    rsf_info = raw[:,:-18]
+    raw = raw[:,-18:].reshape(-1,9,2)
     raw = np.array(raw)
   else:
     rsf_info = None
@@ -316,9 +332,23 @@ def decode_headers (raw):
 
   # Add RSF record info
   if rsf_info is not None:
-    out['address'] = (rsf_info[:,0,0].astype(int)<<32) + rsf_info[:,0,1]
-    out['length'] = (rsf_info[:,1,0].astype(int)<<32) + rsf_info[:,1,1] - 16
-    out['meta_length'] = rsf_info[:,2,0].copy().view('H')[::2].copy()
+    out['address'] = (rsf_info[:,0].astype(int)<<32) + rsf_info[:,1]
+    out['length'] = (rsf_info[:,2].astype(int)<<32) + rsf_info[:,2] - 16
+    # old 20.1.0 alpha2 version:
+    if rsf_info.shape[1] == 6:
+      out['meta_length'] = rsf_info[:,4].copy().view('H')[::2].copy()
+    # some intermediate development version (?):
+    elif rsf_info.shape[1] == 8:
+      out['meta_length'] = rsf_info[:,6].copy().view('H')[::2].copy()
+    # 20.1.0 alpha3 version:
+    elif rsf_info.shape[1] == 9:
+      out['meta_length'] = rsf_info[:,6].copy().view('H')[::2].copy()
+    else:
+      # Unable to determine metadata length.
+      # There may have been an update to fst24 headers, which would require
+      # an update to this tool.
+      pass
+      #raise Exception(['0x%08x'%x for x in rsf_info[0,:]])
   return out
 
 
@@ -381,13 +411,21 @@ def _raw_headers_rsf (f):
       f.seek(-len(sos)*4,1)
       f.seek(dir_offset,1)
       directory = _read_rsf_segment(f)
+      signature = directory[0]
+      assert signature == 0xfe000106
+      length = (directory[1] << 32) + directory[2]
+      lmeta = directory[3]
+      #assert lmeta == 0  # not used for directories?
       nrecs = int(directory[4])
-      # Metadata width is 96 bytes.
-      # 24 bytes for outer (RSF) metadata, 72 bytes for inner (FSTD) metadata.
-      directory = directory[5:-3].reshape(nrecs,24)
+      # Metadata width may be extended in the future, so don't hard-code it
+      # here.
+      size = len(directory[5:-3])
+      assert size % nrecs == 0, "Unable to determine record width."
+      width = size // nrecs
+      directory = directory[5:-3].reshape(nrecs,width)
       # Modify the address to be absolute file reference.
       address = (directory[:,0].astype(int)<<32) + directory[:,1]
-      address = address + (where_sos + 16)
+      address = address + where_sos
       directory[:,0] = address>>32
       directory[:,1] = address&0xFFFFFFFF
       # Directory must be the last record in a segment?
@@ -400,7 +438,7 @@ def _raw_headers_rsf (f):
       assert eos[0]%256 == 0x04
   raw = np.concatenate(raw)
   f.close()
-  return raw.reshape(-1,96)
+  return raw.reshape(-1,width*4)
 
 def raw_headers (filename):
   '''

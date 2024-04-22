@@ -43,6 +43,8 @@ class XMeta (BufferBase):
   def _makevars (self):
     from collections import OrderedDict
     import json
+    from fstd2nc.extra import _split_meta
+    import numpy as np
 
     super(XMeta,self)._makevars()
     if not self._extended_metadata: return
@@ -72,8 +74,16 @@ class XMeta (BufferBase):
       last_filename = filename
       last_f = f
 
-      f.seek(address+72,0)
-      meta = f.read(meta_length*4-72).decode().rstrip('\0')
+      f.seek(address,0)
+      # Read first part of segment (which includes StartOfRecord, legacy
+      # metadata, and extended metadata).
+      data = np.fromfile(f,'B',meta_length*4+16)
+      header, xmeta, data = _split_meta(data)
+      # We should be guaranteed to have a valid xmeta, but just in case...
+      if xmeta is None: continue
+      xmeta = xmeta.view('B')
+      xmeta = xmeta.view('|S%d'%len(xmeta))[0]
+      xmeta = xmeta.decode().rstrip('\0')
       # This line would decode the JSON string, if it's needed in the future.
-      # meta = json.loads(meta,object_pairs_hook=OrderedDict)
-      var.atts['extended_metadata'] = meta
+      # meta = json.loads(xmeta,object_pairs_hook=OrderedDict)
+      var.atts['extended_metadata'] = xmeta
