@@ -561,8 +561,3 @@ class Crop (BufferBase):
       d = d[:,crop_i0:crop_iN]
     return d
 
-#################################################
-# Mixin for rolling field along rlon axis to get values
-# within a desired range.
-
-
