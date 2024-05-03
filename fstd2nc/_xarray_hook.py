@@ -159,8 +159,19 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
       if len(infiles) == 0: return False
       # Check first matching file.
       with open(infiles[0],'rb') as f:
-        magic = f.read(16)
-      return len(magic) >= 16 and magic[12:] == b'STDR'
+        magic = f.read(24)
+      # fstd98 in XDF container
+      if len(magic) >= 16 and magic[12:] == b'STDR':
+        return True
+      # fst24 in RSF container (pre-release version?)
+      elif len(magic) >= 24 and magic[16:24] == b'RSF0STDR':
+        return True
+      # fst24 in RSF container
+      elif len(magic) >= 24 and magic[16:24] == b'RSF0STDF':
+        return True
+      # unrecognized file type, not supported in this engine.
+      else:
+        return False
     except Exception:
       # If something unexpected happened, then assume it's not a valid FST file.
       return False
