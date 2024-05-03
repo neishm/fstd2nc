@@ -1,3 +1,12 @@
+Version 0.20240401.1 (May 3, 2024)
+	* Fixed crash when importing fstd2nc.extra without having rpnpy or
+	  librmn in the environment.
+	* Some fixes for RSF support.  Detect more recent variants of header
+	  structures (e.g. for librmn 20.1.0-alpha3 snapshot).
+	* Fixed missing auto-detect for RSF in xarray interface.
+	* Fixed address overflow issue with CCC file interface, which was
+	  giving missing data for larger files.
+
 Version 0.20240401.0 (Apr 3, 2024)
 	* Some support for new RSF file container and fst24 data format.
 	* Fixed bug in fstpy bridge - nk no longer stored in Buffer.
