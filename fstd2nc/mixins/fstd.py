@@ -186,8 +186,11 @@ class FSTD (BufferBase):
   # How to decode the data from a raw binary array.
   @classmethod
   def _decode (cls,data):
-    from fstd2nc.extra import decode
-    prm = cls._decode_headers(data[:72])
+    from fstd2nc.extra import _split_meta, decode
+    # Read a little extra past the header, since there may be a preamble
+    # (such as with RSF which leads with a "start of record" message).
+    meta, _, _ = _split_meta(data[:100])
+    prm = cls._decode_headers(meta[:72])
     nbits = int(prm['nbits'][0])
     datyp = int(prm['datyp'][0])
     dtype = dtype_fst2numpy(datyp, nbits)
