@@ -88,7 +88,7 @@ def _split_meta (data):
   else:
     data = data.view('>i4').astype('i4')
     header_size = 20    # FSTD, two aux keys need to be skipped.
-    header = data[:header_size]
+    header = data[:header_size-2] # Don't include aux keys in header output.
     xmeta = None
     data = data[header_size:]
   return header, xmeta, data
