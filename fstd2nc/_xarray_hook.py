@@ -161,7 +161,7 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
       with open(infiles[0],'rb') as f:
         magic = f.read(24)
       # fstd98 in XDF container
-      if len(magic) >= 16 and magic[12:] == b'STDR':
+      if len(magic) >= 16 and magic[12:16] == b'STDR':
         return True
       # fst24 in RSF container (pre-release version?)
       elif len(magic) >= 24 and magic[16:24] == b'RSF0STDR':
