@@ -127,6 +127,7 @@ class FSTD (BufferBase):
         variable on different etikets.
     """
     import numpy as np
+    from rpnpy.librmn.fstd98 import fstopt
 
     # Note: name should always be the first attribute
     self._var_id = ('name','ni','nj') + self._var_id
@@ -144,6 +145,10 @@ class FSTD (BufferBase):
       # Insert etiket value just after nomvar.
       self._var_id = self._var_id[0:1] + ('etiket',) + self._var_id[1:]
       self._human_var_id = self._human_var_id[0:1] + ('%(etiket)s',) + self._human_var_id[1:]
+
+    # Turn off librmn messages in quiet mode.
+    if kwargs.get('quiet',False):
+      fstopt ('MSGLVL',6)
 
     super(FSTD,self).__init__(*args,**kwargs)
 

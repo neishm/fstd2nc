@@ -153,7 +153,6 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   parser.add_argument('-f', '--force', action='store_true', help=_("Overwrite the output file if it already exists."))
   parser.add_argument('--turbo', action='store_true', help=SUPPRESS)#_('Throw more resources at the writer, to make it go faster.'))
   parser.add_argument('--no-history', action='store_true', help=_("Don't put the command-line invocation in the netCDF metadata."))
-  parser.add_argument('-q', '--quiet', action='store_true', help=_("Don't display any information except for critical error messages.  Implies --no-progress."))
   parser.add_argument('--pandas', action='store_true', help=SUPPRESS)
   args = parser.parse_args()
   buffer_type._check_args(parser, args)
@@ -167,15 +166,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
   turbo = args.pop('turbo')
   no_history = args.pop('no_history')
   compression = args.pop('compression')
-  quiet = args.pop('quiet')
   use_pandas = args.pop('pandas')
-  if quiet:
-    fstopt ('MSGLVL',6)
-    fstd2nc.stdout.streams = ('error',)
-    args['progress'] = False
-  else:
-    fstd2nc.stdout.streams = ('info','warn','error',)
-  progress = args.get('progress',False)
   if use_pandas:
     fstd2nc.mixins._pandas_needed = True
 
@@ -227,6 +218,7 @@ def _fstd2nc_cmdline (buffer_type=Buffer):
     history = timestamp + ": " + command
     global_metadata = {"history":history}
 
+  progress = args.get('progress',False) and not args.get('quiet',False)
   buf.to_netcdf(outfile, nc_format=nc_format, global_metadata=global_metadata, zlib=zlib, compression=compression, progress=progress, turbo=turbo)
 
 #################################################

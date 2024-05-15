@@ -329,6 +329,7 @@ class BufferBase (object):
     _('Display a progress bar during the conversion, if the "progress" module is installed.')
     group.add_argument('--progress', action='store_true', default=stdout.isatty(), help=SUPPRESS)
     group.add_argument('--no-progress', action='store_false', dest='progress', help=_('Disable the progress bar.'))
+    parser.add_argument('-q', '--quiet', action='store_true', help=_("Don't display any information except for critical error messages.  Implies --no-progress."))
     parser.add_argument('--serial', action='store_true', help=_('Disables multithreading/multiprocessing.  Useful for resource-limited machines.'))
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--minimal-metadata', action='store_true', default=True, help=_("Don't include internal record attributes and other internal information in the output metadata.")+" "+_("This is the default behaviour."))
@@ -362,7 +363,7 @@ class BufferBase (object):
   ###############################################
   # Basic flow for reading data
 
-  def __init__ (self, filename, progress=False, serial=False, **kwargs):
+  def __init__ (self, filename, progress=False, quiet=False, serial=False, **kwargs):
     """
     Read raw records from FSTD files, into the buffer.
     Multiple files can be read simultaneously.
@@ -374,6 +375,8 @@ class BufferBase (object):
     progress : bool, optional
         Display a progress bar during the conversion, if the "progress"
         module is installed.
+    quiet : bool, optional
+        Don't display any information except for critical error messages.
     serial : bool, optional
         Disables multithreading/multiprocessing.  Useful for resource-limited
         machines.
@@ -383,6 +386,7 @@ class BufferBase (object):
         Specify a minimal set of internal record attributes to include in the
         output file.
     """
+    import fstd2nc
     from collections import Counter
     import numpy as np
     from glob import has_magic
@@ -392,6 +396,12 @@ class BufferBase (object):
       from itertools import imap  # Python 2
     except ImportError:
       imap = map
+
+    if quiet:
+      fstd2nc.stdout.streams = ('error',)
+      progress = False
+    else:
+      fstd2nc.stdout.streams = ('info','warn','error',)
 
     # Set up a progress bar for scanning the input files.
     Bar = _ProgressBar if progress is True else _FakeBar

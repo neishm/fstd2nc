@@ -30,6 +30,8 @@ arguments optionnel:
   -h, --help            afficher ce message d'aide et quitter
   --version             afficher le numéro de version du programme et quitter
   --no-progress         Désactiver la barre de progression.
+  -q, --quiet           N'afficher pas quelque information moins les messages
+                        d'erreur critiques. Implique --no-progress
   --serial              Désactiver le multithreading/multitraitement. Utile
                         pour les machines à ressources limitées.
   --minimal-metadata    Ne pas inclure les attributs d'enregistrement internes
@@ -182,8 +184,6 @@ arguments optionnel:
   -f, --force           Remplacer le fichier de sortie s'il existe déjà.
   --no-history          Ne placer pas l'invocation de la ligne de commande
                         dans les métadonnées netCDF
-  -q, --quiet           N'afficher pas quelque information moins les messages
-                        d'erreur critiques. Implique --no-progress
 ```
 
 Utilisation dans un script Python
