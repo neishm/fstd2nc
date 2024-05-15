@@ -453,10 +453,10 @@ class netCDF_IO (BufferBase):
     Bar = _ProgressBar if (progress is True and len(io) > 0) else _FakeBar
     bar = Bar(_("Saving netCDF file"), suffix="%(percent)d%% [%(myeta)s]", max=len(io)-1)
     if turbo:
-      from multiprocessing import Pool
+      from multiprocessing.pool import ThreadPool
       import numpy as np
       io = sorted(io)
-      with Pool() as p:
+      with ThreadPool() as p:
         raw = p.imap (self._read_record, (r for r,shape,v,ind in io))
         raw = bar.iter(raw)
         for (r,shape,v,ind), data in zip(io, raw):
