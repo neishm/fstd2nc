@@ -523,6 +523,9 @@ class Crop (BufferBase):
       grid['ig1'] = self._headers['ig1'][first_recid]
       grid['ig2'] = self._headers['ig2'][first_recid]
       grid['ig3'] = self._headers['ig3'][first_recid]
+      grid['tag1'] = self._headers['ig1'][first_recid]
+      grid['tag2'] = self._headers['ig2'][first_recid]
+      grid['tag3'] = self._headers['ig3'][first_recid]
       # Add this grid to the list.
       matches.setdefault(key,[]).append(grid)
 
@@ -550,7 +553,7 @@ class Crop (BufferBase):
         if np.any(grid['ax'].flatten()[i0:iN] != smallest_grid['ax'].flatten()): continue
         if np.any(grid['ay'].flatten()[j0:jN] != smallest_grid['ay'].flatten()): continue
         # Able to crop, so update the headers to point to the cropped coordinates.
-        submask = (gids == grid['id'])
+        submask = (self._headers['ig1'] == grid['tag1']) & (self._headers['ig2'] == grid['tag2']) & (self._headers['ig3'] == grid['tag3'])
         for key in ('grtyp','ni','nj','ig1','ig2','ig3','ig4'):
           self._headers[key][submask] = smallest_grid[key]
         self._headers['crop_j0'][submask] = j0
