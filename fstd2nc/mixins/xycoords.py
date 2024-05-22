@@ -118,7 +118,7 @@ class GridMap(object):
     self._yaxisatts = OrderedDict()
 # Factory method that creates various types of grid mapping objects
   @classmethod
-  def gen_gmap(cls, grd, no_adjust_rlon=False):
+  def gen_gmap(cls, grd, no_adjust_rlon=False, subgrid_axis=False):
     import numpy as np
     grref = grd['grref'].upper() 
     if grref == 'E' :
@@ -131,6 +131,8 @@ class GridMap(object):
       return LatLon(grd)
     elif grref in ['N','S'] :
       return PolarStereo(grd)
+    elif grref == 'F':
+      return SuperGrid(grd,no_adjust_rlon=no_adjust_rlon,subgrid_axis=subgrid_axis)
     else:
       raise ValueError('Grid mapping variable cannot be created for grids based on grid type %s!' \
                        % (grref))
@@ -415,6 +417,71 @@ class PolarStereo(GridMap):
       self.lat.atts['bounds'] = lat_bnds
     return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
       
+class SuperGrid(GridMap):
+  def __init__(self, *args, **kwargs):
+    self._subgrid_axis = kwargs.pop('subgrid_axis',False)
+    super(SuperGrid,self).__init__(*args)
+    # Grid mapping variable name
+    self._subgrids = [GridMap.gen_gmap(grd,**kwargs) for grd in self._grd['subgrid']]
+  # No grid_mapping available for this grid type.
+  # (we have multiple different grids stuck together!)
+  def gen_gmapvar(self):
+    self.gmap = None
+    return None
+  # Generate latitudes and longitudes for subgrids.
+  def gen_xyll(self, bounds=False):
+    from collections import OrderedDict
+    from rpnpy.librmn.all import gdll
+    from fstd2nc.mixins import _var_type, _axis_type
+    import numpy as np
+    # Collect information from all the subgrids.
+    xaxes, yaxes, gridaxes, lons, lats = zip(*[grd.gen_xyll(bounds=bounds) for grd in self._subgrids])
+    grd0 = self._subgrids[0]
+    # If splitting into subgrids, use same rlat/lon axes as the subgrids.
+    if self._subgrid_axis:
+      self._xaxisatts.update(grd0._xaxisatts)
+      self._yaxisatts.update(grd0._yaxisatts)
+      self.xaxis = xaxes[0]
+      self.yaxis = yaxes[0]
+      ngrids = len(self._subgrids)
+      subgrid = _dim_type('subgrid',ngrids)
+      self.gridaxes = [subgrid,self.yaxis,self.xaxis]
+      self._lonarray = np.array([lon.array for lon in lons])
+      self._lonatts = grd0._lonatts
+      self._latarray = np.array([lat.array for lat in lats])
+      self._latatts = grd0._latatts
+    # Otherwise, need to use generic x/y axes.
+    else:
+      self._xaxisatts['axis'] = 'X'
+      self._yaxisatts['axis'] = 'Y'
+      self.xaxis = _axis_type('x',self._xaxisatts,grd0._grd['ax'][:,0])
+      self.yaxis = _axis_type('y',self._yaxisatts,np.concatenate([grd._grd['ay'][0,:] for grd in self._subgrids]))
+      self.gridaxes = [self.yaxis,self.xaxis]
+      self._lonarray = np.concatenate([lon.array for lon in lons])
+      self._lonatts = grd0._lonatts
+      self._latarray = np.concatenate([lat.array for lat in lats])
+      self._latatts = grd0._latatts
+    self.lon = _var_type('lon',self._lonatts,self.gridaxes,self._lonarray)
+    self.lat = _var_type('lat',self._latatts,self.gridaxes,self._latarray)
+
+    # Get boundary info.
+    if bounds:
+      lon_bnds = [grd.lon.atts['bounds'] for grd in self._subgrids]
+      lat_bnds = [grd.lat.atts['bounds'] for grd in self._subgrids]
+      if self._subgrid_axis:
+        bnd_axes = [subgrid]+lon_bnds[0].axes
+        lonb_array = np.array([lb.array for lb in lon_bnds])
+        latb_array = np.array([lb.array for lb in lat_bnds])
+      else:
+        bnd_axes = [self.yaxis,self.xaxis,bnds4]
+        lonb_array = np.concatenate([lb.array for lb in lon_bnds])
+        latb_array = np.concatenate([lb.array for lb in lat_bnds])
+      lon_bnds = _var_type(lon_bnds[0].name,lon_bnds[0].atts,bnd_axes,lonb_array)
+      lat_bnds = _var_type(lat_bnds[0].name,lat_bnds[0].atts,bnd_axes,latb_array)
+      self.lon.atts['bounds'] = lon_bnds
+      self.lat.atts['bounds'] = lat_bnds
+    return (self.xaxis, self.yaxis, self.gridaxes, self.lon, self.lat)
+
 
 #################################################
 # Mixin for handling lat/lon coordinates.
@@ -577,13 +644,31 @@ class XYCoords (BufferBase):
               grd['ax'] = ref['d'].squeeze()
               grd['ay'] = self._find_coord(var,b'^^  ')['d'].squeeze()
               grd = ezgdef_fmem(grd)
+            elif grtyp == 'U':
+              # U grids aren't yet supported by in-memory ezqkdef
+              ref = self._find_coord(var,b'^>  ')
+              data = ref['d'].flatten()
+              nsubgrids = int(data[2])
+              subgrids = []
+              subdata = data[5:]
+              for i in range(nsubgrids):
+                sub_ni = int(subdata[0])
+                sub_nj = int(subdata[1])
+                # Loosely based on steps in Lire_enrUvercode1 of librmn.
+                sub_ig1, sub_ig2, sub_ig3, sub_ig4 = cxgaig('E',*subdata[6:10])
+                sub_ax = subdata[10:10+sub_ni]
+                sub_ay = subdata[10+sub_ni:10+sub_ni+sub_nj]
+                subgrids.append(ezgdef_fmem(sub_ni, sub_nj, 'Z', 'E', sub_ig1, sub_ig2, sub_ig3, sub_ig4, sub_ax, sub_ay))
+                subdata = subdata[10+sub_ni+sub_nj:]
+              grd = ezgdef_supergrid(ni, nj, 'U', 'F', 1, subgrids)
             else:
               grd = ezqkdef (ni, nj, grtyp, ig1, ig2, ig3, ig4)
             gids[key] = grd
             grd = decodeGrid(grd)
-            gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon)
+            gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon, subgrid_axis=self._subgrid_axis)
             gmapvar = gmap.gen_gmapvar()
-            gridmaps[key] = gmapvar
+            if gmapvar is not None:
+              gridmaps[key] = gmapvar
             (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll(bounds=self._bounds)
           except (TypeError,EzscintError,KeyError,RMNError,ValueError,AttributeError):
             pass # Wasn't supported.
@@ -608,26 +693,7 @@ class XYCoords (BufferBase):
               lonarray = self._find_coord(var,b'>>  ')['d'].squeeze(axis=2)
             # Handle ezqkdef grids.
             else:
-              ###
-              # U grids aren't yet supported by in-memory ezqkdef
-              # (requires ext
-              if grtyp == 'U':
-                ref = self._find_coord(var,b'^>  ')
-                data = ref['d'].flatten()
-                nsubgrids = int(data[2])
-                subgrids = []
-                subdata = data[5:]
-                for i in range(nsubgrids):
-                  sub_ni = int(subdata[0])
-                  sub_nj = int(subdata[1])
-                  # Loosely based on steps in Lire_enrUvercode1 of librmn.
-                  sub_ig1, sub_ig2, sub_ig3, sub_ig4 = cxgaig('E',*subdata[6:10])
-                  sub_ax = subdata[10:10+sub_ni]
-                  sub_ay = subdata[10+sub_ni:10+sub_ni+sub_nj]
-                  subgrids.append(ezgdef_fmem(sub_ni, sub_nj, 'Z', 'E', sub_ig1, sub_ig2, sub_ig3, sub_ig4, sub_ax, sub_ay))
-                  subdata = subdata[10+sub_ni+sub_nj:]
-                gdid = ezgdef_supergrid(ni, nj, 'U', 'F', 1, subgrids)
-              else:
+              if True:
                 #TODO: check if this case still gets triggered?
                 # GridMap grids (N,S,A,B,L,G,Z,E) are already handled.
                 # Direct grids (X,Y,T,+,O,M) are already handled.
@@ -722,17 +788,6 @@ class XYCoords (BufferBase):
           # Case 3: General 2D lat/lon fields on X/Y coordinate system.
           elif xaxis is not None and yaxis is not None:
             gridaxes = [yaxis,xaxis]
-            # Special case: have supergrid data, and the user wants to split it?
-            if grtyp == 'U' and self._subgrid_axis:
-              ngrids = ezget_nsubgrids(gdid)
-              ny = len(yaxis.array)//ngrids
-              yaxis.array = yaxis.array[:ny]
-              subgrid = _dim_type('subgrid',ngrids)
-              gridaxes = [subgrid,yaxis,xaxis]
-              latarray = latarray.reshape(ngrids,ny,-1)
-              lonarray = lonarray.reshape(ngrids,ny,-1)
-            lat = _var_type('lat',latatts,gridaxes,latarray)
-            lon = _var_type('lon',lonatts,gridaxes,lonarray)
 
           # Case 4: General 2D lat/lon fields with no coordinate system.
           elif 'i' in var.dims and 'j' in var.dims:
