@@ -52,7 +52,7 @@ def _fstdump (buffer_type=Buffer):
 
   # Apply message level criteria.
   fstopt ('MSGLVL',6)
-  fstd2nc.stdout.streams = ('error',)
+  args['quiet'] = True
 
   # Turn off Python warning / exception handling, use stdio for communication.
   fstd2nc.stdout._python = False
