@@ -1,3 +1,13 @@
+Version 0.20240401.2 (May 22, 2024)
+	* More bug fixes for RSF support.
+	* Fixed auto-detect of legacy FST files in xarray.open_dataset.
+	  This was broken in 0.20240401.1 after adding RSF detection.
+	* Fixed crash when using --interp and --turbo features at the same
+	  time.
+	* Fixed --crop-to-smallest grid not working in some cases.
+	  decodeGrid was sometimes changing ig1/ig2/ig3 identifiers and causing
+	  a failure to find common grids.
+
 Version 0.20240401.1 (May 3, 2024)
 	* Fixed crash when importing fstd2nc.extra without having rpnpy or
 	  librmn in the environment.
