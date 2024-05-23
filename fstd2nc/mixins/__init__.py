@@ -400,6 +400,8 @@ class BufferBase (object):
     if quiet:
       fstd2nc.stdout.streams = ('error',)
       progress = False
+    elif fstd2nc.stdout._python:
+      fstd2nc.stdout.streams = ('warn','error')
     else:
       fstd2nc.stdout.streams = ('info','warn','error',)
 
