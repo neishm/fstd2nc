@@ -423,11 +423,24 @@ class SuperGrid(GridMap):
     super(SuperGrid,self).__init__(*args)
     # Grid mapping variable name
     self._subgrids = [GridMap.gen_gmap(grd,**kwargs) for grd in self._grd['subgrid']]
-  # No grid_mapping available for this grid type.
-  # (we have multiple different grids stuck together!)
   def gen_gmapvar(self):
-    self.gmap = None
-    return None
+    from fstd2nc.mixins import _var_type
+    # Give a (non-standard) grid mapping for yin/yang pieces.
+    # It won't be parseable by most tools, but at least the information
+    # is in there in some form.
+    if len(self._subgrids) == 2:
+      yin = self._subgrids[0].gen_gmapvar()
+      yang = self._subgrids[1].gen_gmapvar()
+      yin = _var_type('yin',yin.atts,yin.axes,yin.array)
+      yang = _var_type('yang',yang.atts,yang.axes,yang.array)
+      return [yin,yang]
+    else:
+      # Some other kind of supergrid with multiple subgrids?
+      gmap = []
+      for grd in self._subgrids:
+        gmv = grd.gen_gmapvar()
+        gmap.append(_var_type('grid',gmv.atts,gmv.axes,gmv.array))
+      return gmap
   # Generate latitudes and longitudes for subgrids.
   def gen_xyll(self, bounds=False):
     from collections import OrderedDict
@@ -873,7 +886,11 @@ class XYCoords (BufferBase):
     for var in varlist:
       if 'grid_mapping' in var.atts:
         gmapvar = var.atts['grid_mapping']
-        key = tuple(sorted(gmapvar.atts.items()))
+        # Speial case - multiple subgrids (non-standard)
+        if isinstance(gmapvar,list):
+          key = tuple( tuple(sorted(gmv.atts.items())) for gmv in gmapvar)
+        else:
+          key = tuple(sorted(gmapvar.atts.items()))
         if key not in gridmaps:
           gridmaps[key] = gmapvar
         gmapvar = gridmaps[key]
