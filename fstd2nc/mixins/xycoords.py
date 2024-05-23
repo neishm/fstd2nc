@@ -225,7 +225,7 @@ class RotLatLon(GridMap):
       orig_ax = self._ax
       ax_adjust = self._north_pole_grid_longitude
       self._ax = self._ax - self._north_pole_grid_longitude
-      self._north_pole_grid_longitude = 0
+      self._north_pole_grid_longitude = 0.
       # Make sure rlon axis is still in range.
       if self._ax.max() >= 360.:
         self._ax -= 360.
