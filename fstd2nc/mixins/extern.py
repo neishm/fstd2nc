@@ -211,7 +211,14 @@ class ExternOutput (BufferBase):
         continue
       # Single argument - scalar or external array?
       if isinstance(args[i+1],str) or i == len(args)-2:
-        kwargs[key] = args[i]
+        # If this is an integer, then assume it's a native key for the file
+        # format.
+        if isinstance(args[i],int):
+          data = cls._read_record_natively(filename,args[i])
+          kwargs[key] = data
+        # Otherwise, it's some opaque entity (dask array?)
+        else:
+          kwargs[key] = args[i]
         i = i + 1
         continue
       # Dual arguments (address + length)?
@@ -358,14 +365,21 @@ class ExternOutput (BufferBase):
       nchunks = record_id.shape[0]
       args = [files[file_ids]]
       # Add data sources (primary data plus possible secondary like mask).
-      for key, (addr_col, len_col, dname) in self._decoder_data:
-        if addr_col not in self._headers: continue # Skip inactive arguments.
+      for key, (native_col, addr_col, len_col, dname) in self._decoder_data:
         # Source data is coming from dask / numpy?
         if dname in self._headers:
           d = self._headers[dname][record_id]
           args.extend([[key]*nchunks, d])
-        # Source data is from disk?
-        else:
+        # Source data is being served by format-specific interface?
+        elif native_col in self._headers:
+          fname = files[file_ids]
+          native_keys = self._headers[native_key]
+          native_keys[record_id<0] = -1
+          if native_keys.ndim > 1: native_keys = map(np.array,native_keys)
+          else: native_keys = map(int,native_keys)
+          args.extend([[key]*nchunks, native_keys])
+        # Source data is from disk (direct I/O)?
+        elif addr_col in self._headers:
           fname = files[file_ids]
           addr = self._headers[addr_col][record_id]
           addr[record_id<0] = -1
@@ -752,11 +766,19 @@ class ExternOutput (BufferBase):
     table['nk'] = 1  # This was removed from fstd2nc header table to save space.
     # Generate dask objects.
     # NOTE: using raw (records for this, no transformations / masking applied).
-    if 'file_id' in self._headers and 'address' in self._headers and 'length' in self._headers:
+
+    if 'file_id' in self._headers:
       filenames = np.array(self._files+[None])
       filenames = filenames[self._headers['file_id']]
-      arrays = map(delayed(_read_block), filenames, self._headers['address'], self._headers['length'])
-      arrays = map(delayed(decode), arrays)
+      # Check if a native interface is available for reading the data.
+      if 'key' in self._headers:
+        arrays = map(delayed(self._read_record_natively), filenames, self._headers['key'])
+      # Otherwise, fall back to raw I/O and decoding.
+      elif 'address' in self._headers and 'length' in self._headers:
+        arrays = map(delayed(_read_block), filenames, self._headers['address'], self._headers['length'])
+        arrays = map(delayed(decode), arrays)
+      else:
+        raise Exception("???")
       shape = zip(self._headers['nj'], self._headers['ni'])
       arrays = map(delayed(np.reshape), arrays, shape)
       arrays = map(delayed(np.transpose), arrays)

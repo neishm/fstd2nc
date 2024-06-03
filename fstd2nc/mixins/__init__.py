@@ -309,7 +309,7 @@ class BufferBase (object):
   # - length is how much data to read.
   # - d is an alternate source (dask graph?) for case where data is not
   #   stored in a file.
-  _decoder_data = (('data',('address','length','d')),)
+  _decoder_data = (('data',('key','address','length','d')),)
 
   # Extra arguments to pull from columns of the table.
   _decoder_extra_args = ()
@@ -1107,19 +1107,29 @@ class BufferBase (object):
     import numpy as np
     kwargs = {}
     # Add file-based data.
-    file_id = self._headers['file_id'][rec]
-    if file_id >= 0:
-      f = open(self._files[file_id], 'rb')
-    else:
-      f = None
-    for key, (addr_key, len_key, d_key) in self._decoder_data:
-      if addr_key not in self._headers: continue
+    filename = None
+    f = None
+    if 'file_id' in self._headers:
+      file_id = self._headers['file_id'][rec]
+      if file_id >= 0:
+        filename = self._files[file_id]
+        # Will we need to do file I/O ourselves in here?
+        if any(addr_key is not None for (native_key, addr_key, len_key, d_key) in self._decoder_data):
+          f = open(filename, 'rb')
+    for key, (native_key, addr_key, len_key, d_key) in self._decoder_data:
       # Special case: have dask array to read.
       if d_key in self._headers:
         d = self._headers[d_key][rec]
         if d is not None:
           kwargs[key] = np.asarray(d)
           continue
+      # Check if a format-specific key is available.
+      if native_key in self._headers:
+        n = self._headers[native_key]
+        if n is not None and n >= 0:
+          kwargs[key] = self._read_record_natively(filename,n)
+          continue
+      if addr_key not in self._headers: continue
       address = self._headers[addr_key][rec]
       length = self._headers[len_key][rec]
       if address == -1 or length == -1: continue
@@ -1135,6 +1145,10 @@ class BufferBase (object):
       f.close()
     return self._postproc(**kwargs)
 
+  # Read a record from a file, using a format-specific key to select it.
+  @classmethod
+  def _read_record_natively (cls, filename, key):
+    raise NotImplementedError("no decoder found.")
 
   #
   ###############################################
