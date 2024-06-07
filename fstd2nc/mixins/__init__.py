@@ -456,15 +456,19 @@ class BufferBase (object):
       if len(expanded_infiles) == 1: Bar = _FakeBar
       bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
 
-    if len(expanded_infiles) > 1 and not self._serial:
-      with Pool() as p:
-        headers = p.imap (self._raw_headers, [f for (infile,f) in expanded_infiles])
-        headers = ([h,bar.next()][0] for h in headers)
-        headers = list(headers) # Start scanning.
-    else:
-      headers = imap (self._raw_headers, [f for (infile,f) in expanded_infiles])
+    def loop_headers (imap):
+      if hasattr(self,'_read_headers'):
+        headers = imap (self._read_headers, [f for (infile,f) in expanded_infiles])
+      else:
+        headers = imap (self._raw_headers, [f for (infile,f) in expanded_infiles])
       headers = ([h,bar.next()][0] for h in headers)
       headers = list(headers) # Start scanning.
+      return headers
+    if len(expanded_infiles) > 1 and not self._serial:
+      with Pool() as p:
+        headers = loop_headers (p.imap)
+    else:
+      headers = loop_headers (imap)
 
     # If we made this progress bar, then finish it here.
     # Otherwise, if it was passed in it could be part of a bigger workflow
@@ -481,19 +485,23 @@ class BufferBase (object):
         matches[infile] += 1
         filenum = len(self._files)
         self._files.append(f)
-        file_ids.extend([filenum]*len(headers[i]))
+        if isinstance(headers[i],dict):
+          k = list(headers[i].keys())[0]  # Get some key from the headers
+          nrecs = len(headers[i][k])  # Use that key to get number of records.
+        else:
+          nrecs = len(headers[i])
+        file_ids.extend([filenum]*nrecs)
       else:
         matches[infile] += 0
 
     # Decode all the headers
     headers = [h for h in headers if h is not None and len(h) > 0]
-    # Remember indices in the headers (needed for reconstructing keys)
-    indices = [range(len(h)) for h in headers]
     if len(headers) > 0:
-      headers = np.concatenate(headers)
-      indices = np.concatenate(indices)
-      headers = self._decode_headers(headers)
-      # Encode the keys without the file index info.
+      if isinstance(headers[0],dict):
+        headers = dict((k,np.concatenate([h[k] for h in headers])) for k in headers[0].keys() if k not in ('shape',))
+      else:
+        headers = np.concatenate(headers)
+        headers = self._decode_headers(headers)
       headers['file_id'] = np.array(file_ids, dtype='int32')
       headers['selected'] = np.ones(len(file_ids),'bool')
 
@@ -1095,12 +1103,23 @@ class BufferBase (object):
 
   # Shortcuts to header decoding functions.
   # Put into the class so they can potentially be overridden for other formats.
+
+  # This pair of methods is used for 'raw' decoding, where the bytes from
+  # the file(s) are read from disk and then decoded by some method.
   @staticmethod
   def _decode_headers (headers):
     raise NotImplementedError("No decoder found.")
   @staticmethod
   def _raw_headers (filename):
     raise NotImplementedError("No decoder found.")
+
+  # This method is for reading the headers from a file using the format's own
+  # interface.
+  # Not defining stub yet, so we can more easily check in __init__ if this
+  # method is actually available (until the raw methods are phased out).
+  #@staticmethod
+  #def _read_headers (headers):
+  #  raise NotImplementedError("No decoder found.")
 
   # Shortcut for reading a record, given a record id.
   def _read_record (self, rec):
@@ -1114,7 +1133,7 @@ class BufferBase (object):
       if file_id >= 0:
         filename = self._files[file_id]
         # Will we need to do file I/O ourselves in here?
-        if any(addr_key is not None for (native_key, addr_key, len_key, d_key) in self._decoder_data):
+        if any(addr_key is not None for key, (native_key, addr_key, len_key, d_key) in self._decoder_data):
           f = open(filename, 'rb')
     for key, (native_key, addr_key, len_key, d_key) in self._decoder_data:
       # Special case: have dask array to read.
@@ -1125,7 +1144,7 @@ class BufferBase (object):
           continue
       # Check if a format-specific key is available.
       if native_key in self._headers:
-        n = self._headers[native_key]
+        n = self._headers[native_key][rec]
         if n is not None and n >= 0:
           kwargs[key] = self._read_record_natively(filename,n)
           continue

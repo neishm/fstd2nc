@@ -778,7 +778,7 @@ class ExternOutput (BufferBase):
         arrays = map(delayed(_read_block), filenames, self._headers['address'], self._headers['length'])
         arrays = map(delayed(decode), arrays)
       else:
-        raise Exception("???")
+        error (_("No key or address/length columns available.  Don't know how to wrap the records for fstpy."))
       shape = zip(self._headers['nj'], self._headers['ni'])
       arrays = map(delayed(np.reshape), arrays, shape)
       arrays = map(delayed(np.transpose), arrays)
