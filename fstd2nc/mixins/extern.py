@@ -373,7 +373,7 @@ class ExternOutput (BufferBase):
         # Source data is being served by format-specific interface?
         elif native_col in self._headers:
           fname = files[file_ids]
-          native_keys = self._headers[native_key]
+          native_keys = self._headers[native_col]
           native_keys[record_id<0] = -1
           if native_keys.ndim > 1: native_keys = map(np.array,native_keys)
           else: native_keys = map(int,native_keys)
