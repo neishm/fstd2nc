@@ -236,7 +236,16 @@ class FSTD (BufferBase):
     #TODO: keep most active files open (up to a certain limit).
     #TODO: RSF format?
     import rpnpy.librmn.all as rmn
-    funit = rmn.fstopenall(filename,rmn.FST_RO)
+    from rpnpy.librmn.fstd98 import FSTDError
+    from rpnpy.librmn import base as _rb
+    # Try using the standard rpnpy interface.
+    try:
+      funit = rmn.fstopenall(filename,rmn.FST_RO)
+    # If that fails, this might be an fst24 file and this version of rpnpy
+    # might not recognize it yet.  Use lower-level interface for opening.
+    except FSTDError:
+      funit = _rb.fnom(filename,"RND+R/O")
+      rmn.fstouv(funit,"RND+R/O")
     # Make the key compatible with the currently opened file unit.
     findex = rmn.fstinl(funit)[0] % 1024
     key = (key//1024)*1024 + findex
@@ -264,8 +273,16 @@ class FSTD (BufferBase):
   @staticmethod
   def __read_headers (filename):
     import rpnpy.librmn.all as rmn
-    #TODO: check file type?
-    f = rmn.fstopenall(filename,rmn.FST_RO)
+    from rpnpy.librmn.fstd98 import FSTDError
+    from rpnpy.librmn import base as _rb
+    # Try using the standard rpnpy interface.
+    try:
+      f = rmn.fstopenall(filename,rmn.FST_RO)
+    # If that fails, this might be an fst24 file and this version of rpnpy
+    # might not recognize it yet.  Use lower-level interface for opening.
+    except FSTDError:
+      f = _rb.fnom(filename,"RND+R/O")
+      rmn.fstouv(f,"RND+R/O")
     table = None
     for key in rmn.fstinl(f):
       prm = rmn.fstprm(key)
