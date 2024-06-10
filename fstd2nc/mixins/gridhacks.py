@@ -214,7 +214,7 @@ class Interp (BufferBase):
     from fstd2nc.extra import structured_array
     from collections import OrderedDict
 
-    self._decoder_data = self._decoder_data + (('u_data',('u_address','u_length','u_d')),('v_data',('v_address','v_length','v_d')))
+    self._decoder_data = self._decoder_data + (('u_data',('u_key','u_address','u_length','u_d')),('v_data',('v_key','v_address','v_length','v_d')))
 
     interp = kwargs.pop('interp',None)
 
@@ -256,14 +256,20 @@ class Interp (BufferBase):
       if not np.any(is_wind): return
       # Set U,V record info for the interpolator.
       nrecs = len(self._headers['name'])
-      self._headers['u_address'] = np.empty(nrecs,'int32')
-      self._headers['u_address'][:] = -1
-      self._headers['u_length'] = np.empty(nrecs,'int32')
-      self._headers['u_length'][:] = -1
-      self._headers['v_address'] = np.empty(nrecs,'int32')
-      self._headers['v_address'][:] = -1
-      self._headers['v_length'] = np.empty(nrecs,'int32')
-      self._headers['v_length'][:] = -1
+      if 'key' in self._headers:
+        self._headers['u_key'] = np.empty(nrecs,'int32')
+        self._headers['u_key'][:] = -1
+        self._headers['v_key'] = np.empty(nrecs,'int32')
+        self._headers['v_key'][:] = -1
+      else:
+        self._headers['u_address'] = np.empty(nrecs,'int32')
+        self._headers['u_address'][:] = -1
+        self._headers['u_length'] = np.empty(nrecs,'int32')
+        self._headers['u_length'][:] = -1
+        self._headers['v_address'] = np.empty(nrecs,'int32')
+        self._headers['v_address'][:] = -1
+        self._headers['v_length'] = np.empty(nrecs,'int32')
+        self._headers['v_length'][:] = -1
       for u,v in vector_fields:
         this_uv = np.isin(self._headers['nomvar'],(u,v))
         if np.sum(this_uv) == 0: continue
@@ -297,10 +303,14 @@ class Interp (BufferBase):
         v_recid = np.arange(nrecs)[this_uv][ind][is_paired_v]
         # If this is U record, then V record goes into auxiliary data, and
         # vice versa.
-        self._headers['v_address'][u_recid] = self._headers['address'][v_recid]
-        self._headers['v_length'][u_recid] = self._headers['length'][v_recid]
-        self._headers['u_address'][v_recid] = self._headers['address'][u_recid]
-        self._headers['u_length'][v_recid] = self._headers['length'][u_recid]
+        if 'key' in self._headers:
+          self._headers['v_key'][u_recid] = self._headers['key'][v_recid]
+          self._headers['u_key'][v_recid] = self._headers['key'][u_recid]
+        else:
+          self._headers['v_address'][u_recid] = self._headers['address'][v_recid]
+          self._headers['v_length'][u_recid] = self._headers['length'][v_recid]
+          self._headers['u_address'][v_recid] = self._headers['address'][u_recid]
+          self._headers['u_length'][v_recid] = self._headers['length'][u_recid]
 
   def _makevars (self):
     from fstd2nc.mixins import _iter_type

@@ -72,9 +72,11 @@ class FSTD (BufferBase):
   # Define any command-line arguments for reading FSTD files.
   @classmethod
   def _cmdline_args (cls, parser):
+    from argparse import SUPPRESS
     super(FSTD,cls)._cmdline_args (parser)
     parser.add_argument('--ignore-typvar', action='store_true', help=_('Tells the converter to ignore the typvar when deciding if two records are part of the same field.  Default is to split the variable on different typvars.'))
     parser.add_argument('--ignore-etiket', action='store_true', help=_('Tells the converter to ignore the etiket when deciding if two records are part of the same field.  Default is to split the variable on different etikets.'))
+    parser.add_argument('--decoder', choices=('raw','legacy','fst24'), default='raw', help=SUPPRESS)
 
   # Helper method - find all records with the given criteria.
   # Mimics fstinl, but returns table indices instead of record handles.
@@ -125,6 +127,15 @@ class FSTD (BufferBase):
         Tells the converter to ignore the etiket when deciding if two
         records are part of the same field.  Default is to split the
         variable on different etikets.
+    decoder : string, optional
+        The method to use for decoding the file.  Values are:
+        'raw': Read the raw bytes directly from the file, circumventing some
+               layers from librmn.  May be slightly faster, but prone to
+               failure if the on-disk format or internal librmn functions
+               change.
+        'legacy': Use the older fstd98-style librmn interface.  May be slower.
+        'fst24': Use the newer fst24-style librmn interface.  Requires a recent
+                 version of librmn (20.1.0 or later).
     """
     import numpy as np
     from rpnpy.librmn.fstd98 import fstopt
@@ -150,7 +161,24 @@ class FSTD (BufferBase):
     if kwargs.get('quiet',False):
       fstopt ('MSGLVL',6)
 
+    # Determine type of decoding to provide for this interface.
+    self._decoder = kwargs.pop('decoder','raw')
+    if self._decoder == 'raw':
+      self._raw_headers = self.__raw_headers
+      self._decode_headers = self.__decode_headers
+    elif self._decoder == 'legacy':
+      self._read_headers = self.__read_headers
+    else:
+      raise NotImplementedError(self._decoder)
+
     super(FSTD,self).__init__(*args,**kwargs)
+
+    # Make sure string attributes are encoded at bytes of a certain size.
+    # There's a lot of internal logic that depends on that assumption.
+    for k,size in ('nomvar',4),('typvar',2),('grtyp',1),('etiket',12):
+      fmt = '|S%d'%size
+      if self._headers[k].dtype.str != fmt:
+        self._headers[k] = np.char.ljust(self._headers[k].astype('|S'),size)
 
     # Find all unique meta (coordinate) records, and link a subset of files
     # that provide all unique metadata records.
@@ -195,23 +223,75 @@ class FSTD (BufferBase):
     # Read a little extra past the header, since there may be a preamble
     # (such as with RSF which leads with a "start of record" message).
     meta, _, _ = _split_meta(data[:100])
-    prm = cls._decode_headers(meta[:72])
+    prm = cls.__decode_headers(meta[:72])
     nbits = int(prm['nbits'][0])
     datyp = int(prm['datyp'][0])
     dtype = dtype_fst2numpy(datyp, nbits)
     out = decode(data).view(dtype)
     return out
 
+  # How to read data using the standard file interface.
+  @staticmethod
+  def _read_record_natively (filename, key):
+    #TODO: keep most active files open (up to a certain limit).
+    #TODO: RSF format?
+    import rpnpy.librmn.all as rmn
+    from rpnpy.librmn.fstd98 import FSTDError
+    from rpnpy.librmn import base as _rb
+    # Try using the standard rpnpy interface.
+    try:
+      funit = rmn.fstopenall(filename,rmn.FST_RO)
+    # If that fails, this might be an fst24 file and this version of rpnpy
+    # might not recognize it yet.  Use lower-level interface for opening.
+    except FSTDError:
+      funit = _rb.fnom(filename,"RND+R/O")
+      rmn.fstouv(funit,"RND+R/O")
+    # Make the key compatible with the currently opened file unit.
+    findex = rmn.fstinl(funit)[0] % 1024
+    key = (key//1024)*1024 + findex
+    rec = rmn.fstluk(int(key))
+    rmn.fstcloseall(funit)
+    nbits = int(rec['nbits'])
+    datyp = int(rec['datyp'])
+    dtype = dtype_fst2numpy(datyp, nbits)
+    out = rec['d'].T.squeeze().view(dtype)
+    return out
+
   # Shortcuts to header decoding functions.
   # Put into the class so they can potentially be overridden for other formats.
   @staticmethod
-  def _decode_headers (headers):
+  def __decode_headers (headers):
     from fstd2nc.extra import decode_headers
     return decode_headers(headers)
   @staticmethod
-  def _raw_headers (filename):
+  def __raw_headers (filename):
     from fstd2nc.extra import raw_headers
     return raw_headers(filename)
+
+  # Version that reads headers using the standard interface
+  # (no shortcuts or funny business).
+  @staticmethod
+  def __read_headers (filename):
+    import rpnpy.librmn.all as rmn
+    from rpnpy.librmn.fstd98 import FSTDError
+    from rpnpy.librmn import base as _rb
+    # Try using the standard rpnpy interface.
+    try:
+      f = rmn.fstopenall(filename,rmn.FST_RO)
+    # If that fails, this might be an fst24 file and this version of rpnpy
+    # might not recognize it yet.  Use lower-level interface for opening.
+    except FSTDError:
+      f = _rb.fnom(filename,"RND+R/O")
+      rmn.fstouv(f,"RND+R/O")
+    table = None
+    for key in rmn.fstinl(f):
+      prm = rmn.fstprm(key)
+      if table is None:
+        table = dict((k,[]) for k in prm.keys())
+      for k,v in prm.items():
+        table[k].append(v)
+    rmn.fstcloseall(f)
+    return table
 
   # Reconstructing FSTD records from external data.
   def _unmakevars (self):

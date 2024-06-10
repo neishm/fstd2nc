@@ -56,7 +56,7 @@ class Masks (BufferBase):
     from fstd2nc.extra import structured_array
     from collections import OrderedDict
 
-    self._decoder_data = self._decoder_data + (('mask',('mask_address','mask_length','mask_d')),)
+    self._decoder_data = self._decoder_data + (('mask',('mask_key','mask_address','mask_length','mask_d')),)
 
     self._fill_value = kwargs.pop('fill_value',1e30)
     self._decoder_extra_args = self._decoder_extra_args + ('alt_mask',)
@@ -110,12 +110,17 @@ class Masks (BufferBase):
     has_mask = np.where(has_mask)[0]
     has_mask += 1  # Data appears after mask in this case.
     rec_id = np.arange(nrecs)[ind]
-    self._headers['mask_address'] = np.empty(nrecs,int)
-    self._headers['mask_address'][:] = -1
-    self._headers['mask_address'][rec_id[has_mask]] = self._headers['address'][rec_id[has_mask-1]]
-    self._headers['mask_length'] = np.empty(nrecs,'int32')
-    self._headers['mask_length'][:] = -1
-    self._headers['mask_length'][rec_id[has_mask]] = self._headers['length'][rec_id[has_mask-1]]
+    if 'key' in self._headers:
+      self._headers['mask_key'] = np.empty(nrecs,int)
+      self._headers['mask_key'][:] = -1
+      self._headers['mask_key'][rec_id[has_mask]] = self._headers['key'][rec_id[has_mask-1]]
+    else:
+      self._headers['mask_address'] = np.empty(nrecs,int)
+      self._headers['mask_address'][:] = -1
+      self._headers['mask_address'][rec_id[has_mask]] = self._headers['address'][rec_id[has_mask-1]]
+      self._headers['mask_length'] = np.empty(nrecs,'int32')
+      self._headers['mask_length'][:] = -1
+      self._headers['mask_length'][rec_id[has_mask]] = self._headers['length'][rec_id[has_mask-1]]
     #TODO: mask_d array
     del nomvar, typvar, etiket, datev, ip1, ip2, ip3, dltf, uses_mask, has_mask
 
