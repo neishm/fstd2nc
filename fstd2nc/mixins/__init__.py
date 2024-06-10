@@ -335,6 +335,7 @@ class BufferBase (object):
     group.add_argument('--minimal-metadata', action='store_true', default=True, help=_("Don't include internal record attributes and other internal information in the output metadata.")+" "+_("This is the default behaviour."))
     group.add_argument('--internal-metadata','--rpnstd-metadata', action='store_false', dest='minimal_metadata', help=_("Include all internal record attributes in the output metadata."))
     group.add_argument('--metadata-list','--rpnstd-metadata-list', metavar='nomvar,...', help=_("Specify a minimal set of internal record attributes to include in the output file."))
+    parser.add_argument('--decoder', choices=('raw','native'), default='raw', help=SUPPRESS)
 
   # Do some checks on the command-line arguments after parsing them.
   @classmethod
@@ -385,6 +386,11 @@ class BufferBase (object):
     metadata_list : str or list, optional
         Specify a minimal set of internal record attributes to include in the
         output file.
+    decoder : string, optional
+        The method to use for decoding the file.  Values are:
+        'raw': Read the raw bytes directly from the file, circumventing any
+               file interface for that file type (if possible).
+        'native': Use native interface for this file type (if such thing exists)
     """
     import fstd2nc
     from collections import Counter
@@ -445,6 +451,16 @@ class BufferBase (object):
       metadata_list = tuple(metadata_list)
     self._metadata_list = metadata_list
 
+    # Get the requested decoder method.
+    self._decoder = kwargs.pop('decoder',None)
+    if self._decoder is None:
+      if hasattr(self,'_raw_headers'):
+        self._decoder = 'raw'
+      elif hasattr(self,'_read_headers'):
+        self._decoder = 'native'
+      else:
+        error(_('Unable to decoder headers for this format.'))
+
     # Should not have any unprocessed keyword arguments after this.
     if len(kwargs) > 0:
       error(_("Unexpected arguments: %s"%(kwargs.keys())))
@@ -457,7 +473,7 @@ class BufferBase (object):
       bar = Bar(_("Inspecting input files"), suffix='%(percent)d%% (%(index)d/%(max)d)', max=len(expanded_infiles))
 
     def loop_headers (imap):
-      if hasattr(self,'_read_headers'):
+      if self._decoder == 'native':
         headers = imap (self._read_headers, [f for (infile,f) in expanded_infiles])
       else:
         headers = imap (self._raw_headers, [f for (infile,f) in expanded_infiles])
