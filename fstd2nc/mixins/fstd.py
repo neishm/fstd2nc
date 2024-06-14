@@ -22,6 +22,11 @@
 from fstd2nc.stdout import _, info, warn, error
 from fstd2nc.mixins import BufferBase
 
+# FST legacy interface is not thread safe, so need to serialize the "native"
+# access mode (doesn't affect "raw" access).
+from threading import Lock
+_legacy_lock = Lock()
+del Lock
 
 #################################################
 # Mixin for handling FSTD file data.
@@ -218,26 +223,27 @@ class FSTD (BufferBase):
     import rpnpy.librmn.all as rmn
     from rpnpy.librmn.fstd98 import FSTDError
     from rpnpy.librmn import base as _rb
-    if getattr(cls._local,'open_fst_filename',None) == filename:
-      funit = cls._local.open_fst_unit
-    else:
-      # Close old file.
-      if hasattr(cls._local,'open_fst_filename'):
-        rmn.fstcloseall(cls._local.open_fst_unit)
-      # Try using the standard rpnpy interface.
-      try:
-        funit = rmn.fstopenall(filename,rmn.FST_RO)
-      # If that fails, this might be an fst24 file and this version of rpnpy
-      # might not recognize it yet.  Use lower-level interface for opening.
-      except FSTDError:
-        funit = _rb.fnom(filename,"RND+R/O")
-        rmn.fstouv(funit,"RND+R/O")
-      cls._local.open_fst_filename = filename
-      cls._local.open_fst_unit = funit
-    # Make the key compatible with the currently opened file unit.
-    findex = rmn.fstinl(funit)[0] % 1024
-    key = (key//1024)*1024 + findex
-    rec = rmn.fstluk(int(key))
+    with _legacy_lock:
+      if getattr(cls._local,'open_fst_filename',None) == filename:
+        funit = cls._local.open_fst_unit
+      else:
+        # Close old file.
+        if hasattr(cls._local,'open_fst_filename'):
+          rmn.fstcloseall(cls._local.open_fst_unit)
+        # Try using the standard rpnpy interface.
+        try:
+          funit = rmn.fstopenall(filename,rmn.FST_RO)
+        # If that fails, this might be an fst24 file and this version of rpnpy
+        # might not recognize it yet.  Use lower-level interface for opening.
+        except FSTDError:
+          funit = _rb.fnom(filename,"RND+R/O")
+          rmn.fstouv(funit,"RND+R/O")
+        cls._local.open_fst_filename = filename
+        cls._local.open_fst_unit = funit
+      # Make the key compatible with the currently opened file unit.
+      findex = rmn.fstinl(funit)[0] % 1024
+      key = (key//1024)*1024 + findex
+      rec = rmn.fstluk(int(key))
     nbits = int(rec['nbits'])
     datyp = int(rec['datyp'])
     dtype = dtype_fst2numpy(datyp, nbits)
