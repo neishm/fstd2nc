@@ -216,6 +216,21 @@ class ExternOutput (BufferBase):
         if isinstance(args[i],int):
           data = cls._read_record_natively(filename,args[i])
           kwargs[key] = data
+        # If this is a list of integers, then assume it's a list of native keys
+        elif hasattr(args[i],'__len__') and isinstance(args[i][0],(int,np.int64)):
+          kwargs[key] = []
+          try:
+            for native_key in args[i]:
+              # Skip keys that are -1 (indicates no data available?).
+              # E.g. for masked data, if no corresponding mask available
+              if native_key < 0:
+                kwargs[key].append(None)
+                continue
+              data = cls._read_record_natively(filename,native_key)
+              kwargs[key].append(data)
+          except Exception:
+            warn(_("Cannot read from %s - file may be missing or damaged.")%filename)
+            kwargs[key] = [None]*len(args[i])
         # Otherwise, it's some opaque entity (dask array?)
         else:
           kwargs[key] = args[i]
@@ -373,7 +388,7 @@ class ExternOutput (BufferBase):
         # Source data is being served by format-specific interface?
         elif native_col in self._headers:
           fname = files[file_ids]
-          native_keys = self._headers[native_col]
+          native_keys = self._headers[native_col][record_id]
           native_keys[record_id<0] = -1
           if native_keys.ndim > 1: native_keys = map(np.array,native_keys)
           else: native_keys = map(int,native_keys)
