@@ -61,9 +61,9 @@ def _write_graphs (f, ind, batch, graphs, concat_axis='time'):
   # Global collection of all compound data (pickled).
   pickles = {}
 
-  # Extract the filesnames needed for this batch.
+  # Extract the filenames needed for this batch.
   filename_len = len(f.dimensions['filename_len'])
-  allfiles = f.variables['files'][ind*batch:(ind+1)*batch,:].view('|S%d'%filename_len).flatten()
+  allfiles = f.variables['files'][ind*batch:(ind+1)*batch,:].view('|S%d'%filename_len).flatten().astype('U')
 
   # Write dimensions / coordinates.
   # Non-concatenated coordinates only need to be written once.
@@ -423,6 +423,8 @@ class ExternOutput (BufferBase):
   def _graph_maker (cls, **kwargs):
     def get_graphs (infiles, first=[True]):
       import fstd2nc
+      # Make sure files are unicode strings (no bytes).
+      infiles = infiles.astype('U')
       # Only print warning messages for first batch of files, assume the
       # warnings will be the same for the rest of the files as well.
       if first == [True]:
@@ -618,7 +620,8 @@ class ExternOutput (BufferBase):
     file_var[:,:] = allfiles.reshape(-1,1).view('|S1')
 
     # Put the files into batches for processing.
-    file_batches = allfiles.reshape(nbatch,batch)
+    # Convert to unicode strings for use within this package.
+    file_batches = allfiles.reshape(nbatch,batch).astype('U')
     # Remember original I/O streams (will get mangled by write_graphs).
     orig_streams = fstd2nc.stdout.streams
     # Get the funtion for generating the graphs.
