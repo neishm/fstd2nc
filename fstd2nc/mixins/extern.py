@@ -250,11 +250,11 @@ class ExternOutput (BufferBase):
             i = i + 2
             continue
           try:
-            with open(filename,'rb') as f:
-              f.seek (offset,0)
-              data = np.fromfile(f,'B',length)
-              data = cls._decode(data)
-              kwargs[key] = data
+            f = cls._open_file(filename)
+            f.seek (offset,0)
+            data = np.fromfile(f,'B',length)
+            data = cls._decode(data)
+            kwargs[key] = data
           except Exception:
             warn(_("Cannot read from %s - file may be missing or damaged.")%filename)
             kwargs[key] = None
@@ -263,17 +263,17 @@ class ExternOutput (BufferBase):
         # Vectorized version.
         kwargs[key] = []
         try:
-          with open(filename,'rb') as f:
-            for o, l in zip(offset, length):
-              # Skip addresses that are -1 (indicates no data available).
-              # E.g. for masked data, if no corresponding mask available
-              if o < 0:
-                kwargs[key].append(None)
-                continue
-              f.seek (o,0)
-              data = np.fromfile(f,'B',l)
-              data = cls._decode(data)
-              kwargs[key].append(data)
+          f = cls._open_file(filename)
+          for o, l in zip(offset, length):
+            # Skip addresses that are -1 (indicates no data available).
+            # E.g. for masked data, if no corresponding mask available
+            if o < 0:
+              kwargs[key].append(None)
+              continue
+            f.seek (o,0)
+            data = np.fromfile(f,'B',l)
+            data = cls._decode(data)
+            kwargs[key].append(data)
         except Exception:
           warn(_("Cannot read from %s - file may be missing or damaged.")%filename)
           kwargs[key] = [None]*len(offset)
