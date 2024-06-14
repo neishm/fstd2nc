@@ -182,9 +182,11 @@ class FSTD (BufferBase):
     self._headers['name'] = self._headers['nomvar']
     # These two fields may not exist for externally-sourced data
     # (such as from fstpy)
-    if 'address' not in self._headers and 'swa' in self._headers:
-      self._headers['address'] = np.array(self._headers['swa'],int)*8-8
-      del self._headers['swa']
+    # Skip these if native key is available.
+    if 'key' not in self._headers:
+      if 'address' not in self._headers and 'swa' in self._headers:
+        self._headers['address'] = np.array(self._headers['swa'],int)*8-8
+        del self._headers['swa']
     if 'length' not in self._headers and 'lng' in self._headers:
       self._headers['length'] = np.array(self._headers['lng'],'int32')*4
       del self._headers['lng']

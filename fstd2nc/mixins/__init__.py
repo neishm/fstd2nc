@@ -1168,7 +1168,7 @@ class BufferBase (object):
       if file_id >= 0:
         filename = self._files[file_id]
         # Will we need to do file I/O ourselves in here?
-        if any(addr_key is not None for key, (native_key, addr_key, len_key, d_key) in self._decoder_data):
+        if any(addr_key is not None and addr_key in self._headers for key, (native_key, addr_key, len_key, d_key) in self._decoder_data):
           f = self._open_file(filename)
     for key, (native_key, addr_key, len_key, d_key) in self._decoder_data:
       # Special case: have dask array to read.
