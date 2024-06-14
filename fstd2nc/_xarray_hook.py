@@ -31,7 +31,12 @@ class FSTDBackendArray(BackendArray):
     template = self._group.variables['template']
     self.shape = template.shape
     self.dtype = template.dtype
-    self._outer_dims = len(self._group.groups['data'].variables['address'].dimensions)
+    if 'data' in self._group.groups:  # address / length pairs?
+      self._outer_dims = len(self._group.groups['data'].variables['address'].dimensions)
+    elif 'data' in self._group.variables:  # native key version?
+      self._outer_dims = len(self._group.variables['data'].dimensions)
+    else:
+      raise ValueError("Unable to parse index file structure.")
     self._chunk_shape = self.shape[self._outer_dims:]
     # Construct pickle objects if this is the first time decoding.
     if len(self._pickles) == 0:
@@ -98,8 +103,13 @@ class FSTDBackendArray(BackendArray):
       filename = files[file_id].flatten()
       filename = filename.view('|S%d'%len(filename))[0].decode()
       current_args = [filename]
-      current_args.append(args['data'][0][selection].flatten())
-      current_args.append(args['data'][1][selection].flatten())
+      # address / length tuple?
+      if isinstance(args['data'],tuple):
+        current_args.append(args['data'][0][selection].flatten())
+        current_args.append(args['data'][1][selection].flatten())
+      # native key?
+      else:
+        current_args.append(args['data'][selection].flatten())
       for argname, argval in args.items():
         if argname == 'data': continue
         current_args.append(argname)

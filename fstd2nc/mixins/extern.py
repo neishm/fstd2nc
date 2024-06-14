@@ -665,7 +665,12 @@ class ExternOutput (BufferBase):
       # on disk.
       preferred_chunks = {}
       all_dims = group.variables['template'].dimensions
-      outer_dims = group.groups['data'].variables['address'].dimensions
+      if 'data' in group.groups:
+        outer_dims = group.groups['data'].variables['address'].dimensions
+      elif 'data' in group.variables:
+        outer_dims = group.variables['data'].dimensions
+      else:
+        raise ValueError("Unable to parse index file structure.")
       for dim in all_dims:
         if dim in outer_dims:
           preferred_chunks[dim] = 1
