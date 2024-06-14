@@ -1137,6 +1137,25 @@ class BufferBase (object):
   #def _read_headers (headers):
   #  raise NotImplementedError("No decoder found.")
 
+  # Need thread-local variables for keeping track of last opened file.
+  # File object should be shared between threads (even if same file), because
+  # the seek operation could encounter race conditions.
+  from threading import local
+  _local = local()
+  del local
+
+  # Shortcut for opening a file with read-only access.
+  # Uses existing file handle if it's already open in this thread.
+  @classmethod
+  def _open_file (cls, filename):
+    if getattr(cls._local,'open_filename',None) == filename:
+      f = cls._local.open_fileobj
+    else:
+      f = open(filename, 'rb')
+      cls._local.open_filename = filename
+      cls._local.open_fileobj = f
+    return f
+
   # Shortcut for reading a record, given a record id.
   def _read_record (self, rec):
     import numpy as np
@@ -1150,7 +1169,7 @@ class BufferBase (object):
         filename = self._files[file_id]
         # Will we need to do file I/O ourselves in here?
         if any(addr_key is not None for key, (native_key, addr_key, len_key, d_key) in self._decoder_data):
-          f = open(filename, 'rb')
+          f = self._open_file(filename)
     for key, (native_key, addr_key, len_key, d_key) in self._decoder_data:
       # Special case: have dask array to read.
       if d_key in self._headers:
@@ -1176,8 +1195,6 @@ class BufferBase (object):
         value = self._headers[key][rec]
         kwargs[key] = value
     kwargs.update(self._decoder_scalar_args())
-    if f is not None:
-      f.close()
     return self._postproc(**kwargs)
 
   # Read a record from a file, using a format-specific key to select it.
