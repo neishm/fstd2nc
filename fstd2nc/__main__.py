@@ -41,7 +41,7 @@ def _fstdump (buffer_type=Buffer):
   if '-h' in argv: argv.remove('-h')
   # Now, parse everything else as per usual.
   parser = ArgumentParser(description=_("Display %s metadata in a structured format.")%buffer_type._format)
-  parser.add_argument('infile', metavar='<file>', help=_('The %s to query.')%buffer_type._format)
+  parser.add_argument('infile', nargs='+', metavar='<file>', help=_('The %s to query.')%buffer_type._format)
   parser.add_argument('-v', metavar='NOMVAR,...', help=_('Display the values for the specified variable.'))
   buffer_type._cmdline_args(parser)
   args = parser.parse_args()
@@ -64,7 +64,10 @@ def _fstdump (buffer_type=Buffer):
 
   # Get the metadata in a netCDF-like structure.
   buf._makevars()
-  print ("fst %s {"%basename(infile))
+  if isinstance(infile,str):
+    print ("fst %s {"%basename(infile))
+  else:
+    print ("fst {")
   print ("dimensions:")
   for axis in buf._iter_axes():
     print ("\t%s = %d ;"%(axis.name,len(axis)))
