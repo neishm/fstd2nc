@@ -552,13 +552,18 @@ class XYCoords (BufferBase):
   # them?
   def _find_coord (self, var, coordname):
     from fstd2nc.mixins.fstd import dtype_fst2numpy
+    header = None
     # Special case for series data - match any of the lat/lon grids.
     if var.atts['grtyp'] in ('+','Y'):
       header = self._fstlir (nomvar=coordname)
       # Make sure this actually matches a grid of the correct shape.
       if header['ni'] != var.atts['ni'] or header['nj'] != var.atts['nj']:
         header = None
-    else:
+    # Note: there are some files with 'Y' grids that are actually like 'X'
+    # grids, in the sense that they are a set of unstructured points.
+    # The above will fail for that case, so it will be rechecked in the
+    # case below.
+    if header is None:
       header = self._fstlir (nomvar=coordname, ip1=var.atts['ig1'],
                              ip2=var.atts['ig2'], ip3=var.atts['ig3'])
     if header is not None:
