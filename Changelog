@@ -1,3 +1,19 @@
+Version 0.20240625.0 (Jun 25, 2024)
+	* Added quiet=True option for Buffer interface, similar to --quiet
+	  option from command-line.
+	* Added some 'yin' and 'yang' projection metadata to files on a
+	  yin-yang grid.
+	* Fixed data type for north_pole_grid_longitude (double instead of
+	  int64).
+	* Added --decoder option for choosing method of reading the FST files.
+	  (experimental).
+	* Persist last file opened for I/O, which may speed up accessing
+	  multiple records from the same file.
+	* Allow fstdump to take multiple input file arguments.  Previously
+	  this could only be hacked in with globbing patterns surrounded in
+	  quotes.
+	* Fix missing lat/lon coordinates for some 'Y' grid files.
+
 Version 0.20240401.2 (May 22, 2024)
 	* More bug fixes for RSF support.
 	* Fixed auto-detect of legacy FST files in xarray.open_dataset.
