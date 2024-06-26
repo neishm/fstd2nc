@@ -761,7 +761,9 @@ class XYCoords (BufferBase):
           # Calculate the mean lat/lon arrays in double precision.
           meanlat = np.mean(np.array(latarray,dtype=float),axis=1,keepdims=True)
           meanlon = np.mean(np.array(lonarray,dtype=float),axis=0,keepdims=True)
-          if latarray.shape[0] > 1 and lonarray.shape[1] > 1 and np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
+          # Also need to ensure the variable is actually a 2D field,
+          # because some 'Y' grid data uses ni for >> and nj for ^^ sizes.
+          if var.atts['nj'] > 1 and latarray.shape[0] > 1 and lonarray.shape[1] > 1 and np.allclose(latarray,meanlat) and np.allclose(lonarray,meanlon):
             # Reduce back to single precision for writing out.
             meanlat = np.array(meanlat,dtype=latarray.dtype).squeeze()
             meanlon = np.array(meanlon,dtype=lonarray.dtype).squeeze()
