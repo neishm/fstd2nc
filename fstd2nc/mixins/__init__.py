@@ -459,7 +459,7 @@ class BufferBase (object):
       elif hasattr(self,'_read_headers'):
         self._decoder = 'native'
       else:
-        error(_('Unable to decoder headers for this format.'))
+        error(_('Unable to decode headers for this format.'))
 
     # Should not have any unprocessed keyword arguments after this.
     if len(kwargs) > 0:

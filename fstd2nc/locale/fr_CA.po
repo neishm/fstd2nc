@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-03-27 15:44+0000\n"
+"POT-Creation-Date: 2024-06-26 14:53+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -97,13 +97,6 @@ msgstr ""
 "Ne placer pas l'invocation de la ligne de commande dans les métadonnées "
 "netCDF"
 
-msgid ""
-"Don't display any information except for critical error messages.  Implies --"
-"no-progress."
-msgstr ""
-"N'afficher pas quelque information moins les messages d'erreur critiques.  "
-"Implique --no-progress"
-
 #, python-format
 msgid "Warning: '%s' already exists!  Overwrite? (y/n):"
 msgstr "Avertissement: '%s' existe déjà!  Remplacer? (o/n):"
@@ -119,7 +112,8 @@ msgid "Aborted by user."
 msgstr "Annulé par l'utilisateur."
 
 msgid "Add extended metadata to the variables (fst24 data only)."
-msgstr "Ajouter des métadonnées étendues aux variables (données fst24 seulement)."
+msgstr ""
+"Ajouter des métadonnées étendues aux variables (données fst24 seulement)."
 
 msgid "NAME,NAME,..."
 msgstr "NOM,NOM,..."
@@ -138,11 +132,12 @@ msgstr ""
 #, python-format
 msgid ""
 "Subset %s records using the given criteria.  For example, to convert only 24-"
-"hour forecasts you could use --filter ip2==24"
+"hour forecasts you could use --filter ip2==24.  String attributes must be "
+"put in quotes, e.g. --filter etiket=='ICETHICKNESS'."
 msgstr ""
 "Sous-ensemble d'enregistrements %s en utilisant les critères donnés.  Par "
 "exemple, pour convertir seulement les prévisions sur 24 heures, vous pouvez "
-"utiliser --filter ip2==24"
+"utiliser --filter ip2==24.  Les attributs de chaîne doivent être mettre guillemets, par ex. --filter etiket=='ICETHICKNESS'."
 
 #, python-format
 msgid "unable to apply the filter: %s"
@@ -533,6 +528,11 @@ msgstr ""
 msgid "Indexing the files"
 msgstr "Indexer les fichiers"
 
+msgid ""
+"No key or address/length columns available.  Don't know how to wrap the "
+"records for fstpy."
+msgstr ""
+
 msgid "show program's version number and exit"
 msgstr "afficher le numéro de version du programme et quitter"
 
@@ -545,6 +545,13 @@ msgstr ""
 
 msgid "Disable the progress bar."
 msgstr "Désactiver la barre de progression."
+
+msgid ""
+"Don't display any information except for critical error messages.  Implies --"
+"no-progress."
+msgstr ""
+"N'afficher pas quelque information moins les messages d'erreur critiques.  "
+"Implique --no-progress"
 
 msgid ""
 "Disables multithreading/multiprocessing.  Useful for resource-limited "
@@ -574,6 +581,9 @@ msgid ""
 msgstr ""
 "Spécifier un ensemble minimal d'attributs d'enregistrement internes à "
 "inclure dans le fichier de sortie."
+
+msgid "Unable to decode headers for this format."
+msgstr ""
 
 #, python-format
 msgid "Unexpected arguments: %s"

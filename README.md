@@ -122,7 +122,9 @@ optional arguments:
   --bounds              Include grid cell boundaries in the output.
   --filter CONDITION    Subset RPN standard file records using the given
                         criteria. For example, to convert only 24-hour
-                        forecasts you could use --filter ip2==24
+                        forecasts you could use --filter ip2==24. String
+                        attributes must be put in quotes, e.g. --filter
+                        etiket=='ICETHICKNESS'.
   --exclude NAME,NAME,...
                         Exclude some axes, attributes, or derived variables
                         from the output. For instance, excluding

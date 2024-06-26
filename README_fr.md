@@ -132,7 +132,9 @@ arguments optionnel:
   --filter CONDITION    Sous-ensemble d'enregistrements fichier standard RPN
                         en utilisant les critères donnés. Par exemple, pour
                         convertir seulement les prévisions sur 24 heures, vous
-                        pouvez utiliser --filter ip2==24
+                        pouvez utiliser --filter ip2==24. Les attributs de
+                        chaîne doivent être mettre guillemets, par ex.
+                        --filter etiket=='ICETHICKNESS'.
   --exclude NOM,NOM,...
                         Exclure quelque axes, attributs, ou variables dérivées
                         de la sortie. Par exemple, l'exclusion de
