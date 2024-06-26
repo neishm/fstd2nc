@@ -790,6 +790,9 @@ class XYCoords (BufferBase):
           elif 1 in latarray.shape and 1 in lonarray.shape and ('i' in var.dims or 'station_id' in var.dims):
             latarray = latarray.squeeze()
             lonarray = lonarray.squeeze()
+            # If this is a single point, need to keep it 1D instead of 0D.
+            latarray = np.atleast_1d(latarray)
+            lonarray = np.atleast_1d(lonarray)
             # Special case for station data
             station_id = var.getaxis('station_id')
             if station_id is not None:
