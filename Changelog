@@ -1,6 +1,8 @@
 Version 0.20240625.1 (Jun 26, 2024)
 	* Further fixes for some 'Y' grid files, which were being
 	  misidentified as 2D fields after the updates in the previous version.
+	* Fixed generate case where there is a single lat/lon point in the
+	  file.
 	* Added documentation for string arguments to --filter option.
 
 Version 0.20240625.0 (Jun 25, 2024)
