@@ -1,3 +1,6 @@
+Version 0.20240625.2 (Jul 5, 2024)
+	* Fix missing grid_mapping information for 'A' and 'B' grids.
+
 Version 0.20240625.1 (Jun 26, 2024)
 	* Further fixes for some 'Y' grid files, which were being
 	  misidentified as 2D fields after the updates in the previous version.
