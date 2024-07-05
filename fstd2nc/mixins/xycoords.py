@@ -101,6 +101,20 @@ def gdgaxes (gdid):
   ay = np.concatenate(ay, axis=1)
   return {'ax':ax, 'ay':ay}
 
+# Modify decodeGrid to work for 'A' and 'B' grids.
+# These grids were crashing in decodeGrid with the message:
+#   rpnpy.librmn.RMNError: decodeXG2dict: Grid type not yet supported B
+def decodeGrid (gdid):
+  from rpnpy.librmn.all import decodeGrid, RMNError, ezgprm
+  try:
+    return decodeGrid(gdid)
+  except RMNError:
+    grd = ezgprm(gdid)
+    if grd['grtyp'] not in ('A','B'):
+      raise  # Some other issue unrelated to 'A' or 'B' grid decoding.
+    grd['grref'] = grd['grtyp']
+    return grd
+
 # Base class for grid mapping classes
 class GridMap(object):
   # Mean radius of the Earth used in OGC CRS (coord. ref. system) descriptions
@@ -579,7 +593,7 @@ class XYCoords (BufferBase):
     from fstd2nc.mixins import _iter_type, _chunk_type, _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     from rpnpy.librmn.interp import ezqkdef, EzscintError, ezget_nsubgrids
-    from rpnpy.librmn.all import cxgaig, ezgdef_fmem, ezgdef_supergrid, ezqkdef, decodeGrid, RMNError
+    from rpnpy.librmn.all import cxgaig, ezgdef_fmem, ezgdef_supergrid, ezqkdef, RMNError
     import numpy as np
 
     # Save a copy of librmn grid ids, which might be useful for other mixins.
