@@ -286,7 +286,13 @@ class ExternOutput (BufferBase):
       if kwargs.get('data',None) is None:
         return np.full(shape,float('nan'))
       data = cls._postproc(**kwargs)
-      return data.reshape(shape)
+      try:
+        return data.reshape(shape)
+      # Work around some transient issue that sometimes comes up with reading
+      # operational data (reading during cleanup?)
+      except ValueError:
+        warn (_(f"Got unexpected shape of data.\nkwargs: {kwargs}\ngives shape: {data.shape}\nwhich is not compatible with shape: {shape}"))
+        return np.full(shape,float('nan'))
     # Vector case
     # First, broadcast any scalar arguments into vector arguments.
     nrec = [len(v) for v in kwargs.values() if isinstance(v,list)][0]
