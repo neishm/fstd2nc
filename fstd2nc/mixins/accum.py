@@ -71,7 +71,7 @@ class Accum (BufferBase):
       # Check if 'accum' axis should be stripped out.
       # Either if there's only one value or if the value changes with ip2
       # (so only one valid record found per ip2 value).
-      ip3_changes_with_ip2 = np.all( np.sum(var.record_id>=0,axis=ind) == 1)
+      ip3_changes_with_ip2 = np.all( np.sum(var.record_id>=0,axis=ind) <= 1)
       if var.shape[ind] == 1 or ip3_changes_with_ip2:
         ip3 = int(var.axes[ind].array[0])
         if var.name not in self._accum_nomvars and ip3 != 0:
