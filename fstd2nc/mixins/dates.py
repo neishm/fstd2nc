@@ -39,7 +39,9 @@ def stamp2datetime_scalar (date):
       # implemented on that end.
       tmp = date + 1294967266
       hours = int(((tmp//10)<<3) + (tmp % 10))
-      return datetime(1,1,1) + timedelta(hours=hours) - timedelta(days=365)
+      # Can't do datetime(0,1,1), so start as datetime(1,1,1) and subtract
+      # off that extra year offset (assuming year 0 is a leap year).
+      return datetime(1,1,1) + timedelta(hours=hours) - timedelta(days=366)
   else:
     return None
 # Vectorized version, using datetime64 objects.
@@ -68,7 +70,7 @@ def datetime2stamp (date):
     return RPNDate(date).datev
   except ValueError:
     # Extended range encoding
-    hours = date + timedelta(days=365) - datetime(1,1,1)
+    hours = date + timedelta(days=366) - datetime(1,1,1)
     hours = hours // timedelta(hours=1)
     tmp = (hours>>3)*10 + (hours&0x7)
     stamp = tmp - 1294967266
