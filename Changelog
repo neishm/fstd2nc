@@ -1,3 +1,8 @@
+Version 0.20240625.3 (Sep 23, 2024)
+	* Fix decoding of extended dates, which were off by 1 day.
+	* Fix for auto-detecting accumulation periods when there are some
+	  missing records.
+
 Version 0.20240625.2 (Jul 5, 2024)
 	* Fix missing grid_mapping information for 'A' and 'B' grids.
 
