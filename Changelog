@@ -1,3 +1,8 @@
+Version 0.20240625.4 (Sep 25, 2024)
+	* Fix bug when there's a mixture of 0mb and other pressure levels.
+	  This was triggering some weird behaviour in the 'accum' mixin,
+	  even if the fields weren't accumulated quantities.
+
 Version 0.20240625.3 (Sep 23, 2024)
 	* Fix decoding of extended dates, which were off by 1 day.
 	* Fix for auto-detecting accumulation periods when there are some
