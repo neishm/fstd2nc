@@ -636,11 +636,16 @@ class BufferBase (object):
       for n in self._outer_axes:
         values = var_records[n]
         # Ignore axes that have no actual coordinate values.
-        if len(np.ma.compressed(values)) == 0: continue
-        # Remove missing values before continuing.
-        values = np.ma.unique(values).data
+        actual_values = np.ma.compressed(values)
+        if len(actual_values) == 0: continue
         # Get all unique values (sorted).
-        values = tuple(sorted(set(values)))
+        # Remove missing values, but keep one missing value at the end for
+        # indexing purposes (otherwise get index out-of-bounds further down).
+        if len(actual_values) < len(values):
+          values = list(np.ma.unique(values).data) + [float('nan')]
+        else:
+          values = np.ma.unique(values).data
+        values = tuple(values)
         if (n,values) not in known_axes:
           known_axes[(n,values)] = _axis_type(name = n, atts = OrderedDict(),
                                               array = np.array(values))
