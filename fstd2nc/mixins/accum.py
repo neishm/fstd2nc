@@ -32,15 +32,20 @@ class Accum (BufferBase):
   def _cmdline_args (cls, parser):
     super(Accum,cls)._cmdline_args(parser)
     parser.add_argument('--accum-vars', metavar=_('NAME,NAME,...'), help=_('Specify which fields to treat as accumulated quantities (using IP3 as accumulation period).'))
+    parser.add_argument('--no-accum', action='store_true', help=_('Turn off detection of accumulated fields, in case it is causing problems with the conversion.'))
 
   def __init__ (self, *args, **kwargs):
     """
     accum_vars : str or list, optional
         Specify which fields to treat as accumulated quantities
         (using IP3 as accumulation period).
+    no_accum : bool, optional
+        Turn off detection of accumulated fields, in case it is causing
+        problems with the conversion.
     """
     import numpy as np
     accum_vars = kwargs.pop('accum_vars',None)
+    no_accum = kwargs.pop('no_accum',False)
     if accum_vars is None:
       accum_vars = []
     if isinstance(accum_vars,str):
@@ -55,6 +60,8 @@ class Accum (BufferBase):
     # Compute an accumulation period.
     accum = np.ma.asarray (self._headers['ip3'], dtype='float32')
     accum.mask = (np.isin(self._headers['grtyp'],(b'T',b'+'))) | (self._headers['ismeta']) | (self._headers['ip3'] >= 1000) | (self._headers['ip1'] > 0)
+    if no_accum:
+      accum.mask[:] = True
     self._headers['accum'] = accum
 
   def _makevars (self):
