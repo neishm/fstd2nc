@@ -1,3 +1,7 @@
+Version 0.20240625.5 (Oct 8, 2024)
+	* Fix bug when reading multiple files with masked records, when some
+	  records are repeated across files.
+
 Version 0.20240625.4 (Sep 25, 2024)
 	* Fix bug when there's a mixture of 0mb and other pressure levels.
 	  This was triggering some weird behaviour in the 'accum' mixin,
