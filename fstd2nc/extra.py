@@ -333,7 +333,7 @@ def decode_headers (raw):
   # Add RSF record info
   if rsf_info is not None:
     out['address'] = (rsf_info[:,0].astype(int)<<32) + rsf_info[:,1]
-    out['length'] = (rsf_info[:,2].astype(int)<<32) + rsf_info[:,3] - 16
+    out['length'] = (rsf_info[:,2].astype(int)<<32) + rsf_info[:,3] - 16 + 4
     # old 20.1.0 alpha2 version:
     if rsf_info.shape[1] == 6:
       out['meta_length'] = rsf_info[:,4].copy().view('H')[::2].copy()
