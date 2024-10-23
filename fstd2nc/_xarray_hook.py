@@ -159,7 +159,11 @@ class FSTDBackendEntrypoint(BackendEntrypoint):
   def open_dataset (self, filename_or_obj, drop_variables=None, fused=False, **kwargs):
     import fstd2nc
     if drop_variables is not None: kwargs['exclude'] = drop_variables
-    return fstd2nc.Buffer(filename_or_obj, **kwargs).to_xarray(fused=fused)
+    ds = fstd2nc.Buffer(filename_or_obj, **kwargs).to_xarray(fused=fused)
+    # Using this with open_mfdataset in a "with" statement can crash if there's
+    # no _close method defined, so put a dummy one in there.
+    ds._close = lambda: None
+    return ds
 
   def guess_can_open (self, filename_or_obj):
     from fstd2nc.mixins import _expand_files
