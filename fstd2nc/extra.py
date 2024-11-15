@@ -205,28 +205,32 @@ def decode_headers (raw):
       The raw array of headers to decode.
   '''
   import numpy as np
-  # Check if this is from an RSF contain, which as extra info
-  # appended at the end of the header.
-  raw = raw.view('u4')
+  # Check if the data is an array of bytes or 4-byte integers.
+  # If it's already integers, then assume the endianness is already correct.
+  # Otherwise, determine endianness here.
+  # Assume if header width == 18, then it's FST98 (and big-endian).
+  # Otherwise, assume it's FST24, and hard-code an assumption about
+  # being little-endian.  This may change in the future, but it's the easiest
+  # path forward in this code for now.
+  if raw.itemsize == 1:
+    width = raw.view('u4').shape[-1]
+    # FST24, assume little-endian.
+    if width > 18:
+      raw = raw.view('<u4')
+    # FST98, assume big-endian.
+    else:
+      raw = raw.view('>u4')
   width = raw.shape[-1]
+  # Check for extended metadata info.
   if width > 18:
-    rsf_info = raw[:,:-18]
+    rsf_info = raw[:,:-18].astype('u4')
     raw = raw[:,-18:].reshape(-1,9,2)
-    raw = np.array(raw)
   else:
     rsf_info = None
-    raw = raw.view('>u4').reshape(-1,9,2)
-  # Check endianness, based on first record.
-  # Currently, checks position of 'pad' byte next to nomvar.
-  # Could make this more robust, in case nomvars can start with a space?
-  if raw.view('B').flatten()[0x37] == 0:
-    raw = raw.view('>u4').astype('uint32')
-    if rsf_info is not None:
-      rsf_info = rsf_info.view('>u4').astype('uint32')
-  else:
-    raw = raw.view('<u4').astype('uint32')
-    if rsf_info is not None:
-      rsf_info = rsf_info.view('<u4').astype('uint32')
+    raw = raw.reshape(-1,9,2)
+  # Re-align the endianness of the data to the current machine, and make sure
+  # it's contiguous.
+  raw = np.ascontiguousarray(raw,dtype='u4')
 
   # Start unpacking the pieces.
   # Reference structure (from qstdir.h):
