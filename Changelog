@@ -1,3 +1,6 @@
+Version 0.20240625.6 (Nov 15, 2024)
+	* Fixed bug in reading files created by librmn 20.1-alpha.
+
 Version 0.20240625.5 (Oct 8, 2024)
 	* Fix bug when reading multiple files with masked records, when some
 	  records are repeated across files.
