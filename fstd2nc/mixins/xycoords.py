@@ -82,6 +82,20 @@ def gdll (gdid):
   lon = np.concatenate(lon, axis=1)
   return {'lat':lat, 'lon':lon}
 
+# Detect jump discontinuity in longitude values, and modify the range
+# of values to remove the discontinuity.
+def wrap_longitudes (lon):
+  import numpy as np
+  jump = np.where(np.diff(lon)<=-90.0)[0]
+  if len(jump) != 1: return lon
+  jump = jump[0]
+  newlon = np.array(lon)
+  if np.all(newlon[:jump+1] >= 180):
+    newlon[:jump+1] -= 360
+  elif np.all(newlon[jump+1:] <= 0):
+    newlon[jump+1:] += 360
+  return newlon
+
 # Modify gdgaxes to handle supergrids.
 # Simply loops over each subgrid, then re-stacks them together.
 def gdgaxes (gdid):
@@ -171,7 +185,7 @@ class LatLon(GridMap):
     from fstd2nc.mixins import _axis_type, _var_type
     import numpy as np
     ll = gdll(self._grd['id'])
-    self._lonarray = ll['lon'][:,0]
+    self._lonarray = wrap_longitudes(ll['lon'][:,0])
     self._lonatts = OrderedDict()
     self._lonatts['long_name'] = 'longitude'
     self._lonatts['standard_name'] = 'longitude'
@@ -786,6 +800,8 @@ class XYCoords (BufferBase):
             # Taken from old fstd_core.c code.
             if meanlon[-2] > meanlon[-3] and meanlon[-1] < meanlon[-2]:
               meanlon[-1] += 360.
+            # Handle potential jump discontinuities in the 1D longitudes
+            meanlon = wrap_longitudes(meanlon)
             latarray = meanlat
             lonarray = meanlon
             lat = _axis_type('lat',latatts,latarray)
