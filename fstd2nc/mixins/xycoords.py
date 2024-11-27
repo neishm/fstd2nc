@@ -1199,6 +1199,7 @@ class XYCoords (BufferBase):
     zlgrid_table = {}
     zegrid_table = {}
     yygrid_table = {}
+    xgrid_table = {}
     stacked_yaxes = {}
     projection_table = {}
     # Pull out projection variables.
@@ -1213,7 +1214,7 @@ class XYCoords (BufferBase):
     for var_ind, var in enumerate(self._varlist):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
-      axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else None for a in var.axes]
+      axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else 'X' if a.name == 'i' else 'Y' if a.name == 'j' else None for a in var.axes]
       # Skip records without any geophysical connection.
       if 'X' not in axis_codes or 'Y' not in axis_codes: continue
       xind = axis_codes.index('X')
@@ -1264,8 +1265,8 @@ class XYCoords (BufferBase):
       grref = var.atts.get('grref',None)
 
       # Case 1: data is on lat/lon grid (and no coordinate records needed)
-      have_lon = xaxis.name == 'lon' or xaxis.atts.get('standard_name',None) == 'longitude'
-      have_lat = yaxis.name == 'lat' or yaxis.atts.get('standard_name',None) == 'latitude'
+      have_lon = xaxis.name == 'lon' or getattr(xaxis,'atts',{}).get('standard_name',None) == 'longitude'
+      have_lat = yaxis.name == 'lat' or getattr(yaxis,'atts',{}).get('standard_name',None) == 'latitude'
       if have_lon and have_lat:
         # 'A' grid
         #TODO: hemispheric
@@ -1382,7 +1383,7 @@ class XYCoords (BufferBase):
       for coord in var.atts.get('coordinates',[]):
         if coord.name == 'lat': lat = coord
         if coord.name == 'lon': lon = coord
-      if lat is not None and lon is not None and nj%2==0 and np.all(yaxis.array[:nj//2]==yaxis.array[nj//2:]):
+      if lat is not None and lon is not None and nj%2==0 and hasattr(yaxis,'array') and np.all(yaxis.array[:nj//2]==yaxis.array[nj//2:]):
         yygrid_key = (id(xaxis),id(yaxis),id(lat),id(lon))
         if yygrid_key not in yygrid_table:
           # Fix shape of lat/lon (if had subgrid axes)
@@ -1408,6 +1409,29 @@ class XYCoords (BufferBase):
           gid = yygrid_table[yygrid_key]
           var.atts.update(grtyp='U',ig1=gid['tag1'],ig2=gid['tag2'],ig3=gid['tag3'])
           continue
+      # Case 4: generic geophysical data with 2D lat/lon and no projection information.
+      lat = None; lon = None
+      for coord in var.atts.get('coordinates',[]):
+        if coord.name == 'lat': lat = coord
+        if coord.name == 'lon': lon = coord
+      if lat is not None and lon is not None:
+        xgrid_key = (id(lat),id(lon))
+        if xgrid_key not in xgrid_table:
+          ig1 = var.atts.get('ig1',1001)
+          ig2 = var.atts.get('ig2',1002)
+          ig3 = var.atts.get('ig3',1003)
+          # TODO: Better values for ig1/2/3/4.
+          # These were just copied from a sample 'O' grid file.
+          if not hasattr(lat,'array') or not hasattr(lon,'array'): continue
+          xgrid_table[xgrid_key] = dict(ni=len(xaxis),nj=len(yaxis),ax=lon.array,ay=lat.array,ig1=100,ig2=100,ig3=9000,ig4=0,ip1=ig1,ip2=ig2,ip3=ig3)
+        # Set grid descriptors to link to coordinate records.
+        if xgrid_key in xgrid_table:
+          gid = xgrid_table[xgrid_key]
+          var.atts.update(ig1=gid['ip1'],ig2=gid['ip2'],ig3=gid['ip3'])
+          if 'grtyp' not in var.atts:
+            var.atts['grtyp'] = 'X'
+          continue
+
 
     # Add coordinate records to the table.
     for grid in zegrid_table.values():
@@ -1415,6 +1439,9 @@ class XYCoords (BufferBase):
       add_coord('^^',grid['nj'],1,grid['ay'],typvar='X',etiket='POSY',datyp=5,nbits=32,grtyp='E',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
     for grid in yygrid_table.values():
       add_coord('^>',1,25+2*grid['ni']+2*grid['nj'],grid['axy'],typvar='X',etiket='POSXY',datyp=5,nbits=32,grtyp='F',ip1=grid['tag1'],ip2=grid['tag2'],ip3=grid['tag3'],ig1=grid['ig1ref'],ig2=grid['ig2ref'],ig3=grid['ig3ref'],ig4=grid['ig4ref'])
+    for grid in xgrid_table.values():
+      add_coord('>>',grid['nj'],grid['ni'],grid['ax'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['ip1'],ip2=grid['ip2'],ip3=grid['ip3'],ig1=grid['ig1'],ig2=grid['ig2'],ig3=grid['ig3'],ig4=grid['ig4'])
+      add_coord('^^',grid['nj'],grid['ni'],grid['ay'],typvar='X',etiket='POSX',datyp=5,nbits=32,grtyp='L',ip1=grid['ip1'],ip2=grid['ip2'],ip3=grid['ip3'],ig1=grid['ig1'],ig2=grid['ig2'],ig3=grid['ig3'],ig4=grid['ig4'])
 
 
     # Set default grtyp if no better one found.
