@@ -449,6 +449,9 @@ class SuperGrid(GridMap):
   def __init__(self, *args, **kwargs):
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     super(SuperGrid,self).__init__(*args)
+    # Disable rlon adjustment, since it would result in different rlon values
+    # for the two subgrids.
+    kwargs['no_adjust_rlon'] = True
     # Grid mapping variable name
     self._subgrids = [GridMap.gen_gmap(grd,**kwargs) for grd in self._grd['subgrid']]
   def gen_gmapvar(self):
