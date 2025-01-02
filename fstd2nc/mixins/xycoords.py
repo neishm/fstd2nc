@@ -1208,7 +1208,10 @@ class XYCoords (BufferBase):
     # Pull out projection variables.
     for var in self._varlist:
       if 'grid_mapping' in var.atts:
-        projection_table[var.atts['grid_mapping']] = None
+        # Do in loop, to handle case where have multiple grid mappings
+        # separated by spaces (e.g. for subgrids).
+        for g in var.atts['grid_mapping'].split():
+          projection_table[g] = None
     for var in self._varlist:
       if var.name in projection_table.keys():
         projection_table[var.name] = var
@@ -1393,8 +1396,19 @@ class XYCoords (BufferBase):
           lat = lat.array.reshape(nj,ni)
           lon = lon.array.reshape(nj,ni)
           # Get params for yin grid.
+          # Use xarray metadata where available.
+          yin_projection = {}
+          yang_projection = {}
+          projection = var.atts.get('grid_mapping',None)
+          if projection is not None:
+            projection = projection.split()
+            if len(projection) == 2:
+              yin_projection = projection_table.get(projection[0],{})
+              yang_projection = projection_table.get(projection[1],{})
           yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat[:nj//2,:],lon[:nj//2,:])
+          yin_params.update(getattr(yin_projection,'atts',{}))
           yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat[nj//2:,:],lon[nj//2:,:])
+          yang_params.update(getattr(yang_projection,'atts',{}))
           # Encode yin grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params, xaxis.array)
           ax = adjust_ax (xaxis.array, ax_adjust)
