@@ -438,7 +438,11 @@ class Series (BufferBase):
           # Convert forecast to units of hours if it's a timedelta64.
           if forecasts.dtype == 'timedelta64[ns]':
             forecasts = forecasts / np.timedelta64(3600,'s')
-          add_coord('HH',1,len(forecasts),forecasts,typvar='T',datyp=5,nbits=32,grtyp='T')
+          # Encode date into the forecast record (needed for decoding back).
+          atts = dict(typvar='T',datyp=5,nbits=32,grtyp='T')
+          if time0 is not None and hasattr(time0,'array') and len(time0.array) == 1:
+            atts['time'] = time0.array[0]
+          add_coord('HH',1,len(forecasts),forecasts,**atts)
           break
 
     # Check if dimensions need to be transposed.
