@@ -1205,6 +1205,8 @@ class XYCoords (BufferBase):
     xgrid_table = {}
     stacked_yaxes = {}
     projection_table = {}
+    generic_lat_table = []
+    generic_lon_table = []
     # Pull out projection variables.
     for var in self._varlist:
       if 'grid_mapping' in var.atts:
@@ -1216,29 +1218,35 @@ class XYCoords (BufferBase):
       if var.name in projection_table.keys():
         projection_table[var.name] = var
     self._varlist = [v for v in self._varlist if v.name not in projection_table.keys()]
+
     # Loop over all variables, encode grid info.
     for var_ind, var in enumerate(self._varlist):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
       axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else 'X' if a.name == 'i' else 'Y' if a.name == 'j' else None for a in var.axes]
       # Skip records without any geophysical connection.
-      if 'X' not in axis_codes or 'Y' not in axis_codes: continue
+      # Allow for unstructured data with just 'X' axis.
+      if 'X' not in axis_codes: continue
       xind = axis_codes.index('X')
-      yind = axis_codes.index('Y')
+      yind = axis_codes.index('Y') if 'Y' in axis_codes else None
       # Detect lat/lon axes.
       xaxis = var.axes[xind]
-      yaxis = var.axes[yind]
+      yaxis = var.axes[yind] if 'Y' in axis_codes else None
       ni = len(xaxis)
-      nj = len(yaxis)
+      nj = len(yaxis) if 'Y' in axis_codes else 1
 
       # Transpose to expected order.
       order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
-      order = order + [yind, xind]
+      if yind is None:
+        order = order + [xind]
+      else:
+        order = order + [yind, xind]
       if order != list(range(len(var.axes))):
         var.axes = [var.axes[i] for i in order]
         var.array = var.array.transpose(*order)
       # Identify inner axes.
-      var.axes[-2] = _dim_type('j',nj)
+      if yind is not None:
+        var.axes[-2] = _dim_type('j',nj)
       var.axes[-1] = _dim_type('i',ni)
       # Special case for subgrid axis
       # Flatten it out so the yin/yang grids are stacked together.
@@ -1258,7 +1266,10 @@ class XYCoords (BufferBase):
         nj *= 2
       ###
       # Process the variable.
-      outer_shape = [len(a) for a in var.axes[:-2]]
+      if yind is not None:
+        outer_shape = [len(a) for a in var.axes[:-2]]
+      else:
+        outer_shape = [len(a) for a in var.axes[:-1]]
       record_id = np.zeros(outer_shape, dtype=object)
       for ind in np.ndindex(tuple(outer_shape)):
         record_id[ind] = var.array[ind]
@@ -1269,6 +1280,27 @@ class XYCoords (BufferBase):
       # Use the specified one, if it works for the data.
       grtyp = var.atts.get('grtyp',None)
       grref = var.atts.get('grref',None)
+
+      # Case 0: data is unstructured ('X' dimension, no 'Y' dimension).
+      if yind is None:
+        lat = None
+        lon = None
+        # Set grid attributes for the coordinate.
+        ig1 = var.atts.get('ig1',0)
+        ig2 = var.atts.get('ig2',0)
+        ig3 = var.atts.get('ig3',0)
+        key = (ig1,ig2,ig3)
+        for coord in var.atts.get('coordinates',[]):
+          if coord.name == 'lat' or coord.atts.get('standard_name',None) == 'latitude':
+            if key not in generic_lat_table:
+              add_coord ('^^',1,ni,coord.array,typvar='X',etiket='POSY',datype=5,nbits=32,grtyp='L',ip1=ig1,ip2=ig2,ip3=ig3)
+              generic_lat_table.append(key)
+          if coord.name == 'lon' or coord.atts.get('standard_name',None) == 'longitude':
+            if key not in generic_lon_table:
+              add_coord ('>>',1,ni,coord.array,typvar='X',etiket='POSX',datype=5,nbits=32,grtyp='L',ip1=ig1,ip2=ig2,ip3=ig3)
+              generic_lon_table.append(key)
+          var.atts.update(grtyp='Y',ig1=ig1,ig2=ig2,ig3=ig3)
+        continue #raise Exception
 
       # Case 1: data is on lat/lon grid (and no coordinate records needed)
       have_lon = xaxis.name == 'lon' or getattr(xaxis,'atts',{}).get('standard_name',None) == 'longitude'
