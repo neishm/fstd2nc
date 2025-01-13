@@ -123,7 +123,11 @@ class Accum (BufferBase):
       if 'ip3_values' in var.dims:
         ind = var.dims.index('ip3_values')
         axis = var.axes[ind]
-        var.axes[ind] = _axis_type('accum', {}, axis.array)
+        # Convert from hours to nanoseconds (for compatibility with what is
+        # found in accum axis).
+        array = np.asarray(axis.array,int)
+        array = np.asarray(array*3600*1000*1000*1000, 'timedelta64[ns]')
+        var.axes[ind] = _axis_type('accum', {}, array)
       # Check for single accumulation period stored as an attribute.
       if 'accumulation_period' in var.atts:
         axis = _axis_type('accum', {}, np.array([int(var.atts['accumulation_period'].split()[0])]))
