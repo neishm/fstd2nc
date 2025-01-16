@@ -372,7 +372,7 @@ def _raw_headers_fst (f):
     raw.append(params[:nent].view('B').flatten())
     recno_list.extend(list(range(nent)))
     pageno_list.extend([pageno]*nent)
-    pageaddr = page[4]; pageno += 1
+    pageaddr = int(page[4]); pageno += 1
   raw = np.concatenate(raw)
   f.close()
   return raw.reshape(-1,72)
