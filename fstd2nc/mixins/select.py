@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright 2017-2024 - Climate Research Division
+# Copyright 2017-2025 - Climate Research Division
 #                       Environment and Climate Change Canada
 #
 # This file is part of the "fstd2nc" package.
