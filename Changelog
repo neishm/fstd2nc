@@ -1,3 +1,12 @@
+Version 0.20240625.7 (Jan 17, 2025)
+	* Fixed bug in longitude wrapping for 'L' grids.
+	* Fixed writing 'X' and 'O' grids back to FST.
+	* Some fixes for numpy 2.x compatiblity:
+	  - Use np.prod instead np.product (latter is deprecated).
+	  - Cast int32 addresses to int before doing operations.
+	    numpy 1.x would auto upcast to int64 if there would be an
+	    overflow, but numpy 2.x just lets the overflow happen.
+
 Version 0.20240625.6 (Nov 15, 2024)
 	* Fixed bug in reading files created by librmn 20.1-alpha.
 
