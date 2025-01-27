@@ -136,13 +136,13 @@ class Dates (BufferBase):
     forecast = np.ma.asarray(fields['leadtime'], dtype='float32')
     forecast.mask = np.ma.getmaskarray(forecast) | (np.ma.getmaskarray(dateo) & np.ma.getmaskarray(datev) & (fields['deet'] == 0))
     fields['leadtime'] = forecast
-    fields['reftime'] = dateo
+    fields['reftime'] = dateo.copy() # Copy so we don't change orig mask.
     fields['reftime'].mask = forecast.mask
     # Time axis
     if self._squash_forecasts:
       fields['time'] = datev
     else:
-      fields['time'] = dateo.copy() # Copy so it's not the same as reftime.
+      fields['time'] = dateo
 
   # Add time and forecast axes to the data stream.
   def _makevars (self):
