@@ -1197,6 +1197,22 @@ class XYCoords (BufferBase):
             return x.astype('float32')
       return ax.astype('float32')
 
+    # Special preprocessing step - pull out time-dependent lat/lon coordinates
+    # and treat them as LA/LO variables (not "^^" or ">>" coordinate records).
+    # For re-encoding trajectory data.
+    lalo_fields = []
+    for var in list(self._varlist):
+      if 'coordinates' in var.atts:
+        for coord in var.atts['coordinates']:
+          if coord.name in ('lat','lon'):
+            if 'time' in coord.dims:
+              var.atts['coordinates'] = [c for c in var.atts['coordinates'] if c is not coord]
+              if coord not in lalo_fields:
+                # Make a copy before name change, to avoid side-effects
+                coord = _var_type(coord.name.upper()[:2], coord.atts, coord.axes, coord.array)
+                lalo_fields.append(coord)
+    self._varlist.extend(lalo_fields)
+
     gauss_table = {}
     lgrid_table = {}
     zlgrid_table = {}
