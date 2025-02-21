@@ -885,7 +885,8 @@ class ExternInput (BufferBase):
     headers['file_id'][:] = -1
     # Add in data.
     headers['d'] = np.empty(len(headers['nomvar']), dtype=object)
-    headers['d'][:] = [d.T for d in table['d']]
+    for i,d in enumerate(table['d']):
+      headers['d'][i] = d.T
 
     # Encapsulate this info in a structure.
     fake_buffer = cls.__new__(cls)
