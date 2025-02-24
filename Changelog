@@ -1,3 +1,7 @@
+Version 0.20240625.8 (Feb 24, 2025)
+	* Fixed bug is to_fstpy that was causing strange interaction with
+	  dask arrays.
+
 Version 0.20240625.7 (Jan 17, 2025)
 	* Fixed bug in longitude wrapping for 'L' grids.
 	* Fixed writing 'X' and 'O' grids back to FST.
