@@ -240,6 +240,9 @@ class Dates (BufferBase):
     if hasattr(self._headers['npas'],'mask'):
       self._headers['npas'] = self._headers['npas'].filled(0)
     if 'time' in self._headers.keys():
+      # Check if this is a relative time (need absolute time here).
+      if self._headers['time'].dtype == 'timedelta64[ns]':
+        error (_('Expected a complete time axis, but found time difference instead.  This will not encode properly.'))
       if 'forecast' in self._headers.keys():
         self._headers['dateo'] = self._headers['time']
         self._headers['datev'] = self._headers['time'] + self._headers['npas'] * self._headers['deet'] * np.timedelta64(1,'s')
