@@ -1240,6 +1240,12 @@ class XYCoords (BufferBase):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
       axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else 'X' if a.name == 'i' else 'Y' if a.name == 'j' else None for a in var.axes]
+      # Special case for lat/lon axes (should detect even without codes).
+      for i,a in enumerate(var.axes):
+        if a.name == 'lon' and 'X' not in axis_codes:
+          axis_codes[i] = 'X'
+        if a.name == 'lat' and 'Y' not in axis_codes:
+          axis_codes[i] = 'Y'
       # Skip records without any geophysical connection.
       # Allow for unstructured data with just 'X' axis.
       if 'X' not in axis_codes: continue
