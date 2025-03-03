@@ -510,7 +510,7 @@ def maybeFST(filename):
 # Helper method to get cartopy projection information for a dataset.
 # Note: this will be obsolete once cartopy's from_cf function is fixed.
 # (https://github.com/SciTools/cartopy/issues/2099)
-def get_crs (dataset):
+def get_crs (dataset, **extra_kwargs):
   """
   Generate a cartopy crs object for the given data.
 
@@ -519,6 +519,8 @@ def get_crs (dataset):
   dataset : xarray.Dataset
       The data to find the crs projection for.
       Only data generated via the .to_xarray() method is supported.
+  extra_kwargs : dict
+      Additional keyword arguments to pass to the crs constructor.
 
   Returns
   -------
@@ -542,9 +544,9 @@ def get_crs (dataset):
   globe = ccrs.Globe(ellipse="sphere",semimajor_axis=radius,semiminor_axis=radius)
   gname = gmap.attrs['grid_mapping_name']
   if gname == 'latitude_longitude':
-    proj = ccrs.PlateCarree(globe=globe)
+    proj = ccrs.PlateCarree(globe=globe,**extra_kwargs)
   elif gname == 'rotated_latitude_longitude':
-    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'], central_rotated_longitude=gmap.attrs.get('north_pole_grid_longitude',0.), globe=globe)
+    proj = ccrs.RotatedPole (pole_longitude = gmap.attrs['grid_north_pole_longitude'], pole_latitude = gmap.attrs['grid_north_pole_latitude'], central_rotated_longitude=gmap.attrs.get('north_pole_grid_longitude',0.), globe=globe, **extra_kwargs)
   elif gname == 'polar_stereographic':
     # May fail for South Pole projections (would maybe need to change sign of
     # true_scale_latitude?)
@@ -553,7 +555,7 @@ def get_crs (dataset):
       lat = abs(asin(2*k-1)) / pi * 180
     else:
       lat = gmap.attrs['standard_parallel']
-    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=lat, globe=globe)
+    proj = ccrs.Stereographic (central_latitude = gmap.attrs['latitude_of_projection_origin'], central_longitude = gmap.attrs['straight_vertical_longitude_from_pole'], false_easting = gmap.attrs['false_easting'], false_northing = gmap.attrs['false_northing'], true_scale_latitude=lat, globe=globe, **extra_kwargs)
   else:
     warn(_("Unhandled grid mapping: %s")%gname)
     return None
