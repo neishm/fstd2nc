@@ -724,10 +724,16 @@ class ExternOutput (BufferBase):
     for coordname, coord in ds.coords.items():
       if coordname in dims: continue  # Already counted as a dimension.
       coords[coordname] = _var_type(coordname, dict(coord.attrs), [dims[d] for d in coord.dims], np.array(coord))
+    # Find and remove other ancillary variables like boundaries.
+    bounds = []
+    for varname, var in ds.variables.items():
+      if 'bounds' in var.attrs:
+        bounds.append(var.attrs['bounds'])
     # Construct the varlist.
     for varname, var in ds.variables.items():
       if varname in dims: continue
       if varname in coords: continue
+      if varname in bounds: continue
       encoded = _var_type(varname, dict(var.attrs), [dims[d] for d in var.dims], ds[varname].data)
       # Add coordinates.
       encoded.atts.setdefault('coordinates',[coords[coordname] for coordname in ds[varname].coords if coordname in coords])
