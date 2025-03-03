@@ -194,6 +194,8 @@ class Interp (BufferBase):
     super(Interp,cls)._cmdline_args(parser)
     #parser.add_argument('--interp', metavar="GRTYP,PARAM=VAL,PARAM=VAL,...", help=_("Interpolate to the specified grid."))
     parser.add_argument('--interp', metavar="GRTYP,PARAM=VAL,PARAM=VAL,...", help=SUPPRESS)
+    #parser.add_argument('--interp-degree', choices=['nearest','linear','cubic'], help=_("Degree of interpolation to perform."))
+    parser.add_argument('--interp-degree', choices=['nearest','linear','cubic'], help=SUPPRESS)
     #parser.add_argument('--vector-fields', metavar="UFIELD,VFIELD", help=_("Specify a pair of fields to be treated as vectors.  Only needed if --interp is used on vector fields."))
     parser.add_argument('--vector-fields', metavar="UFIELD,VFIELD", help=SUPPRESS)
     #parser.add_argument('--scalar-fields', metavar="VAR1,VAR2,...", help=_("Disable vector interpolation for the specified fields."))
@@ -217,6 +219,7 @@ class Interp (BufferBase):
     self._decoder_data = self._decoder_data + (('u_data',('u_key','u_address','u_length','u_d')),('v_data',('v_key','v_address','v_length','v_d')))
 
     interp = kwargs.pop('interp',None)
+    interp_degree = kwargs.pop('interp_degree',None)
 
     # Determine which fields should be interpolated as vectors.
     vector_fields = kwargs.pop('vector_fields',None)
@@ -250,6 +253,12 @@ class Interp (BufferBase):
       import rpnpy.librmn.all as rmn
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_DEGREE, rmn.EZ_EXTRAP_VALUE)
       rmn.ezsetopt (rmn.EZ_OPT_EXTRAP_VALUE, self._fill_value)
+      if interp_degree == 'nearest':
+        rmn.ezsetopt (rmn.EZ_OPT_INTERP_DEGREE, rmn.EZ_INTERP_NEAREST)
+      if interp_degree == 'linear':
+        rmn.ezsetopt (rmn.EZ_OPT_INTERP_DEGREE, rmn.EZ_INTERP_LINEAR)
+      if interp_degree == 'cubic':
+        rmn.ezsetopt (rmn.EZ_OPT_INTERP_DEGREE, rmn.EZ_INTERP_CUBIC)
 
       # Locate wind components.
       is_wind = np.isin(self._headers['nomvar'],vector_fields)
