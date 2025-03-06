@@ -1,0 +1,56 @@
+schema_version: 1
+
+package:
+  name: fstd2nc
+  version: 0.20240625.8
+
+source:
+  path: ../.
+
+build:
+  number: 0
+  script:
+    - python -m pip install . -vv --no-deps --no-build-isolation --no-compile
+    - find $PREFIX -name '*.pyc' -delete
+    - find $PREFIX -name '__pycache__' -delete
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools
+    - pip >=21.0  # Ensure modern pip for proper installation
+    - wheel
+    - hatchling
+    - numpy
+  run:
+    - python
+    - numpy >1.15.3
+    - netcdf4
+    - progress
+    - pandas
+    - xarray >=0.10.3
+    - dask
+    - toolz
+    - iris >=2.0
+    - certifi
+    - cftime
+    - eccc_rpnpy >=2.2.0
+
+tests:
+  - python:
+      imports:
+        - fstd2nc
+
+about:
+  homepage: https://github.com/neishm/fstd2nc
+  license: LGPL-3.0-or-later
+  summary: 'Converts to netCDF and provides an xarray interface to RPN standard files (from Environment Canada).'
+
+extra:
+  channels:
+    - fortiers
+    - conda-forge
+    - nodefaults
+  channel_priority: flexible  
+
