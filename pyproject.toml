@@ -43,7 +43,7 @@ fstd = "fstd2nc._xarray_hook:FSTDBackendEntrypoint"
 ccc = "cccbuffer._xarray_hook:CCCBackendEntrypoint"
 
 [tool.setuptools]
-packages.find = {}  # Equivalent to find_packages() in setup.py
+packages = ["fstd2nc","cccbuffer"]
 package-data = {fstd2nc = ["locale/*/LC_MESSAGES/fstd2nc.mo"]}
 
 [tool.setuptools.dynamic]

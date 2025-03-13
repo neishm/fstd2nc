@@ -1,0 +1,5 @@
+prune debian
+prune conda.recipe
+exclude pixi*
+exclude *.bk
+exclude .gitignore
