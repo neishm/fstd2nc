@@ -18,6 +18,14 @@ conda install fortiers::fstd2nc
 ```
 
 
+Construction à partir des sources
+=================================
+*(nécessite le paquet Python « build »)*
+```
+python -m build
+```
+
+
 Utilisation de base
 ===========
 
