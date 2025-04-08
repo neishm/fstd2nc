@@ -43,7 +43,7 @@ fstd = "fstd2nc._xarray_hook:FSTDBackendEntrypoint"
 ccc = "cccbuffer._xarray_hook:CCCBackendEntrypoint"
 
 [tool.setuptools]
-packages = ["fstd2nc", "cccbuffer", "fstd2nc.mixins", "fstd2nc.locale"]
+packages = ["fstd2nc", "cccbuffer", "cccbuffer.mixins", "fstd2nc.mixins", "fstd2nc.locale"]
 package-dir = {}
 include-package-data = true
 
