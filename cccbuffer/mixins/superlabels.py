@@ -30,9 +30,11 @@ class Superlabels(BufferBase):
     # Now ignore the superlabel entries in the table (they are not data).
     self._headers['selected'][is_superlabel] = False
     # For TIME records, treat the superlabels as an outer axis.
-    self._headers['type'] = np.ma.empty(self._nrecs,superlabels.dtype)
+    # Force the order as found in the files (avoid lexicographic sorting)
+    indexed_superlabels = np.array(['%08d'%i+s for i,s in enumerate(superlabels)])
+    self._headers['type'] = np.ma.empty(self._nrecs,indexed_superlabels.dtype)
     is_time = (self._headers['kind'] == b'TIME    ')
-    self._headers['type'][is_time] = self._headers['superlabel'][is_time]
+    self._headers['type'][is_time] = indexed_superlabels[closest][is_time]
     self._headers['type'][~is_time] = np.ma.masked
     self._headers['superlabel'][is_time] = ''
     self._headers['superlabel'][is_time] = np.ma.masked
@@ -49,6 +51,10 @@ class Superlabels(BufferBase):
       # Add superlabel as an attribute for the variable.
       if 'superlabel' in var.atts and var.atts['superlabel'] != '':
         var.atts['label'] = var.atts['superlabel']
+      # Remove ordering information from 'type' axis.
+      if 'type' in var.dims:
+        itype = var.dims.index('type')
+        var.axes[itype].array = np.array([s[8:] for s in var.axes[itype].array])
     # Ensure we have unique names for variables.
     # Sometimes have the same variable name multiple times, with
     # different superlabels.
