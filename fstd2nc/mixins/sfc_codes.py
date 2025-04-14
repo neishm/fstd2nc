@@ -41,6 +41,8 @@ sfc_agg_codes = {
   4: "lake_ice_or_sea_ice", # (lake ice, sea ice))
   5: "all_area_types", # (aggregated)
   6: "urban",          # (urban)
+  7: "lake_and_inland_sea", # (lake)
+  8: "river"           # (rivers)
 }
 reverse_sfc_agg_codes = dict((v,k) for k,v in sfc_agg_codes.items())
 # List of "aggregated" variables in rpnphy
