@@ -41,6 +41,15 @@ def yyyymm_to_date (timestep):
   yyyy, mm = divmod(yyyymm, 100)
   return DatetimeNoLeap(year=yyyy,month=mm,day=1)
 
+# Helper function - converts dates from "yyyy" format to a datetime
+# object.
+@vectorize
+def yyyy_to_date (timestep):
+  from cftime import DatetimeNoLeap
+  if timestep > 9999: raise ValueError
+  yyyy = int(timestep)
+  return DatetimeNoLeap(year=yyyy,month=1,day=1)
+
 # Helper function - extract year / month from filename.
 @vectorize
 def filename_to_date (filename):
@@ -83,7 +92,7 @@ class Times(BufferBase):
   # Here we annotate the time axis.
   def _makevars (self):
     import numpy as np
-    from fstd2nc.mixins import _axis_type, _var_type
+    from fstd2nc.mixins import _axis_type, _var_type, _iter_type
     from collections import OrderedDict
     super(Times,self)._makevars()
 
@@ -91,6 +100,27 @@ class Times(BufferBase):
     # Note: 'calendar' attribute is already set to 'noleap' from within
     # fstd2nc.
     time_atts = OrderedDict([('axis','T'),('long_name','time'),('standard_name','time')])
+
+    # Check for 'YEAR' info, which is used instead of usual time encoding.
+    years = None
+    for var in self._varlist:
+      if var.name == 'YEAR' and 'ilg' in var.dims and isinstance(var,_iter_type) and var.record_id.squeeze().ndim == 0:
+        rec_id = var.record_id.flatten()[0]
+        years = self._read_record(rec_id).flatten().astype(int)
+        years = yyyy_to_date (years)
+        years = _axis_type('time',time_atts,np.array(years))
+    #TODO: remove 'YEAR' variable.
+    #TODO: treat 'YEAR' as metadata variable, read through side-channel?
+    if years is not None:
+      for var in self._varlist:
+        # Remove degenerate time axis and use this information instead.
+        if 'time' in var.dims:
+          itime = var.dims.index('time')
+          if len(var.axes[itime]) == 1:
+            var.axes = var.axes[:itime] + var.axes[itime+1:]
+            iilg = var.dims.index('ilg')
+            var.axes[iilg] = years
+      return
 
     # Remove degenerate times (single time, encoded as "0").
     for var in self._varlist:
