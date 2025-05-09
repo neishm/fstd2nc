@@ -178,6 +178,7 @@ class Series (BufferBase):
       # the leadtime.
       starting_hour = stamp2datetime_scalar(forecast_header['datev']).hour - forecast_header['npas']*forecast_header['deet']
       array = forecast_header['d'].flatten() - starting_hour
+      array = array.astype('float32')
       forecast_timedelta = np.array(array*3600,'timedelta64[s]')
       forecast_axis = _axis_type('forecast',atts,array)
     # Extract vertical coordinates.

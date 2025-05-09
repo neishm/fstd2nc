@@ -660,7 +660,9 @@ class VCoords (BufferBase):
               rcoef = header['ig2']/1000.0
               # Apply the formula to compue A & B (from old fstd_core.c code):
               etatop = ptop/pref
-              B = ((eta - etatop) / (1 - etatop)) ** rcoef
+              B = ((eta - etatop) / (1 - etatop)) ** np.float32(rcoef)
+              # Avoid upcasting to double in more recent numpy versions.
+              B = B.astype('float32')
               A = pref * (eta - B)
               coordA = _var_type('ap', {}, [new_axis], np.asarray(A))
               coordB = _var_type('b', {}, [new_axis], np.asarray(B))
