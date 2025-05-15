@@ -716,7 +716,7 @@ class ExternOutput (BufferBase):
     # Collect dimensions and coordinates into a separate structure.
     dims = {}
     coords = {}
-    for dimname,dimsize in ds.dims.items():
+    for dimname,dimsize in ds.sizes.items():
       if dimname in ds.variables:
         dims[dimname] = _axis_type(dimname,dict(ds[dimname].attrs),np.array(ds[dimname]))
       else:
