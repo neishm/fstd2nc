@@ -1122,9 +1122,9 @@ class XYCoords (BufferBase):
     # Helper method - get best xlat1/xlon1/xlat2/xlon2 rotation parameters
     # for the given CF rotation attributes.
     def get_rotation_params (atts, ax):
-      gpole_lat = atts['grid_north_pole_latitude'] * pi / 180
-      gpole_lon = atts['grid_north_pole_longitude'] * pi / 180
-      npole = atts.get('north_pole_grid_longitude',0.)
+      gpole_lat = float(atts['grid_north_pole_latitude']) * pi / 180
+      gpole_lon = float(atts['grid_north_pole_longitude']) * pi / 180
+      npole = float(atts.get('north_pole_grid_longitude',0.))
       # Case 1: have non-zero npole, so no adjustment was done to grid
       # longitudes.
       if npole != 0.0:
@@ -1314,9 +1314,9 @@ class XYCoords (BufferBase):
         lat = None
         lon = None
         # Set grid attributes for the coordinate.
-        ig1 = var.atts.get('ig1',0)
-        ig2 = var.atts.get('ig2',0)
-        ig3 = var.atts.get('ig3',0)
+        ig1 = int(var.atts.get('ig1',0))
+        ig2 = int(var.atts.get('ig2',0))
+        ig3 = int(var.atts.get('ig3',0))
         key = (ig1,ig2,ig3)
         for coord in var.atts.get('coordinates',[]):
           if coord.name == 'lat' or coord.atts.get('standard_name',None) == 'latitude':
@@ -1397,9 +1397,9 @@ class XYCoords (BufferBase):
       if projection_name == 'polar_stereographic':
         origin = projection.atts.get('latitude_of_projection_origin',None)
         if 'standard_parallel' in projection.atts:
-          stdlat = projection.atts['standard_parallel']
+          stdlat = float(projection.atts['standard_parallel'])
         else:
-          k = projection.atts['scale_factor_at_projection_origin']
+          k = float(projection.atts['scale_factor_at_projection_origin'])
           stdlat = abs(asin(2*k-1)) / pi * 180
         if not np.allclose(stdlat,60.,atol=1e-5):
           warn(_('Standard parallel must be 60 deg to encode polar stereographic projections.  Found %s instead.')%stdlat)
@@ -1407,7 +1407,7 @@ class XYCoords (BufferBase):
         if 'straight_vertical_longitude_from_pole' not in projection.atts:
           warn(_('Sterographic projection missing attribute "straight_vertical_longitude_from_pole"'))
           continue
-        dgrw = -(projection.atts['straight_vertical_longitude_from_pole']+90)
+        dgrw = -(float(projection.atts['straight_vertical_longitude_from_pole'])+90)
         dgrw %= 360.0
         d60 = np.mean(xaxis.array[1:]-xaxis.array[:-1])
         east = projection.atts.get('false_easting',0)
@@ -1428,9 +1428,9 @@ class XYCoords (BufferBase):
         continue
       # Rotated lat/lon
       if projection_name == 'rotated_latitude_longitude':
-        gpole_lat = projection.atts['grid_north_pole_latitude'] * pi / 180
-        gpole_lon = projection.atts['grid_north_pole_longitude'] * pi / 180
-        npole = projection.atts.get('north_pole_grid_longitude',0.)
+        gpole_lat = float(projection.atts['grid_north_pole_latitude']) * pi / 180
+        gpole_lon = float(projection.atts['grid_north_pole_longitude']) * pi / 180
+        npole = float(projection.atts.get('north_pole_grid_longitude',0.))
         zegrid_key = (gpole_lat,gpole_lon,npole,id(xaxis),id(yaxis))
         if zegrid_key not in zegrid_table:
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(projection.atts, xaxis.array)
@@ -1494,9 +1494,9 @@ class XYCoords (BufferBase):
       if lat is not None and lon is not None:
         xgrid_key = (id(lat),id(lon))
         if xgrid_key not in xgrid_table:
-          ig1 = var.atts.get('ig1',1001)
-          ig2 = var.atts.get('ig2',1002)
-          ig3 = var.atts.get('ig3',1003)
+          ig1 = int(var.atts.get('ig1',1001))
+          ig2 = int(var.atts.get('ig2',1002))
+          ig3 = int(var.atts.get('ig3',1003))
           # TODO: Better values for ig1/2/3/4.
           # These were just copied from a sample 'O' grid file.
           if not hasattr(lat,'array') or not hasattr(lon,'array'): continue

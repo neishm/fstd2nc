@@ -869,9 +869,9 @@ class VCoords (BufferBase):
           handled_toctocs = set()
           for var in self._varlist:
             if not axis in var.axes: continue
-            ig1 = var.atts['ig1']
-            ig2 = var.atts['ig2']
-            ig3 = var.atts['ig3']
+            ig1 = int(var.atts['ig1'])
+            ig2 = int(var.atts['ig2'])
+            ig3 = int(var.atts['ig3'])
             if (ig1,ig2,ig3) in handled_toctocs: continue
             add_coord ('!!',table.shape[0],table.shape[1],table,datyp=5,nbits=64,typvar='X',grtyp='X',ip1=ig1,ip2=ig2,ip3=ig3,ig1=atts['KIND']*1000+atts['VERS'])
             handled_toctocs.add((ig1,ig2,ig3))
