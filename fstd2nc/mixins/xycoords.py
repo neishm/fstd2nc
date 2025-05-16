@@ -1229,7 +1229,13 @@ class XYCoords (BufferBase):
         # Do in loop, to handle case where have multiple grid mappings
         # separated by spaces (e.g. for subgrids).
         for g in var.atts['grid_mapping'].split():
-          projection_table[g] = None
+          # grid mapping might be hiding in coordinates in some setups
+          for coord in var.atts.get('coordinates', []):
+            if g == coord.name:
+              projection_table[g] = coord
+              break
+          else:
+            projection_table[g] = None
     for var in self._varlist:
       if var.name in projection_table.keys():
         projection_table[var.name] = var
