@@ -347,7 +347,7 @@ class FSTD (BufferBase):
     import rpnpy.librmn.all as rmn
     import numpy as np
     if exists(filename) and not append and not rewrite: remove(filename)
-    outfile = rmn.fstopenall(filename, rmn.FST_RW)
+    outfile = rmn.fstopenall(str(filename), rmn.FST_RW)
     for i in np.where(self._headers['selected'] | self._headers['ismeta'])[0]:
       rec = self._fstluk(i)
       # Ensure data is Fortran-contiguous for librmn.
