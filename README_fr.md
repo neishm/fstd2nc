@@ -130,8 +130,6 @@ arguments optionnel:
                         grilles sur une axe "subgrid". Le défaut est garder
                         les sous-grilles ensemble comme elles sont dans le
                         fichier RPN.
-  --keep-LA-LO          Inclure les enregstrement LA et LO, même s'ils
-                        semblent redondants.
   --no-adjust-rlon      Pour les grilles tournées, n'ajustez PAS la coordonnée
                         rlon pour conserver la plage entre -180..180. Utilise
                         la plage que vient de librmn.

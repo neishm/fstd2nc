@@ -544,7 +544,8 @@ class XYCoords (BufferBase):
     from argparse import SUPPRESS
     super(XYCoords,cls)._cmdline_args(parser)
     parser.add_argument('--subgrid-axis', action='store_true', help=_('For data on supergrids, split the subgrids along a "subgrid" axis.  The default is to leave the subgrids stacked together as they are in the RPN file.'))
-    parser.add_argument('--keep-LA-LO', action='store_true', help=_('Include LA and LO records, even if they appear to be redundant.'))
+    #parser.add_argument('--keep-LA-LO', action='store_true', help=_('Include LA and LO records, even if they appear to be redundant.'))
+    parser.add_argument('--keep-LA-LO', action='store_true', help=SUPPRESS)
     parser.add_argument('--no-adjust-rlon', action='store_true', help=_('For rotated grids, do NOT adjust rlon coordinate to keep the range in -180..180.  Allow the rlon value to be whatever librmn says it should be.'))
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--bounds', action='store_true', default=False, help=_('Include grid cell boundaries in the output.'))
@@ -577,6 +578,18 @@ class XYCoords (BufferBase):
     if 'ig1' not in self._var_id:
       self._var_id = self._var_id + ('ig1','ig2','ig3','ig4')
       self._human_var_id = self._human_var_id + ('grid_%(ig1)s_%(ig2)s_%(ig3)s_%(ig4)s',)
+    # Special case if LA/LO are excluded, need to keep them as variables
+    # long enough to generate coordinate info, then they can be discarded.
+    # Allows for creating empty templates with LA/LO variables.
+    if hasattr(self,'_exclude'):
+      exclude = list(self._exclude)
+      exclude_later = []
+      for varname in 'LA','LO':
+        if varname in exclude:
+          exclude.remove(varname)
+          exclude_later.append(varname)
+      self._exclude = tuple(exclude)
+      self._exclude_later = tuple(exclude_later)
 
   # Helper method - look up a coordinate record for the given variable.
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support
@@ -917,11 +930,11 @@ class XYCoords (BufferBase):
         var.atts['grid_mapping'] = gridmaps[key]
 
       # Throw out superfluous LA/LO variables, if lat/lon was already decoded.
-      if not self._keep_LA_LO:
+      if not self._keep_LA_LO and hasattr(self,'_exclude_later'):
         if var.name == 'LA' and ('lat' in var.dims or lat in coordinates):
-          var.name = None
+          if 'LA' in self._exclude_later: var.name = None
         if var.name == 'LO' and ('lon' in var.dims or lon in coordinates):
-          var.name = None
+          if 'LO' in self._exclude_later: var.name = None
 
     # Only create distinct grid_mappings when they're actually distinct.
     # (may have duplicates because of different ni,nj from staggered grid.)
