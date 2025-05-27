@@ -1,2 +1,57 @@
 [build-system]
-requires = ["setuptools", "wheel", "numpy"]
+requires = ["setuptools>=8.1", "pip>=8.1", "wheel", "hatchling", "numpy"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fstd2nc"
+dynamic = ["version"]
+description = "Converts RPN standard files (from Environment Canada) to netCDF files."
+readme = "README.md"
+authors = [
+    {name = "Mike Neish"}
+]
+license = {text = "LGPL-3"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering :: Atmospheric Science"
+]
+urls = {Homepage = "https://github.com/neishm/fstd2nc"}
+dependencies = [
+    "numpy >= 1.13.0, != 1.15.3",
+    "netcdf4",
+    'fstd2nc-deps >= 0.20200304.0 ; sys_platform == "win32"'
+]
+
+[project.optional-dependencies]
+manyfiles = ["pandas", "progress"]
+array = ["xarray>=0.10.3", "dask", "toolz"]
+iris = ["iris>=2.0", "xarray>=0.10.3", "dask", "toolz"]
+pygeode = ["pygeode>=1.2.2", "xarray>=0.10.3", "dask", "toolz"]
+
+[project.scripts]
+fstd2nc = "fstd2nc.__main__:_fstd2nc_cmdline_trapped"
+fstdump = "fstd2nc.__main__:_fstdump"
+ccc2nc = "cccbuffer.__main__:run"
+cccdump = "cccbuffer.cccdump:run"
+
+[project.entry-points."xarray.backends"]
+fstd = "fstd2nc._xarray_hook:FSTDBackendEntrypoint"
+ccc = "cccbuffer._xarray_hook:CCCBackendEntrypoint"
+
+[tool.setuptools]
+packages = ["fstd2nc", "cccbuffer", "cccbuffer.mixins", "fstd2nc.mixins", "fstd2nc.locale"]
+package-dir = {}
+include-package-data = true
+
+[tool.setuptools.package-data]
+"fstd2nc" = ["locale/fr_CA/LC_MESSAGES/fstd2nc.mo", "mixins/*.py"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*.pyc", "*.pyo", "*.pyd", "__pycache__"]
+
+[tool.setuptools.dynamic]
+version = {attr = "fstd2nc.__version__"} 

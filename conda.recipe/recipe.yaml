@@ -1,0 +1,70 @@
+schema_version: 1
+
+package:
+  name: fstd2nc
+  version: 0.20250310.0
+
+source:
+  path: ../.
+
+build:
+  number: 0
+  script:
+    - export LANG=en_CA.UTF-8
+    - export LC_ALL=en_CA.UTF-8
+    # Compile locale files first
+    - cd fstd2nc/locale && make clean && make && cd ../..
+    # Install the package
+    - python -m pip install . -vv --no-deps --no-build-isolation
+    - find $PREFIX -name '*.pyc' -delete
+    - find $PREFIX -name '__pycache__' -delete
+    # Ensure locale files are properly copied
+    - PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    - mkdir -p "$PREFIX/lib/python${PYTHON_VERSION}/site-packages/fstd2nc/locale/fr_CA/LC_MESSAGES/"
+    - cp -r fstd2nc/locale/fr_CA/LC_MESSAGES/fstd2nc.mo "$PREFIX/lib/python${PYTHON_VERSION}/site-packages/fstd2nc/locale/fr_CA/LC_MESSAGES/"
+    # Create __init__.py files to make locale a proper package
+    - touch "$PREFIX/lib/python${PYTHON_VERSION}/site-packages/fstd2nc/locale/__init__.py"
+    - touch "$PREFIX/lib/python${PYTHON_VERSION}/site-packages/fstd2nc/locale/fr_CA/__init__.py"
+    - touch "$PREFIX/lib/python${PYTHON_VERSION}/site-packages/fstd2nc/locale/fr_CA/LC_MESSAGES/__init__.py"
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools
+    - pip >=21.0  # Ensure modern pip for proper installation
+    - wheel
+    - hatchling
+    - numpy
+
+  run:
+    - python
+    - numpy >1.15.3
+    - netcdf4
+    - progress
+    - pandas
+    - xarray >=0.10.3
+    - dask
+    - toolz
+    - iris >=2.0
+    - certifi
+    - cftime
+    - eccc_rpnpy >=2.2.0
+
+# tests:
+#   - python:
+#       imports:
+#         - fstd2nc
+
+about:
+  homepage: https://github.com/neishm/fstd2nc
+  license: LGPL-3.0-or-later
+  summary: 'Converts to netCDF and provides an xarray interface to RPN standard files (from Environment Canada).'
+
+extra:
+  channels:
+    - fortiers
+    - conda-forge
+    - nodefaults
+  channel_priority: flexible  
+

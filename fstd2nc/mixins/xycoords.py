@@ -449,6 +449,9 @@ class SuperGrid(GridMap):
   def __init__(self, *args, **kwargs):
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     super(SuperGrid,self).__init__(*args)
+    # Disable rlon adjustment, since it would result in different rlon values
+    # for the two subgrids.
+    kwargs['no_adjust_rlon'] = True
     # Grid mapping variable name
     self._subgrids = [GridMap.gen_gmap(grd,**kwargs) for grd in self._grd['subgrid']]
   def gen_gmapvar(self):
@@ -1194,6 +1197,22 @@ class XYCoords (BufferBase):
             return x.astype('float32')
       return ax.astype('float32')
 
+    # Special preprocessing step - pull out time-dependent lat/lon coordinates
+    # and treat them as LA/LO variables (not "^^" or ">>" coordinate records).
+    # For re-encoding trajectory data.
+    lalo_fields = []
+    for var in list(self._varlist):
+      if 'coordinates' in var.atts:
+        for coord in var.atts['coordinates']:
+          if coord.name in ('lat','lon'):
+            if 'time' in coord.dims:
+              var.atts['coordinates'] = [c for c in var.atts['coordinates'] if c is not coord]
+              if coord not in lalo_fields:
+                # Make a copy before name change, to avoid side-effects
+                coord = _var_type(coord.name.upper()[:2], coord.atts, coord.axes, coord.array)
+                lalo_fields.append(coord)
+    self._varlist.extend(lalo_fields)
+
     gauss_table = {}
     lgrid_table = {}
     zlgrid_table = {}
@@ -1202,37 +1221,54 @@ class XYCoords (BufferBase):
     xgrid_table = {}
     stacked_yaxes = {}
     projection_table = {}
+    generic_lat_table = []
+    generic_lon_table = []
     # Pull out projection variables.
     for var in self._varlist:
       if 'grid_mapping' in var.atts:
-        projection_table[var.atts['grid_mapping']] = None
+        # Do in loop, to handle case where have multiple grid mappings
+        # separated by spaces (e.g. for subgrids).
+        for g in var.atts['grid_mapping'].split():
+          projection_table[g] = None
     for var in self._varlist:
       if var.name in projection_table.keys():
         projection_table[var.name] = var
     self._varlist = [v for v in self._varlist if v.name not in projection_table.keys()]
+
     # Loop over all variables, encode grid info.
     for var_ind, var in enumerate(self._varlist):
       # Skip variables already processed into records.
       if isinstance(var, _iter_type): continue
       axis_codes = [a.atts.get('axis','') if isinstance(a,_axis_type) else 'X' if a.name == 'i' else 'Y' if a.name == 'j' else None for a in var.axes]
+      # Special case for lat/lon axes (should detect even without codes).
+      for i,a in enumerate(var.axes):
+        if a.name == 'lon' and 'X' not in axis_codes:
+          axis_codes[i] = 'X'
+        if a.name == 'lat' and 'Y' not in axis_codes:
+          axis_codes[i] = 'Y'
       # Skip records without any geophysical connection.
-      if 'X' not in axis_codes or 'Y' not in axis_codes: continue
+      # Allow for unstructured data with just 'X' axis.
+      if 'X' not in axis_codes: continue
       xind = axis_codes.index('X')
-      yind = axis_codes.index('Y')
+      yind = axis_codes.index('Y') if 'Y' in axis_codes else None
       # Detect lat/lon axes.
       xaxis = var.axes[xind]
-      yaxis = var.axes[yind]
+      yaxis = var.axes[yind] if 'Y' in axis_codes else None
       ni = len(xaxis)
-      nj = len(yaxis)
+      nj = len(yaxis) if 'Y' in axis_codes else 1
 
       # Transpose to expected order.
       order = [i for i in range(len(var.axes)) if i not in (xind,yind)]
-      order = order + [yind, xind]
+      if yind is None:
+        order = order + [xind]
+      else:
+        order = order + [yind, xind]
       if order != list(range(len(var.axes))):
         var.axes = [var.axes[i] for i in order]
         var.array = var.array.transpose(*order)
       # Identify inner axes.
-      var.axes[-2] = _dim_type('j',nj)
+      if yind is not None:
+        var.axes[-2] = _dim_type('j',nj)
       var.axes[-1] = _dim_type('i',ni)
       # Special case for subgrid axis
       # Flatten it out so the yin/yang grids are stacked together.
@@ -1252,7 +1288,10 @@ class XYCoords (BufferBase):
         nj *= 2
       ###
       # Process the variable.
-      outer_shape = [len(a) for a in var.axes[:-2]]
+      if yind is not None:
+        outer_shape = [len(a) for a in var.axes[:-2]]
+      else:
+        outer_shape = [len(a) for a in var.axes[:-1]]
       record_id = np.zeros(outer_shape, dtype=object)
       for ind in np.ndindex(tuple(outer_shape)):
         record_id[ind] = var.array[ind]
@@ -1263,6 +1302,27 @@ class XYCoords (BufferBase):
       # Use the specified one, if it works for the data.
       grtyp = var.atts.get('grtyp',None)
       grref = var.atts.get('grref',None)
+
+      # Case 0: data is unstructured ('X' dimension, no 'Y' dimension).
+      if yind is None:
+        lat = None
+        lon = None
+        # Set grid attributes for the coordinate.
+        ig1 = var.atts.get('ig1',0)
+        ig2 = var.atts.get('ig2',0)
+        ig3 = var.atts.get('ig3',0)
+        key = (ig1,ig2,ig3)
+        for coord in var.atts.get('coordinates',[]):
+          if coord.name == 'lat' or coord.atts.get('standard_name',None) == 'latitude':
+            if key not in generic_lat_table:
+              add_coord ('^^',1,ni,coord.array,typvar='X',etiket='POSY',datype=5,nbits=32,grtyp='L',ip1=ig1,ip2=ig2,ip3=ig3)
+              generic_lat_table.append(key)
+          if coord.name == 'lon' or coord.atts.get('standard_name',None) == 'longitude':
+            if key not in generic_lon_table:
+              add_coord ('>>',1,ni,coord.array,typvar='X',etiket='POSX',datype=5,nbits=32,grtyp='L',ip1=ig1,ip2=ig2,ip3=ig3)
+              generic_lon_table.append(key)
+          var.atts.update(grtyp='Y',ig1=ig1,ig2=ig2,ig3=ig3)
+        continue #raise Exception
 
       # Case 1: data is on lat/lon grid (and no coordinate records needed)
       have_lon = xaxis.name == 'lon' or getattr(xaxis,'atts',{}).get('standard_name',None) == 'longitude'
@@ -1390,8 +1450,19 @@ class XYCoords (BufferBase):
           lat = lat.array.reshape(nj,ni)
           lon = lon.array.reshape(nj,ni)
           # Get params for yin grid.
+          # Use xarray metadata where available.
+          yin_projection = {}
+          yang_projection = {}
+          projection = var.atts.get('grid_mapping',None)
+          if projection is not None:
+            projection = projection.split()
+            if len(projection) == 2:
+              yin_projection = projection_table.get(projection[0],{})
+              yang_projection = projection_table.get(projection[1],{})
           yin_params = get_rotated_grid_params(xaxis.array,yaxis.array[:nj//2],lat[:nj//2,:],lon[:nj//2,:])
+          yin_params.update(getattr(yin_projection,'atts',{}))
           yang_params = get_rotated_grid_params(xaxis.array,yaxis.array[nj//2:],lat[nj//2:,:],lon[nj//2:,:])
+          yang_params.update(getattr(yang_projection,'atts',{}))
           # Encode yin grid
           xlat1, xlon1, xlat2, xlon2, ax_adjust = get_rotation_params(yin_params, xaxis.array)
           ax = adjust_ax (xaxis.array, ax_adjust)

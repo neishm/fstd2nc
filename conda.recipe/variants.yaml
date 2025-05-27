@@ -1,0 +1,9 @@
+# entries per package version that users are interested in
+python:
+# Note that versions are _strings_ (not numbers)
+- "3.8"
+- "3.9"
+- "3.10"
+- "3.11"
+- "3.12"
+- "3.13"

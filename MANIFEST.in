@@ -1,0 +1,9 @@
+prune debian
+prune conda.recipe
+exclude pixi*
+exclude *.bk
+exclude .gitignore
+include fstd2nc/mixins/*.py
+include fstd2nc/*.py
+include cccbuffer/mixins/*.py
+include cccbuffer/*.py
