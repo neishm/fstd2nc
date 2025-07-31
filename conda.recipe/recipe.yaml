@@ -2,7 +2,7 @@ schema_version: 1
 
 package:
   name: fstd2nc
-  version: 0.20250310.0
+  version: 0.20250731.0
 
 source:
   path: ../.

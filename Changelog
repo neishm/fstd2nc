@@ -1,3 +1,22 @@
+Version 0.20250731.0 (Jul 31, 2025)
+	* Some updates to CCC format decoder, to fix bugs in 'type' and
+	  'level' axes, and support for 'YEAR' fields.
+	* Added lake and river surface types (thanks to Pascal Bourgault).
+	* Some compatibility updates for recent numpy versions, to keep the
+	  expected precision for operations.
+	* Avoid use of deprecated "dims" attribute of xarray Datasets.  Thanks
+	  to Pascal Bourgault for the update.
+	* When converting xarray objects back to FSTD format, check for grid
+	  mappings inside the variable's coordinates.  Thanks to Pascal
+	  Bourgault for the update.
+	* Don't automatically exclude 'LA' and 'LO' fields.  They may be
+	  needed in some circumstances, and it's confusing to use the
+	  --keep-LA-LO option vs. keeping them by default.
+	* Allow pathlib Paths in to_fstd().  Thanks to Pascal Bourgault for
+	  the update.
+	* Fixed a typo in the accum mixin, which was only triggered in an
+	  unusual case.
+
 Version 0.20250310.0 (Mar 10, 2025)
 	* Some more compatibility for writing FST files with .to_fstd().
 	* Disable rlon adjustment for yin-yang grids that are combined with a
