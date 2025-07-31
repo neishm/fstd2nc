@@ -78,6 +78,8 @@ arguments optionnel:
   --accum-vars NOM,NOM,...
                         Spécifier les champs à traiter comme des quantités
                         cumulées (en utilisant IP3 comme période de cumul).
+  --no-accum            Désactivez la détection des champs accumulés, au cas
+                        où cela causerait des problèmes lors de la conversion.
   --ensembles           Rassembler différentes etikets pour la même variable
                         ensemble dans une axe "ensemble".
   --profile-momentum-vars VAR1,VAR2,...

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-26 14:53+0000\n"
+"POT-Creation-Date: 2025-07-31 17:11+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -137,7 +137,8 @@ msgid ""
 msgstr ""
 "Sous-ensemble d'enregistrements %s en utilisant les critères donnés.  Par "
 "exemple, pour convertir seulement les prévisions sur 24 heures, vous pouvez "
-"utiliser --filter ip2==24.  Les attributs de chaîne doivent être mettre guillemets, par ex. --filter etiket=='ICETHICKNESS'."
+"utiliser --filter ip2==24.  Les attributs de chaîne doivent être mettre "
+"guillemets, par ex. --filter etiket=='ICETHICKNESS'."
 
 #, python-format
 msgid "unable to apply the filter: %s"
@@ -174,9 +175,6 @@ msgstr ""
 "Pour les données sur les 'supergrids', divisez les grilles sur une axe "
 "\"subgrid\".  Le défaut est garder les sous-grilles ensemble comme elles "
 "sont dans le fichier RPN."
-
-msgid "Include LA and LO records, even if they appear to be redundant."
-msgstr "Inclure les enregstrement LA et LO, même s'ils semblent redondants."
 
 msgid ""
 "For rotated grids, do NOT adjust rlon coordinate to keep the range in "
@@ -684,6 +682,12 @@ msgstr ""
 "Spécifier les champs à traiter comme des quantités cumulées (en utilisant "
 "IP3 comme période de cumul)."
 
+msgid ""
+"Turn off detection of accumulated fields, in case it is causing problems "
+"with the conversion."
+msgstr ""
+"Désactivez la détection des champs accumulés, au cas où cela causerait des problèmes lors de la conversion."
+
 #, python-format
 msgid ""
 "Ignoring IP3 value %d for %s, of unknown purpose.  If this is an accumulated "
@@ -851,6 +855,9 @@ msgstr "choix invalide: %(value)r (choisissez entre %(choices)s)"
 #, python-format
 msgid "%(prog)s: error: %(message)s\n"
 msgstr "%(prog)s: erreur: %(message)s\n"
+
+#~ msgid "Include LA and LO records, even if they appear to be redundant."
+#~ msgstr "Inclure les enregstrement LA et LO, même s'ils semblent redondants."
 
 #~ msgid "Holy crap, how many coordinates do you have???"
 #~ msgstr "Zut alors, combien de coordinnées avez-vous???"

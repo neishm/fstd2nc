@@ -73,6 +73,8 @@ optional arguments:
   --accum-vars NAME,NAME,...
                         Specify which fields to treat as accumulated
                         quantities (using IP3 as accumulation period).
+  --no-accum            Turn off detection of accumulated fields, in case it
+                        is causing problems with the conversion.
   --ensembles           Collect different etikets for the same variable
                         together into an "ensemble" axis.
   --profile-momentum-vars VAR1,VAR2,...
