@@ -112,7 +112,7 @@ class Accum (BufferBase):
         if ip3_purpose == 'accum':
           var.axes[ind] = _axis_type('accum', dict(long_name='accumulation_period',units='hours'), var.axes[ind].array)
         elif ip3_purpose == 'start' and 'ip2' in var.atts:
-          var.axes[ind] = _axis_type('accum', dict(long_name='accumulation_period',units='hours'), vars.atts['ip2'] - var.axes[ind].array)
+          var.axes[ind] = _axis_type('accum', dict(long_name='accumulation_period',units='hours'), var.atts['ip2'] - var.axes[ind].array)
 
   # Re-encode accumulation time back into ip3.
   def _unmakevars (self):
