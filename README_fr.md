@@ -97,6 +97,8 @@ arguments optionnel:
                         dictionnaire opérationnel standard CMC-RPN.
   --sfc-agg-vars NOM,NOM,...
                         Définir des champs d'agrégats de surface additionnel.
+  --soil-depth-vars NOM,NOM,...
+                        Définir des champs de sol additionnel.
   --soil-depths SOIL_DEPTHS
                         Définir des profondeurs personnalisée pour les champs
                         de sol (WSOL,ISOL). Les défauts sont

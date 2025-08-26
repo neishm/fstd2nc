@@ -67,12 +67,15 @@ class Sfc_Codes (BufferBase):
   def _cmdline_args (cls, parser):
     super(Sfc_Codes,cls)._cmdline_args(parser)
     parser.add_argument('--sfc-agg-vars', metavar=_('NAME,NAME,...'), help=_('Define additional surface aggregate fields.'))
+    parser.add_argument('--soil-depth-vars', metavar=_('NAME,NAME,...'), help=_('Define additional soil depth fields.'))
     parser.add_argument('--soil-depths', default=default_soil_depths, help=_('Define custom depths for soil fields (%s).  Defaults are %%(default)s.')%(','.join(soil_depth_nomvars)))
 
   def __init__ (self, *args, **kwargs):
     """
     sfc_agg_vars : str or list, optional
         Define additional surface aggregate fields.
+    soil_depth_vars : str or list, optional
+        Define additional soil depth fields.
     soil_depths : str or list, optional
         Define custom depths for soil fields.
     """
@@ -84,6 +87,15 @@ class Sfc_Codes (BufferBase):
       sfc_agg_vars = sfc_agg_vars.replace(',', ' ')
       sfc_agg_vars = sfc_agg_vars.split()
     self._sfc_agg_nomvars = sfc_agg_nomvars + tuple(sfc_agg_vars)
+
+    soil_depth_vars = kwargs.pop('soil_depth_vars',None)
+    if soil_depth_vars is None:
+      soil_depth_vars = []
+    if isinstance(soil_depth_vars,str):
+      soil_depth_vars = soil_depth_vars.replace(',', ' ')
+      soil_depth_vars = soil_depth_vars.split()
+    self._soil_depth_nomvars = soil_depth_nomvars + tuple(soil_depth_vars)
+
     soil_depths = kwargs.pop('soil_depths',default_soil_depths)
     try:
       if isinstance(soil_depths,str):
@@ -134,7 +146,7 @@ class Sfc_Codes (BufferBase):
         coordinates.append(surface_type)
 
       # Handle soil depth codes.
-      if var.name in soil_depth_nomvars and set(codes) <= set(range(1,len(self._soil_bounds))):
+      if var.name in self._soil_depth_nomvars and set(codes) <= set(range(1,len(self._soil_bounds))):
         # Generate the soil depths.
         if codes not in handled_soil_depth_codes:
           indices = np.asarray(codes,dtype='int32')
@@ -148,7 +160,7 @@ class Sfc_Codes (BufferBase):
           handled_soil_depth_codes[codes] = soil_depth_bnds
         soil_depth_bnds = handled_soil_depth_codes[codes]
         var.axes[var.dims.index('level')] = soil_depth_bnds.getaxis('soil_depth')
-      elif var.name in soil_depth_nomvars:
+      elif var.name in self._soil_depth_nomvars:
         warn(_("More than the expected number of soil depths were found.  No depth values will be encoded."))
         soil_depth = _dim_type('soil_depth',len(codes))
         var.axes[var.dims.index('level')] = soil_depth

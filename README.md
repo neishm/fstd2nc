@@ -92,6 +92,8 @@ optional arguments:
                         operational dictionary.
   --sfc-agg-vars NAME,NAME,...
                         Define additional surface aggregate fields.
+  --soil-depth-vars NAME,NAME,...
+                        Define additional soil depth fields.
   --soil-depths SOIL_DEPTHS
                         Define custom depths for soil fields (WSOL,ISOL).
                         Defaults are 0.05,0.1,0.2,0.4,1.0,2.0,3.0.
