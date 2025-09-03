@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-26 18:12+0000\n"
+"POT-Creation-Date: 2025-09-03 16:17+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -188,6 +188,11 @@ msgstr ""
 
 msgid "Include grid cell boundaries in the output."
 msgstr "Inclure les limites des cellules de grille dans la sortie."
+
+msgid ""
+"The data type to use for the grid mapping variable.  Some netCDF tools have "
+"trouble concatenating if this value is a char."
+msgstr "Le type de données pour la variable de grille.  Quelque utiles de netCDF ont des problèmes de concaténation si cette valeur est un « char »."
 
 #, python-format
 msgid "Unable to get lat/lon coordinates for '%s'"

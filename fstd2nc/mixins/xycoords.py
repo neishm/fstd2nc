@@ -170,13 +170,13 @@ class LatLon(GridMap):
     super(LatLon,self).__init__(*args,**kwargs)
     # Grid mapping variable name
     self._name = 'crs_latlon'
-  def gen_gmapvar(self):
+  def gen_gmapvar(self, gmap_dummy_value):
     from fstd2nc.mixins import _var_type
     import numpy as np
     self._atts['grid_mapping_name'] = 'latitude_longitude'
     self._atts['earth_radius'] = self._earth_radius
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
+    self.gmap = _var_type(self._name,self._atts,[],gmap_dummy_value)
     return self.gmap     
   # Generate true latitudes and longitudes
   def gen_ll(self,bounds=False):
@@ -266,7 +266,7 @@ class RotLatLon(GridMap):
       # to FST format.
       self._ax = orig_ax - ax_adjust
     self._ay = self._grd['ay'][0,:]
-  def gen_gmapvar(self):
+  def gen_gmapvar(self, gmap_dummy_value):
     from fstd2nc.mixins import _var_type
     import numpy as np
     self._atts['grid_mapping_name'] = 'rotated_latitude_longitude'
@@ -279,7 +279,7 @@ class RotLatLon(GridMap):
 #    self._atts['north_pole_grid_longitude'] = 0.
 #    self._atts['longitude_of_prime_meridian'] = 0.
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
+    self.gmap = _var_type(self._name,self._atts,[],gmap_dummy_value)
     return self.gmap
   # Generate latitudes and longitudes in rotated pole grid 
   # and true latitudes and longitudes
@@ -354,7 +354,7 @@ class PolarStereo(GridMap):
     # value returned for standard parallel at 60 deg: 0.933012701892
     # value retrieved using mscale function (rmnlib): 0.9330124
     return (1. + abs_sin)/2. 
-  def gen_gmapvar(self):
+  def gen_gmapvar(self, gmap_dummy_value):
     import numpy as np
     from fstd2nc.mixins import _var_type
     self._atts['grid_mapping_name'] = 'polar_stereographic'
@@ -373,7 +373,7 @@ class PolarStereo(GridMap):
     self._atts['false_easting'] = self._false_easting
     self._atts['false_northing'] = self._false_northing
     # Grid mapping variable
-    self.gmap = _var_type(self._name,self._atts,[],np.array(b""))
+    self.gmap = _var_type(self._name,self._atts,[],gmap_dummy_value)
     return self.gmap
   # Generate projection coordinates
   def _gen_xyll(self):  
@@ -454,14 +454,14 @@ class SuperGrid(GridMap):
     kwargs['no_adjust_rlon'] = True
     # Grid mapping variable name
     self._subgrids = [GridMap.gen_gmap(grd,**kwargs) for grd in self._grd['subgrid']]
-  def gen_gmapvar(self):
+  def gen_gmapvar(self, gmap_dummy_value):
     from fstd2nc.mixins import _var_type
     # Give a (non-standard) grid mapping for yin/yang pieces.
     # It won't be parseable by most tools, but at least the information
     # is in there in some form.
     if len(self._subgrids) == 2:
-      yin = self._subgrids[0].gen_gmapvar()
-      yang = self._subgrids[1].gen_gmapvar()
+      yin = self._subgrids[0].gen_gmapvar(gmap_dummy_value)
+      yang = self._subgrids[1].gen_gmapvar(gmap_dummy_value)
       yin = _var_type('yin',yin.atts,yin.axes,yin.array)
       yang = _var_type('yang',yang.atts,yang.axes,yang.array)
       return [yin,yang]
@@ -469,7 +469,7 @@ class SuperGrid(GridMap):
       # Some other kind of supergrid with multiple subgrids?
       gmap = []
       for grd in self._subgrids:
-        gmv = grd.gen_gmapvar()
+        gmv = grd.gen_gmapvar(gmap_dummy_value)
         gmap.append(_var_type('grid',gmv.atts,gmv.axes,gmv.array))
       return gmap
   # Generate latitudes and longitudes for subgrids.
@@ -550,6 +550,7 @@ class XYCoords (BufferBase):
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--bounds', action='store_true', default=False, help=_('Include grid cell boundaries in the output.'))
     group.add_argument('--no-bounds', action='store_false', dest='bounds', help=SUPPRESS)
+    group.add_argument('--gmap-dummy-type', choices=['char','int'], help=_('The data type to use for the grid mapping variable.  Some netCDF tools have trouble concatenating if this value is a char.'))
 
   def __init__ (self, *args, **kwargs):
     """
@@ -565,11 +566,20 @@ class XYCoords (BufferBase):
         should be.
     bounds : bool, optional
         Include grid cell boundaries in the output.
+    gmap_dummy_type : string, optional
+        The data type to use for the grid mapping variable.  Some netCDF
+        tools have trouble concatenating if this value is a char.
     """
+    import numpy as np
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
     self._keep_LA_LO = kwargs.pop('keep_LA_LO',False)
     self._no_adjust_rlon = kwargs.pop('no_adjust_rlon',False)
     self._bounds = kwargs.pop('bounds',False)
+    gmap_dummy_type = kwargs.pop('gmap_dummy_type','char')
+    if gmap_dummy_type == 'int':
+      self._gmap_dummy_value = np.array(np.int32(0))
+    else:
+      self._gmap_dummy_value = np.array(b"")
     super(XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)
@@ -728,7 +738,7 @@ class XYCoords (BufferBase):
             gids[key] = grd
             grd = decodeGrid(grd)
             gmap = GridMap.gen_gmap(grd,no_adjust_rlon=self._no_adjust_rlon, subgrid_axis=self._subgrid_axis)
-            gmapvar = gmap.gen_gmapvar()
+            gmapvar = gmap.gen_gmapvar(self._gmap_dummy_value)
             if gmapvar is not None:
               gridmaps[key] = gmapvar
             (xaxis,yaxis,gridaxes,lon,lat) = gmap.gen_xyll(bounds=self._bounds)

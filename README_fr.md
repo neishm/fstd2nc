@@ -101,7 +101,7 @@ arguments optionnel:
                         Définir des champs de sol additionnel.
   --soil-depths SOIL_DEPTHS
                         Définir des profondeurs personnalisée pour les champs
-                        de sol (WSOL,ISOL). Les défauts sont
+                        de sol (WSOL,ISOL,TGRD). Les défauts sont
                         0.05,0.1,0.2,0.4,1.0,2.0,3.0.
   --strict-vcoord-match
                         Exiger que les paramètres IP1/IP2/IP3 de la coordonnée
@@ -139,6 +139,10 @@ arguments optionnel:
                         la plage que vient de librmn.
   --bounds              Inclure les limites des cellules de grille dans la
                         sortie.
+  --gmap-dummy-type {char,int}
+                        Le type de données pour la variable de grille. Quelque
+                        utiles de netCDF ont des problèmes de concaténation si
+                        cette valeur est un « char ».
   --filter CONDITION    Sous-ensemble d'enregistrements fichier standard RPN
                         en utilisant les critères donnés. Par exemple, pour
                         convertir seulement les prévisions sur 24 heures, vous
