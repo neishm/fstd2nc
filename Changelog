@@ -1,3 +1,10 @@
+Version 0.20250929.0 (Sep 29, 2025)
+	* New option --soil-depth-vars to specify additional soil fields.
+	* Added 'TGRD' as a soil field by default (thanks to Pascal Bourgault).
+	* New option --gmap-dummy-type to change the data type of the grid
+	  mapping variable.  This variable has no data, but some tools
+	  struggle if the type is the default 'char' type.
+
 Version 0.20250731.0 (Jul 31, 2025)
 	* Some updates to CCC format decoder, to fix bugs in 'type' and
 	  'level' axes, and support for 'YEAR' fields.
