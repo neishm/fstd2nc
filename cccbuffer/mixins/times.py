@@ -118,6 +118,7 @@ class Times(BufferBase):
           itime = var.dims.index('time')
           if len(var.axes[itime]) == 1:
             var.axes = var.axes[:itime] + var.axes[itime+1:]
+            var.record_id = var.record_id.squeeze(axis=itime)
             iilg = var.dims.index('ilg')
             var.axes[iilg] = years
       return
