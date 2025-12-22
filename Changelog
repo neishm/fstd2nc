@@ -1,3 +1,7 @@
+Version 0.20250929.1 (Dec 22, 2025)
+	* Fixed a bug in CCC format interface with 'YEAR' record.
+	* Fixed a bug when decoding with --vardict or --opdict with numpy 2.x.
+
 Version 0.20250929.0 (Sep 29, 2025)
 	* New option --soil-depth-vars to specify additional soil fields.
 	* Added 'TGRD' as a soil field by default (thanks to Pascal Bourgault).
