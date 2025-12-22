@@ -197,7 +197,7 @@ class VarDict (BufferBase):
           try:
             array = np.array(codenames,dtype=np.char.string_).view('|S1').reshape(len(codes),-1)
           except AttributeError:
-            array = np.array(codenames,dtype=np.char.bytes_).view('|S1').reshape(len(codes),-1)
+            array = np.array(codenames,dtype=np.bytes_).view('|S1').reshape(len(codes),-1)
           sfctype = _dim_type('sfctype',array.shape[0])
           sfctype_strlen = _dim_type('sfctype_strlen',array.shape[1])
           surface_type = _var_type("surface_type",{},[sfctype,sfctype_strlen],array)
