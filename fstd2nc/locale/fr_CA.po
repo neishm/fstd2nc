@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-09-03 16:17+0000\n"
+"POT-Creation-Date: 2026-01-26 18:33+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -17,14 +17,6 @@ msgstr ""
 "Content-Type: text/plain; charset=ISO-8859-1\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
-
-#, python-format
-msgid "Warning: %s"
-msgstr "Avertissement: %s"
-
-#, python-format
-msgid "Error: %s"
-msgstr "Erreur: %s"
 
 msgid "No grid mapping found"
 msgstr "Aucun mappage de grille trouvé"
@@ -111,34 +103,155 @@ msgstr "Refus de remplacer le fichier existant '%s'."
 msgid "Aborted by user."
 msgstr "Annulé par l'utilisateur."
 
-msgid "Add extended metadata to the variables (fst24 data only)."
-msgstr ""
-"Ajouter des métadonnées étendues aux variables (données fst24 seulement)."
+#, python-format
+msgid "Warning: %s"
+msgstr "Avertissement: %s"
+
+#, python-format
+msgid "Error: %s"
+msgstr "Erreur: %s"
 
 msgid "NAME,NAME,..."
 msgstr "NOM,NOM,..."
 
 msgid ""
-"Exclude some axes, attributes,  or derived variables from the output.  For "
-"instance, excluding 'leadtime,reftime' can help for netCDF tools that don't "
-"recognize leadtime and reftime as valid coordinates.  Note that axes will "
-"only be excluded if they have a length of 1."
+"Specify which fields to treat as accumulated quantities (using IP3 as "
+"accumulation period)."
 msgstr ""
-"Exclure quelque axes, attributs, ou variables dérivées de la sortie.  Par "
-"exemple, l'exclusion de 'leadtime,reftime' peut aider les outils netCDF qui "
-"ne reconnaissent pas leadtime et reftime comme des coordonnées valides.  "
-"Notez que les axes ne seront exclus que s'ils ont une longueur de 1."
+"Spécifier les champs à traiter comme des quantités cumulées (en utilisant "
+"IP3 comme période de cumul)."
+
+msgid ""
+"Turn off detection of accumulated fields, in case it is causing problems "
+"with the conversion."
+msgstr ""
+"Désactivez la détection des champs accumulés, au cas où cela causerait des "
+"problèmes lors de la conversion."
+
+#, python-format
+msgid ""
+"Ignoring IP3 value %d for %s, of unknown purpose.  If this is an accumulated "
+"variable, you could specify it in the --accum-vars option."
+msgstr ""
+"Ignorer la valeur IP3 %d pour %s, dont l'objectif est inconnu. S'il s'agit "
+"d'une variable accumulée, vous pouvez la spécifier dans l'option --accum-"
+"vars."
+
+#, python-format
+msgid ""
+"Multiple IP3 values of unknown purpose found for %s.  If this is an "
+"accumulated variable, you could specify it in the --accum-vars option."
+msgstr ""
+"Plusieurs valeurs IP3 à but inconnu trouvées pour %s. S'il s'agit d'une "
+"variable accumulée, vous pouvez la spécifier dans l'option --accum-vars."
+
+msgid ""
+"Adds a compatibility layer to the netCDF output file, so it can also "
+"function as a valid FSTD file.  EXPERIMENTAL."
+msgstr ""
+"Ajoute une couche de compatibilité au fichier de sortie netCDF, qu'il puisse "
+"également fonctionner comme un fichier FSTD valide.  EXPÉRIMENTAL."
+
+#, python-format
+msgid "netCDF3 does not support unsigned ints.  Converting %s to signed int."
+msgstr ""
+"netCDF3 ne prend pas en charge les entiers non signés.  Convertis %s en "
+"entier signé."
+
+msgid "No relevant FST records were found."
+msgstr "Aucun enregistrement FST pertinent n'a été trouvé."
+
+msgid "Saving netCDF file"
+msgstr "Ecriture du fichier netCDF."
+
+#, python-format
+msgid ""
+"Problem writing compatible record for %s:%s.  Writing separate netCDF / FSTD "
+"versions instead."
+msgstr ""
+"Probleme d'ecriture d'enregistrement compatible pour %s:%s.  Écrire des "
+"versions distinct de netCDF / FSTD à la place."
+
+#, python-format
+msgid "Internal problem with the script - unable to get data for '%s'"
+msgstr ""
+"Problème interne avec le script - impossible d'obtenir les données pour '%s'"
+
+msgid "Use the date of validity for the \"time\" axis.  This is the default."
+msgstr "Utiliser la date de validité pour l'axe \"time\".  Ceci est le défaut."
+
+msgid ""
+"Use the date of original analysis for the time axis, and put the forecast "
+"times into a separate \"forecast\" axis."
+msgstr ""
+"Utiliser la date d'analyse d'origine pour l'axe temporel, et placer les "
+"heurs de prévision dans un axe \"forecast\" séparé."
+
+msgid ""
+"Expected a complete time axis, but found time difference instead.  This will "
+"not encode properly."
+msgstr ""
+
+msgid ""
+"Collect different etikets for the same variable together into an \"ensemble"
+"\" axis."
+msgstr ""
+"Rassembler différentes etikets pour la même variable ensemble dans une axe "
+"\"ensemble\"."
+
+#, python-format
+msgid "Cannot read from %s - file may be missing or damaged."
+msgstr ""
+"Impossible de lire à partir de %s - le fichier est peut-être manquant ou "
+"endommagé."
+
+#, python-brace-format
+msgid ""
+"Got unexpected shape of data.\n"
+"kwargs: {kwargs}\n"
+"gives shape: {data.shape}\n"
+"which is not compatible with shape: {shape}"
+msgstr ""
+
+msgid "Unable to fuse some variables."
+msgstr "Impossible de fusionner la ou les variables: "
+
+msgid ""
+"Dates out of bounds for pandas routines.  Using alternative (slower) "
+"routines."
+msgstr ""
+"Dates hors limites pour les routines des pandas. Utiliser des routines "
+"alternatives (plus lentes)."
+
+msgid "Cartopy not found.  Unable to add _CRS attribute."
+msgstr "Cartopy non trouvée Impossible d'ajouter l'attribut _CRS."
+
+#, python-format
+msgid "'batch' size (%d) does not divide evenly into number of files (%s)"
+msgstr ""
+"Taille 'batch' (%d) ne se divise pas uniformément en nombre de fichiers (%s)"
+
+msgid "Indexing the files"
+msgstr "Indexer les fichiers"
+
+msgid ""
+"No key or address/length columns available.  Don't know how to wrap the "
+"records for fstpy."
+msgstr ""
 
 #, python-format
 msgid ""
 "Subset %s records using the given criteria.  For example, to convert only 24-"
 "hour forecasts you could use --filter ip2==24.  String attributes must be "
-"put in quotes, e.g. --filter etiket=='ICETHICKNESS'."
+"put in quotes, e.g. --filter etiket=='ICETHICKNESS'.  If there's more than "
+"one --filter listed, the conditions will be AND'd together.  To do a logical "
+"OR between conditions, use the '|' operator inside a single filter.  E.g., --"
+"filter \"(etiket=='ICETHICKNESS') | (etiket=='G6_2_0_0N')\""
 msgstr ""
 "Sous-ensemble d'enregistrements %s en utilisant les critères donnés.  Par "
 "exemple, pour convertir seulement les prévisions sur 24 heures, vous pouvez "
 "utiliser --filter ip2==24.  Les attributs de chaîne doivent être mettre "
-"guillemets, par ex. --filter etiket=='ICETHICKNESS'."
+"guillemets, par ex. --filter etiket=='ICETHICKNESS'.  Si plusieurs filtres sont spécifiés, leurs conditions seront combinées par un ET logique. Pour effectuer un OU logique entre des conditions, utilisez l'opérateur « |» à l'intérieur d'un filtre. Par exemple : --filter \"(etiket=='ICETHICKNESS') | (etiket=='G6_2_0_0N')\"."
 
 #, python-format
 msgid "unable to apply the filter: %s"
@@ -148,112 +261,157 @@ msgstr "impossible d'appliquer le filtre: %s"
 msgid "unable to parse the filter: %s"
 msgstr "impossible d'analyser le filtre: %s"
 
-msgid "Define additional surface aggregate fields."
-msgstr "Définir des champs d'agrégats de surface additionnel."
+msgid ""
+"Raw binary records detected.  The values may not be properly decoded if "
+"you're opening on a different platform."
+msgstr "Enregistrements binaires bruts détectés."
 
-msgid "Define additional soil depth fields."
-msgstr "Définir des champs de sol additionnel."
+msgid "RPN standard file"
+msgstr "fichier standard RPN"
+
+msgid "an RPN standard file"
+msgstr "un fichier standard RPN"
+
+msgid "RPN standard file(s)"
+msgstr "fichier(s) standard"
+
+msgid ""
+"Tells the converter to ignore the typvar when deciding if two records are "
+"part of the same field.  Default is to split the variable on different "
+"typvars."
+msgstr ""
+"Indique au convertisseur d'ignorer la typvar lorsqu'il décide si deux "
+"enregistrements font partie du même champ.  Le défaut est de diviser la "
+"variable sur différents typvars."
+
+msgid ""
+"Tells the converter to ignore the etiket when deciding if two records are "
+"part of the same field.  Default is to split the variable on different "
+"etikets."
+msgstr ""
+"Indique au convertisseur d'ignorer l'etiket lorsqu'il décide si deux "
+"enregistrements font partie du même champ.  Le défaut est de diviser la "
+"variable sur différents etikets."
 
 #, python-format
-msgid "Define custom depths for soil fields (%s).  Defaults are %%(default)s."
-msgstr ""
-"Définir des profondeurs personnalisée pour les champs de sol (%s).  Les "
-"défauts sont %%(default)s."
+msgid "Unknown grid '%s'"
+msgstr "Grille inconnue '%s'"
 
-msgid "Unable to parse soil-depths parameter."
-msgstr "Impossible d'analyser le paramètre 'soil-depths'."
+msgid "Select first subgrid from a supergrid."
+msgstr "Sélectionner la première sous-grille d'une super grille."
+
+msgid "Select second subgrid from a supergrid."
+msgstr "Sélectionner la deuxième sous-grille d'une super grille."
+
+msgid "Crop grids to the smaller (inner core) domain for LAM outputs."
+msgstr ""
+"Couper les grilles au domaine plus petit (noyau interne) pours les sorties "
+"LAM."
+
+msgid "show program's version number and exit"
+msgstr "afficher le numéro de version du programme et quitter"
 
 msgid ""
-"More than the expected number of soil depths were found.  No depth values "
-"will be encoded."
+"Display a progress bar during the conversion, if the \"progress\" module is "
+"installed."
 msgstr ""
-"Plus que le nombre prévu de profondeurs de sol ont été trouvées.  Aucune "
-"valeur de profondeur ne sera encodée."
+"Affiche une barre de progression pendant de la conversion, si le module "
+"\"progress\" est installé."
+
+msgid "Disable the progress bar."
+msgstr "Désactiver la barre de progression."
 
 msgid ""
-"For data on supergrids, split the subgrids along a \"subgrid\" axis.  The "
-"default is to leave the subgrids stacked together as they are in the RPN "
+"Don't display any information except for critical error messages.  Implies --"
+"no-progress."
+msgstr ""
+"N'afficher pas quelque information moins les messages d'erreur critiques.  "
+"Implique --no-progress"
+
+msgid ""
+"Disables multithreading/multiprocessing.  Useful for resource-limited "
+"machines."
+msgstr ""
+"Désactiver le multithreading/multitraitement.  Utile pour les machines à "
+"ressources limitées."
+
+msgid ""
+"Don't include internal record attributes and other internal information in "
+"the output metadata."
+msgstr ""
+"Ne pas inclure les attributs d'enregistrement internes et d'autres "
+"informations internes dans les métadonnées de sortie."
+
+msgid "This is the default behaviour."
+msgstr "Ceci est la comportement par défaut."
+
+msgid "Include all internal record attributes in the output metadata."
+msgstr ""
+"Inclure tous les attributs d'enregistrement internes dans les métadonnées de "
+"sortie."
+
+msgid ""
+"Specify a minimal set of internal record attributes to include in the output "
 "file."
 msgstr ""
-"Pour les données sur les 'supergrids', divisez les grilles sur une axe "
-"\"subgrid\".  Le défaut est garder les sous-grilles ensemble comme elles "
-"sont dans le fichier RPN."
+"Spécifier un ensemble minimal d'attributs d'enregistrement internes à "
+"inclure dans le fichier de sortie."
 
-msgid ""
-"For rotated grids, do NOT adjust rlon coordinate to keep the range in "
-"-180..180.  Allow the rlon value to be whatever librmn says it should be."
+msgid "Unable to decode headers for this format."
 msgstr ""
-"Pour les grilles tournées, n'ajustez PAS la coordonnée rlon pour conserver "
-"la plage entre -180..180.  Utilise la plage que vient de librmn."
-
-msgid "Include grid cell boundaries in the output."
-msgstr "Inclure les limites des cellules de grille dans la sortie."
-
-msgid ""
-"The data type to use for the grid mapping variable.  Some netCDF tools have "
-"trouble concatenating if this value is a char."
-msgstr "Le type de données pour la variable de grille.  Quelque utiles de netCDF ont des problèmes de concaténation si cette valeur est un « char »."
 
 #, python-format
-msgid "Unable to get lat/lon coordinates for '%s'"
-msgstr "Impossible d'obtenir les coordonnées lat/lon pour '%s'"
+msgid "Unexpected arguments: %s"
+msgstr "Arguments inattendus: %s"
+
+msgid "Inspecting input files"
+msgstr "Inspection des fichiers d'entrée"
 
 #, python-format
-msgid "Wrong shape of lat/lon for '%s'"
-msgstr "Mauvaise forme de lat/lon pour '%s'"
+msgid "'%s' is not %s."
+msgstr "'%s' n'est pas %s."
 
 #, python-format
-msgid "Unusual grid axes for '%s' - ignoring."
-msgstr "Axes de grille inhabituels pour '%s' - ignorés."
+msgid "Directory '%s' does not contain any %s."
+msgstr "Le répertoire '%s' ne contient aucun %s."
 
 #, python-format
-msgid ""
-"Standard parallel must be 60 deg to encode polar stereographic projections.  "
-"Found %s instead."
-msgstr ""
-"Le parallèle standard doit être de 60 degrés pour coder les projections "
-"stéréographiques polaires.  Trouve %s à la place."
-
-msgid ""
-"Sterographic projection missing attribute "
-"\"straight_vertical_longitude_from_pole\""
-msgstr ""
-"L'attribut \"straight_vertical_longitude_from_pole\" est manquant pour la "
-"projection stéréographique."
+msgid "No %s match '%s'."
+msgstr "Aucun %s ne correspond à '%s'."
 
 #, python-format
-msgid "latitude_of_projection_origin must be 90 or -90.  Found %s"
-msgstr "latitude_of_projection_origin doit être de 90 ou -90.  Trouve %s"
-
-msgid "Comma-separated list of variables that use momentum levels."
-msgstr ""
-"Liste de variables séparées par des virgules qui utilisent des niveaux "
-"thermodynamiques."
-
-msgid "Comma-separated list of variables that use thermodynamic levels."
-msgstr ""
-"Liste de variables séparées par des virgules qui utilisent des niveaux "
-"momentum."
-
-msgid "Assume the bottom level of the profile data is missing."
-msgstr "Supposer que le niveau final des données de profil est manquant."
-
-msgid "Wrong number of momentum levels found in the data."
-msgstr "Mauvais nombre de niveaux momentum trouvés dans les données."
-
-msgid "Wrong number of thermodynamic levels found in the data."
-msgstr "Mauvais nombre de niveaux thermodynamique trouvés dans les données."
+msgid "'%s' does not exist."
+msgstr "'%s' n'existe pas."
 
 #, python-format
-msgid "Unable to find the vertical coordinates for %s."
-msgstr "Impossible de trouver les coordonnées verticales pour %s."
+msgid "Problem with input file '%s'"
+msgstr "Probleme avec fichier d'entrée '%s'"
 
-msgid ""
-"Can't use datev for timeseries data with multiple dates of origin.  Try re-"
-"running with the --dateo option."
-msgstr ""
-"Impossible d'utiliser datev pour les données de séries temporelles avec "
-"plusieurs dates d'origine.  Assayez relancer avec l'option --dateo."
+msgid "no input files found!"
+msgstr "aucun fichier d'entrée sont trouvé!"
+
+#, python-format
+msgid "Found %d %s"
+msgstr "Trouve %s %s"
+
+#, python-format
+msgid "Missing some records for %s."
+msgstr "Quelque enregistrements sont manquants pour %s."
+
+#, python-format
+msgid "Unknown axis '%s'.  Encoding not complete."
+msgstr "L'axe '%s' inconnue.  Encodage incomplet."
+
+#, python-format
+msgid "Unable to encode %s."
+msgstr "Impossible d'encoder '%s'."
+
+msgid "Nothing to encode!"
+msgstr "Rein à encoder!"
+
+#, python-format
+msgid "Unhandled inner axis %s."
+msgstr "Axe intérieur non géré: %s"
 
 #, python-format
 msgid ""
@@ -280,22 +438,6 @@ msgid "Encoding masks with datyp+64 not supported yet."
 msgstr "Encoder des masques avec datyp+64 n'est pas encore supporté."
 
 msgid ""
-"Comma-separated list of variables to convert.  By default, all variables are "
-"converted."
-msgstr ""
-"Liste de variables séparées par des virgules à convertir.  Par défaut, "
-"toutes les variables sont converties."
-
-msgid "Will look for variables: "
-msgstr "Cherchera des variables: "
-
-msgid "Unable to find variable(s): "
-msgstr "Impossible de trouver la ou les variables: "
-
-msgid "Nothing to convert."
-msgstr "Rein à convertir."
-
-msgid ""
 "Use metadata from the specified file.  You can repeat this option multiple "
 "times to build metadata from different sources."
 msgstr "Utiliser les métadonnées du fichier spécifié."
@@ -319,10 +461,6 @@ msgstr "Omettre entièrement l'attribut \"Conventions\" du fichier netCDF."
 
 msgid "Unable to parse the rename arguments."
 msgstr "Impossible d'analyser les arguments de renommage."
-
-#, python-format
-msgid "'%s' does not exist."
-msgstr "'%s' n'existe pas."
 
 #, python-format
 msgid "The units for the output time axis.  Default is %(default)s."
@@ -360,61 +498,117 @@ msgstr "Renommer '%s' en '_%s'."
 msgid "Renaming '%s' to '%s'."
 msgstr "Renommer '%s' en '%s'."
 
+msgid ""
+"Exclude some axes, attributes,  or derived variables from the output.  For "
+"instance, excluding 'leadtime,reftime' can help for netCDF tools that don't "
+"recognize leadtime and reftime as valid coordinates.  Note that axes will "
+"only be excluded if they have a length of 1."
+msgstr ""
+"Exclure quelque axes, attributs, ou variables dérivées de la sortie.  Par "
+"exemple, l'exclusion de 'leadtime,reftime' peut aider les outils netCDF qui "
+"ne reconnaissent pas leadtime et reftime comme des coordonnées valides.  "
+"Notez que les axes ne seront exclus que s'ils ont une longueur de 1."
+
+msgid ""
+"Comma-separated list of variables to convert.  By default, all variables are "
+"converted."
+msgstr ""
+"Liste de variables séparées par des virgules à convertir.  Par défaut, "
+"toutes les variables sont converties."
+
+msgid "Will look for variables: "
+msgstr "Cherchera des variables: "
+
+msgid "Unable to find variable(s): "
+msgstr "Impossible de trouver la ou les variables: "
+
+msgid "Nothing to convert."
+msgstr "Rein à convertir."
+
+msgid "Comma-separated list of variables that use momentum levels."
+msgstr ""
+"Liste de variables séparées par des virgules qui utilisent des niveaux "
+"thermodynamiques."
+
+msgid "Comma-separated list of variables that use thermodynamic levels."
+msgstr ""
+"Liste de variables séparées par des virgules qui utilisent des niveaux "
+"momentum."
+
+msgid "Assume the bottom level of the profile data is missing."
+msgstr "Supposer que le niveau final des données de profil est manquant."
+
+msgid "Wrong number of momentum levels found in the data."
+msgstr "Mauvais nombre de niveaux momentum trouvés dans les données."
+
+msgid "Wrong number of thermodynamic levels found in the data."
+msgstr "Mauvais nombre de niveaux thermodynamique trouvés dans les données."
+
 #, python-format
-msgid "netCDF3 does not support unsigned ints.  Converting %s to signed int."
+msgid "Unable to find the vertical coordinates for %s."
+msgstr "Impossible de trouver les coordonnées verticales pour %s."
+
+msgid ""
+"Can't use datev for timeseries data with multiple dates of origin.  Try re-"
+"running with the --dateo option."
 msgstr ""
-"netCDF3 ne prend pas en charge les entiers non signés.  Convertis %s en "
-"entier signé."
+"Impossible d'utiliser datev pour les données de séries temporelles avec "
+"plusieurs dates d'origine.  Assayez relancer avec l'option --dateo."
 
-msgid "No relevant FST records were found."
-msgstr "Aucun enregistrement FST pertinent n'a été trouvé."
+msgid "Define additional surface aggregate fields."
+msgstr "Définir des champs d'agrégats de surface additionnel."
 
-msgid "Saving netCDF file"
-msgstr "Ecriture du fichier netCDF."
+msgid "Define additional soil depth fields."
+msgstr "Définir des champs de sol additionnel."
 
 #, python-format
-msgid "Internal problem with the script - unable to get data for '%s'"
+msgid "Define custom depths for soil fields (%s).  Defaults are %%(default)s."
 msgstr ""
-"Problème interne avec le script - impossible d'obtenir les données pour '%s'"
+"Définir des profondeurs personnalisée pour les champs de sol (%s).  Les "
+"défauts sont %%(default)s."
+
+msgid "Unable to parse soil-depths parameter."
+msgstr "Impossible d'analyser le paramètre 'soil-depths'."
 
 msgid ""
-"Collect different etikets for the same variable together into an \"ensemble"
-"\" axis."
+"More than the expected number of soil depths were found.  No depth values "
+"will be encoded."
 msgstr ""
-"Rassembler différentes etikets pour la même variable ensemble dans une axe "
-"\"ensemble\"."
+"Plus que le nombre prévu de profondeurs de sol ont été trouvées.  Aucune "
+"valeur de profondeur ne sera encodée."
+
+msgid "Use metadata from the specified variable dictionary (XML format)."
+msgstr ""
+"Utiliser les métadonnées du dictionnaire de variables spécifié (format XML)."
+
+msgid "Similar to above, but use the standard CMC-RPN operational dictionary."
+msgstr ""
+"Similaire à ce qui précéde, mais utilise le dictionnaire opérationnel "
+"standard CMC-RPN."
+
+msgid "Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"
+msgstr "Impossible de trouver $CMCCONST/opdict/ops.variable_dictionary."
 
 msgid ""
-"Raw binary records detected.  The values may not be properly decoded if "
-"you're opening on a different platform."
-msgstr "Enregistrements binaires bruts détectés."
-
-msgid "RPN standard file"
-msgstr "fichier standard RPN"
-
-msgid "an RPN standard file"
-msgstr "un fichier standard RPN"
-
-msgid "RPN standard file(s)"
-msgstr "fichier(s) standard"
+"Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary."
+"xml"
+msgstr ""
+"Impossible de trouver $AFSISIO/datafiles/constants/opdict/ops."
+"variable_dictionary."
 
 msgid ""
-"Tells the converter to ignore the typvar when deciding if two records are "
-"part of the same field.  Default is to split the variable on different "
-"typvars."
+"Neither $CMCCONST nor $AFSISIO defined.  Can't find operational dictionary."
 msgstr ""
-"Indique au convertisseur d'ignorer la typvar lorsqu'il décide si deux "
-"enregistrements font partie du même champ.  Le défaut est de diviser la "
-"variable sur différents typvars."
+"Ni $CMCCONST ni $AFSISIO définis.  Impossible de trouver le dictionnaire "
+"opérationnel."
 
-msgid ""
-"Tells the converter to ignore the etiket when deciding if two records are "
-"part of the same field.  Default is to split the variable on different "
-"etikets."
-msgstr ""
-"Indique au convertisseur d'ignorer l'etiket lorsqu'il décide si deux "
-"enregistrements font partie du même champ.  Le défaut est de diviser la "
-"variable sur différents etikets."
+#, python-format
+msgid "Unable to find '%s'"
+msgstr "Impossible de trouver '%s'"
+
+#, python-format
+msgid "Invalid dictionary file '%s'"
+msgstr "Le fichier de dictionnare '%s' est invalide."
 
 msgid ""
 "Require the IP1/IP2/IP3 parameters of the vertical coordinate to match the "
@@ -507,251 +701,103 @@ msgstr ""
 "Problème de traitement du niveau de diagnostic de %s comme niveau de modèle "
 "- le divise dans un champ séparé."
 
-#, python-format
-msgid "Cannot read from %s - file may be missing or damaged."
+msgid "Add extended metadata to the variables (fst24 data only)."
 msgstr ""
-"Impossible de lire à partir de %s - le fichier est peut-être manquant ou "
-"endommagé."
-
-msgid "Unable to fuse some variables."
-msgstr "Impossible de fusionner la ou les variables: "
+"Ajouter des métadonnées étendues aux variables (données fst24 seulement)."
 
 msgid ""
-"Dates out of bounds for pandas routines.  Using alternative (slower) "
-"routines."
-msgstr ""
-"Dates hors limites pour les routines des pandas. Utiliser des routines "
-"alternatives (plus lentes)."
-
-msgid "Cartopy not found.  Unable to add _CRS attribute."
-msgstr "Cartopy non trouvée Impossible d'ajouter l'attribut _CRS."
-
-#, python-format
-msgid "'batch' size (%d) does not divide evenly into number of files (%s)"
-msgstr ""
-"Taille 'batch' (%d) ne se divise pas uniformément en nombre de fichiers (%s)"
-
-msgid "Indexing the files"
-msgstr "Indexer les fichiers"
-
-msgid ""
-"No key or address/length columns available.  Don't know how to wrap the "
-"records for fstpy."
-msgstr ""
-
-msgid "show program's version number and exit"
-msgstr "afficher le numéro de version du programme et quitter"
-
-msgid ""
-"Display a progress bar during the conversion, if the \"progress\" module is "
-"installed."
-msgstr ""
-"Affiche une barre de progression pendant de la conversion, si le module "
-"\"progress\" est installé."
-
-msgid "Disable the progress bar."
-msgstr "Désactiver la barre de progression."
-
-msgid ""
-"Don't display any information except for critical error messages.  Implies --"
-"no-progress."
-msgstr ""
-"N'afficher pas quelque information moins les messages d'erreur critiques.  "
-"Implique --no-progress"
-
-msgid ""
-"Disables multithreading/multiprocessing.  Useful for resource-limited "
-"machines."
-msgstr ""
-"Désactiver le multithreading/multitraitement.  Utile pour les machines à "
-"ressources limitées."
-
-msgid ""
-"Don't include internal record attributes and other internal information in "
-"the output metadata."
-msgstr ""
-"Ne pas inclure les attributs d'enregistrement internes et d'autres "
-"informations internes dans les métadonnées de sortie."
-
-msgid "This is the default behaviour."
-msgstr "Ceci est la comportement par défaut."
-
-msgid "Include all internal record attributes in the output metadata."
-msgstr ""
-"Inclure tous les attributs d'enregistrement internes dans les métadonnées de "
-"sortie."
-
-msgid ""
-"Specify a minimal set of internal record attributes to include in the output "
+"For data on supergrids, split the subgrids along a \"subgrid\" axis.  The "
+"default is to leave the subgrids stacked together as they are in the RPN "
 "file."
 msgstr ""
-"Spécifier un ensemble minimal d'attributs d'enregistrement internes à "
-"inclure dans le fichier de sortie."
-
-msgid "Unable to decode headers for this format."
-msgstr ""
-
-#, python-format
-msgid "Unexpected arguments: %s"
-msgstr "Arguments inattendus: %s"
-
-msgid "Inspecting input files"
-msgstr "Inspection des fichiers d'entrée"
-
-#, python-format
-msgid "'%s' is not %s."
-msgstr "'%s' n'est pas %s."
-
-#, python-format
-msgid "Directory '%s' does not contain any %s."
-msgstr "Le répertoire '%s' ne contient aucun %s."
-
-#, python-format
-msgid "No %s match '%s'."
-msgstr "Aucun %s ne correspond à '%s'."
-
-#, python-format
-msgid "Problem with input file '%s'"
-msgstr "Probleme avec fichier d'entrée '%s'"
-
-msgid "no input files found!"
-msgstr "aucun fichier d'entrée sont trouvé!"
-
-#, python-format
-msgid "Found %d %s"
-msgstr "Trouve %s %s"
-
-#, python-format
-msgid "Missing some records for %s."
-msgstr "Quelque enregistrements sont manquants pour %s."
-
-#, python-format
-msgid "Unknown axis '%s'.  Encoding not complete."
-msgstr "L'axe '%s' inconnue.  Encodage incomplet."
-
-#, python-format
-msgid "Unable to encode %s."
-msgstr "Impossible d'encoder '%s'."
-
-msgid "Nothing to encode!"
-msgstr "Rein à encoder!"
-
-#, python-format
-msgid "Unhandled inner axis %s."
-msgstr "Axe intérieur non géré: %s"
-
-msgid "Use metadata from the specified variable dictionary (XML format)."
-msgstr ""
-"Utiliser les métadonnées du dictionnaire de variables spécifié (format XML)."
-
-msgid "Similar to above, but use the standard CMC-RPN operational dictionary."
-msgstr ""
-"Similaire à ce qui précéde, mais utilise le dictionnaire opérationnel "
-"standard CMC-RPN."
-
-msgid "Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"
-msgstr "Impossible de trouver $CMCCONST/opdict/ops.variable_dictionary."
+"Pour les données sur les 'supergrids', divisez les grilles sur une axe "
+"\"subgrid\".  Le défaut est garder les sous-grilles ensemble comme elles "
+"sont dans le fichier RPN."
 
 msgid ""
-"Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary."
-"xml"
+"For rotated grids, do NOT adjust rlon coordinate to keep the range in "
+"-180..180.  Allow the rlon value to be whatever librmn says it should be."
 msgstr ""
-"Impossible de trouver $AFSISIO/datafiles/constants/opdict/ops."
-"variable_dictionary."
+"Pour les grilles tournées, n'ajustez PAS la coordonnée rlon pour conserver "
+"la plage entre -180..180.  Utilise la plage que vient de librmn."
+
+msgid "Adjust longitudes to have range -180..180."
+msgstr ""
+
+msgid "Include grid cell boundaries in the output."
+msgstr "Inclure les limites des cellules de grille dans la sortie."
 
 msgid ""
-"Neither $CMCCONST nor $AFSISIO defined.  Can't find operational dictionary."
+"The data type to use for the grid mapping variable.  Some netCDF tools have "
+"trouble concatenating if this value is a char."
 msgstr ""
-"Ni $CMCCONST ni $AFSISIO définis.  Impossible de trouver le dictionnaire "
-"opérationnel."
+"Le type de données pour la variable de grille.  Quelque utiles de netCDF ont "
+"des problèmes de concaténation si cette valeur est un « char »."
 
 #, python-format
-msgid "Unable to find '%s'"
-msgstr "Impossible de trouver '%s'"
+msgid "Unable to get lat/lon coordinates for '%s'"
+msgstr "Impossible d'obtenir les coordonnées lat/lon pour '%s'"
 
 #, python-format
-msgid "Invalid dictionary file '%s'"
-msgstr "Le fichier de dictionnare '%s' est invalide."
+msgid "Wrong shape of lat/lon for '%s'"
+msgstr "Mauvaise forme de lat/lon pour '%s'"
 
-msgid "Use the date of validity for the \"time\" axis.  This is the default."
-msgstr "Utiliser la date de validité pour l'axe \"time\".  Ceci est le défaut."
-
-msgid ""
-"Use the date of original analysis for the time axis, and put the forecast "
-"times into a separate \"forecast\" axis."
-msgstr ""
-"Utiliser la date d'analyse d'origine pour l'axe temporel, et placer les "
-"heurs de prévision dans un axe \"forecast\" séparé."
-
-msgid ""
-"Specify which fields to treat as accumulated quantities (using IP3 as "
-"accumulation period)."
-msgstr ""
-"Spécifier les champs à traiter comme des quantités cumulées (en utilisant "
-"IP3 comme période de cumul)."
-
-msgid ""
-"Turn off detection of accumulated fields, in case it is causing problems "
-"with the conversion."
-msgstr ""
-"Désactivez la détection des champs accumulés, au cas où cela causerait des problèmes lors de la conversion."
+#, python-format
+msgid "Unusual grid axes for '%s' - ignoring."
+msgstr "Axes de grille inhabituels pour '%s' - ignorés."
 
 #, python-format
 msgid ""
-"Ignoring IP3 value %d for %s, of unknown purpose.  If this is an accumulated "
-"variable, you could specify it in the --accum-vars option."
+"Standard parallel must be 60 deg to encode polar stereographic projections.  "
+"Found %s instead."
 msgstr ""
-"Ignorer la valeur IP3 %d pour %s, dont l'objectif est inconnu. S'il s'agit "
-"d'une variable accumulée, vous pouvez la spécifier dans l'option --accum-"
-"vars."
-
-#, python-format
-msgid ""
-"Multiple IP3 values of unknown purpose found for %s.  If this is an "
-"accumulated variable, you could specify it in the --accum-vars option."
-msgstr ""
-"Plusieurs valeurs IP3 à but inconnu trouvées pour %s. S'il s'agit d'une "
-"variable accumulée, vous pouvez la spécifier dans l'option --accum-vars."
+"Le parallèle standard doit être de 60 degrés pour coder les projections "
+"stéréographiques polaires.  Trouve %s à la place."
 
 msgid ""
-"Adds a compatibility layer to the netCDF output file, so it can also "
-"function as a valid FSTD file.  EXPERIMENTAL."
+"Sterographic projection missing attribute "
+"\"straight_vertical_longitude_from_pole\""
 msgstr ""
-"Ajoute une couche de compatibilité au fichier de sortie netCDF, qu'il puisse "
-"également fonctionner comme un fichier FSTD valide.  EXPÉRIMENTAL."
+"L'attribut \"straight_vertical_longitude_from_pole\" est manquant pour la "
+"projection stéréographique."
 
 #, python-format
-msgid ""
-"Problem writing compatible record for %s:%s.  Writing separate netCDF / FSTD "
-"versions instead."
-msgstr ""
-"Probleme d'ecriture d'enregistrement compatible pour %s:%s.  Écrire des "
-"versions distinct de netCDF / FSTD à la place."
+msgid "latitude_of_projection_origin must be 90 or -90.  Found %s"
+msgstr "latitude_of_projection_origin doit être de 90 ou -90.  Trouve %s"
 
 #, python-format
-msgid "Unknown grid '%s'"
-msgstr "Grille inconnue '%s'"
-
-msgid "Select first subgrid from a supergrid."
-msgstr "Sélectionner la première sous-grille d'une super grille."
-
-msgid "Select second subgrid from a supergrid."
-msgstr "Sélectionner la deuxième sous-grille d'une super grille."
-
-msgid "Crop grids to the smaller (inner core) domain for LAM outputs."
+msgid "%(heading)s:"
 msgstr ""
-"Couper les grilles au domaine plus petit (noyau interne) pours les sorties "
-"LAM."
 
 msgid "usage: "
 msgstr "usage: "
 
+#, python-format
+msgid " (default: %(default)s)"
+msgstr ""
+
+#, python-format
+msgid "argument %(argument_name)s: %(message)s"
+msgstr ""
+
 msgid ".__call__() not defined"
 msgstr ".__call__() non défini"
+
+#, fuzzy, python-format
+msgid "conflicting subparser: %s"
+msgstr "chaîne d'option en conflit: %s"
+
+#, fuzzy, python-format
+msgid "conflicting subparser alias: %s"
+msgstr "chaîne d'option en conflit: %s"
 
 #, python-format
 msgid "unknown parser %(parser_name)r (choices: %(choices)s)"
 msgstr "Analyseur inconnue %(parser_name)r (choix: %(choices)s)"
+
+#, python-format
+msgid "command '%(parser_name)s' is deprecated"
+msgstr ""
 
 #, python-format
 msgid "argument \"-\" with mode %r"
@@ -796,14 +842,17 @@ msgstr "les arguments mutuellement exclusifs doivent être optionnel."
 msgid "positional arguments"
 msgstr "arguments positionnels"
 
-msgid "optional arguments"
-msgstr "arguments optionnel"
+msgid "options"
+msgstr ""
 
 msgid "show this help message and exit"
 msgstr "afficher ce message d'aide et quitter"
 
 msgid "cannot have multiple subparser arguments"
 msgstr "impossible d'avoir plusiers arguments de sous-analyseur"
+
+msgid "subcommands"
+msgstr ""
 
 #, python-format
 msgid "unrecognized arguments: %s"
@@ -814,8 +863,20 @@ msgid "not allowed with argument %s"
 msgstr "non autorisé avec l'argument %s"
 
 #, python-format
+msgid "ambiguous option: %(option)s could match %(matches)s"
+msgstr "option ambiguë: %(option)s peut correspondre à %(matches)s"
+
+#, python-format
 msgid "ignored explicit argument %r"
 msgstr "ignoré l'argument explicite %r"
+
+#, python-format
+msgid "option '%(option)s' is deprecated"
+msgstr ""
+
+#, python-format
+msgid "argument '%(argument_name)s' is deprecated"
+msgstr ""
 
 #, python-format
 msgid "the following arguments are required: %s"
@@ -841,10 +902,6 @@ msgstr[0] "attendu %s argument"
 msgstr[1] "attendu %s arguments"
 
 #, python-format
-msgid "ambiguous option: %(option)s could match %(matches)s"
-msgstr "option ambiguë: %(option)s peut correspondre à %(matches)s"
-
-#, python-format
 msgid "unexpected option string: %s"
 msgstr "chaîne d'option inattendu: %s"
 
@@ -863,6 +920,13 @@ msgstr "choix invalide: %(value)r (choisissez entre %(choices)s)"
 #, python-format
 msgid "%(prog)s: error: %(message)s\n"
 msgstr "%(prog)s: erreur: %(message)s\n"
+
+#, fuzzy, python-format
+msgid "%(prog)s: warning: %(message)s\n"
+msgstr "%(prog)s: erreur: %(message)s\n"
+
+#~ msgid "optional arguments"
+#~ msgstr "arguments optionnel"
 
 #~ msgid "Include LA and LO records, even if they appear to be redundant."
 #~ msgstr "Inclure les enregstrement LA et LO, même s'ils semblent redondants."

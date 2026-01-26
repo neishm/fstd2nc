@@ -148,7 +148,12 @@ arguments optionnel:
                         convertir seulement les prévisions sur 24 heures, vous
                         pouvez utiliser --filter ip2==24. Les attributs de
                         chaîne doivent être mettre guillemets, par ex.
-                        --filter etiket=='ICETHICKNESS'.
+                        --filter etiket=='ICETHICKNESS'. Si plusieurs filtres
+                        sont spécifiés, leurs conditions seront combinées par
+                        un ET logique. Pour effectuer un OU logique entre des
+                        conditions, utilisez l'opérateur « |» à l'intérieur
+                        d'un filtre. Par exemple : --filter
+                        "(etiket=='ICETHICKNESS') | (etiket=='G6_2_0_0N')".
   --exclude NOM,NOM,...
                         Exclure quelque axes, attributs, ou variables dérivées
                         de la sortie. Par exemple, l'exclusion de

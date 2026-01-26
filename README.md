@@ -138,7 +138,12 @@ optional arguments:
                         criteria. For example, to convert only 24-hour
                         forecasts you could use --filter ip2==24. String
                         attributes must be put in quotes, e.g. --filter
-                        etiket=='ICETHICKNESS'.
+                        etiket=='ICETHICKNESS'. If there's more than one
+                        --filter listed, the conditions will be AND'd
+                        together. To do a logical OR between conditions, use
+                        the '|' operator inside a single filter. E.g.,
+                        --filter "(etiket=='ICETHICKNESS') |
+                        (etiket=='G6_2_0_0N')"
   --exclude NAME,NAME,...
                         Exclude some axes, attributes, or derived variables
                         from the output. For instance, excluding
