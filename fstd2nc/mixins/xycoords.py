@@ -551,6 +551,7 @@ class XYCoords (BufferBase):
     group.add_argument('--bounds', action='store_true', default=False, help=_('Include grid cell boundaries in the output.'))
     group.add_argument('--no-bounds', action='store_false', dest='bounds', help=SUPPRESS)
     group.add_argument('--gmap-dummy-type', choices=['char','int'], help=_('The data type to use for the grid mapping variable.  Some netCDF tools have trouble concatenating if this value is a char.'))
+    parser.add_argument('--ignore-igx', action='store_true', help=_('Ignore changes to ig1/ig2/ig3 values (assume grids are all the same).'))
 
   def __init__ (self, *args, **kwargs):
     """
@@ -569,6 +570,9 @@ class XYCoords (BufferBase):
     gmap_dummy_type : string, optional
         The data type to use for the grid mapping variable.  Some netCDF
         tools have trouble concatenating if this value is a char.
+    ignore_igx : bool, optional
+        Ignore changes to ig1/ig2/ig3 values (assume underlying grid is the
+        same).
     """
     import numpy as np
     self._subgrid_axis = kwargs.pop('subgrid_axis',False)
@@ -580,6 +584,7 @@ class XYCoords (BufferBase):
       self._gmap_dummy_value = np.array(np.int32(0))
     else:
       self._gmap_dummy_value = np.array(b"")
+    self._ignore_igx = kwargs.pop('ignore_igx',False)
     super(XYCoords,self).__init__(*args,**kwargs)
     # Variables must have an internally consistent horizontal grid.
     self._var_id = self._var_id + ('grtyp',)
@@ -600,6 +605,14 @@ class XYCoords (BufferBase):
           exclude_later.append(varname)
       self._exclude = tuple(exclude)
       self._exclude_later = tuple(exclude_later)
+
+    # Check if ig1/ig2/ig3/ig4 should be forcefully ignored?
+    if self._ignore_igx:
+      # Set to some arbitrary value?
+      for key in 'ig1','ig2','ig3':
+        self._headers[key][~self._headers['ismeta']] = 999
+      for key in 'ip1','ip2','ip3':
+        self._headers[key][self._headers['ismeta']] = 999
 
   # Helper method - look up a coordinate record for the given variable.
   # Need this for manual lookup of 'X' grids, since ezqkdef doesn't support

@@ -143,6 +143,9 @@ arguments optionnel:
                         Le type de données pour la variable de grille. Quelque
                         utiles de netCDF ont des problèmes de concaténation si
                         cette valeur est un « char ».
+  --ignore-igx          Ignorer les modifications apportées aux valeurs
+                        ig1/ig2/ig3 (supposer que toutes les grilles sont
+                        identiques).
   --filter CONDITION    Sous-ensemble d'enregistrements fichier standard RPN
                         en utilisant les critères donnés. Par exemple, pour
                         convertir seulement les prévisions sur 24 heures, vous

@@ -134,6 +134,8 @@ optional arguments:
                         The data type to use for the grid mapping variable.
                         Some netCDF tools have trouble concatenating if this
                         value is a char.
+  --ignore-igx          Ignore changes to ig1/ig2/ig3 values (assume grids are
+                        all the same).
   --filter CONDITION    Subset RPN standard file records using the given
                         criteria. For example, to convert only 24-hour
                         forecasts you could use --filter ip2==24. String
