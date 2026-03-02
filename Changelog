@@ -1,3 +1,8 @@
+Version 0.20260225.0 (Feb 25, 2026)
+	* Fixed a FutureWarning from xarray about the encoding of leadtime.
+	* New option --ignore-igx to avoid splitting fields on different
+	  ig1/ig2/ig3 key pairs.
+
 Version 0.20250929.1 (Dec 22, 2025)
 	* Fixed a bug in CCC format interface with 'YEAR' record.
 	* Fixed a bug when decoding with --vardict or --opdict with numpy 2.x.
