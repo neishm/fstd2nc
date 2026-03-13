@@ -23,7 +23,7 @@ urls = {Homepage = "https://github.com/neishm/fstd2nc"}
 dependencies = [
     "numpy >= 1.13.0, != 1.15.3",
     "netcdf4",
-    'fstd2nc-deps >= 0.20200304.0 ; sys_platform == "win32"'
+    'fstd2nc-deps >= 0.20200304.0'
 ]
 
 [project.optional-dependencies]
