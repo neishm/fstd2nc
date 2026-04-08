@@ -63,6 +63,8 @@ optional arguments:
                         The fill value to use for masked (missing) data. Gets
                         stored as '_FillValue' attribute in the metadata.
                         Default is '1e+30'.
+  --no-apply-masks      Don't apply masks to the data. Keep the masks as
+                        separate variables.
   --datev, --squash-forecasts
                         Use the date of validity for the "time" axis. This is
                         the default.

@@ -68,6 +68,8 @@ arguments optionnel:
                         masquées (manquantes). Enregistré en tant qu'attribut
                         '_FillValue' dans les métadonnées. Le défaut est
                         '1e+30'.
+  --no-apply-masks      N'appliquer pas de masques aux données. Conserver les
+                        masques comme des variables distinctes.
   --datev, --squash-forecasts
                         Utiliser la date de validité pour l'axe "time". Ceci
                         est le défaut.

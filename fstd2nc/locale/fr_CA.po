@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: fstd2nc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-25 19:00+0000\n"
+"POT-Creation-Date: 2026-04-08 17:07+0000\n"
 "PO-Revision-Date: 2022-11-25 17:40+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -426,6 +426,9 @@ msgstr ""
 "Enregistré en tant qu'attribut '_FillValue' dans les métadonnées.  Le défaut "
 "est '%(default)s'."
 
+msgid "Don't apply masks to the data.  Keep the masks as separate variables."
+msgstr "N'appliquer pas de masques aux données.  Conserver les masques comme des variables distinctes."
+
 #, python-format
 msgid "Can't set fill value '%g' for %s."
 msgstr "Impossible de définir la valeur de replissage '%g' pour %s."
@@ -736,7 +739,9 @@ msgstr ""
 "des problèmes de concaténation si cette valeur est un « char »."
 
 msgid "Ignore changes to ig1/ig2/ig3 values (assume grids are all the same)."
-msgstr "Ignorer les modifications apportées aux valeurs ig1/ig2/ig3 (supposer que toutes les grilles sont identiques)."
+msgstr ""
+"Ignorer les modifications apportées aux valeurs ig1/ig2/ig3 (supposer que "
+"toutes les grilles sont identiques)."
 
 #, python-format
 msgid "Unable to get lat/lon coordinates for '%s'"

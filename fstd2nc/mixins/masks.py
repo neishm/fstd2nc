@@ -45,12 +45,15 @@ class Masks (BufferBase):
   def _cmdline_args (cls, parser):
     super(Masks,cls)._cmdline_args(parser)
     parser.add_argument('--fill-value', type=float, default=1e30, help=_("The fill value to use for masked (missing) data.  Gets stored as '_FillValue' attribute in the metadata.  Default is '%(default)s'."))
+    parser.add_argument('--no-apply-masks', action='store_true', help=_("Don't apply masks to the data.  Keep the masks as separate variables."))
 
   def __init__ (self, *args, **kwargs):
     """
     fill_value : scalar, optional
         The fill value to use for masked (missing) data.  Gets stored as
         '_FillValue' attribute in the metadata.  Default is 1e30.
+    no_apply_masks : boolean, optional
+        Don't apply masks to the data.  Keep the masks as separate variables.
     """
     import numpy as np
     from fstd2nc.extra import structured_array
@@ -59,8 +62,9 @@ class Masks (BufferBase):
     self._decoder_data = self._decoder_data + (('mask',('mask_key','mask_address','mask_length','mask_d')),)
 
     self._fill_value = kwargs.pop('fill_value',1e30)
+    self._no_apply_masks = kwargs.pop('no_apply_masks',False)
     self._decoder_extra_args = self._decoder_extra_args + ('alt_mask',)
-    self._ignore_atts = ('mask_record','mask_length','alt_mask') + self._ignore_atts
+    self._ignore_atts = ('mask_record','mask_length','alt_mask','mask_descr') + self._ignore_atts
     super(Masks,self).__init__(*args,**kwargs)
 
     # Check for usage of the alternate masking technique (flag 64).
@@ -82,10 +86,21 @@ class Masks (BufferBase):
     uses_mask = np.array(typvar,dtype='|S2').view('|S1').reshape(-1,2)[:,1] == b'@'
     if not np.any(uses_mask): return
 
+    is_mask = np.isin(self._headers['typvar'],(b'@@',b'!@'))
+    # If masks are kept separate, then need to distinguish between data / mask
+    # records for variable names.
+    # Otherwise, by default,
     # Remove all mask records from the table, they should not become variables
     # themselves.
-    is_mask = np.isin(self._headers['typvar'],(b'@@',b'!@'))
-    self._headers['selected'][is_mask] = False
+    if self._no_apply_masks:
+      self._var_id = self._var_id + ('is_mask',)
+      # Apply the 'mask' & 'data' suffixes early, so it takes precedence over
+      # typvar suffixes for variable distinction.
+      self._human_var_id = ('%(mask_descr)s',) + self._human_var_id
+      self._headers['is_mask'] = is_mask
+      return
+    else:
+      self._headers['selected'][is_mask] = False
 
     nrecs = len(self._headers['name'])
 
@@ -130,6 +145,19 @@ class Masks (BufferBase):
   def _makevars (self):
     from fstd2nc.mixins import _iter_type
     super(Masks,self)._makevars()
+
+    # If masks are being kept separate, then add a human-readable suffix to
+    # the mask variable.
+    if self._no_apply_masks:
+      for var in self._varlist:
+        if 'is_mask' in var.atts:
+          if var.atts['is_mask']:
+            var.atts['mask_descr'] = 'mask'
+          else:
+            var.atts['mask_descr'] = 'data'
+        else:
+          var.atts['mask_descr'] = 'unknown'
+      return
     for var in self._varlist:
       if not isinstance(var,_iter_type):
         continue
