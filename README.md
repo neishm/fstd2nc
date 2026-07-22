@@ -89,7 +89,7 @@ optional arguments:
                         Assume the bottom level of the profile data is
                         missing.
   --vardict VARDICT     Use metadata from the specified variable dictionary
-                        (XML format).
+                        (XML or YAML format).
   --opdict              Similar to above, but use the standard CMC-RPN
                         operational dictionary.
   --sfc-agg-vars NAME,NAME,...

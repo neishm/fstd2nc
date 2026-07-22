@@ -50,6 +50,7 @@ requirements:
     - certifi
     - cftime
     - eccc_rpnpy >=2.2.0
+    - pyyaml
 
 # tests:
 #   - python:

@@ -31,7 +31,7 @@ class VarDict (BufferBase):
   def _cmdline_args (cls, parser):
     import argparse
     super(VarDict,cls)._cmdline_args(parser)
-    parser.add_argument('--vardict', action='append', help=_('Use metadata from the specified variable dictionary (XML format).'))
+    parser.add_argument('--vardict', action='append', help=_('Use metadata from the specified variable dictionary (XML or YAML format).'))
     parser.add_argument('--opdict', action='store_true', help=_('Similar to above, but use the standard CMC-RPN operational dictionary.'))
 
   @classmethod
@@ -45,9 +45,13 @@ class VarDict (BufferBase):
       if 'CMCCONST' in environ:
         f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
         if not exists(f):
+          f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.yaml'
+        if not exists(f):
           parser.error(_("Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"))
       elif 'AFSISIO' in environ:
         f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.yaml'
         if not exists(f):
           parser.error(_("Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary.xml"))
       else:
@@ -69,6 +73,11 @@ class VarDict (BufferBase):
     from fstd2nc.mixins import _var_type, _axis_type, _dim_type
     from collections import OrderedDict
     from xml.etree import ElementTree as ET
+    import yaml
+    try:
+      from yaml import CSafeLoader as SafeLoader
+    except ImportError:
+      from yaml import SafeLoader
     from os.path import exists
 
     opdict = kwargs.pop('opdict',False)
@@ -79,9 +88,13 @@ class VarDict (BufferBase):
       if 'CMCCONST' in environ:
         f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
         if not exists(f):
+          f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.yaml'
+        if not exists(f):
           error(_("Unable to find $CMCCONST/opdict/ops.variable_dictionary.xml"))
       elif 'AFSISIO' in environ:
         f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.yaml'
         if not exists(f):
           error(_("Unable to find $AFSISIO/datafiles/constants/opdict/ops.variable_dictionary.xml"))
       else:
@@ -97,9 +110,13 @@ class VarDict (BufferBase):
     if opdict:
       if 'CMCCONST' in environ:
         f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          f = environ['CMCCONST']+'/opdict/ops.variable_dictionary.yaml'
         vardicts.append(f)
       elif 'AFSISIO' in environ:
         f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.xml'
+        if not exists(f):
+          f = environ['AFSISIO']+'/datafiles/constants/opdict/ops.variable_dictionary.yaml'
         vardicts.append(f)
 
     super(VarDict,self).__init__(*args, **kwargs)
@@ -109,29 +126,65 @@ class VarDict (BufferBase):
     ip3_axis = OrderedDict()
 
     for vardict in vardicts:
-      try:
-        metvars = list(ET.parse(vardict).getroot())
-      except ET.ParseError:
-        error (_("Invalid dictionary file '%s'"%vardict.name))
+      if vardict.endswith('.xml'):
+        try:
+          metvars = list(ET.parse(vardict).getroot())
+        except ET.ParseError:
+          error (_("Invalid dictionary file '%s'"%vardict))
 
-      for metvar in metvars:
-        if metvar.attrib.get('usage','current') != 'current': continue
-        nomvar = metvar.findtext('nomvar')
-        if nomvar is None: continue
-        var = metadata.setdefault(nomvar,OrderedDict())
-        atts = metvar.find('nomvar').attrib
-        coords = (atts.get('ip1',None), atts.get('ip3',None))
-        d = var.setdefault(coords,OrderedDict())
-        for desc in metvar.iterfind("description/short"):
-          if desc.attrib.get('lang','') == 'en':
-            d['long_name'] = desc.text
-        for desc in metvar.iterfind("description/long"):
-          if desc.attrib.get('lang','') == 'en':
-            if desc.text is not None:
-              d['definition_opdict'] = desc.text
-        units = metvar.find("measure/real/units")
-        if units is not None:
-          d['units'] = units.text
+        for metvar in metvars:
+          if metvar.attrib.get('usage','current') != 'current': continue
+          nomvar = metvar.findtext('nomvar')
+          if nomvar is None: continue
+          var = metadata.setdefault(nomvar,OrderedDict())
+          atts = metvar.find('nomvar').attrib
+          coords = (atts.get('ip1',None), atts.get('ip3',None))
+          d = var.setdefault(coords,OrderedDict())
+          for desc in metvar.iterfind("description/short"):
+            if desc.attrib.get('lang','') == 'en':
+              d['long_name'] = desc.text
+          for desc in metvar.iterfind("description/long"):
+            if desc.attrib.get('lang','') == 'en':
+              if desc.text is not None:
+                d['definition_opdict'] = desc.text
+          units = metvar.find("measure/real/units")
+          if units is not None:
+            d['units'] = units.text
+
+      elif vardict.endswith('.yaml'):
+        with open(vardict,'r') as f:
+          metvars = yaml.load(f,SafeLoader)['parameters']
+        def add_atts (d, atts):
+          if 'title' in atts and 'en' in atts['title']:
+            d['long_name'] = atts['title']['en']
+            if 'description' in atts and 'en' in atts['description']:
+              if atts['description']['en'] != d['long_name']:
+                d['definition_opdict'] = atts['description']['en']
+          if 'units' in atts:
+            u = atts['units']
+            if 'mappings' in u and 'udunits2' in u['mappings']:
+              d['units'] = u['mappings']['udunits2']['value']
+            elif 'title' in u and 'en' in u['title']:
+              d['units'] = u['title']['en']
+        for nomvar, atts in metvars.items():
+          var = metadata.setdefault(nomvar,OrderedDict())
+          if 'processing' in atts:
+            for subkey, subatts in atts['processing'].items():
+              subkey_name, subkey_val = subkey.split('_',1)
+              if subkey_name == 'ip1':
+                coords = subkey_val, None
+              elif subkey_name == 'ip3':
+                coords = None, subkey_val
+              else:
+                continue  # Unknown information, ignore.
+              d = var.setdefault(coords,OrderedDict())
+              add_atts(d,subatts)
+          if len(var) == 0: # No ip1/ip3 specific metadata found
+            d = var.setdefault((None,None),OrderedDict())
+            add_atts(d,atts)
+
+      else:
+        error (_("Unknown dictionary file of type %s")%vardict.split('.')[-1])
 
       for nomvar in metadata.keys():
         descs = [d['long_name'] for d in metadata[nomvar].values() if 'long_name' in d]

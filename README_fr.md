@@ -94,7 +94,7 @@ arguments optionnel:
                         Supposer que le niveau final des données de profil est
                         manquant.
   --vardict VARDICT     Utiliser les métadonnées du dictionnaire de variables
-                        spécifié (format XML).
+                        spécifié (format XML ou YAML).
   --opdict              Similaire à ce qui précéde, mais utilise le
                         dictionnaire opérationnel standard CMC-RPN.
   --sfc-agg-vars NOM,NOM,...

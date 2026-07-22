@@ -62,6 +62,7 @@ progress = "*"
 python = ">=3.10.12"
 toolz = "*"
 xarray = ">=0.10.3"
+pyyaml = "*"
 
 [feature.dev.dependencies]
 anaconda-client = "*"
