@@ -53,6 +53,8 @@ depends-on = ["conda-build"]
 [dependencies]
 dask = ">=2023.7.1"
 eccc_rpnpy = ">=2.2.0"
+eccc_librmn = "==20.0.4"
+eccc_libvgrid = "==6.9.3.1"
 iris = ">=2.0"
 netcdf4 = "*"
 numpy = ">=1.15.3"
