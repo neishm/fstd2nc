@@ -82,9 +82,11 @@ def _split_meta (data):
       # Older alpha versions don't encode info here, but there seems to be
       # a consistent value of header size in this other place?
       header_size = 18 + (data[0]&0x00ffff00)>>8
-      header = data[4:4+18]
-      xmeta = data[4+18:4+header_size]
-      data = data[4+header_size:]
+      # Skip first 5 bytes ([ZR+RLM+RT, RL[0], RL[1], LMETA, RMETA[0])
+      data = data[5:]
+      header = data[:18]
+      xmeta = data[18:header_size]
+      data = data[header_size:]
   else:
     data = data.view('>i4').astype('i4')
     header_size = 20    # FSTD, two aux keys need to be skipped.
