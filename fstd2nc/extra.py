@@ -81,7 +81,11 @@ def _split_meta (data):
     else:
       # Older alpha versions don't encode info here, but there seems to be
       # a consistent value of header size in this other place?
-      header_size = 18 + (data[0]&0x00ffff00)>>8
+#      header_size = 18 + (data[0]&0x00ffff00)>>8
+      # Actually, that isn't quite right.
+      # Current test records have header size of 19, but need to skip only
+      # first 18 words to get to the data?
+      header_size = 18
       # Skip first 5 bytes ([ZR+RLM+RT, RL[0], RL[1], LMETA, RMETA[0])
       data = data[5:]
       header = data[:18]
