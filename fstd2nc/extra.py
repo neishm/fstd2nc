@@ -30,12 +30,26 @@ try:
   import ctypes as ct
   import numpy as np
   import numpy.ctypeslib as npc
-  librmn.compact_float.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
-  librmn.compact_double.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
-  librmn.compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+  try:
+    # Librmn 20.0 and earlier
+    compact_float = librmn.compact_float
+    compact_double = librmn.compact_double
+    compact_integer = librmn.compact_integer
+    compact_char = librmn.compact_char
+  except AttributeError:
+    # Librmn 20.1
+    compact_float = librmn.compact_u_float
+    compact_double = librmn.compact_u_double
+    compact_integer = librmn.compact_u_integer
+    compact_char = librmn.compact_u_char
+
+  compact_float.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
+  compact_double.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
+  compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
   librmn.ieeepak_.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
-  librmn.compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+  compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
   librmn.c_armn_uncompress32.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+
   # API for armn_compress was updated after version 20 to include an extra
   # "swap_stream" integer flag.
   try:
@@ -151,22 +165,22 @@ def decode (data):
     work = data
   elif datyp == 1:
     if nbits.value <= 32:
-      librmn.compact_float(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
+      compact_float(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
     else:
       raise Exception
-      librmn.compact_double(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
+      compact_double(work, data, data[3:], nelm, nbits, 24, 1, 2, 0, ct.byref(tempfloat))
   elif datyp == 2:
-    librmn.compact_integer(work, None, data, nelm, nbits, 0, 1, 2)
+    compact_integer(work, None, data, nelm, nbits, 0, 1, 2)
   elif datyp == 3:
     raise Exception
   elif datyp == 4:
-    librmn.compact_integer(work, None, data, nelm, nbits, 0, 1, 4)
+    compact_integer(work, None, data, nelm, nbits, 0, 1, 4)
   elif datyp == 5:
     librmn.ieeepak_(work, data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
   elif datyp == 6:
     librmn.c_float_unpacker(work, data, data[3:], nelm, ct.byref(nbits));
   elif datyp == 7:
-    ier = librmn.compact_char(work, None, data, nelm, 8, 0, 1, 10)
+    ier = compact_char(work, None, data, nelm, 8, 0, 1, 10)
     work = work.view('B')[:len(work)] #& 127
   elif datyp == 8:
     librmn.ieeepak_(work, data, ct.byref(nelm), ct.byref(one), ct.byref(npak), ct.byref(zero), ct.byref(two))
@@ -175,7 +189,7 @@ def decode (data):
       librmn.armn_compress(data[5:],ni,nj,nk,nbits,2)
     else:
       librmn.armn_compress(data[5:],ni,nj,nk,nbits,2,1)
-    librmn.compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
+    compact_float(work,data[1:],data[5:],nelm,nbits.value+64*max(16,nbits.value),0,1,2,0,ct.byref(tempfloat))
   elif datyp == 130:
     #librmn.c_armn_compress_setswap(0)
     if _api_version <= 20:
