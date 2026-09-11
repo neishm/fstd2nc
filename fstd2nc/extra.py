@@ -35,19 +35,35 @@ try:
     compact_float = librmn.compact_float
     compact_double = librmn.compact_double
     compact_integer = librmn.compact_integer
+    # Need to set argtypes early, since the function is overridden in case of
+    # more recent librmn.
+    compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
     compact_char = librmn.compact_char
+    compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
   except AttributeError:
     # Librmn 20.1
     compact_float = librmn.compact_u_float
     compact_double = librmn.compact_u_double
-    compact_integer = librmn.compact_u_integer
-    compact_char = librmn.compact_u_char
+    # In new interface, last argument has different meaning.
+    # Used to be: 1 = pack unsigned, 2 = unpack unsigned, 3 = pack signed, 4 = unpack signed.
+    # Now it is: 0 = unsigned, 1 = signed
+    librmn.compact_u_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
+    def compact_integer (*args):
+      if args[-1] == 2:
+        args = args[:-1] + (0,)
+      elif args[-1] == 4:
+        args = args[:-1] + (1,)
+      else:
+        raise Exception("Unknown integer packing case.")
+      return librmn.compact_u_integer(*args)
+    # compact_char has 1 less argument in new version (don't need pack/unpack flags).
+    librmn.compact_u_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int)
+    def compact_char (*args):
+      return librmn.compact_u_char (*args[:-1])
 
   compact_float.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
   compact_double.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_double))
-  compact_integer.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
   librmn.ieeepak_.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.POINTER(ct.c_int))
-  compact_char.argtypes = (npc.ndpointer(dtype='int32'), ct.c_void_p, npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.c_int)
   librmn.c_armn_uncompress32.argtypes = (npc.ndpointer(dtype='int32'), npc.ndpointer(dtype='int32'), ct.c_int, ct.c_int, ct.c_int, ct.c_int)
 
   # API for armn_compress was updated after version 20 to include an extra
