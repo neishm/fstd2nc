@@ -1,3 +1,12 @@
+Version 0.20260914.0 (Sep 14, 2026)
+	* New option --no-apply-masks to keep masks (typvar @@) as their own
+	  field.  Useful for converting files that only contain masks (no
+	  data).
+	* Added support for new YAML format for variable dictionaries.
+	* Some fixes for RSF compatibility (and probably added some
+	  incompatibilities as well :) )
+	* Fixed compatibility with librmn version 20.1 API.
+
 Version 0.20260225.0 (Feb 25, 2026)
 	* Fixed a FutureWarning from xarray about the encoding of leadtime.
 	* New option --ignore-igx to avoid splitting fields on different
